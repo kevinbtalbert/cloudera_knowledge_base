@@ -1,0 +1,54 @@
+Example for using TSaslClientTransport API in secure cluster without HTTPCloudera Docs
+Example for using TSaslClientTransport API in secure cluster without HTTP
+Refer to this example of using the TSaslClientTransport API in secure cluster without
+    HTTP.
+TSaslClientTransport API in secure cluster without HTTP
+If you do not use THttpClient and want to use
+          TSaslClientTransport for legacy compatibility reasons, ensure that you
+        set hbase.regionserver.thrift.http property to false. The other
+        settings could be same as the configuration properties mentioned in the HBase thrift
+          configurations table under the Default value (secured) column.
+from thrift.transport import TSocket
+from thrift.transport import TTransport
+from thrift.protocol import TBinaryProtocol
+from thrift.protocol import TCompactProtocol
+from hbase import Hbase
+
+'''
+Assume you already kinit the hbase principal, or you can use the function in example-1 to kinit.
+'''
+
+# Replace with your own parameters
+thrift_host = 'your_hbase_thrift_server_hostname'
+thrift_port = 9090
+
+# Initialize TSocket and TTransport
+socket = TSocket.TSocket(thrift_host, thrift_port)
+transport=TTransport.TSaslClientTransport(socket,host=thrift_host,service='hbase',mechanism='GSSAPI')
+
+# Initialize TCompactProtocol with TTransport
+protocol = TCompactProtocol.TCompactProtocol(transport)
+
+# Create HBase client
+client = Hbase.Client(protocol)
+
+# Open connection and retrieve list of HBase tables
+transport.open()
+tables = client.getTableNames()
+print(tables)
+
+# Close connection
+transport.close()
+
+Cloudera recommends you to use the HTTP options (Example-1 and Example-2). You can consider
+        the Example-3 for legacy compatibility issues where some old applications might not rewrite
+        the codes. This is because Hue is using HTTP mode to interact with HBase thrift, and if you
+        disable the HTTP mode, Hue might not work properly with HBase.
+
+Known bugs while using TSaslClientTransport with Kerberos enabled CDP versions
+Upstream JIRA HBASE-21652, where a bug is introduced related to Kerberos
+        principal handling. The affected versions are CDP 7.1.6 and earlier. The versions containing
+        the fix are 7.1.7, 7.2.11, and later.
+
+
+Related informationList of Thrift API and HBase configurationsParent topic: Using the Apache Thrift Proxy API

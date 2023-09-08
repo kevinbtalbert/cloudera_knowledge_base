@@ -1,0 +1,206 @@
+Certmanager Options - Using CM's GenerateCMCA APICloudera Docs
+Certmanager Options - Using CM's GenerateCMCA API
+This article describes how to use the certmanager’s GenerateCMCA API. It generates the CMCA, which is an OpenSSL self-signed cert and CA directory. It creates and signs the certificate for the CM host. Creates an “internal” truststore with the CA certificate only. If trusted certificates were given, loads them into a “global” truststore. certmanager is part of the CM agent package.
+Name
+certmanager setup- generates CMCA and certificates for the host.
+
+Description
+This command initializes the certmanager and setup the certificates for  the CM server to run on this host, using those certificates.
+The --location option (if any) given to certmanager will decide the
+        location of the directory root where the certmanager will keep its files. This directory
+        will contain sensitive files. It must be backed up and protected accordingly. This directory
+        must not exist prior to calling this command, but must be create-able. (i.e. either its
+        ancestors must exist, or must be create-able).
+
+Options
+
+--config
+<config-file-or-dir>
+Path for configuration to use. If a directory, read and use all .ini files within it.
+              If a file, must point to a config .ini file.
+
+--override
+<Section.Property=Value>
+ Override config file setting.
+
+--hostname
+<dns-or-ip>
+Alternate name of local host (for SSL certificates). Only applies if CA type is
+              'internal'
+
+--altname
+<alt-name>
+Alternate name of to add to generated SSL certificates. Multiple names may be supplied by repeating the option. Only applies if CA type is 'internal'.
+
+
+--write-cm-init / --skip-cm-init
+Writes a CM init file to set Auto-TLS related parameters. If disabled, only the CA directory will be created, and the init file contents will be printed to stdout.
+
+
+--rotate / --no-rotate
+Rotates the CA keys and certificates. If disabled, the command fails if the CA directory already exists.
+
+
+--configure-services / --no-configure-services
+Configure new services to use Auto-TLS certificates. If disabled, only agents will use TLS certificates.
+
+
+--trusted-ca-certs
+<trusted_certs.pem>
+Path to trusted CA certs bundle in PEM format. These certs will be imported into the
+              truststore for all hosts.
+
+
+--skip-invalid-ca-certs / --fail-invalid-ca-cert
+Whether to skip invalid CA certs in the trusted CA certs bundle. If false, setup will fail if any certs are invalid orduplicates.
+
+
+--stop-at-csr / --dont-stop-at-csr
+Whether to stop at signing the CSR. If true, continue the setup by running setup and passing in --signed-ca-cert.
+
+--signed-ca-cert
+<signed_ca_chain.pem>
+Path to signed CA cert chain. Pass this after running setup with the --stop-at-csr
+              option.
+
+--help
+Show this message and exit.
+
+
+
+
+Hw to customize CSR fields
+You can customize the CSR fields by using the “--override“ command-line option. The
+        properties available for the --override parameter are mentioned below. An example of how to
+        use the API follows this table.
+
+
+Property
+Default Value
+Description
+
+
+
+email_address
+-
+Additional subject alternate names to add to the certioficate.
+
+
+subject_suffix
+-
+The subject suffix to be appended to the CN.
+
+
+ca_key_algo
+rsa
+CA Key encryption algorithm to be used. Valid values are "rsa", "dsa",
+                "ec".
+
+
+ca_key_args
+3072
+Integer value determining the number of bits for the key.
+
+
+ca_sig_hash_algo
+sha256
+The hashing algorithm to use when signing.
+
+
+ca_dn
+-
+The Subject DN to add to the CSR.
+
+
+ca_expiration
+5 years
+"YYYMMDD" format date for when certificate expires.Certificate expires at
+                23:59:59 on the given date at GMT time.
+
+
+host_expiration
+1 year
+"YYYMMDD" format date for when host expires.
+
+
+ca_name
+SCM Local CA on <host_fqdn>
+Common Name to be used while generating the subject for the
+                certificate.
+
+
+host_key_algo
+rsa
+The asymmetric key algorithm to use to generate a CSR for a host.
+
+
+host_key_args
+3072
+The parameter to the key algorithm (# bits, curve name, etc.) to generate a CSR
+                for a host.
+
+
+host_sig_hash_algo
+sha256
+The hashing algorithm to use in the signature when using the internal CA to
+                sign the given host's CSR.
+
+
+key_encryption_algo
+aes256
+The algo to use to encrypt the private key to generate a CSR for a
+                host.
+
+
+
+Examples
+This example shows how you can use additionalArguments property to pass any override parameters to the certmanager using generateCMCA API.
+curl -X POST "https://tkarkera-1.tkarkera.root.hwx.site:7183/api/v45/cm/commands/generateCmca" -H "accept: application/json" -H "Content-Type: application/json" -d 
+      "{
+        "sshPort": 22,
+        "userName": "...",
+        "password": "...",
+        "privateKey": "...",
+        "passphrase": "...",
+        "location": "/opt/cloudera/CMCA",
+        "customCA": false,
+        "interpretAsFilenames": true,
+        "cmHostCert": "host-cert.pem",
+        "cmHostKey": "host-key.pem",
+        "caCert": "ca-cert.pem",
+        "keystorePasswd": "keystore.pw.txt",
+        "truststorePasswd": "truststore.pw.txt",
+        "trustedCaCerts": "cacerts.pem",
+        "additionalArguments": [
+        "--override",
+        "ca_expiration=301010",
+        "--override",
+        "ca_key_args=4096",
+        "--override",
+        "host_key_args=4096"
+        ],
+        "hostCerts": [
+        {
+        "hostname": "...",
+        "certificate": "host-cert.pem",
+        "key": "host-key.pem",
+        "subjectAltNames": [
+        "DNS:example.cloudera.com",
+        "..."
+        ]
+        },
+        {
+        "hostname": "...",
+        "certificate": "...",
+        "key": "...",
+        "subjectAltNames": [
+        "...",
+        "DNS:example.cloudera.com"
+        ]
+        }
+        ],
+        "configureAllServices": true
+        }“
+
+
+Parent topic: Use case 2: Enabling Auto-TLS with an intermediate CA signed by an existing Root CA

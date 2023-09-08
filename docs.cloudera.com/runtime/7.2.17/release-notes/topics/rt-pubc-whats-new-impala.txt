@@ -1,0 +1,142 @@
+What's New in Apache ImpalaCloudera Docs
+What's New in Apache Impala
+Learn about the new features of Impala in Cloudera Runtime 7.2.17.
+View query timeline in Impala WebUI
+For a detailed report on how a query was executed and to understand the detailed query
+        performance characteristics, use the built-in web server’s UI and look at the Gantt chart.
+
+Ability to create a non-unique primary key for Kudu 
+Impala now supports creating a Kudu table with a non-unique primary key.
+        When creating a Kudu table, specifying PRIMARY KEY is optional now. If there is no primary
+        key attribute specified, the partition key columns could be promoted as non-unique primary
+        keys if those columns are the beginning columns of the table.
+
+Improvement in Ozone file handle caching
+In this release, Ozone file handle caching is enabled by default.
+        This file handle caching improves TPC-DS geomean query time by 10%.
+
+Support Read from Ozone data with erasure coding
+Impala now supports reading from Ozone data stored with Erasure Coding
+        (EC). The Ozone EC feature provides data durability and fault tolerance with reduced storage
+        space and ensures data durability similar to the Ratis THREE replication approach. EC can be
+        considered as an alternative to replication.
+
+Spill to HDFS
+Impala occasionally needs to use persistent storage for writing intermediate files during
+        large sorts, joins, aggregations, or analytical function operations. If your workload
+        results in large volumes of intermediate writted data, it is recommended to configure the
+        heavy spilling queries to use a remote storage location rather than the local one. The
+        advantage of using remote storage for scratch space is that it is
+        elastic and can handle large amounts of spilling.
+
+New bytes-read-encrypted metric
+When Impala executes any query on an Ozone encrypted file, the query PROFILE
+        captures the runtime details of the execution, including the total number of encrypted bytes read from Ozone by the query.
+
+Spill to Ozone
+You can now use Ozone as a scratch space for writing intermediate
+        files during large sorts, joins, aggregations, or analytic function operations.
+
+New metrics for EC reads
+The Query Details page contains the low-level details of
+        how a SQL query is processed through Impala. You can now use the Query details page to view
+        the erasure-coded bytes read metrics.
+
+Ability to configure impala-shell client retry attempts
+From this release, you can configure the maximum number of attempts
+        impala-shell can make using an impala-shell option.
+
+Ability to CREATE/ALTER VIEW SET/UNSET TBLPROPERTIES
+Before this release, altering only the VIEW definition, VIEW name, and owner was supported.
+        Impala now supports altering the table properties of a VIEW by using the
+        set tblproperties clause.
+
+Flags related to use_local_catalog 
+When use_local_catalog is enabled or set to True on the
+        impalad coordinators a new list of flags configures various parameters as
+        described here. It is not recommended to change the default values on these flags.
+
+Synchronization between Impala clusters
+When a LOAD statement is run from Impala in a cluster, an INSERT event is generated. This INSERT event
+        generated notifies other Impala clusters or any other systems that consume HMS events (e.g.
+        Hive Replication) about the changes of LOAD DATA. The other Impala clusters will refresh the
+        table or partitions based on the event.
+
+Support for all complex types in a SELECT * query
+A SELECT * statement did not expand to complex types to be compatible with earlier versions
+        of Impala that did not support complex types in the result set. In the older versions of
+        Impala, queries using SELECT * skip complex types by default and only expanded to primitive
+        types even when the table contained complex-typed columns. This release adds a new query
+        option EXPAND_COMPLEX_TYPES to include complex types in the SELECT * list.
+
+Allow map type in the SELECT list
+You can now use a SELECT statement to run queries on the keys
+        and values of maps. However, you cannot have mixed complex types in the select list such as
+        collections (arrays or maps) in structs or structs in collections. Also, sorting is not
+        supported if the select list contains collection columns.
+
+Push down date literals to Kudu scanner
+Impala now allows creating and pushing down Kudu predicates
+        from the DATE type.
+Example:
+
+      select * from functional_kudu.date_tbl where date_col = DATE "1970-01-01";
+      
+      PLAN-ROOT SINK
+      |
+      00:SCAN KUDU [functional_kudu.date_tbl]
+      kudu predicates: date_col = DATE '1970-01-01'
+      row-size=12B cardinality=1
+      ---- DISTRIBUTEDPLAN
+      PLAN-ROOT SINK
+      |
+      01:EXCHANGE [UNPARTITIONED]
+      |
+      00:SCAN KUDU [functional_kudu.date_tbl]
+      kudu predicates: date_col = DATE '1970-01-01'
+      row-size=12B cardinality=1
+      
+    
+
+UTF-8 mode support
+Some Impala STRING types now support UTF-8 aware behavior to ensure consistent
+        results for non-ASCII characters in the string in both Hive and Impala.
+
+Binary support
+Impala now supports BINARY columns for all table formats except Kudu. See the BINARY support topic for more information on
+        using this arbitrary-length byte array data type in CREATE TABLE and SELECT statements.
+
+Increased data_cache_write_concurrency default for SSDs
+To avoid overwhelming the underlying IO device, the data cache limits concurrent writes to
+        the cache. This is controlled by the data_cache_write_concurrency flag and it defaults to 1.
+        If the underlying IO device is identified to be an SSD, the default value of this flag will
+        be increased to allow more concurrent writes to the data cache. This would allow the data
+        cache to warm up faster and stay more up-to-date. When the default value is used, the
+        rotational disks continue to use a default of 1, while non-rotational disks use a default of
+        8.
+
+Support custom hash schema for Kudu range tables
+Impala now includes CREATE TABLE and ALTER TABLE syntax to allow
+        Kudu custom hash schema. HASH syntax within a partition is similar to the table-level syntax
+        except that HASH clauses must follow the PARTITION clause and commas are not allowed within
+        a partition. You can use the SHOW HASH SCHEMA statement to view the hash schema information
+        for each partition.
+Example:
+
+      CREATE TABLE t1 (id int, c2 int, PRIMARY KEY(id, c2))
+      PARTITION BY HASH(id) PARTITIONS 3 HASH(c2) PARTITIONS 4
+      RANGE (c2)
+      (
+      PARTITION 0 <= VALUES < 10
+      PARTITION 10 <= VALUES < 20
+      HASH(id) PARTITIONS 2 HASH(c2) PARTITIONS 3
+      PARTITION 20 <= VALUES < 30
+      )
+      STORED AS KUDU;
+      ALTER TABLE t1 ADD RANGE PARTITION 30 <= VALUES < 40
+      HASH(id) PARTITIONS 3 HASH(c2) PARTITIONS 4;
+      
+    
+
+
+Parent topic: What's New In Cloudera Runtime 7.2.17

@@ -1,0 +1,105 @@
+Specifying a group when user belongs to multiple groupsCloudera Docs
+Specifying a group when user belongs to multiple groups
+If a user is mapped to multiple roles via group membership, the specific role to be used
+  needs to be provided at runtime. 
+note
+Spark does not work with Hive Metastore if there are multiple IDBroker group mappings. If you
+    would like to use multiple group mappings, you should use the Ranger Authorization Service
+    (RAZ).
+
+If you do not specify the group, you will get an error similar to the
+   following:Ambiguous group role mappings for the authenticated user.
+To provide the role, use the following commands:
+fs.<s3a | azure | gs>.ext.cab.required.group
+This command specifies the name of a particular group from which the credentials
+   should be resolved. This can be used, when multiple user groups resolve to cloud roles, to
+   specify for which group credentials are needed.
+
+fs.<s3a | azure | gs>.ext.cab.required.role
+
+This command specifies a particular cloud IAM role for which the credentials are
+   needed. This can be used when the required cloud IAM role is known, and the IDBroker is
+   configured in any way to resolve the user to that role.
+The following examples illustrate how to use these commands in different contexts: 
+HDFS CLI
+The following command sets a Java system property (-D) called "fs.s3a.ext.cab.required.group"
+    with the value of the group to use (GROUP). 
+
+hdfs dfs -Dfs.s3a.ext.cab.required.group=GROUP -ls s3a://BUCKET/PATH
+
+The system property is used by the s3a binding to request that group specifically instead of
+    falling back to looking up all the groups for the user.
+
+Spark 
+Here is how to set the config for a Spark
+    job:spark-shell --conf spark.yarn.access.hadoopFileSystems=s3a://BUCKET/ --conf spark.hadoop.fs.s3a.ext.cab.required.group=GROUP
+
+val textFile = spark.read.text("s3a://BUCKET/PATH")
+textFile.count()
+textFile.first()
+
+Livy
+Here is how to set the config for a batch job:
+# Ensure credentials
+kinit
+
+# Create test.py with following content
+from pyspark.sql import SparkSession
+spark = SparkSession.builder.appName("SimpleApp").getOrCreate()
+textFile = spark.read.text("s3a://cldr-cdp-dl-1/user/systest/test.csv")
+textFile.count()
+
+# Upload file to cloud storage
+hdfs dfs -copyFromLocal -f test.py s3a://cldr-cdp-dl-1/user/systest/test.py
+
+# Submit Livy batch job
+curl --negotiate -u: -i -XPOST --data '{"file": "s3a://cldr-cdp-dl-1/user/systest/test.py", "conf":{"spark.yarn.access.hadoopFileSystems":"s3a://cldr-cdp-dl-1/", "spark.hadoop.fs.s3a.ext.cab.required.group":"GROUP"}}' -H "Content-Type: application/json" http://krisden-1.gce.cloudera.com:8998/batches
+
+# Check Livy batch job
+curl --negotiate -u: -i http://krisden-1.gce.cloudera.com:8998/batches/0
+curl --negotiate -u: -i http://krisden-1.gce.cloudera.com:8998/batches/0/log
+Here is how to create a new session in Livy using the right config:
+# Ensure credentials
+kinit
+
+# Create Livy session
+curl --negotiate -u: -i -XPOST --data '{"kind": "pyspark", "conf":{"spark.yarn.access.hadoopFileSystems":"s3a://cldr-cdp-dl-1/", "spark.hadoop.fs.s3a.ext.cab.required.group":"GROUP"}}' -H "Content-Type: application/json" http://krisden-1.gce.cloudera.com:8998/sessions
+
+# Check Livy session is idle
+curl --negotiate -u: -i http://krisden-1.gce.cloudera.com:8998/sessions
+curl --negotiate -u: -i http://krisden-1.gce.cloudera.com:8998/sessions/0
+curl --negotiate -u: -i http://krisden-1.gce.cloudera.com:8998/sessions/0/state
+
+# Use Livy session
+curl --negotiate -u: -i -XPOST --data '{"kind": "pyspark", "code": "spark.read.text(\"s3a://cldr-cdp-dl-1/user/systest/test.csv\").count()"}' -H "Content-Type: application/json" http://krisden-1.gce.cloudera.com:8998/sessions/0/statements
+
+# Check the session statement output
+curl --negotiate -u: -i http://krisden-1.gce.cloudera.com:8998/sessions/0/statements/0
+
+# Delete the session
+curl --negotiate -u: -i -XDELETE http://krisden-1.gce.cloudera.com:8998/sessions/0
+curl --negotiate -u: -i http://krisden-1.gce.cloudera.com:8998/sessions
+
+Zeppelin
+Make sure to set the following configs in the Livy interpreter config before running
+    the notebook: 
+
+
+Set livy.spark.yarn.access.hadoopFileSystems to
+       s3a://cldr-cdp-dl-1/
+
+
+
+Set livy.spark.hadoop.fs.s3a.ext.cab.required.group to
+       GROUP
+
+
+Next, create a Zeppelin notebook with the following content:
+%livy.pyspark
+textFile = spark.read.text("s3a://cldr-cdp-dl-1/user/systest/test.csv")
+textFile.count()
+note
+Livy interpreter uses Livy sessions and not batches.
+
+
+

@@ -1,0 +1,128 @@
+PBJ WorkbenchCloudera Docs
+PBJ Workbench
+The PBJ Workbench features the classic workbench UI backed by the open-source Jupyter
+  protocol pre-packaged in a runtime image. Users can easily choose this runtime image when
+  launching a session. The open-source Jupyter infrastructure eliminates the dependency on
+  proprietary CML code when building a Docker image, allowing runtime images to be built more
+  quickly. The PBJ Workbench enables you to construct runtime images on Ubuntu base images
+  (including non-Cloudera base images) and use them with the CML workbench.
+ML Runtimes have been open sourced and are available in the cloudera/ml-runtimes GitHub repository. If you need to understand your Runtime
+   environments fully or want to build a new Runtime from scratch,  you can access the Dockerfiles
+   that were used to build the ML Runtime container images in this repository.
+The PBJ Workbench is available by default, but you have to select it when you launch a
+   session.
+
+Click New Session.
+In Runtime > Editor, select PBJ Workbench
+Click Start Session.
+
+Now you can use the PBJ Workbench as you would the normal workbench.
+The requirements and preparatory steps for creating a PBJ Workbench are described in each
+   section below.
+PBJ Workbench setup: Python installation
+PBJ Runtimes need to have Python installed, even if the Runtime is intended to run another
+    kernel in CML, e.g. R. The minimum Python version supported is 3.7. Python can be installed from
+    the base image’s package manager or compiled by the user.
+The minimal requirements that must be satisfied by a custom PBJ Runtime image include:
+
+The actual Python binary or a symlink to it must exist at the following path:
+     /usr/local/bin/python3
+The Python binary must be on the PATH under the name "python", meaning that executing the
+     command "python" in a terminal shall start up Python.
+Executing “python --version” should result in a version greater than 3.7
+If the Runtime is configured to run a Python kernel in CML, the commands “python” and
+     “/usr/local/bin/python3” must start up the same Python process that is registered as a Jupyter
+     Kernel (see below).
+
+If the method you chose to install Python does not place the Python binary under
+    /usr/local/bin/python3, or does not create the command "python", please create appropriate
+    symlinks.
+
+Install Jupyter dependencies and register your kernel
+First, the Jupyter Kernel Gateway, version 2.5.2 must be installed into the Docker image. This
+    example command may need to be modified depending on the filename and path of the pip executable
+    in the image.
+RUN pip3 install "jupyter-kernel-gateway==2.5.2"
+The path to the Jupyter executable installed by pip should be noted, and the command to run
+    Jupyter Kernel Gateway must be incorporated into the ML_RUNTIME_JUPYTER_KERNEL_GATEWAY_CMD
+    environment variable in the Docker image:
+ENV ML_RUNTIME_JUPYTER_KERNEL_GATEWAY_CMD="/path/to/jupyter kernelgateway"
+noteThe highest supported version of the jupyter-client library is version 7.4.9. Do not upgrade
+   to version 8 or higher.
+When launching the Runtime in CML, the correct IP address - port configuration for Jupyter
+    Kernel Gateway is set automatically by CML.
+Next, a Jupyter kernel has to be registered. Each instance of the PBJ Workbench communicates
+    with the Jupyter kernel installed in the Runtime via the Jupyter protocol. Kernels are available
+    for a wide variety of languages and versions. Install the kernel of your choice to the image by
+    following its installation instructions. A kernel named python3 is registered
+    by default when installing jupyter-kernel-gateway via pip.
+    Installed Jupyter kernels can be listed by running the following command in a container created
+    from the image:
+path/to/jupyter kernelspec list
+The name of your chosen kernel must be incorporated into the ML_RUNTIME_JUPYTER_KERNEL_NAME
+    environment variable in the Docker image. For example, if your kernel’s name is python3, the
+    following must be included in the Dockerfile:
+ENV ML_RUNTIME_JUPYTER_KERNEL_NAME=python3
+
+Add the cdsw user
+User code will be run in the image under user and group 8536:8536 . Associate these id’s with
+    the name cdsw in the image by adding the following command to the dockerfile:
+RUN groupadd --gid 8536 cdsw && \
+    useradd -c "CDSW User" --uid 8536 -g cdsw -m -s /bin/bash cdsw
+   
+
+Relax permissions so that Cloudera client config can be written
+All code in the runtime container, including initial setup, will be run as the cdsw user. The
+    initial setup includes linking client files for Cloudera data services out to their standard
+    paths. To facilitate this, permissions to the following paths should be set so that user 8536
+    can write to them and to their subfolders:
+
+/etc
+/bin
+/usr/share/java
+/opt
+/usr
+
+Also set the permissions of the following folders and all their subfolders to 777.
+
+/etc
+/etc/alternatives
+
+
+Additional requirements
+
+ML_RUNTIME_METADATA_VERSION environment variable and the corresponding Docker label must be
+      set to 2.
+To use the PBJ Workbench editor, the ML_RUNTIME_EDITOR environment variable and the
+      corresponding Docker label must be set to "PBJ Workbench". If using a 3rd party editor (for
+      example, JupyterLab or RStudio), set the ML_RUNTIME_EDITOR environment variable and Docker
+      label to the desired value. Note that "Workbench" and "PBJ Workbench" are reserved names.
+Base image must be Ubuntu. 
+Bash must be installed and must be configured as the default terminal used by the csdw
+      user.
+In case the PBJ Runtime is running the R kernel, the kernel must be registered with the
+      IRkernel package.
+The executable that is registered as a Jupyter kernel must be on PATH, must be found by the
+      "which" command and must be named after the programming language of the kernel. E.g. the name
+      of the executable must be: 
+`python` in case of a Python kernel (python3 is not sufficient)
+`R` in case of an R kernel, etc.
+
+In the case of using a virtual / conda environment and a Python kernel, we recommend
+      configuring PATH such that the default "pip" command corresponds to the python executable
+      registered as a Jupyter kernel.
+CML mounts the project’s filesystem under the path /home/cdsw and erases any file installed
+      to that path in the Runtime image. Therefore, custom Runtime images should not install
+      anything under the home folder of the cdsw user.
+On the other hand, once the Runtime image starts up in CML, the kernel must be configured
+      to install new packages to user site libraries under /home/cdsw. That way, newly installed
+      packages will persist in the project’s filesystem.
+The package xz-utils must be installed on the Runtime image.
+The following binaries should be reachable on the PATH: kinit,
+       klist, ktutil, and sshd. These are
+      installed on Ubuntu as part of the following packages: krb5-user and
+       ssh.
+
+
+
+Dockerfile compatible with PBJ WorkbenchThis Dockerfile produces a runtime image that is compatible with the PBJ Workbench from a third-party base image.PBJ Runtimes and ModelsThe PBJ (Powered by Jupyter) Runtime enables a wide variety of language kernels to be   run as CML workloads. Model workloads are currently only supported for Python and R   kernels.Example models with PBJ RuntimesThe library cml includes the package, models_v1. This   package includes the cml_model decorator that can be used to allow a function to   work as a model in a PBJ Runtime. It can also be used to enable gathering of model   metrics.

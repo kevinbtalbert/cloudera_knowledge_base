@@ -1,0 +1,84 @@
+Backing up a collection from HDFSCloudera Docs
+Backing up a collection from HDFS
+You can back up Solr collections to your local cluster or a remote cluster using the
+    solrctl utility to minimize data loss caused by accidental or malicious administrative actions.
+    Learn how to create, prepare, and export the Solr collection snapshot to create a backup of the
+    Solr collection.
+
+
+If you are using a secure (Kerberos-enabled) cluster,
+                    specify your jaas.conf file by adding the following parameter
+                    to each
+                    command:--jaas [***/PATH/TO/JAAS.CONF***]
+If TLS is enabled for the Solr service, specify the truststore and password using
+                    the ZKCLI_JVM_FLAGS environment variable before you begin the
+                    procedure:
+export ZKCLI_JVM_FLAGS="-Djavax.net.ssl.trustStore=[***/PATH/TO/TRUSTSTORE \
+-Djavax.net.ssl.trustStorePassword=[***TRUST_STORE_PASSWORD***]"
+
+
+
+Create a snapshot. On a host running Solr
+                    Server, run the following command:
+
+solrctl collection --create-snapshot [***USER_DEFINED_NAME_OF_THE_SNAPSHOT***] -c [***NAME_OF_THE_COLLECTION_TO_BE_BACKED_UP***]
+
+For example, for a collection named
+                            tweets the
+                    command:solrctl collection --create-snapshot tweets-$(date +%Y%m%d%H%M) -c tweetscreates
+                    the snapshot tweets-202103281043.
+
+If you are backing up the Solr collection to a remote cluster, prepare the
+                    snapshot for export. If you are backing up the Solr collection to the local
+                    cluster, skip this step. 
+
+The destination HDFS directory path
+                            ([***DESTINATION_DIRECTORY***], specified by the
+                            -d option) must exist on the local cluster before you
+                        run this command. Make sure that the Solr superuser (solr
+                        by default) has permission to write to this directory.
+solrctl collection --prepare-snapshot-export [***NAME_OF_THE_SNAPSHOT_TO_BE_EXPORTED***] -c [***COLLECTION_NAME***] -d [***DESTINATION_DIRECTORY***]
+
+
+For example:
+hdfs dfs -mkdir -p /path/to/backup-staging/tweets-202103281043
+hdfs dfs -chown :solr /path/to/backup-staging/tweets-202103281043
+solrctl collection --prepare-snapshot-export tweets-202103281043 -c tweets \
+-d /path/to/backup-staging/tweets-202103281043
+
+
+Export the snapshot. This step uses the DistCp utility to back up the collection
+          metadata as well as the corresponding index files. The destination directory must exist
+          and be writable by the Solr superuser (solr by default).
+To export the snapshot to a remote cluster, run the following
+          command:solrctl collection --export-snapshot [***NAME_OF_THE_SNAPSHOT_TO_BE_EXPORTED***] -s [***SOURCE_DIRECTORY***] -d [***PROTOCOL***]://[***NAMENODE***]:[***PORT***]/[***DESTINATION_DIRECTORY***]
+
+
+ For example:
+HDFSwebHDFSHDFS
+              protocol:solrctl collection --export-snapshot tweets-202103281043 -s /path/to/backup-staging/tweets-202103281043 \
+-d hdfs://nn01.example.com:8020/path/to/backups WebHDFS
+              protocol:solrctl collection --export-snapshot tweets-202103281043 -s /path/to/backup-staging/tweets-202103281043 \
+-d webhdfs://nn01.example.com:20101/path/to/backups
+
+
+
+To export the snapshot to the local cluster, run the following command:
+solrctl collection --export-snapshot [***NAME_OF_THE_SNAPSHOT_TO_BE_EXPORTED***] -c [***COLLECTION_NAME***] -d [***DESTINATION_DIRECTORY***]
+
+
+For example:
+solrctl collection --export-snapshot tweets-202103281043 -c tweets -d /path/to/backups/
+
+
+Delete the snapshot after exporting: 
+
+solrctl collection --delete-snapshot [***NAME_OF_THE_SNAPSHOT_TO_BE_DELETED***] -c [***COLLECTION_NAME***]
+
+
+For example:
+solrctl collection --delete-snapshot tweets-202103281043 -c tweets
+
+
+
+Related informationsolrctl Reference

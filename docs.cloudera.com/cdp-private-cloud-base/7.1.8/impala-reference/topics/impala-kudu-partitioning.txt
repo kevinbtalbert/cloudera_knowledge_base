@@ -1,0 +1,109 @@
+Partitioning for Kudu TablesCloudera Docs
+Partitioning for Kudu Tables
+Kudu tables use special mechanisms to distribute data among the
+    underlying tablet servers. Although referred as partitioned tables, they are
+    distinguished from traditional Impala partitioned tables with the different
+    syntax in CREATE TABLE statement. 
+ Kudu tables use PARTITION BY, HASH,
+        RANGE, and range specification clauses rather than the
+        PARTITIONED BY clause for HDFS-backed tables, which
+      specifies only a column name and creates a new partition for each
+      different value. 
+ To see the current partitioning scheme for a Kudu table, you can use the
+        SHOW CREATE TABLE statement or the SHOW
+        PARTITIONS statement. The CREATE TABLE syntax
+      displayed by this statement includes all the hash, range, or both clauses
+      that reflect the original table structure plus any subsequent
+        ALTER TABLE statements that changed the table
+      structure. 
+ To see the underlying buckets and partitions for a Kudu table, use the
+        SHOW TABLE STATS or SHOW PARTITIONS
+      statement. 
+Hash Partitioning
+ Hash partitioning is the simplest type of partitioning for Kudu
+        tables. For hash-partitioned Kudu tables, inserted rows are divided up
+        between a fixed number of buckets by applying a hash function to
+        the values of the columns specified in the HASH clause.
+        Hashing ensures that rows with similar values are evenly distributed,
+        instead of clumping together all in the same bucket. Spreading new rows
+        across the buckets this way lets insertion operations work in parallel
+        across multiple tablet servers. Separating the hashed values can impose
+        additional overhead on queries, where queries with range-based
+        predicates might have to read multiple tablets to retrieve all the
+        relevant values. 
+
+-- 1M rows with 50 hash partitions = approximately 20,000 rows per partition.
+-- The values in each partition are not sequential, but rather based on a hash function.
+-- Rows 1, 99999, and 123456 might be in the same partition.
+CREATE TABLE million_rows (id string primary key, s string)
+  PARTITION BY HASH(id) PARTITIONS 50
+  STORED AS KUDU;
+
+-- Because the ID values are unique, we expect the rows to be roughly
+-- evenly distributed between the buckets in the destination table.
+INSERT INTO million_rows SELECT * FROM billion_rows ORDER BY id LIMIT 1e6;
+
+The largest number of buckets that you can create with a
+          PARTITIONS clause varies depending on the number of
+        tablet servers in the cluster, while the smallest is 2. For large
+        tables, prefer to use roughly 10 partitions per server in the cluster.
+      
+
+Range Partitioning
+ Range partitioning lets you specify partitioning precisely, based on
+        single values or ranges of values within one or more columns. You add
+        one or more RANGE clauses to the CREATE
+          TABLE statement, following the PARTITION BY
+        clause. The RANGE clause includes a combination of
+        constant expressions, VALUE or VALUES
+        keywords, and comparison operators. 
+
+CREATE TABLE t1 (id STRING PRIMARY KEY, s STRING)
+  PARTITION BY RANGE (PARTITION 'a' <= VALUES < '{', PARTITION 'A' <= VALUES < '[', PARTITION VALUES = '00000')
+  STORED AS KUDU;
+
+note
+ When defining ranges, be careful to avoid fencepost errors
+          where values at the extreme ends might be included or omitted by
+          accident. For example, in the tables defined in the preceding code
+          listings, the range 
+            "a" <= VALUES < "{"
+           ensures that any values starting with z,
+          such as za or zzz or
+            zzz-ZZZ, are all included, by using a less-than
+          operator for the smallest value after all the values starting with
+            z. 
+
+ For range-partitioned Kudu tables, an appropriate range must exist
+        before a data value can be created in the table. Any
+          INSERT, UPDATE, or
+          UPSERT statements fail if they try to create column
+        values that fall outside the specified ranges. The error checking for
+        ranges is performed on the Kudu side. Impala passes the specified range
+        information to Kudu, and passes back any error or warning if the ranges
+        are not valid. (A nonsensical range specification causes an error for a
+        DDL statement, but only a warning for a DML statement.) 
+ Partition ranges can be non-contiguous: 
+
+PARTITION BY RANGE (year) (PARTITION 1885 <= VALUES <= 1889, PARTITION 1893 <= VALUES <= 1897)
+ The ALTER TABLE statement with the ADD
+          PARTITION or DROP PARTITION clauses can be
+        used to add or remove ranges from an existing Kudu table. 
+
+ALTER TABLE foo ADD PARTITION 30 <= VALUES < 50;
+ALTER TABLE foo DROP PARTITION 1 <= VALUES < 5;
+
+ When a range is added, the new range must not overlap with any of the
+        previous ranges; that is, it can only fill in gaps within the previous
+        ranges. 
+ When a range is removed, all the associated rows in the table are
+        deleted regardless whether the table is internal or external. 
+ Kudu tables can also use a combination of hash and range partitioning.
+        For example:
+
+PARTITION BY HASH (school) PARTITIONS 10,
+  RANGE (letter_grade) (PARTITION VALUE = 'A', PARTITION VALUE = 'B',
+    PARTITION VALUE = 'C', PARTITION VALUE = 'D', PARTITION VALUE = 'F')
+
+
+

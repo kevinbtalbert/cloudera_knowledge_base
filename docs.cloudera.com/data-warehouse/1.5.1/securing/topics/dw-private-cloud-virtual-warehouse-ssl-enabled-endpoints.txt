@@ -1,0 +1,63 @@
+SSL-enabled endpoints for Virtual Warehouse clients in CDW on Private CloudCloudera Docs
+SSL-enabled endpoints for Virtual Warehouse clients in CDW on Private Cloud
+In Cloudera Data Warehouse (CDW) Private Cloud, all client endpoints have been
+    SSL-enabled. This requires that you configure the SSL certificates for client
+    endpoints.
+The client endpoints for web applications and Virtual Warehouse client URLs are SSL-enabled.
+      The following endpoints use the OpenShift/Embedded Container Service cluster
+      default certificate: 
+Hue
+Impala coordinator
+HiveServer2
+
+
+Domain name changes
+To use the OpenShift/Embedded Container Service cluster wildcard certificate,
+        the DNS names have been changed. The environment ID sub domain from the
+        domain name has been removed. This creates a flat DNA structure so the cluster wildcard
+        certificate can be applied to the endpoints. 
+
+Generating a truststore for a self-signed certificate
+You can query the service certificate and convert it to a JKS truststore using the following
+     steps:
+
+Retrieve the certificate:
+          $ openssl s_client -showcerts -connect hs2-my-cwh1.apps.cdw.mycloud.myfirm.com:443 -servername
+hs2-my-cwh1.apps.cdw.mycloud.myfirm.com </dev/null|openssl x509 -outform PEM > <mycertfile>.pem
+
+Convert the PEM file to a truststore. You will be prompted for a password.
+          $ keytool -import -alias hs2-my-cw1.apps.cdw.mycloud.myfirm.com -file <mycertfile>.pem -keystore <mycert>.jks
+
+
+
+Opening SSL-enabled connections with Database Catalog clients
+The CDW Virtual Warehouse clients like beeline and impala-shell can open SSL-enabled
+        connections as described in this section.
+Beeline
+A beeline connection can be created using a JDBC connection string. Specifying the username
+       and password with the '-n' and the '-p' options returns an
+       error. The beeline CLI prompts for credentials:
+$ beeline
+beeline> !connect
+jdbc:hive2://hs2-my-cwh1.apps.cdw.mycloud.myfirm.com:443/default;transportMode=http;httpPath=cliservice;
+     ssl=true;retries=3;sslTrustStore=<JKS-path>;trustStorePassword=<***password***>
+Enter username for jdbc:hive2://hs2-my-cwh1.apps.cdw.mycloud.myfirm.com:443/default:<my-user-name
+Enter password for jdbc:hive2://hs2-my-cwh1.apps.cdw.mycloud.myfirm.com:443/default:<********>
+importantThe value for <JKS-path> is
+       generated in the above section "Generating a truststore for a self-signed certificate."
+impala-shell
+The impala-shell CLI opens a TLS/SSL-enabled connection when you use the
+       `--ssl` option. If `--ca_cert` is not set, impala-shell
+       enables TLS/SSL, but does not validate the server certificate. Set the `--ca_cert`
+       CLI option to the local path name that points to the third-party CA certificate, or to a copy
+     of the server certificate in the case you have a self-signed server certificate:
+$ impala-shell --protocol='hs2-http' -i "coordinator-my-iwh2.apps.cdw.mycloud.myfirm.com:443" --ssl
+
+OpenShift routes
+OpenShift routes are used to expose the user-facing services in the CDW Private Cloud
+       deployment. Route objects can perform edge TLS termination using the cluster-deployed
+       certificate for the endpoints. If the cluster certificate must be rotated, the routes can
+       pick up the new certificate automatically. It is not necessary to re-deploy or to manually
+       configure the service in order to pick up the changes.
+
+

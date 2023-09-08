@@ -1,0 +1,81 @@
+Recovering a corrupted CDE Embedded databaseCloudera Docs
+Recovering a corrupted CDE Embedded database
+In case you did not stop the jobs and scale down CDE embedded databases but completed
+        the upgrade of OpenShift Container Platform (OCP), there is a chance of the CDE embedded
+        database getting corrupted which causes the virtual clusters to become inaccessible. Follow
+        the below steps to recover the CDE embedded database.
+
+Identifying the CDE Namespace
+
+
+Navigate to the Cloudera Data Engineering Overview page by clicking the
+                            Data Engineering  tile in the  Cloudera Data Platform (CDP)  management
+                            console. 
+
+
+In the  CDE Services  column, click  Service Details  for the CDE
+                            service.
+
+
+Note the Cluster ID shown in the page. For example, if the Cluster ID
+                            is cluster-abcd1234, then the CDE Namespace is dex-base-abcd1234.
+
+
+Use this CDE Namespace (in the above example, it is dex-base-abcd1234)
+                            in the following instructions to run kubernetes commands.
+
+
+
+Edit the dex-base-db-server-config configuration map and add the
+                     innodb_force_recovery=4 configuration in the [mysqld] section. 
+OpenShift CLI
+oc scale statefulset/cdp-cde-embedded-db --namespace <CDE Namespace> --replicas 1
+Kubernetes CLI
+                        kubectl scale statefulset/cdp-cde-embedded-db --namespace <CDE Namespace> --replicas 1Example
+                        snippet:
+                    # Please edit the object below. Lines beginning with a '#' will be ignored,
+# and an empty file will abort the edit. If an error occurs while saving this file 
+# will be reopened with the relevant failures.
+#
+apiVersion: v1
+data:
+  my.cnf: |-
+    [mysqld]
+    port=3306
+    default_authentication_plugin = mysql_native_password
+    bind-address = 0.0.0.0
+    innodb_force_recovery=4
+
+Scale down and then back up the CDE embedded database statefulset to restart
+                    it.
+OpenShift CLI oc scale statefulset/cdp-cde-embedded-db --namespace <CDE Namespace> --replicas 0
+
+oc scale statefulset/cdp-cde-embedded-db --namespace <CDE Namespace> --replicas 1
+Kubernetes CLI
+                    kubectl scale statefulset/cdp-cde-embedded-db --namespace <CDE Namespace> --replicas 0
+
+kubectl scale statefulset/cdp-cde-embedded-db --namespace <CDE Namespace> --replicas 1
+Wait for 10 minutes for the CDE embedded database to complete the
+                    recovery.
+
+Edit the dex-base-db-server-config configuration map again by removing the
+                    previously added innodb_force_recovery=4 configuration under the [mysqld]
+                    section.
+OpenShift CLI oc edit configmap/dex-base-db-server-config --namespace <CDE Namespace>
+Kubernetes CLI
+                    kubectl edit configmap/dex-base-db-server-config --namespace <CDE Namespace> 
+
+Scale down and then back up the CDE embedded database statefulset to restart it
+                    again.
+OpenShift CLI oc scale statefulset/cdp-cde-embedded-db --namespace <CDE Namespace> --replicas 0
+                        
+oc scale statefulset/cdp-cde-embedded-db --namespace <CDE Namespace> --replicas 1
+Kubernetes CLI
+                    kubectl scale statefulset/cdp-cde-embedded-db --namespace <CDE Namespace> --replicas 0
+                        
+kubectl scale statefulset/cdp-cde-embedded-db --namespace <CDE Namespace> --replicas 1
+Wait for all the CDE Virtual Clusters to be accessible. This usually
+                    takes about 10 minutes.
+
+
+Parent topic: Update from 1.4.1 or 1.5.0 to 1.5.1 (OCP)

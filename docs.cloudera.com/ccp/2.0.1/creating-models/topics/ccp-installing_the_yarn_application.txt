@@ -1,0 +1,194 @@
+Set up Model as a ServiceCloudera Docs
+Set up Model as a
+      Service
+The YARN application listens for model deployment requests. Models are exposed as REST
+      microservices that expose your model application as an endpoint. The YARN application takes
+      the submitted request that specifies the model payload that includes a shell script and other
+      model collateral which will start the microservice. Upon execution of the shell script that
+      starts the model, the YARN application registers the endpoints in ZooKeeper.
+If you are using or depending upon an API library in your model such as Flask and
+         Jinja2, the library must be installed on every data node. This is because the model is
+         executed by a shell script which must be able to run successfully on every node.In order
+            to know on which port that the REST service is listening, the model must create a file
+            in the current working directory which indicates the URL for the model. Because you
+            might have more than one copy of the model, it is a good idea to find an open port and
+            bind to that. An example of how to do that in Python is as follows:
+              sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.bind(('localhost', 0))
+port = sock.getsockname()[1]
+sock.close()
+with open("endpoint.dat", "w") as text_file:
+  text_file.write("{\"url\" : \"http://0.0.0.0:%d\"}" % port)
+
+ As root, log into the host from which you run Metron. 
+
+ Create a directory for the model.
+For this example, create a "sample" directory in the root user's home directory.
+            
+
+Now, you can create a simple shell script that will expose a REST endpoint called
+               "echo" that will echo back the arguments passed to it. Create a file in the "sample"
+               directory named "echo.sh", and copy the following information into the file.
+
+noteIn this simple REST service, we are always binding to port 1500. In a real REST
+                  service which would expose your model, you will use an appropriate port.
+
+
+#!/bin/bash
+rm -f out
+mkfifo out
+trap "rm -f out" EXIT
+echo "{ \"url\" : \"http://localhost:1500\", \"functions\" : { \"apply\" : \"echo\" } }" > endpoint.dat
+while true
+do
+  cat out | nc -l 0.0.0.0 1500 > >( # parse the netcat output, to build the answer redirected to the pipe "out".
+    export REQUEST=
+    while read line
+    do
+      line=$(echo "$line" | tr -d '[\r\n]')
+
+      if echo "$line" | grep -qE '^GET /' # if line starts with "GET /"
+      then
+        REQUEST=$(echo "$line" | cut -d ' ' -f2) # extract the request
+      elif [ "x$line" = x ] # empty line / end of request
+      then
+        HTTP_200="HTTP/1.1 200 OK"
+        HTTP_LOCATION="Location:"
+        HTTP_404="HTTP/1.1 404 Not Found"
+        # call a script here
+        # Note: REQUEST is exported, so the script can parse it (to answer 200/403/404 status code + content)
+        if echo $REQUEST | grep -qE '^/echo/'
+        then
+            printf "%s\n%s %s\n\n%s\n" "$HTTP_200" "$HTTP_LOCATION" $REQUEST ${REQUEST#"/echo/"} > out
+        else
+            printf "%s\n%s %s\n\n%s\n" "$HTTP_404" "$HTTP_LOCATION" $REQUEST "Resource $REQUEST NOT FOUND!" > out
+        fi
+      fi
+    done
+  )
+done
+
+
+ Change directories to $METRON_HOME.  
+
+cd $METRON_HOME
+
+
+ Start the MaaS service in bin/maas_service.sh -zk
+                  $ZOOKEEPER_HOST:2181. 
+
+bash bin/maas_service.sh -zk $ZOOKEEPER_HOST:2181
+
+where
+
+
+-c, --create
+
+Flag to indicate whether to create the domain specified with -domain.
+
+-d,--domain <arg>
+
+ID of the time line domain where the time line entities will be put
+
+-e,--shell_env <arg>
+
+Environment for shell script. Specified as env_key=env_val pairs.
+
+-h,--help
+
+The help screen
+
+-j,--jar <arg>
+
+Jar file containing the application master
+
+-l,--log4j <arg>
+
+The log4j properties file to load
+
+-ma,--modify_acls <arg>
+
+Users and groups that allowed to modify the time line entities in the
+                           given domain
+
+-ma,--master_vcores <arg>
+
+Amount of virtual cores to be requested to run the application master
+
+-mm,--master_memory
+
+Amount of memory in MB to be requested to run the application master
+
+-nle,--node_label_expression <arg>
+
+Node label expression to determine the nodes where all the containers of
+                           this application will be allocated, "" means containers can be allocated
+                           anywhere, if you don't specify the option, default node_label_expression
+                           of queue will be used.
+
+-q,--queue <arg>
+
+RM Queue in which this application is to be submitted
+
+-t,--timeout <arg>
+
+Application timeout in milliseconds
+
+-va,--view_acls <arg>
+
+Users and groups that allowed to view the time line entities in the given
+                           domain
+
+-zq,--zk_quorum <arg>
+
+ZooKeeper Quorum
+
+-zr,--zk_root <arg>
+
+ZooKeeper Root
+
+
+
+
+ Test the configuration to ensure that the MaaS service is running correctly.   
+For example, you can enter the following:
+
+
+Start one instance of a sample echo service (named 'sample' version '1.0') in
+                     a container of 500m:
+
+bin/maas_deploy.sh -hmp ~/sample -hmp /user/root/maas/sample -m 500 -mo ADD -n sample -ni 1 -v 1.0 -zk $ZOOKEEPER_HOST:2181 -lmp /root/sample
+
+
+
+Wait a couple seconds and then ensure that the service started by running the
+                     following command:
+
+curl -i http://localhost:1500/echo/foobar
+
+You should see a response foobar.
+
+
+List the active models and ensure that you see the sample
+                     model in the output.
+
+bin/maas_deploy.sh -mo LIST -n sample -zk $ZOOKEEPER_HOST:2181
+
+
+
+Remove one instance of the sample model.
+
+bin/maas_deploy.sh -mo REMOVE -n sample -ni 1 -v 1.0 -zk $ZOOKEEPER_HOST:2181
+
+
+
+After a couple seconds ensure that you cannot access the
+                        sample model any longer:
+
+curl -i http://localhost:1500/echo/foobar
+
+
+
+
+
+Parent topic: Creating Models Overview

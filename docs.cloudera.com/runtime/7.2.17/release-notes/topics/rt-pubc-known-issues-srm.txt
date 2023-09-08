@@ -1,0 +1,128 @@
+Known Issues in Streams Replication ManagerCloudera Docs
+Known Issues in Streams Replication Manager
+Learn about the known issues in Streams Replication Manager, the impact or changes to
+    the functionality, and the workaround.
+Known Issues
+
+
+CDPD-22089: SRM does not sync re-created source topics until the
+            offsets have caught up with target topic
+Messages written to topics that were deleted and re-created are
+            not replicated until the source topic reaches the same offset as the target topic. For
+            example, if at the time of deletion and re-creation there are a 100 messages on the
+            source and target clusters, new messages will only get replicated once the re-created
+            source topic has 100 messages. This leads to messages being lost.
+None
+
+
+CDPD-11079: Blacklisted topics appear in the list of replicated
+            topics
+If a topic was originally replicated but was later disallowed
+            (blacklisted), it will still appear as a replicated topic under the
+              /remote-topics REST API endpoint. As a result, if a call is made to
+            this endpoint, the disallowed topic will be included in the response. Additionally, the
+            disallowed topic will also be visible in the SMM UI. However, it's Partitions and
+            Consumer Groups will be 0, its Throughput, Replication Latency and Checkpoint Latency
+            will show N/A.
+None
+
+
+CDPD-30275: SRM may automatically re-create deleted topics on
+            target clusters
+If auto.create.topics.enable is enabled,
+            deleted topics might get automatically re-created on target clusters. This is a timing
+            issue. It only occurs if remote topics are deleted while the replication of the topic is
+            still ongoing.
+
+
+Remove the topic from the topic allowlist with srm-control. For
+                example:srm-control topics --source [SOURCE_CLUSTER] --target [TARGET_CLUSTER] --remove [TOPIC1]
+Wait until SRM is no longer replicating the topic.
+Delete the remote topic in the target cluster.
+
+
+
+
+OPSAPS-67772: SRM Service metrics processing fails when the
+            noexec option is enabled for /tmp
+The SRM Service role uses /tmp to extract
+            RocksDB .so files, which are required for metrics processing to
+            function. If the noexec option is enabled for the
+              /tmp directory, the SRM Service role is not able load the
+            required RocksDB files. This results in metrics processing failing.
+
+
+In Cloudera Manager, select the SRM service and go to
+                  Configuration.
+Add the following to SRM Service Environment Advanced Configuration
+                  Snippet (Safety Valve). Do this for all SRM Service role
+                  instances.ROCKSDB_SHAREDLIB_DIR=[***PATH***]Replace
+                    [***PATH***] with a directory that is not
+                    /tmp.
+
+
+
+
+OPSAPS-67738: SRM Service role's Remote Querying feature does
+            not work when the noexec option is enabled for /tmp
+
+The SRM Service role puts the Netty native libraries into the
+                /tmp directory. As a result, If the noexec
+              option is enabled for the /tmp directory, the Remote Querying
+              feature will fail to function.
+
+
+
+In Cloudera Manager, select the SRM service and go to
+                  Configuration.
+Add the following to
+                SRM_JVM_PERF_OPTS.-Dio.netty.native.workdir=[***PATH***]Replace
+                  [***PATH***] with a directory that is not
+                  /tmp.
+
+
+
+
+OPSAPS-67742: The SRM Service role fails to start if properties
+            are added to Additional Configs For Streams Application Running Inside SRM Service 
+Configuring the SRM Service role's internal Kafka Streams
+            application is not possible. If you add any properties to Using the
+              Additional Configs For Streams Application Running Inside SRM Service, the
+            SRM Service role fails to start. If you are affected by this issue, an exception similar
+            to the following will be present in the SRM Service role's
+              stderr.log:o.dropwizard.configuration.ConfigurationParsingException: /var/run/cloudera-scm-agent/process/132-streams_replication_manager-STREAMS_REPLICATION_MANAGER_SERVICE/srm-service.yaml has an error: * Malformed YAML at line: 66, column: 49; mapping values are not allowed here in 'reader', line 65, column 48:
+.
+.
+ 
+None
+
+
+CDPD-60426: Configuration changes are lost following a rolling
+            restart of the service
+In certain cases, SRM might fail to apply configuration
+            updates if the service is restarted with a rolling restart. In a case like this,
+            configuration changes are ignored without any warning or indication. This issue also
+            affects rolling upgrades.
+When restarting the service, use Actions >  > Restart instead of Actions >  > Rolling Restart after making configuration changes. When upgrading a cluster, ensure that
+            SRM is not restarted with a rolling restart. 
+
+
+
+Limitations
+
+
+
+SRM cannot replicate Ranger authorization policies to or from
+              Kafka clusters
+Due to a limitation in the Kafka-Ranger plugin, SRM cannot
+              replicate Ranger policies to or from clusters that are configured to use Ranger for
+              authorization. If you are using SRM to replicate data to or from a cluster that uses
+              Ranger, disable authorization policy synchronization in SRM. This can be achieved by
+              clearing the Sync Topic Acls Enabled
+                (sync.topic.acls.enabled) checkbox.
+
+
+
+
+
+Parent topic: Known Issues In Cloudera Runtime 7.2.17

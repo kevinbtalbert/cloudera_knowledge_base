@@ -1,0 +1,89 @@
+Optimizing S3A read performance for different file typesCloudera Docs
+Optimizing S3A read performance for different file types
+The S3A filesystem client supports the notion of input policies, similar to that of
+    the POSIX fadvise() API call. This tunes the behavior of the S3A client to
+    optimize HTTP GET requests for reading different filetypes. To optimize HTTP GET requests, you
+    can take advantage of the S3A input policy option
+      fs.s3a.experimental.input.fadvise.
+
+
+
+Policy
+Description
+
+
+
+"normal"
+This starts off as "sequential": it asks for the whole file. As soon as the
+                application tries to seek backwards in the file it switches into "random" IO mode.
+                This is not quite as efficient for Random IO as the "random" mode, because that
+                first read may have to be aborted. However, because it is adaptive, it is the best
+                choice if you do not know the data formats which will be read. 
+
+
+"sequential" (default)
+
+Read through the file, possibly with some short forward seeks.
+The whole document is requested in a single HTTP request; forward seeks within
+                  the readahead range are supported by skipping over the intermediate data.
+This leads to maximum read throughput, but with very expensive backward
+                  seeks.
+
+
+
+"random"
+
+Optimized for random IO, specifically the Hadoop `PositionedReadable` operations
+                  — though `seek(offset); read(byte_buffer)` also benefits.
+Rather than ask for the whole file, the range of the HTTP request is set to that
+                  of the length of data desired in the `read` operation - rounded up to the
+                  readahead value set in `setReadahead()` if necessary.
+By reducing the cost of closing existing HTTP requests, this is highly efficient
+                  for file IO accessing a binary file through a series of
+                    PositionedReadable.read() and
+                    PositionedReadable.readFully() calls. Sequential reading of a
+                  file is expensive, as now many HTTP requests must be made to read through the
+                  file.
+
+
+
+For operations simply reading through a file (copying, DistCp, reading
+          gzip or other compressed formats, parsing .csv files,
+        and so on) the sequential policy is appropriate. This is the default, so
+        you do not need to configure it.
+For the specific case of high-performance random access IO (for example, accessing ORC
+        files), you may consider using the random policy in the following
+        circumstances:
+
+
+Data is read using the PositionedReadable API.
+
+
+There are long distance (many MB) forward seeks.
+
+
+Backward seeks are as likely as forward seeks.
+
+
+There is little or no use of single character read() calls or small
+              read(buffer) calls.
+
+
+Applications are running close to the Amazon S3 data store; that is, the EC2 VMs on
+            which the applications run are in the same region as the Amazon S3 bucket.
+
+
+You must set the desired fadvise policy in the configuration option
+          fs.s3a.experimental.input.fadvise when the filesystem instance is
+        created. It can only be set on a per-filesystem basis, not on a per-file-read basis. You can
+        set it in core-site.xml:
+<property>
+  <name>fs.s3a.experimental.input.fadvise</name>
+  <value>random</value>
+</property>
+Or, you can set it in the spark-defaults.conf configuration of Spark:
+spark.hadoop.fs.s3a.experimental.input.fadvise random
+Be aware that this random access performance comes at the expense of sequential IO —
+        which includes reading files compressed with gzip.
+
+Parent topic: Improving Performance for S3A

@@ -1,0 +1,91 @@
+Create a Streaming ProfileCloudera Docs
+Create a Streaming
+    Profile
+Create a streaming profile when you want to create a profile based on telemetry that is
+    currently being captured, enriched, triaged, and indexed by CCP. 
+Ensure that the PROFILE_GET client is correctly configured to
+      match your desired Profile configuration before using it to read that Profile. 
+
+Create a streaming profile definition by editing
+            $METRON_HOME/config/zookeeper/profiler.json.
+As an example, in the editor copy/paste the basic "Hello, World" profile below.
+
+{
+  "profiles": [
+    {
+      "profile": "hello-world",
+      "foreach": "ip_src_addr",
+      "init": { 
+         "count": "0" 
+       },
+      "update": { 
+         "count": "count + 1" 
+       },
+      "result":  "count"
+    }
+  ]
+}
+
+
+You can also include the timestampField to:
+List the system time, which is the time at which you are processing the data.
+List the event time, which is the time contained in the data itself. 
+
+
+Upload the profile definition to ZooKeeper:
+
+source /etc/default/metron
+cd $METRON_HOME
+bin/zk_load_configs.sh -m PUSH -i config/zookeeper/ -z $ZOOKEEPER
+
+You can validate your upload by reading back the Metron configuration from ZooKeeper
+          using the same script. The result should look-like the following.
+
+bin/zk_load_configs.sh -m DUMP -z $ZOOKEEPER
+...
+PROFILER Config: profiler
+{
+  "profiles": [
+    {
+      "profile": "hello-world",
+      "onlyif":  "exists(ip_src_addr)",
+      "foreach": "ip_src_addr",
+      "init":    { "count": "0" },
+      "update":  { "count": "count + 1" },
+      "result":  "count"
+    }
+  ]
+}
+
+
+Ensure that test messages are being sent to the Profiler's input topic in Kafka. 
+The Profiler will consume messages from the input topic defined in the Profiler's
+          configuration (see Configure the Streaming Profiler). By default this is the
+          indexing topic.
+
+Check the HBase table to validate that the Profiler is writing the profile. 
+Remember that the Profiler is flushing the profile every 15 minutes. You will need to
+          wait at least this long to start seeing profile data in HBase.
+
+/usr/hdp/current/hbase-client/bin/hbase shell
+hbase(main):001:0> count 'profiler'
+
+
+Use the Profiler Client to read the profile data. 
+The following PROFILE_GET command reads the data written by the hello-world profile.
+          This assumes that 10.0.0.1 is one of the values for ip_src_addr contained within the
+          telemetry consumed by the Profiler.
+
+source /etc/default/metron
+bin/stellar -z $ZOOKEEPER
+[Stellar]>>> PROFILE_GET( "hello-world", "10.0.0.1", PROFILE_FIXED(30, "MINUTES"))
+[451, 448]
+
+This result indicates that over the past 30 minutes, the Profiler stored two values
+          related to the source IP address "10.0.0.1". In the first 15 minute period, the IP
+          10.0.0.1 was seen in 451 telemetry messages. In the second 15 minute period, the same IP
+          was seen in 448 telemetry messages.
+Enter quit to exit Stellar.
+
+
+Parent topic: Streaming Profiler

@@ -1,0 +1,387 @@
+Configuring a dedicated MIT KDC for cross-realm trustCloudera Docs
+Configuring a dedicated MIT KDC for cross-realm trust
+How to configure a cluster-dedicated KDC and default realm in Cloudera Manager. 
+Related informationHadoop Users (user:group) and Kerberos Principals
+
+
+
+Using Cloudera Manager to configure Kerberos authentication for the cluster creates
+          several principals and keytabs automatically. Cloudera Manager also deploys the keytab
+          files to every host in the cluster. See Hadoop Users (user:group) and Kerberos
+            Principals for complete listing. 
+noteThe example below is specific for creating and deploying principals and keytab files
+          for MIT Kerberos. See the appropriate documentation for other Kerberos implementations,
+          such as Microsoft Active Directory, as needed.
+
+
+
+
+Local and Remote Kerberos Admin Tools
+
+
+Kerberos administrator commands can be run directly on the KDC server host or remotely,
+          as shown in the table:
+
+
+kadmin.local
+Requires root access or Kerberos admin account. Use to log on directly to the
+                  KDC host.
+
+
+kadmin
+Use the logon to the KDC host system from another remote host over the
+                  network.
+
+
+
+To run Kerberos administration commands locally on the KRB host system:
+            sudo kadmin.localEnter your Linux system
+            password (for the sudo). 
+To run Kerberos administration commands from any host:
+            kadminEnter your Kerberos administrator
+            password. 
+
+noteCommands shown for the kadmin shell can also be run at
+          the kadmin.local shell.
+
+
+
+
+Setting up a Cluster-Dedicated KDC and Default Realm for the Hadoop Cluster
+
+
+Cloudera has tested the following configuration approaches to Kerberos security for
+          clusters managed by Cloudera Manager. For administration teams that are just getting
+          started with Kerberos security, we recommend starting with these approaches to the
+          configuration of KDC services for a number of reasons.
+The number of Service Principal Names (SPNs) that are created and managed by the Cloudera
+          Manager server for a CDP cluster can be significant, so it is important to realize the
+          potential impact on cluster uptime and overall operations if you choose to manage keytabs
+          manually instead. The Cloudera Manager server manages the creation of service keytabs on
+          the proper hosts based on the current configuration of the database. Manual keytab
+          management can be error prone and introduce delays when deploying or moving services
+          within the cluster, especially under time-sensitive conditions.
+Cloudera Manager creates SPNs within a KDC that it can access with the
+            kadmin command based on configuration of the
+            /etc/krb5.conf file on the Cloudera Manager host. SPNs are created with
+          the format service-name/host.fqdn.name@EXAMPLE.COM where
+            service-name is the relevant CDP service name such as
+            hue or hbase or hdfs.
+If your site already has a working KDC, and any existing principals share the same name
+          as any of the principals that Cloudera Manager creates, the Cloudera Manager Server
+          generates a new randomized key for those principals, and consequently causes existing
+          keytabs to become invalid.
+This is why Cloudera recommends using a dedicated local MIT Kerberos KDC and realm for
+          the Hadoop cluster. You can set up a one-way cross-realm trust from the cluster-dedicated
+          KDC and realm to your existing central MIT Kerberos KDC, or to an existing Active
+          Directory realm. Using this method, there is no need to create Hadoop service principals
+          in the central MIT Kerberos KDC or in Active Directory, but principals (users) in the
+          central MIT KDC or in Active Directory can be authenticated to Hadoop. The steps to
+          implement this approach are as follows:
+
+
+Install and configure a cluster-dedicated MIT Kerberos KDC that will be managed by
+            Cloudera Manager for creating and storing principals for the services supported by the
+            cluster.
+
+noteThe krb5-server package includes a logrotate
+              policy file to rotate log files monthly. To take advantage of this, install the
+                logrotate package. No additional configuration is necessary.
+            
+
+
+See the example kdc.conf and krb5.conf files in in
+              Sample Kerberos Configuration Files for
+            configuration considerations for the KDC and Kerberos clients. 
+
+Configure a default Kerberos realm for the cluster you want Cloudera Manager to
+            manage and set up one-way cross-realm trust between the cluster-dedicated KDC and either
+            your central KDC or Active Directory, using the appropriate steps: 
+
+
+Using a Cluster-Dedicated KDC with a Central MIT KDC
+Using a Cluster-Dedicated MIT KDC with Active Directory
+
+Cloudera strongly recommends the method above because: 
+It requires minimal configuration in Active Directory.
+It is comparatively easy to script the creation of many principals and keytabs.
+                  A principal and keytab must be created for every daemon in the cluster, and in a
+                  large cluster this can be extremely onerous to do directly in Active
+                  Directory.
+There is no need to involve central Active Directory administrators to get
+                  service principals created.
+It allows for incremental configuration. The Hadoop administrator can completely
+                  configure and verify the functionality the cluster independently of integrating
+                  with Active Directory.
+
+
+
+
+
+Using a Cluster-Dedicated KDC with a Central MIT KDC
+
+
+
+importantIf you plan to use Oozie or the Hue Kerberos Ticket Renewer in
+              your cluster, you must configure your KDC to allow tickets to be renewed, and you must
+              configure krb5.conf to request renewable tickets. Typically, you can
+              do this by adding the max_renewable_life setting to your realm in
+                kdc.conf, and by adding the renew_lifetime
+              parameter to the libdefaults section of
+              krb5.conf.
+
+
+
+In the /var/kerberos/krb5kdc/kdc.conf file on the local dedicated
+              KDC server host, configure the default realm for the Hadoop cluster by substituting
+              your Kerberos realm in the following realms property:
+
+[realms]
+ HADOOP.EXAMPLE.COM = {
+
+
+In the /etc/krb5.conf file on all cluster hosts and all Hadoop
+              client user hosts, configure the default realm for the Hadoop cluster by substituting
+              your Kerberos realm in the following realms property. Also specify
+              the local dedicated KDC server hostname in the /etc/krb5.conf file
+              (for example, kdc01.example.com).
+
+[libdefaults]
+  default_realm = HADOOP.EXAMPLE.COM
+[realms]
+  HADOOP.EXAMPLE.COM = {
+    kdc = kdc01.hadoop.example.com:88
+    admin_server = kdc01.hadoop.example.com:749
+    default_domain = hadoop.example.com
+  }
+  EXAMPLE.COM = {
+    kdc = kdc01.example.com:88
+    admin_server = kdc01.example.com:749
+    default_domain = example.com
+  }
+[domain_realm]
+  .hadoop.example.com = HADOOP.EXAMPLE.COM
+  hadoop.example.com = HADOOP.EXAMPLE.COM
+  .example.com = EXAMPLE.COM
+  example.com = EXAMPLE.COM
+
+
+To set up the cross-realm trust in the cluster-dedicated KDC, type the following
+              command in the kadmin.local or kadmin shell on the
+              cluster-dedicated KDC host to create a krbtgt principal. Substitute
+              your cluster-dedicated KDC realm for HADOOP.EXAMPLE.COM, and
+              substitute your central KDC realm for EXAMPLE.COM. Enter a trust
+              password when prompted. Note the password because you will need to enter the exact
+              same password in the central KDC in the next step.
+
+kadmin:  addprinc krbtgt/HADOOP.EXAMPLE.COM@EXAMPLE.COM 
+
+
+To set up the cross-realm trust in the central KDC, type the same command in the
+                kadmin.local or kadmin shell on the central KDC
+              host to create the exact same krbtgt principal and password.
+
+kadmin:  addprinc krbtgt/HADOOP.EXAMPLE.COM@EXAMPLE.COM 
+importantFor a cross-realm trust to operate properly, both KDCs must
+                have the same krbtgt principal and password, and both KDCs must be
+                configured to use the same encryption type.
+
+
+To properly translate principal names from the central KDC realm into the
+              cluster-dedicated KDC realm for the Hadoop cluster, configure the Trusted Kerberos
+                Realms property of the HDFS service.
+
+
+Open the Cloudera Manager Admin Console.
+
+
+Go to the HDFS service.
+
+
+Click the Configuration tab.
+
+
+Select Scope > HDFS (Service Wide).
+
+
+Select Category  > Security.
+
+
+Type Kerberos in the Search box.
+
+
+Edit the Trusted Kerberos Realms property to add the name of your
+                  central KDC realm. If you need to use more advanced mappings which do more than
+                  just allow principals from another domain, you may enter them in the
+                    Additional Rules to Map Kerberos Principals to Short
+                    Names property.
+                  
+
+
+
+Each of your Hadoop client users must also place this information in their local
+                core-site.xml file. The easiest way to do so is by using the
+              Cloudera Manager Admin Console to generate a client configuration file.
+
+Later in this procedure, you will restart the services to have the configuration
+              changes in core-site.xml take effect.
+
+
+
+
+Using a Cluster-Dedicated MIT KDC with Active Directory
+
+
+For Cloudera Manager clusters, the openldap-clients package must be
+            installed on the Cloudera Manager Server host before configuring the cluster to use
+            Kerberos for authentication.
+
+
+
+
+On the Active Directory Server
+
+
+On the Active Directory server host, type the following command to add the local
+              realm trust to Active Directory:
+
+netdom trust HADOOP.EXAMPLE.COM /Domain:EXAMPLE.COM /add /realm /passwordt:TrustPassword
+
+
+On the Active Directory server host, type the following command to set the proper
+              encryption type:
+Windows 2003 RC2Windows 2003 server installations do not support AES
+              encryption for Kerberos.
+                ktpass /MITRealmName HADOOP.EXAMPLE.COM /TrustEncryp RC4Windows
+                2008ksetup /SetEncTypeAttr HADOOP.EXAMPLE.COM <enc_type>Where
+              the <enc_type> parameter can be replaced with parameter strings
+              for AES, DES, or RC4 encryption modes. For example, for AES encryption, replace
+                <enc_type> with AES256-CTS-HMAC-SHA1-96 or
+                AES128-CTS-HMAC-SHA1-96 and for RC4 encryption, replace with
+                RC4-HMAC-MD5.
+                importantMake sure that the encryption type you specify is supported on both
+                your version of Windows Active Directory and your version of MIT
+              Kerberos.
+
+
+
+
+On the MIT KDC Server
+
+
+In the /var/kerberos/krb5kdc/kdc.conf file on the local dedicated
+              KDC server host, configure the default realm for the Hadoop cluster by substituting
+              your Kerberos realm in the following realms property:
+
+[realms]
+ HADOOP.EXAMPLE.COM = {
+
+
+Each of your Hadoop client users must also place this information in their local
+                core-site.xml file. The easiest way to do so is by using the
+              Cloudera Manager Admin Console to generate a client configuration file.
+
+On the local MIT KDC server host, type the following command in the kadmin.local or
+              kadmin shell to add the cross-realm krbtgt principal:
+
+kadmin:  addprinc -e "<keysalt_list>" krbtgt/HADOOP.EXAMPLE.COM@EXAMPLE.COM
+where the <keysalt_list> parameter specifies the types of
+                keys and their salt to be used for encryption of the password for this cross-realm
+                krbtgt principal. It can be set to AES, or RC4 keytypes with a salt value of
+                :normal. Note that DES is deprecated and should no longer be used. You can specify
+                multiple keysalt types using the parameter in the command above. Make sure that at
+                least one of the encryption types corresponds to the encryption types found in the
+                tickets granted by the KDC in the remote realm. For an example of the values to use,
+                see the examples based on the Active Directory functional domain level, below.
+Examples by Active Directory Domain or Forest "Functional level"
+Active Directory will, based on the Domain or Forest functional level, use
+                encryption types supported by that release of the Windows Server operating system.
+                It is not possible to use AES encryption types with an AD 2003 functional level. If
+                you notice that DES encryption types are being used when authenticating or
+                requesting service tickets to Active Directory then it might be necessary to enable
+                weak encryption types in the /etc/krb5.conf.
+                  
+Windows
+                    2003kadmin: addprinc -e "rc4-hmac:normal" krbtgt/HADOOP.EXAMPLE.COM@EXAMPLE.COM
+Windows
+                    2008kadmin: addprinc -e "aes256-cts:normal aes128-cts:normal rc4-hmac:normal" krbtgt/HADOOP.EXAMPLE.COM@EXAMPLE.COM
+
+noteThe cross-realm krbtgt principal that you add in this step must
+                have at least one entry that uses the same encryption type as the tickets
+                that are issued by the remote KDC. If there are no matching encryption types,
+                principals in the local realm can successfully access the Hadoop cluster, but
+                principals in the remote realm are unable to.
+
+
+
+
+On All Cluster Hosts
+
+
+In the /etc/krb5.conf file on all cluster hosts and all Hadoop
+              client user hosts, configure both Kerberos realms. Note that
+                default_realm should be configured as the local MIT Kerberos realm
+              for the cluster. Your krb5.conf may contain more configuration
+              properties than those demonstrated below. This example is provided to clarify
+              configuration
+              parameters.
+
+[libdefaults]
+  default_realm = HADOOP.EXAMPLE.COM
+[realms]
+  EXAMPLE.COM = {
+    kdc = dc01.example.com:88
+    admin_server = dc01.example.com:749
+  }
+  HADOOP.EXAMPLE.COM = {
+    kdc = kdc01.hadoop.example.com:88
+    admin_server = kdc01.hadoop.example.com:749
+  }
+[domain_realm]
+  .hadoop.example.com = HADOOP.EXAMPLE.COM
+  hadoop.example.com = HADOOP.EXAMPLE.COM
+  .example.com = EXAMPLE.COM
+  example.com = EXAMPLE.COM
+
+
+Use one of the following methods to properly translate principal names from the
+              Active Directory realm into the cluster-dedicated KDC realm for the Hadoop
+              cluster.
+
+
+Using Cloudera Manager: Configure the Trusted Kerberos realms
+                  property of the HDFS service:
+Open the Cloudera Manager Admin
+                      Console.
+Go to the HDFS service.
+Click the Configuration tab.
+Select Scope > HDFS (Service Wide)
+Select Category > Security.
+Type Kerberos in the Search box.
+Edit the Trusted Kerberos Realms property to add the name of your
+                      central KDC realm. If you need to use more advanced mappings which do more
+                      than just allow principals from another domain, you may enter them in the
+                        Additional Rules to Map Kerberos Principals to Short Names
+                      property.
+
+Using the Command Line: Configure the
+                    hadoop.security.auth_to_local setting in the
+                    core-site.xml file on all of the cluster hosts. The
+                  following example translates all principal names with the realm
+                    EXAMPLE.COM into the first component of the
+                  principal name only. It also preserves the standard translation for the default
+                  realm (the cluster
+                  realm).<property>
+  <name>hadoop.security.auth_to_local</name>
+  <value>
+    RULE:[1:$1@$0](^.*@EXAMPLE\.COM$)s/^(.*)@EXAMPLE\.COM$/$1/g
+    RULE:[2:$1@$0](^.*@EXAMPLE\.COM$)s/^(.*)@EXAMPLE\.COM$/$1/g
+    DEFAULT
+  </value>
+</property>
+
+
+
+
+
+

@@ -1,0 +1,99 @@
+Accessing non-public CDE virtual clusters via SOCKS proxyCloudera Docs
+Accessing non-public CDE virtual clusters via SOCKS proxy
+ A SOCKS proxy server, or jump host, allows your web browser to connect securely to a
+        non-public Cloudera Data Engineering (CDE) endpoint. When you connect to the CDE endpoint
+        using its internal IP, the browser connects to the proxy server, which performs the required
+        SSH tunneling, and forwards the request to the internal CDE endpoint.
+
+This topic describes how to configure a SOCKS proxy to access CDE Virtual
+                Clusters on non-publicly routable VPCs. noteUsing the below
+                    approach all the web traffic in the launched browser instance will be
+                    routed via the jump host.
+
+
+In a VPC with a public subnet, which can also route to the target VPC where the
+                    CDE Load Balancer is running, create an EC2 instance for your SOCKS server (for
+                    example, my-ec2-jump-host) with a public IP and an SSH key-pair
+                    (for example, my-key-file.pem). 
+
+The instance does not need to be large, for example on AWS a micro instance
+                        is usually sufficient, but may need to be larger depending on how many users
+                        are using it concurrently.
+Depending on whether you want multiple users to share the jump host or have
+                        everyone create their own server, pick the SSH key pair for the instance
+                        accordingly. 
+noteMake sure to apply a locked down security group to
+                        your jump host instance to ensure only users from trusted IP ranges can SSH
+                        into the server.
+Related AWS Documentation: Getting Started with Amazon EC2
+                                Instances, Amazon EC2 Key Pairs
+
+
+
+Set up a SOCKS proxy server via SSH to the EC2 instance using below
+                            command:
+
+
+nohup ssh -i "SSH-key-pair" -CND <SOCKS-Proxy-Port> ec2-user@<jump-host-public-IP> &
+Example: nohup ssh -i "my-key-file.pem" -CND 8157 ec2-user@<public ip for my-ec2-jump-host> &where
+nohup(optional) is a POSIX command to ignore the HUP
+                            (hangup) signal so that the proxy process is not terminated
+                            automatically if the terminal process is later terminated.
+my-key-file.pem is the private key you used to create
+                            the EC2 instance where the SOCKS server is running.
+C sets up compression.
+N suppresses any command execution once established.
+D 8157 sets up the SOCKS 5 proxy on the port. The port number 8157 in
+                            this example is arbitrary, but must match the port number you specify in
+                            your browser configuration in step 2.
+ec2-user is the AMI username for the EC2 instance. The
+                            AMI username can be found in the details for the instance displayed in
+                            the AWS Management Console on the
+                                Instances page under the Usage
+                                Instructions tab.
+<public ip for my-ec2-jump-host>is the public IP
+                            address of the EC2 instance running the SOCKS server you created
+                            above.
+& (optional) causes the SSH connection to run as an
+                            operating system background process, independent of the command shell.
+                            Without the &, you leave your terminal open while the proxy server
+                            is running and use another terminal window to issue other commands.
+
+
+Configure Your Browser to Use the Proxy. 
+ Using Google Chrome
+
+By default, Google Chrome uses system-wide proxy settings on a per-profile
+                        basis. To get around that you can start Chrome using the Command Line and
+                        specify the following:
+
+The SOCKS proxy port to use (must be the same value used in step 1, 8157
+                            in example above)
+The profile to use (new profile created in the example below)
+
+
+
+
+Run the following commands to create a new profile and launch a new
+                            instance of Chrome that does not interfere with any currently running
+                            instance.
+For
+                                    Linux:/usr/bin/google-chrome \
+--user-data-dir="$HOME/chrome-with-proxy" \
+--proxy-server="socks5://localhost:<SOCKS-Proxy-Port>"
+For
+                                    MacOS"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+--user-data-dir="$HOME/chrome-with-proxy" \
+--proxy-server="socks5://localhost:<SOCKS-Proxy-Port>"
+For
+                            Windows"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe" ^
+--user-data-dir="%USERPROFILE%\chrome-with-proxy" ^
+--proxy-server="socks5://localhost:<SOCKS-Proxy-Port>"
+
+
+
+
+These steps enable you to navigate to any CDE virtual cluster in the
+                browser launched using SOCKS proxy.
+
+

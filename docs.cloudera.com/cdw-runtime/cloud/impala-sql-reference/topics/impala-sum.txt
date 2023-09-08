@@ -1,0 +1,283 @@
+SUM functionCloudera Docs
+SUM function
+An aggregate function that returns the sum of a set of numbers. Its single argument can
+    be numeric column, or the numeric result of a function or expression applied to the column
+    value. Rows with a NULL value for the specified column are ignored. If the
+    table is empty, or all the values supplied to MIN are NULL,
+      SUM returns NULL.
+Syntax:
+SUM([DISTINCT | ALL] expression) [OVER (analytic_clause)]
+      When the query contains a GROUP BY clause, returns one value for each combination of
+      grouping values.
+    
+Return type: BIGINT for integer arguments, DOUBLE for floating-point
+      arguments
+    
+Complex type considerations:
+ To access a column with a complex
+        type (ARRAY, STRUCT, or MAP) in an
+        aggregation function, you unpack the individual elements using join notation in the query,
+        and then apply the function to the final scalar item, field, key, or value at the bottom of
+        any nested type hierarchy in the column. 
+The following example demonstrates calls to several aggregation functions
+using values from a column containing nested complex types
+(an ARRAY of STRUCT items).
+The array is unpacked inside the query using join notation.
+The array elements are referenced using the ITEM
+pseudocolumn, and the structure fields inside the array elements
+are referenced using dot notation.
+Numeric values such as SUM() and AVG()
+are computed using the numeric R_NATIONKEY field, and
+the general-purpose MAX() and MIN()
+values are computed from the string N_NAME field.
+describe region;
++-------------+-------------------------+---------+
+| name        | type                    | comment |
++-------------+-------------------------+---------+
+| r_regionkey | smallint                |         |
+| r_name      | string                  |         |
+| r_comment   | string                  |         |
+| r_nations   | array<struct<           |         |
+|             |   n_nationkey:smallint, |         |
+|             |   n_name:string,        |         |
+|             |   n_comment:string      |         |
+|             | >>                      |         |
++-------------+-------------------------+---------+
+
+select r_name, r_nations.item.n_nationkey
+  from region, region.r_nations as r_nations
+order by r_name, r_nations.item.n_nationkey;
++-------------+------------------+
+| r_name      | item.n_nationkey |
++-------------+------------------+
+| AFRICA      | 0                |
+| AFRICA      | 5                |
+| AFRICA      | 14               |
+| AFRICA      | 15               |
+| AFRICA      | 16               |
+| AMERICA     | 1                |
+| AMERICA     | 2                |
+| AMERICA     | 3                |
+| AMERICA     | 17               |
+| AMERICA     | 24               |
+| ASIA        | 8                |
+| ASIA        | 9                |
+| ASIA        | 12               |
+| ASIA        | 18               |
+| ASIA        | 21               |
+| EUROPE      | 6                |
+| EUROPE      | 7                |
+| EUROPE      | 19               |
+| EUROPE      | 22               |
+| EUROPE      | 23               |
+| MIDDLE EAST | 4                |
+| MIDDLE EAST | 10               |
+| MIDDLE EAST | 11               |
+| MIDDLE EAST | 13               |
+| MIDDLE EAST | 20               |
++-------------+------------------+
+
+select
+  r_name,
+  count(r_nations.item.n_nationkey) as count,
+  sum(r_nations.item.n_nationkey) as sum,
+  avg(r_nations.item.n_nationkey) as avg,
+  min(r_nations.item.n_name) as minimum,
+  max(r_nations.item.n_name) as maximum,
+  ndv(r_nations.item.n_nationkey) as distinct_vals
+from
+  region, region.r_nations as r_nations
+group by r_name
+order by r_name;
++-------------+-------+-----+------+-----------+----------------+---------------+
+| r_name      | count | sum | avg  | minimum   | maximum        | distinct_vals |
++-------------+-------+-----+------+-----------+----------------+---------------+
+| AFRICA      | 5     | 50  | 10   | ALGERIA   | MOZAMBIQUE     | 5             |
+| AMERICA     | 5     | 47  | 9.4  | ARGENTINA | UNITED STATES  | 5             |
+| ASIA        | 5     | 68  | 13.6 | CHINA     | VIETNAM        | 5             |
+| EUROPE      | 5     | 77  | 15.4 | FRANCE    | UNITED KINGDOM | 5             |
+| MIDDLE EAST | 5     | 58  | 11.6 | EGYPT     | SAUDI ARABIA   | 5             |
++-------------+-------+-----+------+-----------+----------------+---------------+
+
+
+Examples:
+
+      The following example shows how to use SUM() to compute the total for all the values in the
+      table, a subset of values, or the sum for each combination of values in the GROUP BY clause:
+    -- Total all the values for this column in the table.
+select sum(c1) from t1;
+-- Find the total for this column from a subset of the table.
+select sum(c1) from t1 where month = 'January' and year = '2013';
+-- Find the total from a set of numeric function results.
+select sum(length(s)) from t1;
+-- Often used with functions that return predefined values to compute a score.
+select sum(case when grade = 'A' then 1.0 when grade = 'B' then 0.75 else 0) as class_honors from test_scores;
+-- Can also be used in combination with DISTINCT and/or GROUP BY.
+-- Return more than one result.
+select month, year, sum(purchase_price) from store_stats group by month, year;
+-- Filter the input to eliminate duplicates before performing the calculation.
+select sum(distinct x) from t1;
+
+      The following examples show how to use SUM() in an analytic context. They use a table
+      containing integers from 1 to 10. Notice how the SUM() is reported for each input value, as
+      opposed to the GROUP BY clause which condenses the result set.
+select x, property, sum(x) over (partition by property) as sum from int_t where property in ('odd','even');
++----+----------+-----+
+| x  | property | sum |
++----+----------+-----+
+| 2  | even     | 30  |
+| 4  | even     | 30  |
+| 6  | even     | 30  |
+| 8  | even     | 30  |
+| 10 | even     | 30  |
+| 1  | odd      | 25  |
+| 3  | odd      | 25  |
+| 5  | odd      | 25  |
+| 7  | odd      | 25  |
+| 9  | odd      | 25  |
++----+----------+-----+
+
+
+Adding an ORDER BY clause lets you experiment with results that are cumulative or apply to a moving
+set of rows (the window). The following examples use SUM() in an analytic context
+(that is, with an OVER() clause) to produce a running total of all the even values,
+then a running total of all the odd values. The basic ORDER BY x clause implicitly
+activates a window clause of RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW,
+which is effectively the same as ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW,
+therefore all of these examples produce the same results:
+select x, property,
+  sum(x) over (partition by property order by x) as 'cumulative total'
+  from int_t where property in ('odd','even');
++----+----------+------------------+
+| x  | property | cumulative total |
++----+----------+------------------+
+| 2  | even     | 2                |
+| 4  | even     | 6                |
+| 6  | even     | 12               |
+| 8  | even     | 20               |
+| 10 | even     | 30               |
+| 1  | odd      | 1                |
+| 3  | odd      | 4                |
+| 5  | odd      | 9                |
+| 7  | odd      | 16               |
+| 9  | odd      | 25               |
++----+----------+------------------+
+
+select x, property,
+  sum(x) over
+  (
+    partition by property
+    order by x
+    range between unbounded preceding and current row
+  ) as 'cumulative total'
+from int_t where property in ('odd','even');
++----+----------+------------------+
+| x  | property | cumulative total |
++----+----------+------------------+
+| 2  | even     | 2                |
+| 4  | even     | 6                |
+| 6  | even     | 12               |
+| 8  | even     | 20               |
+| 10 | even     | 30               |
+| 1  | odd      | 1                |
+| 3  | odd      | 4                |
+| 5  | odd      | 9                |
+| 7  | odd      | 16               |
+| 9  | odd      | 25               |
++----+----------+------------------+
+
+select x, property,
+  sum(x) over
+  (
+    partition by property
+    order by x
+    rows between unbounded preceding and current row
+  ) as 'cumulative total'
+  from int_t where property in ('odd','even');
++----+----------+------------------+
+| x  | property | cumulative total |
++----+----------+------------------+
+| 2  | even     | 2                |
+| 4  | even     | 6                |
+| 6  | even     | 12               |
+| 8  | even     | 20               |
+| 10 | even     | 30               |
+| 1  | odd      | 1                |
+| 3  | odd      | 4                |
+| 5  | odd      | 9                |
+| 7  | odd      | 16               |
+| 9  | odd      | 25               |
++----+----------+------------------+
+
+
+Changing the direction of the ORDER BY clause causes the intermediate
+results of the cumulative total to be calculated in a different order:
+
+select sum(x) over (partition by property order by x desc) as 'cumulative total'
+  from int_t where property in ('odd','even');
++----+----------+------------------+
+| x  | property | cumulative total |
++----+----------+------------------+
+| 10 | even     | 10               |
+| 8  | even     | 18               |
+| 6  | even     | 24               |
+| 4  | even     | 28               |
+| 2  | even     | 30               |
+| 9  | odd      | 9                |
+| 7  | odd      | 16               |
+| 5  | odd      | 21               |
+| 3  | odd      | 24               |
+| 1  | odd      | 25               |
++----+----------+------------------+
+
+
+The following examples show how to construct a moving window, with a running total taking into account 1 row before
+and 1 row after the current row, within the same partition (all the even values or all the odd values).
+Because of a restriction in the Impala RANGE syntax, this type of
+moving window is possible with the ROWS BETWEEN clause but not the RANGE BETWEEN
+clause:
+select x, property,
+  sum(x) over
+  (
+    partition by property
+    order by x
+    rows between 1 preceding and 1 following
+  ) as 'moving total'
+  from int_t where property in ('odd','even');
++----+----------+--------------+
+| x  | property | moving total |
++----+----------+--------------+
+| 2  | even     | 6            |
+| 4  | even     | 12           |
+| 6  | even     | 18           |
+| 8  | even     | 24           |
+| 10 | even     | 18           |
+| 1  | odd      | 4            |
+| 3  | odd      | 9            |
+| 5  | odd      | 15           |
+| 7  | odd      | 21           |
+| 9  | odd      | 16           |
++----+----------+--------------+
+
+-- Doesn't work because of syntax restriction on RANGE clause.
+select x, property,
+  sum(x) over
+  (
+    partition by property
+    order by x
+    range between 1 preceding and 1 following
+  ) as 'moving total'
+from int_t where property in ('odd','even');
+ERROR: AnalysisException: RANGE is only supported with both the lower and upper bounds UNBOUNDED or one UNBOUNDED and the other CURRENT ROW.
+
+
+Restrictions:
+
+        Due to the way arithmetic on FLOAT and DOUBLE columns uses
+        high-performance hardware instructions, and distributed queries can perform these operations in different
+        order for each query, results can vary slightly for aggregate function calls such as SUM()
+        and AVG() for FLOAT and DOUBLE columns, particularly on
+        large data sets where millions or billions of values are summed or averaged. For perfect consistency and
+        repeatability, use the DECIMAL data type for such operations instead of
+        FLOAT or DOUBLE.
+      

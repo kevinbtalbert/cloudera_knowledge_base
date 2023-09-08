@@ -1,0 +1,97 @@
+Authorization Provider for ImpalaCloudera Docs
+Authorization Provider for Impala
+Using the BDR service available in CDH you can migrate the permissions in CDP because
+  Ranger is the authorization provider instead of Sentry. You must be aware how Ranger enforces a
+  policy in CDP which may be different from using Sentry.
+New behavior:
+
+The CREATE ROLE, GRANT ROLE,
+    SHOW ROLE statements are not supported as Ranger
+    currently does not support roles.
+When a particular resource is renamed, currently, the policy is not
+    automatically transferred to the newly renamed resource.
+SHOW GRANT with an invalid user/group does not
+    return an error.
+
+The following table lists the different access type requirements to run SQL statements in
+   Impala.
+
+
+SQL Statement
+Impala Access Requirement
+
+
+
+DESCRIBE
+view
+VIEW_METADATA on the underlying tables
+
+
+ALTER TABLE RENAMEALTER VIEW
+       RENAME
+ALL on the target table / viewALTER on the source table
+       / view
+
+
+SHOW DATABASESSHOW
+       TABLES
+VIEW_METADATA
+
+
+where:
+
+
+VIEW_METADATA privilege denotes the SELECT, INSERT, or REFRESH privileges.
+ALL privilege denotes the SELECT, INSERT, CREATE, ALTER, DROP, and
+      REFRESH privileges.
+
+For more information on the minimum level of privileges and the scope required to run SQL
+   statements in Impala, see Impala Authorization.
+Migrating Sentry Policies
+As CDP leverages Ranger as its authorization service, you must migrate permissions from Sentry
+    to Ranger. You can use the BDR service available in CDH to migrate the permissions. This service
+    migrates Sentry authorization policies into Ranger as a part of the replication policy job. When
+    you create the replication policy, choose the resources that you want to migrate and the Sentry
+    policies are migrated for those resources. You can migrate all permissions or permissions on a
+    set of objects to Ranger.
+The Sentry Permissions section of the Create Replication Policy wizard contains the following
+    options:
+
+Include Sentry Permissions with Metadata - Select this to migrate Sentry permissions
+     during the replication job.
+Exclude Sentry Permissions from Metadata - Select this if you do not want to migrate
+     Sentry permissions during the replication job.
+
+The Replication Option section of the Create Replication Policy wizard contains the following
+    options:
+
+Include Metadata and Data
+Include Metadata Only
+
+
+Stages of Migration
+Sentry and Ranger have different permission models. Sentry permissions are granted to roles
+    and users. These are translated to permissions for groups and users since Ranger currently does
+    not support roles. This is followed by grouping by resource because Ranger policies are grouped
+    by resource. All the permissions that are granted to a resource are considered a single Ranger
+    policy. 
+The migration of Sentry policies into Ranger is performed in the following operations:
+
+Export - The export operation runs in the source cluster. During this operation, the
+     Sentry permissions are fetched and exported to a JSON file. This file might be in a local file
+     system or HDFS or S3, based on the configuration that you provided.
+Translate and Ingest - These operations take place on the target cluster. In the
+     translate operation, Sentry permissions are translated into a format that can be read by
+     Ranger. The permissions are then imported into Ranger. When the permissions are imported, they
+     are tagged with the source cluster name and the time that the ingest took place. After the
+     import, the file containing the permissions is deleted.
+
+Because there is no one-to-one mapping between Sentry privileges and Ranger service policies,
+    the Sentry privileges are translated into their equivalents within Ranger service policies. For
+    more information on how Sentry actions is applied to the corresponding action in Ranger, see
+     Sentry to Ranger Permissions.
+noteBecause the authorization model in Ranger is different from Sentry's model, not all policies can be migrated using BDR. For certain resources you must
+    manually create the permissions after migrating the workload from CDH to CDP.
+
+
+Parent topic: Impala Changes between CDH and CDP

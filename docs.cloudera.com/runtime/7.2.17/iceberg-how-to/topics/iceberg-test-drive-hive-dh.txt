@@ -1,0 +1,71 @@
+Test driving Iceberg from HiveCloudera Docs
+Test driving Iceberg from Hive
+ You learn how to access the Hive demo data, which you can use to get hands-on
+        experience running Iceberg queries.
+  query sample airline demo data in Hue. 
+
+
+You must meet the prerequisites to query Iceberg tables.
+You obtained the Ranger permissions to run Hive queries.
+
+
+
+Connect to Hive running in a Data Hub cluster.
+
+Run the queries in the previous topic, "Hive demo data" to set up the following
+                    databases: airline_ontime_iceberg, airline_ontime_orc,
+                    airline_ontime_parquet.
+
+Use the airline_ontime_iceberg database.
+
+Take a look at the tables in the airline_ontime_iceberg database.
+USE airline_ontime_iceberg;
+SHOW TABLES;
+Flights is the fact table. It has 100M rows and three dirmensions, ariline,
+                    airports, and planes. This records flights for more than 10 years in the US, and
+                    includes the following details: 
+origin 
+destination 
+delay 
+air time
+
+
+Query the demo data from Hive.
+For example, find the flights that departed each year, by IATA code,
+                    airport, city, state, and country. Find the average departure
+                    delay.SELECT f.month, a.iata, a.airport, a.city, a.state, a.country
+FROM flights f,
+airports a
+WHERE f.origin = a.iata
+GROUP BY 
+f.month,
+a.iata,
+a.airport,
+a.city,
+a.state,
+a.country
+HAVING COUNT(*) > 10000
+ORDER BY AVG(f.DepDelay) DESC
+LIMIT 10;                        Output
+                    appears as
+                    follows:+----------+---------+------------------------------------+---------------+----------+------------+
+| f.month  | a.iata  |             a.airport              |    a.city     | a.state  | a.country  |
++----------+---------+------------------------------------+---------------+----------+------------+
+| 12       | ORD     | Chicago O'Hare International       | Chicago       | NULL     | USA        |
+| 6        | EWR     | Newark Intl                        | Newark        | NULL     | USA        |
+| 7        | JFK     | John F Kennedy Intl                | New York      | NULL     | USA        |
+| 6        | IAD     | Washington Dulles International    | Chantilly     | NULL     | USA        |
+| 7        | EWR     | Newark Intl                        | Newark        | NULL     | USA        |
+| 6        | PHL     | Philadelphia Intl                  | Philadelphia  | NULL     | USA        |
+| 1        | ORD     | Chicago O'Hare International       | Chicago       | NULL     | USA        |
+| 6        | ORD     | Chicago O'Hare International       | Chicago       | NULL     | USA        |
+| 7        | ATL     | William B Hartsfield-Atlanta Intl  | Atlanta       | NULL     | USA        |
+| 12       | MDW     | Chicago Midway                     | Chicago       | NULL     | USA        |
++----------+---------+------------------------------------+---------------+----------+------------+
+10 rows selected (103.812 seconds)
+
+Split the partitioned data into manageable files.
+ALTER TABLE airports SET PARTITION SPEC (iata,BUCKET(15, country));
+
+
+

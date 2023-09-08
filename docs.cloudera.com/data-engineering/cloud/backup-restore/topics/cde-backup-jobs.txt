@@ -1,0 +1,184 @@
+Backing up Cloudera Data Engineering jobs on local storageCloudera Docs
+Backing up Cloudera Data Engineering jobs on local storage
+You can back up Cloudera Data Engineering (CDE) jobs and associated resources. Backups
+    are saved as zip files that can be used to restore jobs and their associated resources. Backups
+    and restores is also supported for remote storage (also known as object store).
+noteCurrently, the user who runs the cde backup restore
+      command has permissions, by default, to run the Jobs. This may cause CDE jobs to fail if the
+      workload user differs from the user who runs the Jobs on Source CDE Service where the backup
+      was performed. This failure is due to the Workload User having different privileges as the
+      user who is expected to run the job. Additionally, backup and restore functionality does not
+      include Airflow metadata related to connections and variable definitions. Those must be
+      manually recreated in the new service.  
+CDE CLICDE APIWeb UI
+Before you begin
+
+Download and configure the CDE CLI.
+
+Steps for backing up on local storage
+
+Run the cde backup create command to create a backup of the jobs in
+            the virtual cluster your CDE CLI is configured to interact with. By default, all job
+            configurations in the cluster are backed up, but the resources are not. You can use
+            command flags to change this behavior as follows:
+--include-job-resources
+Backs up all resources associated with the selected jobs. These resources cannot
+                  be filtered out by the --resource-filter parameter.
+--include-jobs
+Backs up all jobs in the virtual cluster. This is the default behavior.
+
+--include-resources
+Backs up all resources in the virtual cluster, including those not associated
+                  with jobs.
+
+--job-filter <filter_string>
+Selects jobs to back up using the fieldname[operator]argument
+                  syntax. This command flag can be repeated. This command flag can be repeated. The
+                  name of the job and resource API field is 'fieldname' and 'operator is one of the
+                  following: 'eq', 'noteq', 'lte', 'lt', 'gte', 'gt', 'in', 'notin', 'like',
+                    'rlike'. Multiple filters are ANDed. For example: The following
+                    command will backup locally all jobs whose name is not test, and which is
+                      created later than or equal to 2020-01-01, and all their related
+                    resources:
+                    cde backup create --job-filter "name[noteq]test" --job-filter "created[gte]2020-01-01"
+
+--resource-filter <filter_string>
+Selects resources to back up using the
+                    fieldname[operator]argument syntax. This command flag can be
+                  repeated. The name of the job and resource API field is 'fieldname' and 'operator
+                  is one of the following: 'eq', 'noteq', 'lte', 'lt', 'gte', 'gt', 'in',
+                    'notin', 'like', 'rlike'. Multiple filters are ANDed. For example: 
+cde backup create --resource-filter "name[eq]test" --resource-filter "created[gte]2020-01-01
+
+
+
+--local-path <filename>
+Specifies the local file path and name to store the backup. By default, the
+                  backup filename is archive-<timestamp>.zip.
+For example, to backup all jobs containing the string etl and
+              include all resources associated with those
+            jobs:cde backup create --job-filter "name[like]%etl%" --include-job-resources
+Validate the backup using the cde backup list-archive command. For
+              example:cde backup list-archive --local-path archive-2021-11-10T01:24:06.zipConfirm
+              that all jobs and resources that you expected to be backed up are included.
+
+Result
+The output of cde backup list-archive is similar to the following:
+{
+  "backup_set": [
+    {
+      "id": "v1/backupset/v1/f332bb06-7612-4345-8f3b-da4f27f315b3/",
+      "cdeVersion": "1.18.0-b59",
+      "clusterID": "cluster-2bqdpfrs",
+      "appID": "dex-app-82wlpx6d",
+      "app_name": "yjtest",
+      "user": "csso_yjlu",
+      "backupStarted": "2022-10-07T06:39:46.082837691Z"
+    }
+  ],
+  "entries": [
+    {
+      "backup_set": "v1/backupset/v1/f332bb06-7612-4345-8f3b-da4f27f315b3/",
+      "entityType": "Job",
+      "name": "example-a",
+      "adjustedName": "example-a",
+      "archiveDirectoryPath": "v1/jobs/v1/d7826797-4985-455f-a9c8-2ab1cc624d9b/",
+      "user": "csso_yjlu"
+    },
+    {
+      "backup_set": "v1/backupset/v1/f332bb06-7612-4345-8f3b-da4f27f315b3/",
+      "entityType": "Resource",
+      "name": "example-data",
+      "adjustedName": "example-data",
+      "archiveDirectoryPath": "v1/resources/v1/41979747-5ad1-40c3-b301-cd57111411f9/",
+      "user": "csso_yjlu"
+    }
+  ]
+} 
+
+noteSome of the command examples provided utilize jq to parse the JSON output and make it
+          more readable.
+Before you begin
+Request an access token and save it as an environment variable to use
+          in API calls. For instructions, see Getting a Cloudera Data Engineering
+            API access token.
+Steps
+
+ Determine the API URL for the virtual cluster containing the job
+            you want to back up: 
+Navigate to the Cloudera Data Engineering
+                  Overview page.
+In the CDE Services column, select the
+                service containing the virtual cluster with the jobs you want to
+                back up.
+In the Virtual Clusters column on the
+                right, click the Cluster Details icon for
+                the virtual cluster containing the jobs you want to back
+                up.
+Copy the URL under JOBS API URL, and
+                set it as an environment variable. For example:
+                export CDE_JOBS_API="https://pmjkrgn5.cde-czlmkz4y.na-01.xvp2-7p8o.cloudera.site/dex/api/v1"
+
+
+Back up jobs using a URL-encoded filter with the syntax
+                name[like]<query>,
+            modeled after the SQL like operator. For example,
+            to back up jobs containing the string etl, set
+              jobfilter to name[like]%etl%
+            (URL-encoded as
+              name%5Blike%5D%25etl%25):curl -k \
+-H "Authorization: Bearer ${CDE_TOKEN}" \
+-X GET "${CDE_JOBS_API}/admin/export?exportjobs=true&jobfilter=name%5Blike%5D%25etl%25&exportjobresources=true&exportresources=false" \
+-H "accept: application/zip" \
+--output cde-etl-jobs-backup.zipTo
+              back up all jobs and associated resources, omit the
+                jobfilter
+            parameter:curl -k \
+-H "Authorization: Bearer ${CDE_TOKEN}" \
+-X GET "${CDE_JOBS_API}/admin/export?exportjobs=true&exportjobresources=true&exportresources=false" \
+-H "accept: application/zip" \
+--output cde-all-jobs-backup.zip
+(Optional) You can validate a backup file by uploading it to the
+              /admin/list-archive endpoint. For example, for a backup file named
+              cde-all-jobs-backup.zip:curl -k \
+-H "Authorization: Bearer ${CDE_TOKEN}" \
+-X POST "${CDE_JOBS_API}/admin/list-archive" \
+-H "accept: application/json" \
+-H "Content-Type: multipart/form-data" \
+-F "file=@/path/to/cde-all-jobs-backup.zip;type=application/zip" \
+| jq
+
+
+Before you beginimportantThe user interface for CDE 1.17 and above has been updated. The
+            left-hand menu was updated to provide easy access to commonly used pages. The steps
+            below will vary slightly, for example, the Overview page has been
+            replaced with the Home page. You can also manage a job by
+            clicking Jobs on the left-hand menu, then selecting your desired
+            Virtual Cluster from a drop-down at the top of the Jobs page. The
+            new home page still displays Virtual Clusters, but now includes quick-access links
+            located at the top for the following categories: Jobs,
+              Resources, and Download &
+            Docs.
+Steps
+
+In the Cloudera Data Platform (CDP) console, click the Data
+              Engineering tile and click Overview.
+ In the CDE Services column, select the
+            service containing the virtual cluster with the jobs you want to
+            back up.
+In the Virtual Clusters column on the right, click the
+              View Jobs icon for the virtual cluster with the jobs that you
+            want to back up.
+Click Jobs in the left menu.
+Click  at the top right, and then click Backup
+              Jobs.
+
+Result
+Depending on your browser settings, you are either prompted for a
+          location to save the file, or the file is downloaded to your default
+          download location. The file is a ZIP file named
+              archive-<timestamp>.zip.
+
+To restore a backup file, see Restoring Cloudera Data Engineering jobs
+        from backup.
+

@@ -1,0 +1,441 @@
+solrctl ReferenceCloudera Docs
+solrctl Reference
+The solrctl utility is a wrapper shell script included with Cloudera
+    Search for managing collections, instance directories, configs, and more.
+Make sure that the host on which you are running the solrctl utility has
+      either a Gateway or Solr Server role
+      assigned.
+In general, if an operation succeeds, solrctl exits silently with a success
+      exit code. If an error occurs, solrctl prints a diagnostics message combined
+      with a failure exit code. solrctl supports specifying a
+        log4j.properties file by setting the LOG4J_PROPS
+      environment variable. By default, the LOG4J_PROPS setting specifies the
+        log4j.properties in the Solr configuration directory (for example,
+        /etc/solr/conf/log4j.properties). Many solrctl commands
+      redirect stderr to /dev/null, so Cloudera recommends that
+      your log4j properties file specify a location other than
+        stderr for log output.
+You can run solrctl on any host that is configured as part of the SolrCloud
+      deployment (the Solr service in Cloudera Manager environments) . To run
+      any solrctl command on a host outside of SolrCloud deployment, ensure that
+      SolrCloud hosts are reachable and provide --zk and --solr
+      command line options.
+If you are using solrctl to manage your deployment in an environment that
+      requires Kerberos authentication, you must have a valid Kerberos ticket, which you can get
+      using kinit.
+For collection configuration, users have the option of interacting directly with ZooKeeper
+      using the instancedir option or using the Solr ConfigSets API using the
+        config option. For more information, see Managing Configuration Using Configs or Instance
+        Directories.
+Command syntax
+The general solrctl command syntax is:
+solrctl [options] command [command-arg] [command [command-arg]] ... 
+Each element and its possible values are described in the following sections.
+
+solrctl options
+If used, the following options must precede commands:Table 1. solrctl options
+
+Option
+Description
+
+
+
+--solr <solr_uri>
+Directs solrctl to a SolrCloud web API available at the
+                  specified URI. This option is required for hosts running outside of SolrCloud. A
+                  sample URI might be:
+                  http://search01.example.com:8983/solr.
+
+
+--zk <zk_ensemble>
+Directs solrctl to a particular ZooKeeper quorum. This
+                  option is required for hosts running outside of SolrCloud. For example:
+                    zk01.example.com:2181,zk02.example.com:2181,zk03.example.com:2181/solr.
+                  Output from solrctl commands that use the --zk
+                  option is sent to /dev/null, so no results are displayed.
+
+
+--jaas /path/to/jaas.conf
+Used to identify a JAAS configuration that specifies the principal with
+                  permissions to modify Solr metadata. The principal is typically
+                    solr@EXAMPLE.COM. In Kerberos-enabled environments where
+                  ZooKeeper ACLs protect Solr metadata, you must use this parameter when modifying
+                  metadata.
+
+
+--help
+Prints help.
+
+
+--quiet
+Suppresses most solrctl messages.
+
+
+--debug
+Prints errors to stdout.
+
+
+--debug-dump
+Prints the current state of ZooKeeper
+
+
+--trace
+Prints the executed commands to stdout.
+
+
+
+Commands and arguments
+The solrctl commands init, instancedir,
+          config, collection and cluster affect
+        the entire SolrCloud deployment and only need to be run once per required operation.
+The solrctl core command affects a single SolrCloud host.
+Table 2. solrctl commmands and arguments
+
+Command
+Argument
+Description
+
+
+
+init 
+
+Initializes a SolrCloud deployment. Must be run before starting solr-server
+                daemons for the first time. The command has a built-in security check that prevents
+                it from running on a deployment that has already been initialized.
+
+
+[--force]
+Allows you to re-initialize an already initialized SolrCloud deployment. Use
+                this command cautiously because it erases all SolrCloud deployment state information
+                from ZooKeeper, including all configuration files. It does not delete collections.
+              
+
+
+instancedir
+
+Manipulates instance directories.notesolrctl instancedir commands talk directly
+                  to ZooKeeper. Starting from CDH version 6.0, the ZooKeeper node that stores the
+                  instance configuration files (e.g.: /solr/configs) is only
+                  writable by the user 'solr'. This means that in a Kerberized environment you will
+                  have to create a Java Authentication and Authorization Service (JAAS)
+                  configuration file and a keytab for the solr user, and specifying this
+                    jaas.conf file when using solrctl. For
+                  example: solrctl --jaas jaas.conf instancedir --create myInstanceDir
+                    /tmp/myInstanceDir. Cloudera recommends using the solrctl
+                      config --upload command instead, as it does not require a keytab of
+                    the solr user (a simple kinit is enough) and additionally it
+                    can utilize Ranger to control who is authorized to modify instance
+                    configurations.
+
+
+--generate <path> [-schemaless]
+                  [-localfs]
+--generate <path>: Generates an instance
+                directory template on the local filesystem at <path>. The
+                configuration files are located in the conf subdirectory under
+                  <path>. 
+If used with the -schemaless option, it generates a
+                    schemaless instance directory template. For more information on schemaless
+                    support, see Schemaless Mode Overview and Best
+                      Practices.
+If used with the -localfs option, the default
+                      HdfsDirectoryFactory is overwritten with
+                      NRTCachingDirectoryFactory in the generated
+                      solrconfig.xml. The index of a collection using this
+                    configuration is written to the local file system, not to HDFS.
+
+
+
+--create <name>
+<path>
+Uploads a copy of the instance directory from <path> on
+                the local filesystem to ZooKeeper. If an instance directory with the specified
+                  <name> already exists, this command fails. Use
+                  --update to modify existing instance directories.
+
+
+--update <name>
+<path>
+Overwrites an existing instance directory in ZooKeeper using the specified
+                files on the local filesystem. This command is analogous to first running
+                  --delete <name> followed by
+                  --create <name>
+<path>.
+
+
+--get <name>
+<path>
+Downloads the specified instance directory from ZooKeeper to the specified path
+                on the local filesystem. You can then edit the configuration and then re-upload it
+                using --update.
+
+
+--delete <name>
+Deletes the specified instance directory from ZooKeeper.
+
+
+--list
+Lists existing instance directories, including configs created by the
+                  solrctl config command.
+
+
+config
+
+Manipulates configs. 
+
+
+--create name <baseConfig> [-p
+                    <name>=<value>
+Creates a new config based on an existing config. The config is created with
+                the specified name, using <baseConfig> as
+                the template. For more information about config templates, see Config Templates. The -p
+                  name=value option overrides a <baseConfig> setting.
+                The only config property that you can override is immutable, so the
+                possible options are -p immutable=true and -p
+                  immutable=false. If you are copying an immutable config, such as a
+                template, use -p immutable=false to make sure that you can edit the
+                new config.
+
+
+--upload name
+path
+Uploads a new configset in zip file format. You cannot use this option to
+                update an existing config. The script will ask you to delete the existing version
+                before allowing you to upload the new one.The path argument of
+                  this command needs to point to the local directory containing the instance
+                  configuration (meaning it has a conf subdirectory and the config files like
+                    conf/solrconfig.xml). This can also be an instance
+                  configuration directory generated using solrctl instancedir --generate
+                      name or downloaded using solrctl
+                    instancedir --get name
+path. The underlying Solr API requires a .zip
+                  archive to be created, this is automatically performed by the command. noteThis
+                    function needs the zip binary to be installed and executable by the user running
+                    the solrctl config --upload command.
+
+
+--delete name
+Deletes the specified config. You cannot delete an immutable config without
+                accessing ZooKeeper directly as the solr super user.
+
+
+collection
+
+Manipulates collections.
+
+
+--create <name> -s
+                    <numShards> [-a] [-c
+                    <configName>] [-r
+                    <replicationFactor>] [-m
+                    <maxShardsPerHost>] [-n
+                    <hostList>]]
+Creates a new collection with
+                  <numShards> shards.The
+                    -a option enables automatic addition of replicas
+                    (autoAddReplicas=true) if machines hosting existing shards
+                  become unavailable.The collection uses the specified
+                      <configName> for its configuration
+                  set, and the specified
+                    <replicationFactor> controls the
+                  number of replicas for the collection. Keep in mind that this replication factor
+                  is on top of the HDFS replication factor.The maximum shards per host is
+                  determined by <maxShardsPerHost>, and
+                  you can specify specific hosts for the collection in the
+                      <hostList>.The only required
+                  parameters are <name> and -s
+                      <numShards>. If -c
+                      <configName> is not provided, it is assumed to
+                  be the same as the name of the collection.
+
+
+--delete <name>
+Deletes a collection.
+
+
+--reload <name>
+Reloads a collection.
+
+
+--stat <name>
+Outputs SolrCloud specific run-time information for a collection.
+
+
+--deletedocs <name>
+Purges all indexed documents from a collection.
+
+
+--list
+Lists all collections.
+
+
+--create-snapshot <snapshotName> -c
+                    <collectionName>
+Creates a named snapshot for the specified collection.
+
+
+--delete-snapshot <snapshotName> -c
+                    <collectionName>
+Deletes the specified snapshot for the specified collection.
+
+
+--describe-snapshot <snapshotName> -c
+                    <collectionName>
+Provides detailed information about a snapshot for the specified
+                collection.
+
+
+--list-snapshots
+                <collectionName>
+Lists all snapshots for the specified collection.
+
+
+--prepare-snapshot-export <snapshotName> -c
+                    <collectionName> -d
+                  <destDir>
+
+Prepares the snapshot for export to a remote cluster. If you are exporting the
+                  snapshot to the local cluster, you do not need to run this command. This command
+                  generates collection metadata as well as information about the Lucene index files
+                  corresponding to the snapshot.
+The destination HDFS directory path (specified by the -d option)
+                  must exist on the local cluster before you run this command. Make sure that the
+                  Solr superuser (solr by default) has permission to write to this
+                  directory.
+If you are running the snapshot export command on a remote cluster, specify the
+                  HDFS protocol (such as WebHDFS or HFTP) to be used for accessing the Lucene index
+                  files corresponding to the snapshot on the source cluster. This configuration is
+                  driven by the -p option which expects a fully qualified URI for
+                  the root filesystem on the source cluster, for example
+                    webhdfs://namenode.example.com:20101/.
+
+
+
+--export-snapshot <snapshotName> -c
+                    <collectionName>|-s <sourceDir> -d
+                    <destDir>
+Creates a backup copy of the Solr collection metadata as well as the associated
+                Lucene index files at the specified location. If exporting to a local cluster, use
+                the -c <collectionName> argument. If
+                exporting to a remote cluster, use the -s
+                  <sourceDir> argument. The
+                    -d configuration option specifies the
+                directory path where this backup copy is be created. This directory must exist
+                before exporting the snapshot, and the Solr superuser (solr, by
+                default) must be able to write to it.
+
+
+--restore <restoreCollectionName> -l
+                    <backupLocation> -b <snapshotName>
+                  -i <requestId> [-a] [-c <configName>]
+                  [-r <replicationFactor>] [-m
+                    <maxShardsPerHost>] [-n
+                    <selectedNodes>]
+
+ Restores the state of an earlier created backup as a new Solr collection. Run
+                  this command on the cluster on which you want to restore the backup.
+The -l configuration option specifies the local HDFS directory
+                  where the backup is stored. If the backup is stored on a remote cluster, you must
+                  copy it to the local cluster before restoring it. The Solr superuser
+                    (solr by default) must have permission to read from this
+                  directory.
+The -b configuration option specifies the name of the backup to
+                  be restored.
+Because the restore operation can take a long time to complete depending on the
+                  size of the exported snapshot, it is run asynchronously. The -i
+                  configuration parameter specifies a unique identifier for tracking the
+                  operation.
+The optional -a configuration option enables the
+                    autoAddReplicas feature for the new Solr collection.
+The optional -c configuration option specifies the
+                    configName for the new Solr collection. If this option is not
+                  specified, the configName of the original collection at the time
+                  of backup is used. If the specified configName does not exist,
+                  the restore operation creates a new configuration from the backup.
+The optional -r configuration option specifies the replication
+                  factor for the new Solr collection. If this option is not specified, the
+                  replication factor of the original collection at the time of backup is used.
+The optional -m configuration option specifies the maximum
+                  number of replicas (maxShardsPerNode) to create on each Solr
+                  Server. If this option is not specified, the maxShardsPerNode
+                  configuration of the original collection at the time of backup is used.
+The optional -n configuration option specifies the nodes to
+                  spread the restored collection across. If this option is not specified, the
+                  operation will create shard-replica spread across all live Solr nodes.
+
+
+
+--request-status <requestId>
+
+Displays the status of the specified operation. The status can be one of the
+                  following:
+
+running: The restore operation is running.
+completed: The restore operation is complete.
+failed: The restore operation failed.
+notfound: The specified requestID is not found.
+
+
+
+
+core
+
+Manipulates cores.
+
+
+--create <name> [-p
+                    <name>=<value>]
+Creates a new core. The core is configured using
+                    <name>=<value>
+                pairs. For more information about configuration options, see Solr documentation
+
+
+--reload <name>
+Reloads a core.
+
+
+--unload <name>
+Unloads a core.
+
+
+--status <name>
+Prints the status of a core.
+
+
+cluster
+
+Manages cluster configuration. 
+
+
+
+--get-solrxml <file>
+Downloads the cluster configuration file solr.xml from
+                ZooKeeper to the local system.
+
+
+
+--put-solrxml <file>
+Uploads the specified file to ZooKeeper as the cluster configuration file
+                  solr.xml.
+
+
+
+--set-property <name>
+<value>
+Sets property names and values. For example, to configure a cluster to use
+                TLS/SSL:solrctl cluster --set-property urlScheme https
+
+
+
+--remove-property <name>
+Removes the specified property.
+
+
+
+--get-clusterstate <file>
+Downloads the clusterstate.json file from ZooKeeper to the
+                local system.
+
+
+
+

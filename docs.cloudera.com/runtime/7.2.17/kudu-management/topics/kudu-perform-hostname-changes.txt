@@ -1,0 +1,76 @@
+Perform master hostname changesCloudera Docs
+Perform master hostname changes
+You need to bring the Kudu clusters down to update the master hostnames. Therefore,
+    identify at least a one-hour maintenance window for this task.
+ Rewrite each master’s Raft configuration with the following command, executed on each
+          master host:
+
+$ sudo -u kudu kudu local_replica cmeta rewrite_raft_config --fs_wal_dir=<master_wal_dir> [--fs_data_dirs=<master_data_dir>] 00000000000000000000000000000000 <all_masters>
+
+For
+          example:$ sudo -u kudu kudu local_replica cmeta rewrite_raft_config --fs_wal_dir=/data/kudu/master/wal --fs_data_dirs=/data/kudu/master/data 00000000000000000000000000000000 4aab798a69e94fab8d77069edff28ce0:new-master-name-1:7051 f5624e05f40649b79a757629a69d061e:new-master-name-2:7051 988d8ac6530f426cbe180be5ba52033d:new-master-name-3:7051
+
+ Update the master address:
+
+
+ In an environment not managed by Cloudera Manager, change the
+                gflag file of the masters so the master_addresses
+              parameter reflects the new hostnames. 
+ In an environment managed by Cloudera Manager, specify the new hostname in the
+                Master Address (server.address) field on each Kudu role. 
+
+
+
+              Change the gflag file of the tablet servers to update the
+              tserver_master_addrs parameter with the new hostnames. In an
+              environment managed by Cloudera Manager, this step is not needeed.
+            
+ Start the masters.
+
+ To verify that all masters are working properly, perform the following checks:
+
+
+In each master’s Web UI, click Masters on the Status Pages.
+              All of the masters should be listed there with one master in the LEADER role
+              field and the others in the FOLLOWER role field. The contents of Masters
+              on all master should be the same. 
+
+
+Run the below command to verify all masters are up and listening. The UUIDs are the
+              same and belong to the same master as before the hostname change:
+
+$ sudo -u kudu kudu master list new-master-name-1:7051,new-master-name-2:7051,new-master-name-3:7051
+
+
+
+
+              Start all of the tablet servers.
+            
+ Run a Kudu system check (ksck) on the
+          cluster using the kudu command line tool. After startup, some tablets may be unavailable as it
+          takes some time to initialize all of them. 
+ If you have Kudu tables that are accessed from Impala, update the HMS database manually in the
+          underlying database that provides the storage for HMS.  
+
+
+The following is an example SQL statement you run in the HMS database:
+
+UPDATE TABLE_PARAMSSET PARAM_VALUE =
+'new-master-name-1:7051,new-master-name-2:7051,new-master-name-3:7051'
+WHERE PARAM_KEY = 'kudu.master_addresses'
+AND PARAM_VALUE = 'master-1:7051,master-2:7051,master-3:7051';
+
+
+
+
+In impala-shell, run:
+
+INVALIDATE METADATA;
+
+
+
+Verify updating the metadata worked by running a simple SELECT
+              query on a Kudu-backed Impala table.
+
+
+Related informationMonitoring cluster health with ksckParent topic: Change master hostnames

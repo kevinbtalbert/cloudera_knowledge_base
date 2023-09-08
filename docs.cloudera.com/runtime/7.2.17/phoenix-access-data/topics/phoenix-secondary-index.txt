@@ -1,0 +1,98 @@
+Using secondary indexing in Apache PhoenixCloudera Docs
+Using secondary indexing in Apache Phoenix
+Apache Phoenix uses a secondary index to serve queries. An index table is an Apache
+        Phoenix table that stores the reference copy of some or all the data in the main
+        table.
+You can use a secondary index to access data from its primary data access path. When you
+            use a secondary index, the indexed column qualifiers or rows form a unique row key that
+            allows you to do point lookups and range scans. 
+Secondary index types
+Apache Phoenix supports global and local secondary indexes. Global indexes is used
+                for all typical use cases. You can use local indexes  for specific use cases where
+                you want the primary and the index table to be present in the same Apache HBase
+                region. 
+Use global indexes for read-heavy use cases. Use the covered-global index to
+                        save on read-time overheads. Global indexes are used to co-locate related
+                        information.
+Use local indexes for write-heavy use cases. Use the functional-local index
+                        on arbitrary expressions to query specific combinations of index queries. A
+                        local index is an in-partition index that is optimized for writes but
+                        requires more data to be read to answer a query.
+noteIf your table is large, you can use the ASYNC keyword with CREATE INDEX
+                    to create an index asynchronously. ASYNC uses a MapReduce job to distribute
+                    index workload, and every single mapper works with each data table region and
+                    writes to the index region. Therefore freeing up critical resources during
+                    indexing. 
+The following tables list the index type and index scope with a description and
+                example for each index type:
+Table 1. 
+
+Index type
+Description
+
+
+
+Covered
+
+Include the data that you want to access from the
+                                    primary table in the index rows. The query does not have to
+                                    access the primary table once the index entry is found. 
+Benefits: Save read-time overhead by only accessing the
+                                    index entry. In the following example, column v3 is included in
+                                    the index to avoid the query to access the primary table to
+                                    retrieve this information. 
+Example
+The following command creates indexes on the v1 and v2
+                                    columns and include the v3 column as
+                                    well:CREATE INDEX my_index ON exp_table (v1,v2) INCLUDE(v3);
+
+
+
+Functional
+
+Create an index on arbitrary expressions. When your
+                                    query uses the expression, the index is used to retrieve the
+                                    results instead of the data table. 
+Benefits: Useful for certain combinations of index
+                                    queries.
+Example
+Run the following command to create a functional index so that
+                                    you can perform case insensitive searches on the combined first
+                                    name and last name of a person:
+CREATE INDEX UPPER_NAME ON EMP (UPPER(FIRST_NAME||' '||LAST_NAME));Search
+                                    on the combined first name and last name using the following
+                                    command:SELECT EMP_ID FROM EMP WHERE UPPER(FIRST_NAME||' '||LAST_NAME)='EXP_NAME';
+
+
+
+Table 2. 
+
+Index scope
+Description
+
+
+
+Global
+
+You can use this when you have read-heavy use cases.
+                                    Each global index is stored in its own table, and therefore it
+                                    is not co-located with the data table.
+A Global index is a covered index. It is used for
+                                    queries only when all columns in that query are included in that
+                                    index.
+Example
+Run the following command to create a global
+                                    index:CREATE INDEX my_index ON exp_table (v1);
+
+
+
+Local
+You can use this for write-heavy use cases. Each local index is
+                                stored within the data table.ExampleRun the following
+                                    command to create a local
+                                    index:CREATE LOCAL INDEX my_index ON exp_table (v1);
+
+
+
+
+Use strongly consistent indexing with Apache PhoenixStrongly consistent indexing is a three-phase indexing algorithm that ensures that         the index table is always in sync with the data table.Migrate existing tables to use strongly consistent indexingYou can use the index upgrade tool to rebuild your indexes. After you run this tool,         your existing tables use the strongly consistent global index.

@@ -1,0 +1,95 @@
+Getting a Cloudera Data Engineering API access tokenCloudera Docs
+Getting a Cloudera Data Engineering API access token
+Cloudera Data Engineering uses JSON Web Tokens (JWT) for API
+    authentication. To interact with a virtual cluster using the API, you must
+    obtain an access token for that cluster.
+Before you begin
+Determine the authentication endpoint for your virtual cluster:
+
+In the Cloudera Data Platform (CDP) console, click the Data
+          Engineering tile. The Home page displays.
+In the Virtual Clusters section, navigate to the virtual cluster
+        for which you want.
+Click View Cluster Details for the virtual cluster. 
+          The
+            Administration/Virtual Cluster page is
+          displayed.
+Click GRAFANA CHARTS. The hostname of the URL in your browser is
+        the base URL, and
+          /gateway/<***authtkn-OR-cdptkn***>/knoxtoken/api/v1/token
+        is the endpoint. 
+Example: LDAP Authentication URL
+            https://service.cde-czlmkz4y.na-01.xvp2-7p8o.cloudera.site/gateway/authtkn/knoxtoken/api/v1/token
+Example: Access Key Authentication URL
+            https://service.cde-czlmkz4y.na-01.xvp2-7p8o.cloudera.site/gateway/cdptkn/knoxtoken/api/v1/token
+
+
+Using LDAP authenticationUsing CDP Access keys
+
+ From the client you want to use to access the API, run curl -u
+              <workload_user> <auth_endpoint>. Enter your workload password when
+              prompted.For
+              example:curl -u csso_psherman https://service.cde-czlmkz4y.na-01.xvp2-7p8o.cloudera.site/gateway/authtkn/knoxtoken/api/v1/token The
+              user account is your CDP workload user
+              .
+In the output, the access_token value is the JWT. For convenience,
+            copy it and set it as an environment variable:
+              export CDE_TOKEN=<access_token>
+             Alternatively, you can set the token in a single step using jq to extract the
+              token:export CDE_TOKEN=$(curl -s -u <workload_user> <auth_endpoint> | jq -r '.access_token')
+
+
+
+Create a requirements.txt file specifying the Python package and
+            version dependencies required by your CDE job.
+
+Steps
+
+Generate CDP Access Keys in User
+            Management Console. 
+Generate DE workload auth token using CDP IAM API. The IAM API endpoint
+              <CDP_ENDPOINT>/api/v1/iam/generateWorkloadAuthToken is called to generate a CDP
+              Access Token. A CDP API call requires a request signature to be passed in the
+              "x-altus-auth" header, along with a corresponding timestamp in the "x-altus-date"
+              header. The cdpcurl library constructs the headers automatically. However, if you
+              would rather use a different HTTP client, such as ordinary curl, you can use the
+              cdpv1sign script within cdpcurl to generate these required headers. The request
+              body contains workload-name as DE and is authenticated using the CDP Access Key. This
+              request must also be signed as per the specification is available here either manually
+              or use the cdpv1sign library to generate these necessary headers through automation
+                script.curl -X POST '<CDP_ENDPOINT>/api/v1/iam/generateWorkloadAuthToken' \
+-H "Content-Type: application/json" \
+-H "x-altus-date: Tue, 15 Mar 2022 07:22:57 GMT" \
+-H "x-altus-auth: <signature-string-as-per-the-specification>" \
+-i --insecure \
+-d '{
+   "workloadName": "DE"
+}'noteCDP_ENDPOINT
+                corresponds to CDP Control Plane console url. For example,
+                  https://console-test-cp.apps.shared-os-dev-01.kcloud.cloudera.com
+The response will include the CDP Access Token in the token field and expiry time in
+            the expireAt.
+             {
+    "token": "<token-string>",
+    "expireAt": "2021-05-03T15:34:03.727000+00:00"
+}
+Export the CDP token to CDP_TOKEN from above
+            output.export CDP_TOKEN=<token-string>
+Once you have a CDP access token CDP_TOKEN from the previous step, you can manually
+            exchange it for a CDE access
+            token.curl https://service.cde-czlmkz4y.na-01.xvp2-7p8o.cloudera.site/gateway/authtkn/knoxtoken/api/v1/token \
+-XPOST \
+-H "Accept: application/json" \
+-H "Authorization: Bearer ${CDP_TOKEN}" \
+-i --insecure
+In the output, the access_token value is the JWT. For convenience, copy it and set it
+            as an environment variable: export CDE_TOKEN=<access_token>Alternatively, you can set the token in a single step using jq to extract
+              the
+              token:.export CDE_TOKEN=$(curl <auth_endpoint> -XPOST \
+-H "Accept: application/json" \
+-H "Authorization: Bearer ${CDP_TOKEN}" \
+-i --insecure | jq -r '.access_token')
+
+
+See Using an access token in Cloudera Data Engineering API calls for instructions on using the token in API calls.
+

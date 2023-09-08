@@ -1,0 +1,133 @@
+Configuring Oracle database to use SSL for Data WarehouseCloudera Docs
+Configuring Oracle database to use SSL for Data Warehouse
+You must enable SSL for the Oracle database before setting up the CDP Private Cloud
+        Data Services. Enabling SSL establishes a secure channel between the client (CDP-side) and
+        the server (Oracle database server).
+
+To enable SSL, you need to configure SSL only on the server side. The client-side
+                configurations are present in CDP.
+
+
+SSH into the Oracle database server host.
+
+Change to the "oracle" user as follows:
+
+sudo -su oracle
+
+
+Append the location of ORACLE_HOME to the
+                        PATH environment variable by running the following
+                    commands:
+
+export ORACLE_HOME=/opt/oracle/product/19c/dbhome_1
+export PATH=${PATH}:${ORACLE_HOME}/bin
+
+
+Create an auto-login wallet by running the following command:
+
+orapki wallet create -wallet /opt/oracle/product/19c/dbhome_1/wallet -auto_login
+
+An auto-login wallet uses SSL's single sign-on functionality. The users do not
+                    need to specify password each time they open the wallet.
+
+Add a self-signed certificate to this wallet by running the following
+                    command:
+
+orapki wallet add -wallet /opt/oracle/product/19c/dbhome_1/wallet -dn "CN=server" -keysize 4096 -self_signed -validity 365
+
+
+Export the certificate from the Oracle wallet by running the following
+                    command:
+
+orapki wallet export -wallet /opt/oracle/product/19c/dbhome_1/wallet -dn "CN=server" -cert server_ca.cert
+
+This exports a certificate with the subject's distinguished name
+                        (-dn) (CN=server) from a wallet to the file that is
+                    specified by -cert (server_ca.cert).
+
+Add the following lines to the
+                        /opt/oracle/product/19c/dbhome_1/network/admin/listener.ora
+                    configuration file:
+
+SSL_CLIENT_AUTHENTICATION = FALSE
+WALLET_LOCATION =
+  (SOURCE =
+    (METHOD = FILE)
+    (METHOD_DATA =
+      (DIRECTORY = /opt/oracle/product/19c/dbhome_1/wallet)
+    )
+  )
+Register a new address in LISTENER:
+(ADDRESS = (PROTOCOL = TCPS)(HOST = [***HOST***])(PORT = 2484))
+
+
+Add the following lines to the
+                        /opt/oracle/product/19c/dbhome_1/network/admin/sqlnet.ora
+                    profile configuration file:
+
+SSL_CLIENT_AUTHENTICATION = FALSE
+WALLET_LOCATION =
+  (SOURCE =
+    (METHOD = FILE)
+    (METHOD_DATA =
+      (DIRECTORY = /opt/oracle/product/19c/dbhome_1/wallet)
+    )
+  )
+
+
+Add the following lines to the
+                        /opt/oracle/product/19c/dbhome_1/network/admin/tnsnames.ora
+                    configuration file:
+
+ORCLPDB1_SSL =
+    (DESCRIPTION =
+      (ADDRESS = (PROTOCOL = TCPS)(HOST = [***HOST***])(PORT = 2484))
+      (CONNECT_DATA =
+        (SERVER = DEDICATED)
+        (SERVICE_NAME = ORCLPDB1)
+      )
+      (SECURITY =
+        (MY_WALLET_DIRECTORY = /opt/oracle/product/19c/dbhome_1/wallet)
+      )
+    )
+
+
+Restart the listener by running the following commands:
+
+lsnrctl stop
+lsnrctl start
+
+
+Copy the content of the certificate that you exported earlier and add it to the
+                    keystore on the base cluster instances.
+Paste the copied content to the ca-cert.pem file.
+
+Fetch the keystore password from the
+                        /etc/hadoop/conf/ssl-client.xml file by running the
+                    following command:
+
+/usr/java/default/bin/keytool -importcert -alias oracle -file ca-cert.pem -keystore /var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_truststore.jks -storetype jks -noprompt -storepass [***PASSWORD***]
+
+
+Log in to Cloudera Manager as an Administrator.
+
+Go to Clusters > Hive service > Configuration > Hive Metastore Server Advanced Configuration Snippet (Safety
+                            Valve) for hive-site.xml and click  to add the following:
+
+
+Name:
+                                javax.jdo.option.ConnectionURL
+Value:
+                                jdbc:oracle:thin:@tcps://[***BASE_CLUSTER_HOSTNAME***]:2484/ORCLPDB1?javax.net.ssl.trustStore=/var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_truststore.jks&javax.net.ssl.trustStorePassword=[***PASSWORD***]&oracle.net.ssl_server_dn_match=false
+
+
+
+Change the port to 2484 in the Hive Metastore
+                        Database Port field.
+
+Click Save Changes.
+
+Restart the Hive service.
+
+
+Parent topic: How to enable SSL for MariaDB, MySQL, and Oracle databases

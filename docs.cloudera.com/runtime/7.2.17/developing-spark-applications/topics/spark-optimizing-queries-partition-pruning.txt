@@ -1,0 +1,30 @@
+Optimizing queries using partition pruningCloudera Docs
+Optimizing queries using partition pruning
+
+
+When predicate push-down optimization is not applicable—for example, if all stripes contain
+        records that match the predicate condition—a query with a WHERE
+        clause might need to read the entire data set. This becomes a bottleneck over a large table.
+        Partition pruning is another optimization method; it exploits query semantics to avoid
+        reading large amounts of data unnecessarily.
+Partition pruning is possible when data within a table is split across multiple logical
+        partitions. Each partition corresponds to a particular value of a partition column and is
+        stored as a subdirectory within the table root directory on HDFS. Where applicable, only the
+        required partitions (subdirectories) of a table are queried, thereby avoiding unnecessary
+        I/O.
+Spark supports saving data in a partitioned layout seamlessly, through the partitionBy method available during data source write operations.
+        To partition the "people" table by the “age” column, you can use the following command:
+people.write.format("orc").partitionBy("age").save("peoplePartitioned")
+As a result, records are automatically partitioned by the age field and then saved into
+        different directories: for example, peoplePartitioned/age=1/,
+          peoplePartitioned/age=2/, and so on.
+After partitioning the data, subsequent queries can omit large amounts of I/O when the
+        partition column is referenced in predicates. For example, the following query automatically
+        locates and loads the file under peoplePartitioned/age=20/and omits all
+        others:
+val peoplePartitioned = spark.read.format("orc").load("peoplePartitioned")
+peoplePartitioned.createOrReplaceTempView("peoplePartitioned") 
+spark.sql("SELECT * FROM peoplePartitioned WHERE age = 20")
+
+
+Parent topic: Accessing ORC Data in Hive Tables

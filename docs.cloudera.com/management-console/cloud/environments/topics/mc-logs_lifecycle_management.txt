@@ -1,0 +1,216 @@
+Configure lifecycle management for logs on AWSCloudera Docs
+Configure lifecycle management for logs on AWS
+To avoid unnecessary costs related to Amazon S3 cloud storage, you should create
+  lifecycle management rules for your cloud storage bucket used by CDP for storing logs so that
+  these logs get deleted once they are no longer useful.
+Some examples of CDP logs stored in cloud storage are: cloudera server logs, cloudera
+      agent logs, autossh logs, freeipa logs, ranger audit logs, datahub services logs, datalake
+      logs, cm management services logs, and so on. These logs are mostly useful for
+      troubleshooting, so they can be periodically deleted.
+AWS allows you to set up lifecycle management rules for your S3 buckets. For example,
+      you can set a specified expiration period for a cloud storage location so that the files in
+      that location get deleted automatically on a scheduled basis. Cloudera recommends that you do
+      this for the cloud storage location that you provided to CDP for log storage. 
+Consider the following when setting up lifecycle management rules:
+
+As logs and data locations may overlap with each other (in case the same bucket or
+    container is used for both), ensure to use the correct path prefixes in order to delete only the
+    logs. The prefixes are listed below. 
+When setting an expiration period, consider how long you would like to keep the
+    logs to allow enough time for troubleshooting. For example, in case your Data Lake, FreeIPA or
+    Data Hub cluster is ever down, you should be able to access the logs for troubleshooting. 
+
+Prefixes based on AWS environment’s logs location base
+Prior to creating lifecycle management rules in S3, review this information to
+    ensure that you use the correct path. 
+
+note
+Path logic changed in February 2021. Starting in February 2021, the path automatically
+            contains the cluster-logs folder as a peer of the cluster-backups folder,
+            creating a better structural separation between logs and backups.
+
+
+
+
+
+The “cluster-logs” prefix is automatically generated if a bucket
+                  name without any subdirectories is used as logs location
+The “cluster-logs” prefix is automatically generated if
+                  subdirectories are provided
+If your environment was registered prior to February 2021: If you
+                  defined a sub-directory, then that subdirectory is used instead of
+                  “cluster-logs”
+
+
+Logs location provided during environment registration
+s3a://my-bucket/
+s3a://my-bucket/my-dl
+s3a://my-bucket/my-dl
+
+
+
+FreeIPA prefix for lifecycle rule
+
+cluster-logs/freeipa
+
+my-dl/cluster-logs/freeipa
+my-dl/freeipa
+
+
+DataLake prefix for lifecycle rule
+cluster-logs/datalake
+my-dl/cluster-logs/datalake
+my-dl/datalake
+
+
+DataHub prefix for lifecycle rule
+cluster-logs/datahub
+my-dl/cluster-logs/datahub
+my-dl/datahub
+
+
+
+Creating expiration rules for an S3 bucket via AWS CLI
+
+If you would like to create expiration rules via AWS CLI, refer to the
+            following examples of JSON files in order to create your own JSON file. If the log
+          base location is s3://mybucket, create a JSON file similar to the following: 
+
+
+{
+ "Rules": [
+  {
+     "Filter": {
+         "Prefix": "cluster-logs/"
+      },
+     "Status": "Enabled",
+     "AbortIncompleteMultipartUpload": {
+         "DaysAfterInitiation": 7
+      },
+    "NoncurrentVersionExpiration": {
+        "NoncurrentDays": 7
+     },
+    "Expiration": {
+        "Days": 7
+     },
+     "ID": "cleanup cloud storage data after 7 days"
+
+  }]
+}
+
+If the log base location is s3://mybucket/mypath and your environment was registered in
+    February 2021 or later, create a JSON file similar to the following:
+
+{
+ "Rules": [
+  {
+     "Filter": {
+         "Prefix": "mypath/cluster-logs/"
+      },
+     "Status": "Enabled",
+     "AbortIncompleteMultipartUpload": {
+         "DaysAfterInitiation": 7
+      },
+    "NoncurrentVersionExpiration": {
+        "NoncurrentDays": 7
+     },
+    "Expiration": {
+        "Days": 7
+     },
+     "ID": "cleanup cloud storage data after 7 days"
+
+  }]
+}
+
+If the log base location is s3://mybucket/mypath and your environment was registered
+        prior to February 2021, create a JSON file similar to the following:
+
+noteMultiple rules are needed in this case to ensure that the cluster-backups folder
+          (which is also located in "mypath") does not get deleted. Starting in February 2021, this
+          is no longer needed because the cluster-backups folder is always a peer of the
+            cluster-logs folder.
+
+
+{
+ "Rules": [
+  {
+     "Filter": {
+         "Prefix": "mypath/freeipa"
+      },
+     "Status": "Enabled",
+     "AbortIncompleteMultipartUpload": {
+         "DaysAfterInitiation": 7
+      },
+    "NoncurrentVersionExpiration": {
+        "NoncurrentDays": 7
+     },
+    "Expiration": {
+        "Days": 7
+     },
+     "ID": "cleanup cloud storage data after 7 days (freeipa)"
+
+  },
+  {
+     "Filter": {
+         "Prefix": "mypath/datalake"
+      },
+     "Status": "Enabled",
+     "AbortIncompleteMultipartUpload": {
+         "DaysAfterInitiation": 7
+      },
+    "NoncurrentVersionExpiration": {
+        "NoncurrentDays": 7
+     },
+    "Expiration": {
+        "Days": 7
+     },
+     "ID": "cleanup cloud storage data after 7 days (datalake)"
+
+  },
+{
+     "Filter": {
+         "Prefix": "mypath/datahub"
+      },
+     "Status": "Enabled",
+     "AbortIncompleteMultipartUpload": {
+         "DaysAfterInitiation": 7
+      },
+    "NoncurrentVersionExpiration": {
+        "NoncurrentDays": 7
+     },
+    "Expiration": {
+        "Days": 7
+     },
+     "ID": "cleanup cloud storage data after 7 days (datahub)"
+
+  }
+]
+}
+
+
+Once you have the JSON file ready, post it with an AWS CLI command similar
+      to:
+aws s3api put-bucket-lifecycle-configuration /
+--bucket mybucket /
+--lifecycle-configuration file:///my/path/rules.json
+If you have existing rules on the nodes, you can use the
+      get-bucket-lifecycle-configuration command first, edit that JSON (adding the new rules
+     there), and then post the updated JSON.
+
+
+Creating expiration rules for an S3 bucket via S3 console
+If you would like to create expiration rules via S3 console, navigate to your S3
+        bucket > Management tab > Create lifecycle rule.
+The following screenshots show an example setup for a single prefix:
+
+
+
+
+
+
+
+
+
+
+
+Related informationManaging your storage lifecycleAmazon S3 – Object ExpirationEnabling environment telemetryParent topic: Managing an environment

@@ -1,0 +1,205 @@
+GROUP BY clauseCloudera Docs
+GROUP BY clause
+Specify the GROUP BY clause in queries that use aggregation functions,
+    such as COUNT(), SUM(), AVG(),
+      MIN(), and MAX(). Specify in the GROUP BY
+    clause the names of all the columns that do not participate in the aggregation operation. 
+
+Complex type considerations:
+ In Impala 2.3 and higher, the complex data types STRUCT,
+          ARRAY, and MAP are available. These columns cannot be
+        referenced directly in the ORDER BY clause. When you query a complex type
+        column, you use join notation to unpack the elements of the complex type, and within
+        the join query you can include an ORDER BY clause to control the order in
+        the result set of the scalar elements from the complex type.
+Zero-length strings: For purposes of clauses such as DISTINCT and GROUP
+        BY, Impala considers zero-length strings (""), NULL, and space
+        to all be different values.
+      
+Examples:
+
+      For example, the following query finds the 5 items that sold the highest total quantity (using the
+      SUM() function, and also counts the number of sales transactions for those items (using the
+      COUNT() function). Because the column representing the item IDs is not used in any
+      aggregation functions, we specify that column in the GROUP BY clause.
+    select
+  ss_item_sk as Item,
+  count(ss_item_sk) as Times_Purchased,
+  sum(ss_quantity) as Total_Quantity_Purchased
+from store_sales
+  group by ss_item_sk
+  order by sum(ss_quantity) desc
+  limit 5;
++-------+-----------------+--------------------------+
+| item  | times_purchased | total_quantity_purchased |
++-------+-----------------+--------------------------+
+| 9325  | 372             | 19072                    |
+| 4279  | 357             | 18501                    |
+| 7507  | 371             | 18475                    |
+| 5953  | 369             | 18451                    |
+| 16753 | 375             | 18446                    |
++-------+-----------------+--------------------------+
+      The HAVING clause lets you filter the results of aggregate functions, because you cannot
+      refer to those expressions in the WHERE clause. For example, to find the 5 lowest-selling
+      items that were included in at least 100 sales transactions, we could use this query:
+    select
+  ss_item_sk as Item,
+  count(ss_item_sk) as Times_Purchased,
+  sum(ss_quantity) as Total_Quantity_Purchased
+from store_sales
+  group by ss_item_sk
+      having count(ss_item_sk) >= 100
+  order by sum(ss_quantity)
+  limit 5;
++-------+-----------------+--------------------------+
+| item  | times_purchased | total_quantity_purchased |
++-------+-----------------+--------------------------+
+| 13943 | 105             | 4087                     |
+| 2992  | 101             | 4176                     |
+| 4773  | 107             | 4204                     |
+| 14350 | 103             | 4260                     |
+| 11956 | 102             | 4275                     |
++-------+-----------------+--------------------------+
+      When performing calculations involving scientific or financial data, remember that columns with type
+      FLOAT or DOUBLE are stored as true floating-point numbers, which cannot
+      precisely represent every possible fractional value. Thus, if you include a FLOAT or
+      DOUBLE column in a GROUP BY clause, the results might not precisely match
+      literal values in your query or from an original Text data file. Use rounding operations, the
+      BETWEEN operator, or another arithmetic technique to match floating-point values that are
+      near literal values you expect. For example, this query on the ss_wholesale_cost
+      column returns cost values that are close but not identical to the original figures that were entered as
+      decimal fractions.
+    select ss_wholesale_cost, avg(ss_quantity * ss_sales_price) as avg_revenue_per_sale
+  from sales
+  group by ss_wholesale_cost
+  order by avg(ss_quantity * ss_sales_price) desc
+  limit 5;
++-------------------+----------------------+
+| ss_wholesale_cost | avg_revenue_per_sale |
++-------------------+----------------------+
+| 96.94000244140625 | 4454.351539300434    |
+| 95.93000030517578 | 4423.119941283189    |
+| 98.37999725341797 | 4332.516490316291    |
+| 97.97000122070312 | 4330.480601655014    |
+| 98.52999877929688 | 4291.316953108634    |
++-------------------+----------------------+
+      Notice how wholesale cost values originally entered as decimal fractions such as 96.94 and
+      98.38 are slightly larger or smaller in the result set, due to precision limitations in the
+      hardware floating-point types. The imprecise representation of FLOAT and
+      DOUBLE values is why financial data processing systems often store currency using data types
+      that are less space-efficient but avoid these types of rounding errors.
+    
+ROLLUP
+The GROUP BY ROLLUP clause creates a group for each combination of column expressions. When
+        you run a query with the “rollup” clause on a group of columns, it is run from right to
+        left decreasing the number of column expressions over which it creates groups and the
+        aggregation(s).
+For example, GROUP BY ROLLUP (col1, col2, col3)  creates groups for each combination of column expressions in the following lists.
+
+col1, col2, col3
+col1, col2, col1NULL
+col1, NULL, NULL
+NULL, NULL, NULL This is the grand total
+
+Example:
+The following query analyzes sales data, to study the amount of sales that is occurring for different products, in different states and regions using the ROLLUP feature.
+select
+ region, state, product, sum(sales) as total_sales,
+from sales_history
+ group by rollup (region, state, product);
+Semantically the above query is equivalent to:
+select region, state, product, sum(sales) as total_sales
+      from sales_history 
+      group by region, state, product;
+      
+      union all
+      
+      select region, state, null, sum(sales) as  total_sales
+      from sales_history 
+      group by region, state;      
+      
+      union all
+      
+      select region, null, null, sum(sales) as  total_sales
+      from sales_history 
+      group by region;
+      
+      union all
+      
+      select null, null, null, sum(sales) as total_sales
+      from sales_history;
+The query result has the same aggregations as the simple GROUP BY without the ROLLUP. In
+        addition, it creates subtotals for each value of Region. Finally, it gives a grand total for
+        all rows. The result looks like this:
+
+      +--------+-------+---------+-------------+
+      | region | state | product | total_sales | 
+      +--------+-------+---------+-------------+
+      | NULL   | NULL  | NULL    | 6200        |
+      | EAST   | MA    | BOATS   | 100         |
+      | EAST   | MA    | CARS    | 1500        |
+      | EAST   | MA    | NULL    | 1600        |
+      | EAST   | NY    | BOATS   | 150         |
+      | EAST   | NY    | CARS    | 1000        |
+      | EAST   | NY    | NULL    | 1150        |
+      | EAST   | NULL  | NULL    | 2750        |
+      | WEST   | CA    | CARS    | 500         |
+      | WEST   | CA    | BOATS   | 750         |
+      | WEST   | CA    | NULL    | 1250        |
+      | WEST   | AZ    | BOATS   | 2000        |
+      | WEST   | AZ    | CARS    | 200         |
+      | WEST   | AZ    | NULL    | 2200        |
+      | WEST   | NULL  | NULL    | 3450        |
+      +--------+-------+---------+-------------+
+    
+
+CUBE
+This creates groups for all possible combinations of columns. For e.g., GROUP BY CUBE for (col1, col2) creates groups for:
+
+col1, col2
+col1, NULL
+NULL, col2
+NULL, NULL
+
+Example:
+select region, state, sum(sales) as total_sales
+       from sales_history 
+       group by cube (region, state);
+This will produce results for the following combinations (region, state), (NULL, state), (Region, NULL), and (NULL, NULL).
+
+GROUPING SETS
+A grouping set is a set of columns by which you group using the GROUP BY clause.
+Example:
+
+        select region, state, sum(sales) as total_sales
+        from sales_history 
+        group by grouping sets ((region, state), (region), (state), ());
+      
+This lets you define four grouping sets (region, state), (region), (state), and ().
+        Semantically the above query is equivalent to:
+
+        select region, state, sum(sales) as total_sales
+        from sales_history 
+        group by region, state;
+        
+        union all
+        
+        select region, null, sum(sales) as total_sales
+        from sales_history 
+        group by region;
+        
+        union all
+        
+        select null, state, sum(sales) as total_sales
+        from sales_history 
+        group by state;
+        
+        union all
+        
+        select null, null, sum(sales) as total_sales
+        from sales_history;
+        
+       
+
+
+Parent topic: SELECT statement

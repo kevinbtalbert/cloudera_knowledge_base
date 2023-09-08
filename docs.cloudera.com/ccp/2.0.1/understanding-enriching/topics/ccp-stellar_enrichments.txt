@@ -1,0 +1,114 @@
+Stellar EnrichmentsCloudera Docs
+Stellar Enrichments
+Individual sensor enrichments are sufficient for the geo,
+      host, and hbaseEnrichment, sensor topologies However, more
+    complex enrichments might contain their own configuration. Currently, the
+      stellar enrichment is more adaptable and thus requires a more nuanced
+    configuration.
+Consider the basic example of  taking a message and applying a couple of enrichments,
+          such as converting the hostname field to lowercase. For this conversion, you
+          must specify the transformation inside of the config file for the
+            stellar fieldMap option. Two syntaxes are supported, specifying the
+          transformations as a map with the key as the field and the value as the tellar
+          expression:
+"fieldMap": {
+       ...
+      "stellar" : {
+        "config" : {
+          "hostname" : "To_LOWER(hostname)"
+        }
+      }
+    }
+Another approach is to make the transformations a list with the same var :=
+            expr syntax used in the Stellar REPL:
+"fieldMap": {
+       ...
+      "stellar" : {
+        "config" : [
+          "hostname := TO_LOWER(hostname)"
+        ]
+      }
+    }
+Sometimes arbitrary Stellar enrichments running in sequence run so slowly that you
+          want to group them and run them in parallel: for instance, performing an HBase enrichment
+          and a profiler call
+:
+ "fieldMap": {
+       ...
+      "stellar" : {
+        "config" : {
+          "malicious_domain_enrichment" : {
+            "is_bad_domain" : "ENRICHMENT_EXISTS('malicious_domains', ip_dst_addr, 'enrichments', 'cf')"
+          },
+          "login_profile" : [
+            "profile_window := PROFILE_WINDOW('from 6 months ago')", 
+            "global_login_profile := PROFILE_GET('distinct_login_attempts', 'global', profile_window)",
+            "stats := STATS_MERGE(global_login_profile)",
+            "auth_attempts_median := STATS_PERCENTILE(stats, 0.5)", 
+            "auth_attempts_sd := STATS_SD(stats)",
+            "profile_window := null", 
+            "global_login_profile := null", 
+            "stats := null"
+          ]
+        }
+      }
+    }
+In the previous example,  a group called malicious_domain_enrichment
+          determines whether the destination address exists in the HBase enrichment table in the
+            malicious_domains enrichment type. Because this is a simple enrichment,
+          the group is expressed as a map with the new field is_bad_domain being a key
+          and the Stellar expression associated with that operation being the associated
+          value.
+In contrast, the Stellar enrichment group login_profile that interacts
+          with the profiler has multiple temporary expressions (for example,
+            profile_window, global_login_profile, and stats)
+          that are useful only within the context of this group of Stellar expressions. In this
+          case, you must use the list construct when specifying the group and set the temporary
+          variables to null so they are not passed along.
+In general, things to note from this section are as follows:
+
+
+The Stellar enrichments for the stellar enrichment adapter are
+              specified in the config for the stellar enrichment adapter
+              in the fieldMap
+
+
+
+Groups of independent (for example, no expression in any group depend on the
+              output of an expression from an other group) may be executed in parallel
+
+
+If you have the need to use temporary variables, you may use the list construct.
+              Ensure that you assign the variables to null before the end of the
+              group.
+
+
+Ensure that you do not assign a field to a Stellar expression which returns an
+              object which JSON cannot represent.
+
+
+Fields assigned to Maps as part of tellar enrichments have the maps unfolded,
+              similar to the HBase Enrichment
+
+
+For example the Stellar enrichment for field foo which assigns a
+                  map such as foo := { 'grok' : 1, 'bar' : 'baz'} would yield the
+                  following fields:
+
+
+
+foo.grok == 1
+
+
+
+
+foo.bar == 'baz'
+
+
+
+
+
+
+
+
+Parent topic: Sensor Enrichment Configuration

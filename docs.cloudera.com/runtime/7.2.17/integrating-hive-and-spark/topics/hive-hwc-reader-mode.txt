@@ -1,0 +1,80 @@
+Reading data through HWCCloudera Docs
+Reading data through HWC
+You can configure one of the several HWC modes to read Apache Hive managed tables
+        from Apache Spark. You need to know about the modes you can configure for querying Hive from
+        Spark. Examples of how to configure the modes are presented. 
+
+In this release, HWC configuration has been simplified.  
+You set the following configurations when starting the spark shell:
+
+spark.sql.extensions="com.hortonworks.spark.sql.rule.Extensions" 
+spark.datasource.hive.warehouse.read.mode=<mode> where <mode> is one of
+                        the following: 
+
+
+DIRECT_READER_V1 or DIRECT_READER_V2
+JDBC_CLUSTER
+SECURE_ACCESS 
+                    
+You can transparently read with HWC in different modes using just
+                    spark.sql("<query>"). You can specify the mode in the
+                spark-shell when you run Spark SQL commands to query Apache Hive tables from Apache
+                Spark. You can also specify the mode in
+                    configuration/spark-defaults.conf, or using the
+                    --conf option in spark-submit. 
+For backward compatibility, configuring
+                    spark.datasource.hive.warehouse.read.mode is the same as the
+                following configurations. 
+--conf spark.datasource.hive.warehouse.read.jdbc.mode
+                        //deprecated
+--conf spark.sql.hive.hwc.execution.mode //deprecated
+--conf spark.datasource.hive.warehouse.read.via.llap
+                        //deprecated
+
+The old configurations are still supported for backward compatibility, but in a later
+                release, support will end for these configurations and
+                    spark.datasource.hive.warehouse.read.mode will replace these
+                configurations. HWC gives precedence to new configurations when old and new ones are
+                encountered. 
+
+
+Related informationUsing Direct Reader modeUsing JDBC read modeApache Spark executor task statisticsUsing secure access modeDirect Reader mode introductionDirect Reader mode is a transparent connection that Hive Warehouse Connector (HWC) makes   to Apache Hive metastore (HMS) to get transaction information. You use this mode if you do not   need production-level Ranger authorization. Direct Reader mode does not support Ranger   authorization. Direct Reader does support Spark-consistent timestamps in this release and   later.Using Direct Reader modeIn a few steps, you configure Apache Spark to connect to the Apache Hive metastore.         An example shows how to configure Direct Reader reads while launching the Spark         shell.Direct Reader configuration propertiesYou need to know the property names and valid values for configuring Direct Reader mode.   The advantage of using Direct Reader V2 over Direct Reader V1 is its ability to process ORC data   using vectorization, which improves performance.Direct Reader limitationsYou must understand the limitations of Direct Reader mode and what functionality is not   supported.Secure access mode introductionUse Hive Warehouse Connector (HWC) secure access mode if you want fine-grained access   control (FGAC) column masking and row filtering to secure managed (ACID); or external, Hive table   data that you read from Spark. If you have large workloads, low-latency requirements, and require   fine-grained access control, secure access mode is recommended over the Direct Reader   mode.Setting up secure access mode in Data HubLearn how to set up Ranger policies on a staging location. This location is used to         temporarily store Hive files that users need to read from Spark using the HWC secure access         mode.Using secure access modeLearn how to use HWC secure access mode that offers fine-grained access control         (FGAC) column masking and row filtering to secure managed (ACID), or external Hive table         data that you read from Spark. Configuring caching for secure access modeYou can enable or disable caching for the Hive Warehouse Connector (HWC) secure         access mode to have finer control over read queries and ensure that the content updated         outside of a Spark session is considered during reads. Caching is enabled by default because         queries that run with caching enabled tend to run faster.JDBC read mode introduction JDBC read mode is a connection that Hive Warehouse Connector (HWC) makes to HiveServer   (HS2) to get transaction information. JDBC read mode is secured through Ranger authorization and   supports fine-grained access control, such as column masking. You need to understand how you read   Apache Hive tables from Apache Spark through HWC using the JDBC mode. The location where your   queries are executed affects configuration. Understanding execution locations and recommendations   help you configure JDBC reads for your use case.Using JDBC read mode In a few steps, you configure Apache Spark to connect to HiveServer (HS2). Examples         show how to configure JDBC Cluster mode while launching the Spark shell. JDBC mode configuration propertiesYou need to know the property names and valid values for configuring JDBC mode. JDBC mode limitationsYou must understand the limitations of JDBC mode and what functionality is not supported.Kerberos configurations for HWCYou learn how to set up HWC for Kerberos, or not. You set properties and values   depending on the JDBC_CLUSTER or JDBC_CLIENT option you configure.Parent topic: Introduction to HWC
+Example of configuring and reading a Hive managed table
+
+Set Kerberos for HWC.
+
+Choose a read mode.
+
+Start the Spark session using the following configurations. 
+For example, start the Spark session using Direct Reader and configure
+                        for kyro serialization:
+                            spark-shell --jars ./hive-warehouse-connector-assembly-1.0.0.7.2.8.0.jar \
+--master yarn \
+--conf spark.sql.extensions="com.hortonworks.spark.sql.rule.Extensions" \
+--conf spark.kryo.registrator=com.qubole.spark.hiveacid.util.HiveAcidKyroRegistrator \
+--conf spark.sql.hive.hiveserver2.jdbc.url="jdbc:hive2://hwc-2.hwc.root.hwx.site:2181/default;retries=5;serviceDiscoveryMode=zooKeeper;zooKeeperNamespace=hiveserver2" \
+--conf spark.sql.hive.hiveserver2.jdbc.url.principal=hive/_HOST@ROOT.HWX.SITE \
+--conf spark.datasource.hive.warehouse.read.mode=DIRECT_READER_V2For
+                            example, start the Spark session using the JDBC_CLUSTER option:
+                        spark-shell --jars ./hive-warehouse-connector-assembly-1.0.0.7.2.8.0.jar 
+--master yarn
+--conf spark.sql.extensions="com.hortonworks.spark.sql.rule.Extensions" 
+--conf spark.kryo.registrator=com.qubole.spark.hiveacid.util.HiveAcidKyroRegistrator
+--conf spark.sql.hive.hiveserver2.jdbc.url="jdbc:hive2://hwc-2.hwc.root.hwx.site:2181/default;retries=5;serviceDiscoveryMode=zooKeeper;zooKeeperNamespace=hiveserver2"
+--conf spark.sql.hive.hiveserver2.jdbc.url.prinicpal=hive/_HOST@ROOT.HWX.SITE
+--conf spark.datasource.hive.warehouse.read.mode=JDBC_CLUSTER
+You must start the Spark session after setting the Direct Read option, so
+                        include the configurations in the launch string. 
+
+Read Apache Hive managed tables.
+For example:
+                            scala> val hive = com.hortonworks.hwc.HiveWarehouseSession.session(spark).build()
+
+scala> hive.sql("select * from managedTable").shownoteHWC supports the hive.sql() API
+                            for executing queries. The .execute() and
+                                .executeQuery() methods are deprecated and it is
+                            recommended that you use the hive.sql()
+                        method.
+
+
+

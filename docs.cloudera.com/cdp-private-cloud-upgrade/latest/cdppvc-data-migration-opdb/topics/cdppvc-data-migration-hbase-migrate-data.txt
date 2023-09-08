@@ -1,0 +1,112 @@
+Migrating HBase from CDH or HDPCloudera Docs
+Migrating HBase from CDH or HDP
+Before you migrate your data, you must have an Apache HBase cluster created on CDP Private Cloud Base. Your CDH or HDP cluster is your source
+        cluster, and your CDP Private Cloud Base cluster is your destination
+        cluster.
+
+Deploy HBase replication on both the source and the destination cluster. 
+For instructions, see Deploy HBase
+                    replication.
+
+Enable replication on both the source and destination clusters by running the
+                    following commands in the HBase Shell.
+
+On the source
+                        clustercreate 't1',{NAME=>'f1', REPLICATION_SCOPE=>1}
+On the destination cluster
+create 't1',{NAME=>'f1', KEEP_DELETED_CELLS=>'true'}
+noteCloudera recommends enabling KEEP_DELETED_CELLS on column
+                        families in the destination cluster, where
+                            REPLICATION_SCOPE=1 in the source cluster.
+
+
+Run the add_peer <ID>, <DESTINATION_CLUSTER_KEY> command
+                    in the HBase Shell on the source cluster to add the destination cluster as a
+                    peer.
+
+You can get the DESTINATION_CLUSTER_KEY value from the HBase
+                        Master user interface that you can access using Cloudera Manager.
+
+
+Run the disable_peer <ID1> command in the HBase Shell on
+                    the source cluster to disable the peer in the source cluster
+This stop the replication with the peer, but the logs are retained for
+                    future reference.
+
+Take a snapshot in Cloudera Manager.
+
+
+Select the HBase
+                            service.
+
+
+Click the Table Browser
+                            tab.
+
+
+Click a
+                            table.
+
+
+Click Take
+                            Snapshot.
+
+
+Specify the name of the snapshot, and click Take
+                                Snapshot.
+
+
+
+Run the ExportSnapshot command in the HBase Shell on the
+                    source cluster to export a snapshot from the source to the destination cluster.
+                    You must run the ExportSnapshot command as the
+                        hbase user or the user that owns the files.
+
+The ExportSnapshot tool executes a MapReduce Job similar to
+                            distcp to copy files to the other cluster.
+                            ExportSnapshot works at the file-system level, so the
+                        HBase cluster can be offline.
+hbase org.apache.hadoop.hbase.snapshot.ExportSnapshot -snapshot <snapshot name> -copy-to hdfs://destination:hdfs_port/hbase -mappers 16
+Here, destination (hdfs://destination:hdfs_port/hbase)
+                        is the destination CDP Private Cloud Base cluster.
+                        Replace the HDFS server path and port with the ones you have used for your
+                            cluster.importantSnapshots must be enabled on the source
+                            and destination clusters. When you export a snapshot, the table's
+                            HFiles, logs, and the snapshot metadata are copied from the source
+                            cluster to the destination cluster.
+
+
+Run the following commands in the HBase Shell on the destination cluster to
+                    restore the table. If the table already exists on the destination cluster, use
+                        restore_snapshot to restore it to the state recorded in the
+                    snapshot.
+
+
+disable <tablename>
+restore_snapshot <snapshotname>
+
+If the snapshot still does not exist, use the clone_snapshot
+                        command to recreate it.
+
+clone_snapshot <snapshotname> <tablename>
+
+
+
+Run the enable_peer <ID1> command in the HBase Shell on the
+                    source cluster to enable the peer in the source and destination clusters.
+
+Run the HashTable command on the source cluster and the
+                        SyncTable command on the destination cluster to synchronize
+                    the table data between your source and destination clusters.
+
+On the source
+                        clusterHashTable [options] <tablename> <outputpath>
+On the destination cluster
+SyncTable [options] <sourcehashdir> <sourcetable> <targettable>
+For more information and examples about using HashTable and
+                            SyncTable, see Use HashTable and SyncTable
+                            tool.
+
+
+
+Parent topic: Migrating HBase

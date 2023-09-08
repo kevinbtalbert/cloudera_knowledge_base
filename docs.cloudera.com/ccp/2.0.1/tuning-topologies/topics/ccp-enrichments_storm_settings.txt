@@ -1,0 +1,142 @@
+Storm Enrichment ParametersCloudera Docs
+Storm Enrichment
+      Parameters
+You can modify various Storm enrichment properties for the unified topology using
+      Ambari.
+The following list provides tuning guidelines for the enrichment properties you can modify
+         in Ambari:
+
+enrichment.workers
+The number of worker processes for the enrichment topology.  Increase parallelism
+               before attempting to increase the number of workers.
+Start by tuning only a single worker. Maximize throughput for that worker, then
+               increase the number of workers. 
+The throughput should scale relatively linearly as workers are added. This reaches a
+               limit as the number of workers running on a single node saturate the resources
+               available. 
+When this happens, adding workers, but on additional nodes should allow further
+               scaling.
+enrichment.acker.executors
+The number of ackers within the topology.  
+This should most often be equal to the number of workers defined in
+               enrichment.workers. 
+Within the Storm UI, click the "Show System Stats" button. This will display a bolt
+               named __acker. If the capacity of this bolt is too high, then increase the number of
+               ackers.
+topology.worker.childopts
+This parameter accepts arguments that will be passed to the JVM created for each
+               Storm worker. This allows for control over the heap size, garbage collection, and any
+               other JVM-specific parameter.   
+Start with a 2G heap and increase as needed. Running with 8G was found to be
+               beneficial, but will vary depending on caching needs. 
+-Xms8g -Xmx8g
+
+The Garbage First Garbage Collector (G1GC) is recommended along with a cap on the
+               amount of time spent in garbage collection. This is intended to help address small
+               object allocation issues due to our extensive use of caches.
+-XX:+UseG1GC -XX:MaxGCPauseMillis=100
+If the caches in use are very large (as defined by either enrichment.join.cache.size
+               or threat.intel.join.cache.size) and performance is poor, turning on garbage
+               collection logging might be helpful. 
+topology.max.spout.pending
+This limits the number of unacked tuples that the spout can introduce into the
+               topology.
+Decreasing this value will increase back pressure and allow the topology to consume
+               messages at a pace that is maintainable.
+If the spout throws 'Commit Failed Exceptions' then the topology is not keeping up.
+               Decreasing this value is one way to ensure that messages can be processed before they
+               time out. 
+If the topology's throughput is unsteady and inconsistent, decrease this value. This
+               should help the topology consume messages at a maintainable pace.
+If the bolt capacity is low, the topology can handle additional load. Increase this
+               value so that more tuples are introduced into the topology which should increase the
+               bolt capacity. 
+kafka.spout.parallelism
+The parallelism of the Kafka spout within the topology. Defines the maximum number
+               of executors for each worker dedicated to running the spout.
+The spout parallelism should most often be set to the number of partitions of the
+               input Kafka topic.dd
+If the enrichment bolt capacity is low, increasing the parallelism of the spout can
+               introduce additional load on the topology.
+enrichment.parallelism
+The parallelism hint for the enrichment bolt. Defines the maximum number of
+               executors within each worker dedicated to running the enrichment bolt.
+If the capacity of the enrichment bolt is high, increasing the parallelism will
+               introduce additional executors to bring the bolt capacity down.
+If the throughput of the topology is too low, increase this value. This allows
+               additional tuples to be enriched in parallel.
+Increasing parallelism on the enrichment bolt will at some point put pressure on the
+               downstream threat intel and output bolts. As this value is increased, monitor the
+               capacity of the downstream bolts to ensure that they do not become a bottleneck.
+            
+threat.intel.parallelism
+The parallelism hint for the threat intel bolt. Defines the maximum number of
+               executors within each worker dedicated to running the threat intel bolt.
+If the capacity of the threat intel bolt is high, increasing the parallelism will
+               introduce additional executors to bring the bolt capacity down. 
+If the throughput of the topology is too low, increase this value. This allows
+               additional tuples to be enriched in parallel.
+Increasing parallelism on this bolt will at some point put pressure on the
+               downstream output bolt. As this value is increased, monitor the capacity of the
+               output bolt to ensure that it does not become a bottleneck.
+kafka.writer.parallelism
+The parallelism hint for the output bolt which writes to the output Kafka topic.
+               Defines the maximum number of executors within each worker dedicated to running the
+               output bolt. 
+If the capacity of the output bolt is high, increasing the parallelism will
+               introduce additional executors to bring the bolt capacity down. 
+enrichment.cache.size
+The Enrichment bolt maintains a cache so that if the same enrichment occurs
+               repetitively, the value can be retrieved from the cache instead of it being
+               recomputed.  Increase the size of the cache to improve the rate of cache hits. 
+There is a great deal of repetition in network telemetry, which leads to a great
+               deal of repetition for the enrichments that operate on that telemetry. Having a
+               highly performant cache is one of the most critical factors driving performance. 
+Increasing the size of the cache may require that you increase the worker heap size
+               using `topology.worker.childopts'. 
+threat.intel.cache.size
+The Threat Intel bolt maintains a cache so that if the same enrichment occurs
+               repetitively, the value can be retrieved from the cache instead of it being
+               recomputed.
+There is a great deal of repetition in network telemetry, which leads to a great
+               deal of repetition for the enrichments that operate on that telemetry. Having a
+               highly performant cache is one of the most critical factors driving performance.
+Increase the size of the cache to improve the rate of cache hits.
+Increasing the size of the cache may require that you increase the worker heap size
+               using `topology.worker.childopts'. 
+enrichment.threadpool.size
+This value defines the number of threads maintained within a pool to execute each
+               enrichment. This value can either be a fixed number or it can be a multiple of the
+               number of cores (5C = 5 times the number of cores).
+The enrichment bolt maintains a static thread pool that is used to execute each
+               enrichment. This thread pool is shared by all of the executors running within the
+               same worker. 
+Start with a thread pool size of 1. Adjust this value after tuning all other
+               parameters first. Only increase this value if testing shows performance improvements
+               in your environment given your workload. 
+If the thread pool size is too large this will cause the work to be shuffled amongst
+               multiple CPU cores, which significantly decreases performance. Using a smaller thread
+               pool helps pin work to a single core.
+If the thread pool size is too small this can negatively impact IO-intensive
+               workloads. Increasing the thread pool size, helps when using IO-intensive workloads
+               with a significant cache miss rate. A thread pool size of 3-5 can help in these
+               cases. 
+Most workloads will make significant use of the cache and so 1-2 threads will most
+               likely be optimal. 
+The bolt uses a static thread pool. To scale out, but keep the work mostly pinned to
+               a CPU core, add more Storm workers while keeping the thread pool size low.
+If a larger thread pool increases load on the system, but decreases the throughput,
+               then it is likely that the system is thrashing. In this case the thread pool size
+               should be decreased. 
+enrichment.threadpool.type
+The enrichment bolt maintains a static thread pool that is used to execute each
+               enrichment. This thread pool is shared by all of the executors running within the
+               same worker.   
+Defines the type of thread pool used. This value can be either "FIXED" or
+               "WORK_STEALING". 
+Currently, this value must be manually defined within the flux file at
+                  $METRON_HOME/flux/enrichment/remote-unified.yaml. This value
+               cannot be altered within Ambari.
+
+
+Parent topic: Tuning an Enrichment Topology

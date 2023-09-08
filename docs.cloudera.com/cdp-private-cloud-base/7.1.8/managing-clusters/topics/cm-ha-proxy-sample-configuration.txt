@@ -1,0 +1,169 @@
+Sample Configuration Files for HAProxyCloudera Docs
+Sample Configuration Files for HAProxy 
+You can use the supplied configuration files to configure the
+    HAProxy load balancer for deployments with and without TLS or as a guide
+    when using a different type of load balancer.
+HAProxy is an open source load balancer. It can be used as a
+      load balancer in front of the Cloudera Manager hosts. Other load balancers
+      may be used instead of HAProxy.
+Below is are samples of an haproxy.config
+      file, one for deployments where TLS is enabled, and a second samlple
+      without TLS. If you choose a different type of load balancer, use this
+      configuration file as a guide for configuring the load balancer.
+In the files below, <cert.pem> refers to a
+      PEM-encoded file containing a concatenation of the load balancer’s
+      certificate and corresponding private key. Ensure that the private key
+      does not have a passphrase. HAProxy does not support private keys
+      protected with a passphrase.
+Replace <cm_host_1> and
+        <cm_host_2> with the actual DNS names of the
+      Cloudera Manager server hosts. The passive server is indicated by the use
+      of the backup keyword in the server definition line, as
+      used in the file below.
+Sample haproxy.confg file with TLS enabled
+#---------------------------------------------------------------------
+# common defaults that all the 'listen' and 'backend' sections will
+# use if not designated in their block
+#---------------------------------------------------------------------
+defaults 
+timeout http-request    10s
+   	timeout queue           1m
+   	timeout connect         10s
+   	 timeout client          10m
+    	 timeout server          10m
+   	 #timeout http-keep-alive 10s
+   	 timeout check           10s
+    	 maxconn                 3000
+
+
+# enable admin stats at :8000/haproxy?stats
+listen admin
+	bind *:8000
+	stats enable
+
+
+
+global
+    log /dev/log local0
+    log localhost local1 notice
+    maxconn 2000
+    daemon
+
+defaults
+    log global
+    mode tcp
+    option tcplog
+    option dontlognull
+    retries 3
+    timeout connect 5000
+    timeout client 50000
+    timeout server 50000
+
+frontend http-in
+    bind *:7183 ssl crt <cert.pem>
+    default_backend cmservers
+
+backend cmservers
+    mode tcp
+    option tcplog
+    option log-health-checks
+    option redispatch
+    log global
+    balance roundrobin
+    timeout connect 10s
+    timeout server 1m
+    # active server
+    server cm1 <cm_host_1>:7183 check ssl verify none crt <cert.pem>
+    # passive server
+    server cm2 <cm_host_2>:7183 check backup ssl verify none crt <cert.pem>
+
+
+
+frontend agents
+    bind *:7182 ssl crt <cert.pem>
+    default_backend foragents
+
+backend foragents
+    mode tcp
+    option tcplog
+    option log-health-checks
+    option redispatch
+    log global
+    balance roundrobin
+    timeout connect 10s
+    timeout server 1m
+    server cm1 <cm_host_1>:7182 check ssl verify none crt <cert.pem>
+    server cm2 <cm_host_2>:7182 check backup ssl verify none crt <cert.pem>
+
+
+
+Sample haproxy.confg file for HAProxy without TLS
+defaults 
+timeout http-request    10s
+   	 timeout queue           1m
+   	 timeout connect         10s
+   	 timeout client          10m
+    	 timeout server          10m
+   	 #timeout http-keep-alive 10s
+   	 timeout check           10s
+    	 maxconn                 3000
+
+
+# enable admin stats at :8000/haproxy?stats
+listen admin
+	bind *:8000
+	stats enable
+
+
+
+global
+    log /dev/log local0
+    log localhost local1 notice
+    maxconn 2000
+    daemon
+
+defaults
+    log global
+    mode tcp
+    option tcplog
+    option dontlognull
+    retries 3
+    timeout connect 5000
+    timeout client 50000
+    timeout server 50000
+
+frontend http-in
+    bind *:7180
+    default_backend cmservers
+
+backend cmservers
+    mode tcp
+    option tcplog
+    option log-health-checks
+    option redispatch
+    log global
+    balance roundrobin
+    timeout connect 10s
+    timeout server 1m
+    server cm1 <cm_host_1>:7180 check
+    server cm2 <cm_host_2>:7180 check backup
+
+frontend agents
+    bind *:7182
+    default_backend foragents
+
+backend foragents
+    mode tcp
+    option tcplog
+    option log-health-checks
+    option redispatch
+    log global
+    balance roundrobin
+    timeout connect 10s
+    timeout server 1m
+    server cm1 <cm_host_1>:7182 check 
+    server cm2 <cm_host_2>:7182 check backup
+
+
+
+Parent topic: Configuring Cloudera Manager for High Availability

@@ -1,0 +1,28 @@
+Minimize cluster disruption during temporary planned downtime of a single tablet serverCloudera Docs
+Minimize cluster disruption during temporary planned downtime of a single tablet
+    server
+If a single tablet server is brought down temporarily in a healthy cluster, all tablets
+    will remain available and clients will function as normal, after potential short delays due to
+    leader elections. However, if the downtime lasts for more than --follower_unavailable_considered_failed_sec (default
+    300) seconds, the tablet replicas on the down tablet server will be replaced by new replicas on
+    available tablet servers. This will cause stress on the cluster as tablets re-replicate and, if
+    the downtime lasts long enough, significant reduction in the number of replicas on the down
+    tablet server, which may require the rebalancer to fix. 
+ To work
+      around this, in Kudu versions 1.11 onward, the kudu CLI contains a tool to
+      put tablet servers into maintenance mode. While in this state, the tablet server’s replicas
+      are not re-replicated due to its downtime alone, though re-replication may still occur in the
+      event that the server in maintenance suffers from a disk failure or if a follower replica on
+      the tablet server falls too far behind its leader replica. Upon exiting maintenance,
+      re-replication is triggered for any remaining under-replicated tablets.
+The kudu tserver state enter_maintenance and kudu tserver state
+        exit_maintenance tools are added to orchestrate tablet server maintenance. The
+      following can be run from a tablet server to put it into
+      maintenance:$ TS_UUID=$(sudo -u kudu kudu fs dump uuid --fs_wal_dir=<wal_dir> --fs_data_dirs=<data_dirs>)
+$ sudo -u kudu kudu tserver state enter_maintenance <master_addresses> "$TS_UUID"
+The tablet server maintenance mode is shown in the "Tablet Servers" page of the Kudu leader
+      master's web UI, and in the output of kudu cluster ksck. To exit maintenance
+      mode, run the following
+      command:sudo -u kudu kudu tserver state exit_maintenance <master_addresses> "$TS_UUID"
+
+Parent topic: Orchestrate a rolling restart with no downtime

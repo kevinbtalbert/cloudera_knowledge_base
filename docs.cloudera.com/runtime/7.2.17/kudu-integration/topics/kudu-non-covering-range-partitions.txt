@@ -1,0 +1,43 @@
+Non-covering range partitionsCloudera Docs
+Non-covering range partitions
+Kudu supports the use of non-covering range partitions, which can be used to address the
+  following scenarios:
+
+
+ In the case of time-series data or other schemas which need to account
+     for constantly-increasing primary keys, tablets serving old data will be relatively fixed in
+     size, while tablets receiving new data will grow without bounds. 
+ In cases where you want to partition data based on its category, such
+     as sales region or product type, without non-covering range partitions you must know all of the
+     partitions ahead of time or manually recreate your table if partitions need to be added or
+     removed, such as the introduction or elimination of a product type. 
+
+
+note See Range partitioning for the caveats of non-covering
+      range partitions. 
+ The following example creates a tablet per year (5 tablets total), for
+   storing log data. The table only accepts data from 2012 to 2016. Keys outside of these ranges
+   will be rejected.
+   CREATE TABLE sales_by_year (
+  year INT, sale_id INT, amount INT,
+  PRIMARY KEY (year, sale_id)
+)
+PARTITION BY RANGE (year) (
+  PARTITION VALUE = 2012,
+  PARTITION VALUE = 2013,
+  PARTITION VALUE = 2014,
+  PARTITION VALUE = 2015,
+  PARTITION VALUE = 2016
+)
+STORED AS KUDU;
+
+When records start coming in for 2017, they will be rejected. At that point,
+   the 2017 range should be added as follows:
+   ALTER TABLE sales_by_year ADD RANGE PARTITION VALUE = 2017;In
+   use cases where a rolling window of data retention is required, range partitions may also be
+   dropped. For example, if data from 2012 should no longer be retained, it may be deleted in bulk:
+   ALTER TABLE sales_by_year DROP RANGE PARTITION VALUE = 2012;
+   Note that just like dropping a table, this irrecoverably deletes all data stored in the dropped
+   partition. 
+
+Related informationRange partitioningParent topic: Partitioning tables

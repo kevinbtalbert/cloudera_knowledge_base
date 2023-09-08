@@ -1,0 +1,63 @@
+Choosing the number of partitions for a topicCloudera Docs
+Choosing the number of partitions for a topic
+Learn how to determine the number of partitions each of your Kafka topics
+    requires.
+Choosing the proper number of partitions for a topic is the key to
+      achieving a high degree of parallelism with respect to writes to and reads and to distribute
+      load. Evenly distributed load over partitions is a key factor to have good throughput (avoid
+      hot spots). Making a good decision requires estimation based on the desired throughput of
+      producers and consumers per partition.
+
+
+
+For example, if you want to be able to read 1 GB/sec, but your
+      consumer is only able process 50 MB/sec, then you need at least 20 partitions and 20 consumers
+      in the consumer group. Similarly, if you want to achieve the same for producers, and 1
+      producer can only write at 100 MB/sec, you need 10 partitions. In this case, if you have 20
+      partitions, you can maintain 1 GB/sec for producing and consuming messages. You should adjust
+      the exact number of partitions to number of consumers or producers, so that each consumer and
+      producer achieve their target throughput. 
+So a simple formula could be: 
+#Partitions = max(NP, NC)
+where:
+
+NP is the number of required producers determined by
+        calculating: TT/TP
+NC is the number of required consumers determined by
+        calculating: TT/TC
+TT is the total expected throughput for our system
+TP is the max throughput of a single producer to a single
+        partition
+TC is the max throughput of a single consumer from a single
+        partition
+
+This calculation gives you a rough indication of the number of
+      partitions. It's a good place to start. Keep in mind the following considerations for
+      improving the number of partitions after you have your system in place:
+
+The number of partitions can be specified at topic creation time or later.
+Increasing the number of partitions also affects the number of open file descriptors. So
+        make sure you set file descriptor limit properly. 
+Reassigning partitions can be very expensive, and therefore it's better to over- than
+        under-provision. 
+Changing the number of partitions that are based on keys is challenging and involves
+        manual copying. 
+Reducing the number of partitions is not currently supported. Instead, create a new a
+        topic with a lower number of partitions and copy over existing data. 
+Metadata about partitions are stored in ZooKeeper in the form of znodes.
+        Having a large number of partitions has effects on ZooKeeper and on client resources: 
+Unneeded partitions put extra pressure on ZooKeeper (more network requests), and might
+            introduce delay in controller and/or partition leader election if a broker goes
+            down.
+Producer and consumer clients need more memory, because they need to keep track of
+            more partitions and also buffer data for all partitions. 
+
+As guideline for optimal performance, you should not have more than 4000 partitions per
+        broker and not more than 200,000 partitions in a cluster. 
+
+Make sure consumers don’t lag behind producers by monitoring
+      consumer lag. To check consumers' position in a consumer group (that is, how far behind the
+      end of the log they are), use the following command:
+kafka-consumer-groups --bootstrap-server BROKER_ADDRESS --describe --group CONSUMER_GROUP --new-consumer
+
+Related informationManaging Apache kafkaParent topic: Cluster sizing

@@ -1,0 +1,266 @@
+Replicating data from CDP PvC Base cluster to Data Hub cluster with SRM deployed in Data Hub clusterCloudera Docs
+Replicating data from CDP PvC Base cluster to  Data Hub cluster with SRM deployed in
+    Data Hub cluster 
+You can set up and configure an instance of SRM running in a Data Hub cluster to
+    replicate data between the Data Hub cluster and a CDP PvC Base cluster. In addition, you can use
+    SMM to monitor the replication process. Review the following example to learn how this can be
+    set up.
+
+Consider the following replication scenario:
+
+In this scenario, data is replicated from a CDP PvC Base cluster to a Data Hub cluster by
+        an SRM instance that is deployed in the Data Hub cluster. 
+The CDP PvC Base cluster has Kafka deployed on it. It is a secure cluster that has TLS/SSL
+        encryption enabled and uses PLAIN authentication. In addition, it uses Ranger for
+        authorization.
+The Data Hub cluster is provisioned with the one of the default Streams Messaging cluster
+        definitions. 
+
+
+This example scenario does not go into detail on how to
+          set up the clusters and assumes the following:
+
+A Data Hub cluster provisioned with the
+            Streams Messaging Light Duty or Heavy Duty cluster definition is available. For more information, see
+              
+              Setting up your Streams Messaging cluster
+              in the CDF for Data Hub library. Alternatively, you can also review the cloud provider
+              specific cluster creation instructions available in the Cloudera Data Hub library.
+
+A CDP PvC Base cluster with Kafka is available. This cluster has TLS/SSL encryption
+            enabled, uses PLAIN authentication, and has Ranger for authorization. For more
+            information, see the CDP Private Cloud Base Installation Guide.
+
+Network connectivity and DNS resolution are
+            established between the clusters.
+
+
+
+Obtain PLAIN credentials for SRM.
+The credentials of a PLAIN user that can access the CDP PvC Base cluster are required.
+          These credentials are supplied to SRM in a later step. In this example [***PLAIN
+            USER***] and [***PLAIN USER PASSWORD***] is used to refer
+          to these credentials.noteTypically, Kerberos cannot be easily configured to span across
+            an on-premise and a public cloud environment. Therefore, these instructions assume that
+            these environments use authentication methods that are easy to interoperate in such
+            hybrid environments like LDAP or PAM authentication. For more information on how you can
+            configure your Kafka service to use LDAP or PAM, see Kafka
+            Authentication.
+Add Ranger permissions for the PLAIN user in the CDP PvC cluster:
+You must ensure that the PLAIN user you obtained has correct permissions assigned to it
+            in Ranger. Otherwise, SRM will not be able to access Kafka resources on the CDP PvC Base
+            cluster.
+
+
+Access the Cloudera Manager instance of your CDP
+                PvC Base cluster.
+
+
+Go to Ranger >  Ranger Admin Web UI.
+
+
+Log in to the Ranger Console (Ranger Admin Web UI).
+
+Add the [***PLAIN USER***] to the following
+              policies:
+
+All - consumergroup
+All - topic
+All - transactionalid
+All - cluster
+All - delegationtoken
+
+
+Acquire the CDP PvC Base cluster truststore and add it to the Data Hub
+          cluster:The actions you need to take differ depending on how TLS is set up in
+          the CDP PvC Base cluster:Auto TLSManual TLS
+Obtain the certificate of the Cloudera Manager root Certificate Authority and its
+                  password.The Certificate Authority certificate and its password can be obtained
+                  using the Cloudera Manager API. The following steps describe how you can retrieve
+                  the certificate and password using the Cloudera Manager API
+                    Explorer. Alternatively, you can also retrieve the certificate and
+                  password by calling the appropriate endpoints in your browser window or using
+                    curl.
+Access the Cloudera Manager instance of your CDP PvC Base cluster.
+Go to Support > API
+                        Explorer.
+Find CertManagerResource.
+Select the /certs/truststore GET operation and click
+                      Try it out.
+Enter the truststore type.
+Click Execute.
+Click Download file under
+                      Responses.The downloaded file is your
+                      certificate.
+Select the /certs/truststorePassword GET operation and
+                    click Try it out.
+Click Execute.The password is displayed under
+                        Responses.
+
+Run the following command to create the
+                  truststore:keytool \
+  -importcert \
+  -storetype JKS \
+  -noprompt \
+  -keystore cdppvc-truststore.jks \
+  -storepass ***PASSWORD*** \
+  -alias cdppvc-cm-ca \
+  -file ***PATH TO CM CA CERTIFICATE***
+Note
+                  down the password, it is needed in a later step.
+Copy the cdpdc-truststore.jks file to a common location on all
+                the hosts in your CDP Data Hub cluster. Cloudera recommends that you use the
+                  following location:
+                  /opt/cloudera/security/cdppvc-truststore.jks.
+Set the correct file permissions.Use 751 for the directory and 444 for the
+                  truststore file.
+
+Note down the CDP PvC Base cluster's truststore location and password, these
+                should be known to you.
+Copy the truststore file to a common location on all the hosts in your CDP Data
+                Hub cluster.  Cloudera recommends that you use the following location:
+                    /opt/cloudera/security/truststore.jks.
+Set the correct file permissions.Use 751 for the directory and 444 for the
+                  truststore file.
+Access the Cloudera Manager instance of your Data Hub Cluster.Define the external Kafka cluster (CDP PvC Base).
+Go to Administration > External
+                  Accounts.
+Go to the Kafka Credentials tab.On this
+              tab you will create a credential for each external cluster taking part in the
+              replication process. 
+Click Add Kafka credentials
+Configure the Kafka credentials:In the case of this example, you
+              must create a single credential representing the CDP PvC Base cluster. For
+                example:Name=cdppvc
+Bootstrap servers=[***MY-CDP-PVC-CLUSTER-HOST-1.COM:9093***],[***MY-CDP-PVC-CLUSTER-HOST-2:9093***]
+Security Protocol=SASL_SSL
+JAAS Secret 1=[***PLAIN USER***]
+JAAS Secret 2=[***PLAIN USER PASSWORD***]
+JAAS Template=org.apache.kafka.common.security.plain.PlainLoginModule required username="##JAAS_SECRET_1##" password="##JAAS_SECRET_2##"; 
+SASL Mechanism=PLAIN
+Truststore Password=[***PASSWORD***] 
+Truststore Path=/opt/cloudera/security/cdppvc-truststore.jks
+Truststore type=JKS
+noteThe
+                properties you specify for the  Kafka credential depend on the security
+                configuration of the CDP PvC Base cluster. This specific example is for a cluster
+                that has TLS/SSL encryption and PLAIN authentication enabled. You must change these
+                configurations based on the setup of your CDP PvC Base
+            cluster.
+Click Add.If credential creation is
+              successful, a new entry corresponding to the Kafka credential you specified appears on
+              the page.
+Define the co-located Kafka cluster (Datahub):
+noteSome of the following properties might already be
+          configured by automation.
+
+In Cloudera Manager, go to Clusters and select the
+              Streams Replication Manager service.
+Go to Configuration.
+Find and enable the Kafka Service
+            property.
+Find and configure the Streams Replication Manager Co-located
+                Kafka Cluster Alias property.The alias you configure
+              represents the co-located cluster. Enter an alias that is unique and easily
+              identifiable. For example:datahub
+Enable relevant security feature toggles.Because the Data Hub
+              cluster is both TLS/SSL and Kerberos enabled, you must enable all feature toggles for
+              both the Driver and Service roles. The feature toggles are the following:
+Enable TLS/SSL for SRM Driver
+Enable TLS/SSL for SRM Service
+Enable Kerberos Authentication
+
+Add both clusters to SRM's configuration:
+Find and configure the External Kafka Accounts
+              property.Add the name of all Kafka credentials you created to
+              this property. This can be done by clicking the add button to add a new line to the
+              property and then entering the name of the Kafka credential. For
+              example:cdppvc
+Find and configure the Streams Replication Manager Cluster
+                alias property.Add all cluster aliases to this property.
+              This includes the aliases present in both the External Kafka
+                Accounts and Streams Replication Manager Co-located Kafka
+                Cluster Alias properties. Delimit the aliases with commas. For
+              example:datahub,cdppvc
+Configure replications:
+In this example data is replicated unidirectionally. As a result, only a single
+            replication must be configured.
+
+Find the Streams Replication
+                Manager's Replication Configs property.
+Click the add button and add new lines
+              for each unique replication you want to add and enable.
+Add and enable your replications. For example:
+cdppvc->datahub.enabled=true
+
+Configure Driver and Service role targets:
+Find and configure the Streams Replication Manager Service Target
+                Cluster property. Add the co-located cluster's alias to the
+              property. For example:datahub
+Find and configure the Streams Replication Manager Driver Target
+                Cluster property. For
+                example:datahub,cdppvcimportantIf you have
+                another SRM instance configured with the same clusters and is targeting the CDP PvC
+                Base cluster, the cdppvc alias should not be configured as a target
+                for this instance of SRM.noteThis property must either contain all aliases or
+          left blank. Leaving the property blank has the same effect as adding all aliases.
+Configure the srm-control tool:
+Click Gateway in the Filters
+              pane.
+Find and configure the following properties:
+SRM Client's Secure Storage Password:
+                    [***PASSWORD***]
+Environment Variable Holding SRM Client's Secure Storage
+                    Password: SECURESTOREPASS
+Gateway TLS/SSL Trust Store File:
+                    /opt/cloudera/security/datahub-truststore.jks
+Gateway TLS/SSL Truststore Password:
+                    [***PASSWORD***]
+SRM Client's Kerberos Principal Name: [***MY
+                    KERBEROS PRINCIPAL****]
+SRM Client's Kerberos Keytab Location: [***PATH
+                    TO KEYTAB FILE***]
+Take note of the password you configure in SRM Client's Secure Storage
+                Password and the name you configure in Environment Variable
+                Holding SRM Client's Secure Storage Password. You will need to provide
+              both of these in your CLI session before running the tool.
+Click Save Changes.
+Restart the SRM service.
+Deploy client configuration for SRM.
+Start the replication process using the srm-control tool:
+SSH as an administrator to any of the SRM hosts in the Data Hub
+              cluster.
+ssh [***USER***]@[***MY-DATAHUB-CLUSTER.COM***]
+
+Set the secure storage password as an environment variable.
+export [***SECURE STORAGE ENV VAR***]=”[***SECURE STORAGE PASSWORD***]”
+Replace [***SECURE STORAGE ENV VAR***] with the name of the
+                environment variable you specified in Environment Variable Holding SRM
+                  Client's Secure Storage Password. Replace [***SRM SECURE
+                  STORAGE PASSWORD***] with the password you specified in SRM
+                  Client's Secure Storage Password. For example:
+                export SECURESTOREPASS=”mypassword"
+
+Use the srm-control tool with the topics subcommand to add
+              topics to the allow list.
+srm-control topics --source cdppvc --target datahub --add [***TOPIC NAME***]
+
+Use the srm-control tool with the groups subcommand to add
+              groups to the allow list.
+srm-control groups --source cdppvc --target datahub --add ".*"
+
+
+
+Monitor the replication process.
+Access the SMM UI in the Data Hub cluster and go to the Cluster
+            Replications page. The replications you set up will be visible on this
+            page.noteIf the topics or groups you added for replication
+          are newly created, they might not be immediately visible. This is due to how frequently
+          SRM checks for newly created topics and consumer groups. By default, this is set to 10
+          minutes, but can be configured with the Refresh Topics Interval
+            Seconds and Refresh Groups Interval Seconds SRM
+          properties. If at first your topics do not appear, wait a few minutes and refresh the
+          page.
+
+
+Related informationKafka Authentication

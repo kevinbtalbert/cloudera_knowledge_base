@@ -1,0 +1,112 @@
+CREATE VIEW statementCloudera Docs
+CREATE VIEW statement
+The CREATE VIEW statement lets you create a shorthand abbreviation for
+    a more complicated query. The base query can involve joins, expressions, reordered columns,
+    column aliases, and other SQL features that can make a query hard to understand or
+    maintain.Because a view is purely a logical construct (an alias for a query) with no physical data behind
+        it, ALTER VIEW only involves changes to metadata in the metastore database,
+        not any data files in HDFS. 
+Syntax:
+CREATE VIEW [IF NOT EXISTS] view_name
+    [(column_name [COMMENT 'column_comment'][, ...])]
+    [COMMENT 'view_comment']
+    [TBLPROPERTIES ('name' = 'value'[, ...])]
+  AS select_statement
+Statement type: DDL
+      
+Usage notes:
+
+      The CREATE VIEW statement can be useful in scenarios such as the
+      following:
+    
+
+        To turn even the most lengthy and complicated SQL query into a one-liner. You can issue
+        simple queries against the view from applications, scripts, or interactive queries in
+        impala-shell. For example:
+select * from view_name;
+select * from view_name order by c1 desc limit 10;
+        The more complicated and hard-to-read the original query, the more benefit there is to
+        simplifying the query using a view.
+      
+
+        To hide the underlying table and column names, to minimize maintenance problems if those
+        names change. In that case, you re-create the view using the new names, and all queries
+        that use the view rather than the underlying tables keep running with no changes.
+      
+
+        To experiment with optimization techniques and make the optimized queries available to
+        all applications. For example, if you find a combination of WHERE
+        conditions, join order, join hints, and so on that works the best for a class of
+        queries, you can establish a view that incorporates the best-performing techniques.
+        Applications can then make relatively simple queries against the view, without repeating
+        the complicated and optimized logic over and over. If you later find a better way to
+        optimize the original query, when you re-create the view, all the applications
+        immediately take advantage of the optimized base query.
+      
+
+        To simplify a whole class of related queries, especially complicated queries involving
+        joins between multiple tables, complicated expressions in the column list, and other SQL
+        syntax that makes the query difficult to understand and debug. For example, you might
+        create a view that joins several tables, filters using several WHERE
+        conditions, and selects several columns from the result set. Applications might issue
+        queries against this view that only vary in their LIMIT, ORDER
+        BY, and similar simple clauses.
+      
+
+      For queries that require repeating complicated clauses over and over again, for example in
+      the select list, ORDER BY, and GROUP BY clauses, you can
+      use the WITH clause as an alternative to creating a view.
+    
+      You can optionally specify the table-level and the column-level comments as in the
+      CREATE TABLE statement.
+    
+Complex type considerations:
+ For tables containing complex type columns
+          (ARRAY, STRUCT, or MAP), you typically
+        use join queries to refer to the complex values. You can use views to hide the join
+        notation, making such tables seem like traditional denormalized tables, and making those
+        tables queryable by business intelligence tools that do not have built-in support for those
+        complex types.
+        Because you cannot directly issue SELECT col_name
+        against a column of complex type, you cannot use a view or a WITH
+        clause to rename a column by selecting it with a column alias.
+       If you connect to different Impala nodes within an
+          impala-shell session for load-balancing purposes, you can enable the
+          SYNC_DDL query option to make each DDL statement wait before returning,
+        until the new or changed metadata has been received by all the Impala nodes.
+Security considerations:
+ If these statements in your environment contain sensitive
+        literal values such as credit card numbers or tax identifiers, Impala can redact this
+        sensitive information when displaying the statements in log files and other administrative
+        contexts.
+Cancellation: Cannot be cancelled.
+      
+HDFS permissions: This statement does not touch any HDFS files or directories,
+        therefore no HDFS permissions are required.
+      
+Examples:
+-- Create a view that is exactly the same as the underlying table.
+CREATE VIEW v1 AS SELECT * FROM t1;
+
+-- Create a view that includes only certain columns from the underlying table.
+CREATE VIEW v2 AS SELECT c1, c3, c7 FROM t1;
+
+-- Create a view that filters the values from the underlying table.
+CREATE VIEW v3 AS SELECT DISTINCT c1, c3, c7 FROM t1 WHERE c1 IS NOT NULL AND c5 > 0;
+
+-- Create a view that that reorders and renames columns from the underlying table.
+CREATE VIEW v4 AS SELECT c4 AS last_name, c6 AS address, c2 AS birth_date FROM t1;
+
+-- Create a view that runs functions to convert or transform certain columns.
+CREATE VIEW v5 AS SELECT c1, CAST(c3 AS STRING) c3, CONCAT(c4,c5) c5, TRIM(c6) c6, "Constant" c8 FROM t1;
+
+-- Create a view that hides the complexity of a view query.
+CREATE VIEW v6 AS SELECT t1.c1, t2.c2 FROM t1 JOIN t2 ON t1.id = t2.id;
+
+-- Create a view with a column comment and a table comment.
+CREATE VIEW v7 (c1 COMMENT 'Comment for c1', c2) COMMENT 'Comment for v7' AS SELECT t1.c1, t1.c2 FROM t1;
+
+-- Create a view with tblproperties.
+CREATE VIEW v7 (c1 , c2) TBLPROPERTIES ('tblp1' = '1', 'tblp2' = '2') AS SELECT t1.c1, t1.c2 FROM t1;
+
+Parent topic: Impala SQL statements

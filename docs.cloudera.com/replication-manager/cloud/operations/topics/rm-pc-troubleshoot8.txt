@@ -1,0 +1,182 @@
+Target HBase folder is deleted when HBase replication policy failsCloudera Docs
+Target HBase folder is deleted when HBase replication policy fails
+When the snapshot export fails during the HBase replication policy job run, the
+        target HBase folder in the destination Data Hub or COD gets deleted. 
+
+You can either revoke the delete permission for the user, or ensure that you use an
+                access key/role that does not have delete permissions to the required storage
+                component. 
+The following steps show how to create an access key in AWS and an Azure service
+                principal, which do not have delete permission for the storage component.
+
+
+Solution in AWS
+If the Data Hub or COD is on Amazon S3, you can perform the
+                        following steps to create an access key that does not have delete permission
+                        for the storage component:
+Login to AWS.
+
+Click Create policy on the IAM > Policies > Create policy page.
+The following sample image shows the Policies
+                            page in the AWS > IAM section to create a policy.
+
+
+
+Choose the S3 Service, and then choose the
+                            following permissions for generic access (assign resources as
+                            required):
+
+
+List/ListBucket
+Read/GetBucketLocation
+Read/GetObject
+Write/AbortMultipartUpload
+Write/PutObject
+Permissions
+                                        management/PutBucketPublicAccessBlock
+
+
+
+Add Delete/DeleteObject  permission to the target COD
+                            cluster’s snapshot temporary folder. 
+For example, the target COD cluster’s snapshot temporary folder
+                            might be located in [***target COD S3
+                                    path***]/hbase/.hbase-snapshot/.tmp/*.
+                        
+
+Enter a Name for the policy, add tags, and click
+                                Create policy.
+
+Click Add Users to create a user on the IAM > Users page. 
+
+Enter a Name, and click
+                                Next.
+
+Choose the Attach policies directly option on
+                            the Set permission page, and then assign the
+                            previously created policy to the user.
+
+Optionally, add tags and create the user.
+
+Click Create access key to create an access key
+                            for the user on the IAM > Users > [***new user***] page. 
+
+On the Security Credentials > Access keys page, choose Application running outside
+                                AWS. Click Next.
+
+Optionally, attach the tags, create and save the access key. This
+                            access key is used as an external account for replication.
+How do I verify whether the target HBase folder in the destination
+                                Data Hub or COD does not get deleted if the snapshot export fails
+                                during the HBase replication policy job run?
+Perform the following steps to verify if the delete operation is
+                                allowed for the access key that you previously created:
+Run the aws configure --profile
+                                            delete-test command to setup the credentials
+                                        in AWS CLI.
+Delete an arbitrarily created temporary file from the
+                                        account using the aws s3 --profile delete-test rm
+                                            --recursive s3://[***account
+                                            name***]/delete-testing/
+                                        command.
+ The delete operation is not allowed.
+
+
+
+
+Solution in Microsoft Azure
+If the Data Hub or COD is on ABFS, you can perform the following
+                        steps to create an Azure service principal that does not have delete
+                        permission for the storage component:
+Login to Microsoft Azure.
+
+Click Add > Add a custom role on the Subscriptions > Select the subscription > Access Control (IAM) page in Microsoft Azure, and complete the following
+                            steps:
+
+
+On the Basics tab, provide a name for the
+                                    role, select Clone a role for the
+                                        Baseline permissions field, and choose
+                                        Storage Blob Data Contributor for the
+                                        Role to clone field. Click
+                                        Next.
+
+
+On the Permissions tab, remove the
+                                        Microsoft.Storage/storageAccounts/blobServices/containers/delete
+                                    and
+                                        Microsoft.Storage/storageAccounts/blobServices/containers/blobs/delete
+                                    permissions.
+
+
+Click Review + create.
+
+The following sample image shows the Access
+                                            control (IAM) page in Microsoft Azure:
+
+
+
+
+
+
+Click Add > Add role assignment on the Storage accounts > Select the account where snapshots will be
+                                    written > Access Control (IAM) page, and complete the following steps:
+
+
+On the Role tab, select the custom role
+                                    previously created. Click Next.
+
+
+On the Members tab, select
+                                        User, group, or service principal for
+                                        Assign access to field, and select the
+                                    required service principal.
+
+
+Click Review + assign.
+
+
+Click Review + assign on the
+                                        Conditions (optional) tab.
+
+
+
+Click Add principal on the Storage accounts > [***account name***] > [***container where snapshots are to be
+                                        written***] > Manage ACL page.
+
+
+Select the required service principal.
+
+
+Choose the Execute permission for the
+                                    required container, and click Save.
+
+importantEnsure that no
+                                        other role containing delete access to the given storage
+                                        account is assigned to the new service principal on the
+                                        Access Control (IAM) page.
+
+
+
+How do I verify whether the target HBase folder in the destination
+                                Data Hub or COD does not get deleted if the snapshot export fails
+                                during the HBase replication policy job run?
+To verify if the delete operation is allowed on the service principal
+                                that you previously created, perform the following steps:
+Open the Azure Cloud Shell terminal.
+Login using the service principal that you created
+                                        previously using the az login --service-principal
+                                            -u [***client id***] -p
+                                                [***client secret***] --tenant
+                                            [***tenant id***] command.
+Delete an arbitrarily created temporary file from the
+                                        account using the az storage fs file delete
+                                            --path [***temporary file***] -f data
+                                            --account-name [***account name***]
+                                            --auth-mode login command.
+The delete operation is not allowed.
+
+
+
+
+Parent topic: Troubleshooting replication policies in CDP Public Cloud Replication Manager

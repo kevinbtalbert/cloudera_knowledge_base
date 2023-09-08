@@ -1,0 +1,85 @@
+HDFS Encryption IssuesCloudera Docs
+HDFS Encryption Issues
+The following are possible workarounds for issues that may arise when
+    encrypting HDFS directories and files.HDFS encryption is sometimes
+    referred to in the documentation as HDFS Transparent Encryption or as HDFS
+    Data at Rest Encryption.
+KMS warning when using put or list in encryption zone
+
+Description: You see the following warning when doing a put or list into the HDFS
+        encryption zone.
+        22/02/09 12:17:38 ERROR kms.LoadBalancingKMSClientProvider: Aborting since the Request has failed with all KMS providers(depending on hadoop.security.kms.client.failover.max.retries=2 setting and numProviders=2) in the group OR the exception is not recoverable
+put: org.apache.hadoop.security.authentication.client.AuthenticationException: Error while authenticating with endpoint:
+Solution: Increase the MaxHttpHeaderSize and restart the KMS. Add
+          ranger.service.http.connector.property.maxHttpHeaderSize=100 kb in
+        ranger-kms-site.xml. Restart the KMS. You can increase this value up to 2mb if required.
+
+KMS server jute buffer exception
+
+Description: You see the following error when the KMS (for example, as a ZooKeeper
+        client) jute buffer size is insufficient to hold all the tokens:
+        2017-01-31 21:23:56,416 WARN org.apache.zookeeper.ClientCnxn: Session 0x259f5fb3c1000fb for server example.cloudera.com/10.172.0.1:2181, unexpected error, closing socket connection and attempting reconnect
+java.io.IOException: Packet len4196356 is out of range! 
+Solution: Increase the jute buffer size and restart Ranger KMS KTS. In Cloudera
+        Manager, go to the Ranger KMS KTS Configuration page, and in the Ranger KMS Server
+          with KTS Environment Advanced Configuration Snippet (Safety Valve)
+          (RANGER_KMS_SERVER_KTS_role_env_safety_valve) field, enter
+          -Djute.maxbuffer=<number_of_bytes>. Restart Ranger KMS KTS.
+
+Retrieval of encryption keys fails
+Description: You see the following error when trying to list encryption keys
+        user1@example-sles-4:~> hadoop key list
+Cannot list keys for KeyProvider: KMSClientProvider[https: //example-sles-2.example.com:16000/kms/v1/]: Retrieval of all keys failed.
+
+Solution: Make sure your truststore has been updated with the relevant
+        certificate(s), such as the Key Trustee server certificate. 
+
+DistCp between unencrypted and encrypted locations fails
+Description: By default, DistCp compares checksums provided by the filesystem to
+        verify that data was successfully copied to the destination. However, when copying between
+        unencrypted and encrypted locations, the filesystem checksums will not match since the
+        underlying block data is different. 
+Solution: Specify the -skipcrccheck and -update
+        distcp flags to avoid verifying checksums. 
+
+NameNode - KMS communication fails after long periods of inactivity
+Description: Encrypted files and encryption zones cannot be created if a long period
+        of time (by default, 20 hours) has passed since the last time the KMS and NameNode
+        communicated.
+Solution: Upgrading your cluster to CDH 6 will fix this problem. For instructions,
+        see "Upgrading the CDH Cluster".
+
+HDFS Trash Behaviour with Transparent Encryption Enabled
+The Hadoop trash feature helps prevent accidental deletion of files and directories. When
+        you delete a file in HDFS, the file is not immediately expelled from HDFS. Deleted files are
+        first moved to the /user/<username>/.Trash/Current directory, with their
+        original filesystem path being preserved. After a user-configurable period of time
+          (fs.trash.interval), a process known as trash checkpointing renames the
+          Current directory to the current timestamp, that is,
+          /user/<username>/.Trash/<timestamp>. The checkpointing process also
+        checks the rest of the .Trash directory for any existing timestamp
+        directories and removes them from HDFS permanently. You can restore files and directories in
+        the trash simply by moving them to a location outside the .Trash
+        directory.
+
+Trash Behaviour with HDFS Transparent Encryption Enabled
+Starting with CDH 5.7, you can delete files or directories that are part of an HDFS
+        encryption zone. As is evident from the procedure described above, moving and renaming files
+        or directories is an important part of trash handling in HDFS. However, currently HDFS
+        transparent encryption only supports renames within an encryption zone. To
+        accommodate this, HDFS creates a local .Trash directory every time a new
+        encryption zone is created. For example, when you create an encryption zone,
+          enc_zone, HDFS will also create the /enc_zone/.Trash/
+        subdirectory. Files deleted from enc_zone are moved to
+          /enc_zone/.Trash/<username>/Current/. After the checkpoint, the
+          Current directory is renamed to the current timestamp,
+          /enc_zone/.Trash/<username>/<timestamp>. 
+If you delete the entire encryption zone, it will be moved to the .Trash
+        directory under the user's home directory,
+          /users/<username>/.Trash/Current/enc_zone. Trash checkpointing will
+        occur only after the entire zone has been moved to
+          /users/<username>/.Trash. However, if the user's home directory is
+        already part of an encryption zone, then attempting to delete an encryption zone will fail
+        because you cannot move or rename directories across encryption zones.
+
+Related informationUpgrading the CDH Cluster

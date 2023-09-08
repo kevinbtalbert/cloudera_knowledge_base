@@ -1,0 +1,126 @@
+TIMESTAMP compatibility for Parquet filesCloudera Docs
+TIMESTAMP compatibility for Parquet files
+
+
+        Impala stores and retrieves the TIMESTAMP values verbatim, with no
+        adjustment for the time zone. When writing Parquet files, Hive and Spark SQL both normalize all
+        TIMESTAMP values to the UTC time zone. During a query, Spark SQL
+        assumes that all TIMESTAMP values have been normalized this way and
+        reflect dates and times in the UTC time zone. Therefore, Spark SQL adjusts the retrieved
+        date/time values to reflect the local time zone of the server.
+        SPARK-12297 introduces a configuration setting, spark.sql.parquet.int96TimestampConversion=true,
+        that you can set to change the interpretation of TIMESTAMP
+        values read from Parquet files that were written by Impala, to match the Impala behavior.
+      
+note
+        This compatibility workaround only applies to Parquet files created by
+        Impala and has no effect on Parquet files created by Hive, Spark or
+        other Java components.
+      
+
+        The following sequence of examples show how, by default, TIMESTAMP
+        values written to a Parquet table by an Apache Impala SQL statement are interpreted
+        differently when queried by Spark SQL, and vice versa.
+      
+
+        The initial Parquet table is created by Impala, and some TIMESTAMP
+        values are written to it by Impala, representing midnight of one day, noon of another
+        day, and an early afternoon time from the Pacific Daylight Savings time zone. (The
+        second and third tables are created with the same structure and file format, for use in
+        subsequent examples.)
+      
+
+[localhost:21000] > create table parquet_table(t timestamp) stored as parquet;
+[localhost:21000] > create table parquet_table2 like parquet_table stored as parquet;
+[localhost:21000] > create table parquet_table3 like parquet_table stored as parquet;
+[localhost:21000] > select now();
++-------------------------------+
+| now()                         |
++-------------------------------+
+| 2018-03-23 14:07:01.057912000 |
++-------------------------------+
+[localhost:21000] > insert into parquet_table
+                  > values ('2018-03-23'), (now()), ('2000-01-01 12:00:00');
+[localhost:21000] > select t from parquet_table order by t;
++-------------------------------+
+| t                             |
++-------------------------------+
+| 2000-01-01 12:00:00           |
+| 2018-03-23 00:00:00           |
+| 2018-03-23 14:08:54.617197000 |
++-------------------------------+
+
+
+
+        By default, when this table is queried through the Spark SQL using
+        spark-shell, the values are interpreted and displayed differently.
+        The time values differ from the Impala result set by either 4 or 5 hours, depending on
+        whether the dates are during the Daylight Savings period or not.
+      
+
+scala> spark.sql("select t from jdr.parquet_table order by t").show(truncate=false);
++--------------------------+
+|t                         |
++--------------------------+
+|2000-01-01 04:00:00.0     |
+|2018-03-22 17:00:00.0     |
+|2018-03-23 07:08:54.617197|
++--------------------------+
+
+
+        Running the same Spark SQL query with the configuration setting
+        spark.sql.parquet.int96TimestampConversion=true applied makes the
+        results the same as from Impala:
+      
+
+$ spark-shell --conf spark.sql.parquet.int96TimestampConversion=true
+...
+scala> spark.sql("select t from jdr.parquet_table order by t").show(truncate=false);
++--------------------------+
+|t                         |
++--------------------------+
+|2000-01-01 12:00:00.0     |
+|2018-03-23 00:00:00.0     |
+|2018-03-23 14:08:54.617197|
++--------------------------+
+
+
+
+        The compatibility considerations also apply in the reverse direction. The following
+        examples show the same Parquet values as before, this time being written to tables
+        through Spark SQL.
+      
+
+$ spark-shell
+scala> spark.sql("insert into jdr.parquet_table2 select t from jdr.parquet_table");
+scala> spark.sql("select t from jdr.parquet_table2 order by t").show(truncate=false);
++--------------------------+
+|t                         |
++--------------------------+
+|2000-01-01 04:00:00.0     |
+|2018-03-22 17:00:00.0     |
+|2018-03-23 07:08:54.617197|
++--------------------------+
+
+
+
+        Again, the configuration setting
+        spark.sql.parquet.int96TimestampConversion=true means that the values
+        are both read and written in a way that is interoperable with Impala:
+      
+
+$ spark-shell --conf spark.sql.parquet.int96TimestampConversion=true
+...
+scala> spark.sql("insert into jdr.parquet_table3 select t from jdr.parquet_table");
+scala> spark.sql("select t from jdr.parquet_table3 order by t").show(truncate=false);
++--------------------------+
+|t                         |
++--------------------------+
+|2000-01-01 12:00:00.0     |
+|2018-03-23 00:00:00.0     |
+|2018-03-23 14:08:54.617197|
++--------------------------+
+
+
+
+Parent topic: Using Spark SQL

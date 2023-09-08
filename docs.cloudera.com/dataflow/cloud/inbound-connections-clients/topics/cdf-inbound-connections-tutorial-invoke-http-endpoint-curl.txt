@@ -1,0 +1,181 @@
+Tutorial: Invoking an HTTP endpoint with curlCloudera Docs
+Tutorial: Invoking an HTTP endpoint with curl
+This tutorial walks you through invoking an HTTP Inbound Connection Endpoint with
+        curl using the ListenHTTP filter to Kafka ReadyFlow from the ReadyFlow Gallery.
+
+
+You have an enabled and healthy CDF environment.
+
+You have been assigned the DFCatalogAdmin or
+                            DFCatalogViewer role granting you access to the CDF Catalog. 
+
+You have added the ListenHTTP filter to Kafka ReadyFlow to
+                        the Catalog. Adding a ReadyFlow to the Catalog requires the
+                            DFCatalogAdmin  role.
+
+You have been assigned the DFFlowAdmin role for the
+                        environment to which you want to deploy the flow definition.
+
+You have network connectivity established from your curl client to
+                        the virtual network or VPC where your Flow Deployment will run.
+
+You have downloaded and installed curl.
+
+
+
+Deploy the ListenHTTP filter to Kafka Ready Flow.
+
+
+
+Navigate to the ReadyFlow Gallery, locate the
+                                    ListenHTTP filter to Kafka ReadyFlow and
+                                click View Added Flow Definition. 
+Click Deploy and select your target
+                                environment to start the Deployment Wizard for the latest version of
+                                this ReadyFlow.
+Specify a deployment name, for example, Inbound
+                                    Connections curl and click
+                                    Next.
+Select Allow NiFi to receive data checkbox to
+                                configure an endpoint host.
+Accept the automatically created endpoint hostname and automatically
+                                discovered port by clicking Next.
+Optional: This ReadyFlow performs schema validation for
+                                incoming events using Cloudera’s Schema Registry before sending the
+                                events to a Kafka topic. If you have a Streams Messaging cluster
+                                available, fill in the Kafka and Schema Registry connection
+                                properties. If you only want to validate inbound connection
+                                    endpoint connectivity, enter dummy values for the empty
+                                    parameters, set the Input and Output format to JSON while
+                                    keeping the Listening Port set to
+                                        7001.
+At Sizing & Scaling select the
+                                    Extra Small NiFi Node Size and click
+                                    Next.
+Add a KPI on the ListenHTTP processor to monitor how many bytes
+                                    it is receiving, by clicking Add new
+                                    KPI.Make the following settings:
+KPI Scope
+Processor
+Processor Name
+ListenHTTP
+Metric to Track
+Bytes Received
+
+
+
+Click Next.
+Review the information provided and click
+                                    Deploy.Soon after the flow deployment
+                                    has started, the client certificate and private key required for
+                                    sending data to the NiFi flow become available for the flow
+                                    deployment that is being created.
+
+
+
+
+Collect the information required to configure your load balancer.
+
+
+
+
+Once the deployment has been created successfully,
+                                        select it in the Dashboard and click
+                                            Manage Deployment.
+
+
+In the Deployment Settings
+                                        section, navigate to the NiFi
+                                            Configuration tab to find information about
+                                        the associated inbound connection endpoint.
+
+
+Copy the endpoint hostname and port and download
+                                        the certificate and private key.
+
+
+
+
+
+Create the curl request to validate connectivity to the HTTP inbound connection
+                    endpoint.
+Using the endpoint hostname, port, client certificate and private key you can
+                    now construct a curl command to call the endpoint and validate
+                            connectivity:curl -v -X POST https://[***ENDPOINT
+                                HOSTNAME***]:7001/contentListener --key
+                                [***/PATH/TO/***]client-private-key-encoded
+                            --cert
+                            [***/PATH/TO/***]client-certificate-encoded
+
+
+You receive an HTTP 200 response code in a similar message, indicating that
+                        your client was able to securely connect to the inbound connection
+                        endpoint:
+*   Trying 10.36.84.149:7001...
+* Connected to [***ENDPOINT HOSTNAME***] (10.36.84.149) port 7001 (#0)
+* ALPN, offering h2
+* ALPN, offering http/1.1
+* successfully set certificate verify locations:
+*  CAfile: /Users/mkohs/letsencrypt-stg-root-x1.pem
+*  CApath: none
+* (304) (OUT), TLS handshake, Client hello (1):
+* (304) (IN), TLS handshake, Server hello (2):
+* TLSv1.2 (IN), TLS handshake, Certificate (11):
+* TLSv1.2 (IN), TLS handshake, Server key exchange (12):
+* TLSv1.2 (IN), TLS handshake, Request CERT (13):
+* TLSv1.2 (IN), TLS handshake, Server finished (14):
+* TLSv1.2 (OUT), TLS handshake, Certificate (11):
+* TLSv1.2 (OUT), TLS handshake, Client key exchange (16):
+* TLSv1.2 (OUT), TLS handshake, CERT verify (15):
+* TLSv1.2 (OUT), TLS change cipher, Change cipher spec (1):
+* TLSv1.2 (OUT), TLS handshake, Finished (20):
+* TLSv1.2 (IN), TLS change cipher, Change cipher spec (1):
+* TLSv1.2 (IN), TLS handshake, Finished (20):
+* SSL connection using TLSv1.2 / ECDHE-RSA-AES256-GCM-SHA384
+* ALPN, server did not agree to a protocol
+* Server certificate:
+*  subject: CN=dfx.dtefgqis.xcu2-8y8x.dev.cldr.work
+*  start date: May 11 21:02:20 2022 GMT
+*  expire date: Aug  9 21:02:19 2022 GMT
+*  subjectAltName: host "[***ENDPOINT HOSTNAME***]" matched cert's "[***ENDPOINT HOSTNAME***]"
+*  issuer: C=US; O=(STAGING) Let's Encrypt; CN=(STAGING) Artificial Apricot R3
+*  SSL certificate verify ok.
+> POST /contentListener HTTP/1.1
+> Host: [***ENDPOINT HOSTNAME***]:7001
+> User-Agent: curl/7.79.1
+> Accept: */*
+> 
+* Mark bundle as not supporting multiuse
+< HTTP/1.1 200 OK
+< Date: Thu, 12 May 2022 00:45:57 GMT
+< Content-Type: text/plain
+< Content-Length: 0
+< Server: Jetty(9.4.46.v20220331)
+< 
+* Connection #0 to host [***ENDPOINT HOSTNAME***] left intact
+
+
+
+Use curl to post data to the HTTP inbound connection endpoint.
+
+If you want to post events to the NiFi deployment you can add
+                        header and content definition to the curl request. 
+
+
+This example sends JSON data following a simple schema to the
+                        endpoint:
+
+curl -v -X POST [***ENDPOINT HOSTNAME***]:7001/contentListener \
+ --key [***/PATH/TO/***]client-private-key-encoded \
+ --cert [***/PATH/TO/***]client-certificate-encoded \
+ -H 'Content-Type: application/json' \
+ -d '{"created_at":6453,"id":6453,"text":"This is my test event","timestamp_ms":34534,"id_store":12}' 
+
+
+The NiFi deployment tries to validate the schema against the schema name
+                    and Schema Registry that you provided when deploying the ReadyFlow. If you
+                    provided dummy values, you receive a response indicating that the flow was
+                    unable to look up the schema.
+
+
+Related informationReadyFlow overview: ListenHTTP to CDP Kafka

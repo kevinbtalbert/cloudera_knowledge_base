@@ -1,0 +1,205 @@
+Amazon Web Services (AWS) SecurityCloudera Docs
+Amazon Web Services (AWS) Security
+Amazon Web Services (AWS) is Amazon's cloud solution that offers compute, storage,
+    networking, and other infrastructure services that can be used for Cloudera cluster deployments,
+    whether completely cloud-based or in combination with on-premises clusters. 
+For example, Amazon Elastic Compute Cloud (EC2) can be used for the instances that make-up
+      the nodes of a Cloudera cluster deployed to the AWS cloud. Amazon's cloud-based storage
+      solution, Amazon Simple Storage Service (Amazon S3), can be used by both on-premises and
+      AWS-cloud-based clusters in various ways, including as storage for Impala tables for direct
+      use by Hue and Hive, and other CDP components such as HDFS client, Hive, Impala,
+      MapReduce.
+As of release 5.11, Cloudera Manager supports Amazon's IAM-role based access to Amazon S3
+      storage, in addition to its prior support of AWS access key and secret key.
+For any AWS service, including Amazon S3, you must obtain an Amazon Web Services account and
+      have appropriate access to the AWS Management Console to set up the various services you want,
+      including Amazon S3. Assuming you have an account for AWS, to provide access from your
+      Cloudera cluster to Amazon S3 storage you must configure AWS credentials. 
+
+
+Getting Started with Amazon Web Services
+
+To get started with AWS, including Amazon S3, you must have: 
+An Amazon Web Services  account. Both Amazon and Cloudera recommend that you
+            do not use your primary Amazon account—known as the root account—for working with Amazon
+            S3 and other AWS services. See the AWS IAM documentation for details about how to set up
+            your AWS account.
+Access to the AWS Management Console and appropriate permissions to create and configure
+            the AWS services needed for your use case, such as the following:
+AWS Elastic Compute Cloud (EC2) to deploy your cluster to the AWS cloud.
+AWS Identity and Access Management (IAM) to set up users and groups, or to set up
+                an IAM role. 
+Amazon S3 and the specific storage bucket (or buckets) for use with your
+                cluster.
+Amazon DynamoDB to enable the database needed by Cloudera S3Guard, if you plan to
+                enable S3Guard for your cluster. Cloudera S3Guard augments Amazon S3 with a database
+                to track metadata changes so that the 'eventual consistency' model inherent to
+                Amazon S3 does not pose a problem for transactions or other use cases in which
+                changes may not be apparent to each other in real time. See Configuring and
+                  Managing S3Guard in Cloudera Administration for details. To use S3Guard, you
+                will also need to set up the appropriate access policy (create table, read, write)
+                to DynamoDB for the same AWS identity that owns the Amazon S3 storage.
+AWS Key Management Services (KMS) (AWS KMS) to create encryption keys for your
+                Amazon S3 bucket if you plan to use SSE-KMS for server-side encryption (not
+                necessary for SSE-S3 encryption. See How to Configure Encryption for Amazon
+                  S3 for details).
+
+
+
+
+Configuration Properties Reference
+
+This table provides reference documentation for the
+          core-site.xml properties relevant for use with AWS
+        and Amazon S3. 
+
+
+Property
+Description
+
+
+
+fs.s3a.server-side-encryption-algorithm
+Enable server-side encryption for the Amazon S3 storage bucket associated with
+                the cluster. Allowable values:
+AES256 Specifies SSE-S3 server-side encryption for
+                    Amazon S3. 
+SSE-KMS Specifies SSE-KMS server-side encryption for
+                    Amazon S3. Requires adding the
+                      fs.s3a.server-side-encryption-key property with a valid
+                    value.
+
+
+
+fs.s3a.server-side-encryption-key
+Specify the ARN, ARN plus alias, Alias, or globally unique
+                ID of the key created in AWS Key Management Service for use with
+                SSE-KMS. 
+
+
+fs.s3a.awsAccessKeyId
+Specify the AWS access key ID. This property is irrelevant
+                and not used to access Amazon S3 storage from a cluster launched
+                using an IAM role.
+
+
+fs.s3a.awsSecretAccessKey
+Specify the AWS secret key provided by Amazon. This
+                property is irrelevant and not used to access Amazon S3 storage
+                from a cluster launched using an IAM role.
+
+
+fs.s3a.endpoint
+Use this property only if the endpoint is outside the standard region
+                (s3.amazonaws.com), such as regions and endpoints in China or in the US GovCloud.
+                See AWS regions and endpoints documentation for details.
+
+
+fs.s3a.connection.ssl.enabled
+Enables (true) and disables
+                  (false) TLS/SSL connections to Amazon S3.
+                Default is true.
+
+
+
+
+
+Connecting to Amazon S3 Using TLS
+
+The boolean parameter fs.s3a.connection.ssl.enabled in
+          core-site.xml controls whether the
+          hadoop-aws connector uses TLS when communicating with
+        Amazon S3. Because this parameter is set to true by
+        default, you do not need to configure anything to enable TLS. If you are
+        not using TLS on Amazon S3, the connector will automatically fall back
+        to a plaintext connection.
+The root Certificate Authority (CA) certificate that signed the Amazon
+        S3 certificate is trusted by default. If you are using custom
+        truststores, make sure that the configured truststore for each service
+        trusts the root CA certificate.
+To import the root CA certificate into your custom truststore, run the
+        following command:
+$JAVA_HOME/bin/keytool -importkeystore -srckeystore $JAVA_HOME/jre/lib/security/cacerts -destkeystore /path/to/custom/truststore -srcalias baltimorecybertrustca
+If you are using S3Guard, you must import an additional CA certificate:
+$JAVA_HOME/bin/keytool -importkeystore -srckeystore $JAVA_HOME/jre/lib/security/cacerts -destkeystore /path/to/custom/truststore -srcalias verisignclass3g5ca
+If you are using JDK 1.8.0_131 or higher, the aliases are appended with
+          [jdk] as follows:
+$JAVA_HOME/bin/keytool -importkeystore -srckeystore $JAVA_HOME/jre/lib/security/cacerts -destkeystore /path/to/custom/truststore -srcalias "baltimorecybertrustca [jdk]"
+$JAVA_HOME/bin/keytool -importkeystore -srckeystore $JAVA_HOME/jre/lib/security/cacerts -destkeystore /path/to/custom/truststore -srcalias "verisignclass3g5ca [jdk]"
+If you do not have the $JAVA_HOME variable set,
+        replace it with the path to the Oracle JDK (for example,
+            /usr/java/jdk1.8.0_141-cloudera). When prompted, enter the password for the
+        destination and source truststores. The default password for the Oracle
+        JDK cacerts truststore is
+        changeit.
+The truststore configurations for each service
+        that accesses S3 are as follows:
+
+
+hadoop-aws Connector
+
+All components that can use Amazon S3 storage rely on the
+            hadoop-aws connector, which uses the built-in Java
+          truststore ($JAVA_HOME/jre/lib/security/cacerts). To
+          override this truststore, create a truststore named
+            jssecacerts in the same directory
+            ($JAVA_HOME/jre/lib/security/jssecacerts) on all
+          cluster nodes. If you are using the jssecacerts
+          truststore, make sure that it includes the root CA certificate that
+          signed the Amazon S3 certificate.
+
+
+
+Hive/Beeline CLI
+
+The Hive and Beeline command line interfaces (CLI) rely on the
+          HiveServer2 truststore. To view or modify the truststore
+          configuration:
+
+Go to the Hive service in the Cloudera
+            Manager Admin Interface.
+Select the Configuration tab.
+Select
+                  Scope > HIVE-1
+                (Service-Wide).
+Select
+                Category > Security.
+Locate the HiveServer2 TLS/SSL Certificate Trust Store
+              File and HiveServer2 TLS/SSL Certificate
+              Trust Store Password properties or search for them by
+            typing Trust in the Search
+            box.
+
+
+
+
+Impala Shell
+
+The Impala shell uses the hadoop-aws connector truststore. To override
+          it, create the $JAVA_HOME/jre/lib/security/jssecacerts file, as described
+          in hadoop-aws Connector.
+
+
+
+Hue S3 File Browser
+
+The S3 file browser uses TLS if it is enabled, and the S3 File Browser trusts the S3
+          certificate by default. No additional configuration is necessary.
+
+
+
+Impala Query Editor (Hue)
+
+The Impala query editor in Hue uses the hadoop-aws connector truststore.
+          To override it, create the $JAVA_HOME/jre/lib/security/jssecacerts file,
+          as described in hadoop-aws Connector.
+
+
+
+Hive Query Editor (Hue)
+
+The Hive query editor in Hue uses the HiveServer2 truststore. For instructions on viewing
+          and modifying the HiveServer2 truststore, see Hive/Beeline CLI.
+
+
+

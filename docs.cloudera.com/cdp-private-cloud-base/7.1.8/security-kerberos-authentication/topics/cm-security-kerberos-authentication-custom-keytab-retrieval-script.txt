@@ -1,0 +1,83 @@
+Using a custom Kerberos keytab retrieval scriptCloudera Docs
+Using a custom Kerberos keytab retrieval script
+How to manually create principals and keytabs using a custom retrieval script. 
+
+The Cloudera Manager Kerberos setup procedure requires you to create an administrator
+        account for the Cloudera Manager user. Cloudera Manager will then connect to your KDC and
+        use this admin account to generate principals and keytabs for the remaining CDP services. If
+        for some reason, you cannot create a Cloudera Manager administrator account on your KDC with
+        the privileges to create other principals and keytabs for CDP services, then these will need
+        to be created manually. 
+Cloudera Manager gives you the option to use a custom script to retrieve keytabs from the
+        local filesystem. To use a custom Kerberos keytab retrieval script:
+
+
+The KDC administrators should create the required principals and keytabs, and store
+          them securely on the Cloudera Manager Server host.
+
+Create the keytab retrieval script. Your script should take two arguments: a full
+          principal name for which it should retrieve a keytab, and a destination to which it can
+          write the keytab. The script must be executable by the Cloudera Manager admin user,
+            cloudera-scm. Depending on the principal name input by Cloudera
+          Manager, the script should locate the corresponding keytab on the Cloudera Manager Server
+          host (stored in step 1), and copy it into a location accessible to the
+            cloudera-scm user. Here is a simple example:
+
+#!/bin/bash
+
+# Cloudera Manager will input a destination path
+DEST="$1"
+
+# Cloudera Manager will input the principal name in the format: <service>/<fqdn>@REALM
+PRINC="$2"
+
+# Assuming the '<service>_<fqdn>@REALM.keytab' naming convention for keytab files
+IN=$(echo $PRINC | sed -e 's/\//_/')
+SRC="/keytabs/${IN}.keytab"
+
+# Copy the keytab to the destination input by Cloudera Manager
+cp -v $SRC $DEST
+Note that the script will change according to the keytab naming convention followed by
+            your organization.
+There are special requirements when providing your own keytabs and using this sample
+              script:
+Do not use the Keytab File Owner:Group values listed in Hadoop Users
+                  (user:group) and Kerberos Principals; instead ensure that the Cloudera Manager
+                user (cloudera-scm) has read access to the keytabs that you are creating.
+Create keytabs for the individual principals (e.g.,
+                "hive/host.example.com@EXAMPLE.COM")
+Name the keytab files for these individual principals matching the paradigm
+                "<service>_<fqdn>@REALM.keytab". For example, Filename (*.keytab) =
+                "hive_host.example.com@realm.keytab".
+
+
+
+Configure the location for the script in Cloudera Manager:
+
+
+Go to the Cloudera Manager Admin console.
+
+
+Select Administration > Settings.
+
+
+Select Category > Kerberos.
+
+
+Locate the Custom Kerberos Keytab Retrieval Script and set it to point to
+              the script created in step 2.
+
+
+Click Save Changes.
+
+
+
+Once the Custom Kerberos Keytab Retrieval Script property is set, whenever
+          Cloudera Manager needs a keytab, it will ignore all other Kerberos configuration and run
+          the keytab retrieval script to copy the required keytab to the desired destination.
+
+Cloudera Manager can now distribute the keytab to the services that need access to
+          it.
+
+
+Related informationHadoop Users (user:group) and Kerberos PrincipalsParent topic: Configuring Authentication in Cloudera Manager

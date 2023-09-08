@@ -1,0 +1,102 @@
+Query Join PerformanceCloudera Docs
+Query Join Performance
+Joins are the main class of queries that you can tune at the SQL
+    level. 
+Queries involving join operations often require more tuning than queries
+      that refer to only one table. The maximum size of the result set from a
+      join query is the product of the number of rows in all the joined tables.
+      When joining several tables with millions or billions of rows, any missed
+      opportunity to filter the result set, or other inefficiency in the query,
+      could lead to an operation that does not finish in a practical time and
+      has to be cancelled. 
+ The simplest technique for tuning an Impala join query is to collect
+      statistics on each table involved in the join using the COMPUTE
+        STATS statement, and then to let Impala automatically optimize
+      the query based on the size of each table, number of distinct values of
+      each column, and so on. For accurate statistics about each table, issue
+      the COMPUTE STATS statement after loading the data into
+      that table, and again if the amount of data changes substantially due to
+      operations, such as INSERT, LOAD DATA,
+      or adding a partition. 
+
+      If statistics are not available for all the tables in the join query, or if Impala chooses a join order that
+      is not the most efficient, you can override the automatic join order optimization by specifying the
+      STRAIGHT_JOIN keyword immediately after the SELECT and any DISTINCT
+      or ALL keywords. In this case, Impala uses the order the tables appear in the query to guide how the
+      joins are processed.
+    
+
+      When you use the STRAIGHT_JOIN technique, you must order the tables in the join query
+      manually instead of relying on the Impala optimizer. The optimizer uses sophisticated techniques to estimate
+      the size of the result set at each stage of the join. For manual ordering, use this heuristic approach to
+      start with, and then experiment to fine-tune the order:
+    
+
+
+        Specify the largest table first. This table is read from disk by each Impala node and so its size is not
+        significant in terms of memory usage during the query.
+      
+
+        Next, specify the smallest table. The contents of the second, third, and so on tables are all transmitted
+        across the network. You want to minimize the size of the result set from each subsequent stage of the join
+        query. The most likely approach involves joining a small table first, so that the result set remains small
+        even as subsequent larger tables are processed.
+      
+
+        Join the next smallest table, then the next smallest, and so on.
+      
+
+
+      For example, if you had tables BIG, MEDIUM, SMALL, and
+        TINY, the logical join order to try would be BIG, TINY,
+        SMALL, MEDIUM.
+    
+
+      The terms largest and smallest refers to the size of the intermediate result set based on the
+      number of rows and columns from each table that are part of the result set. For example, if you join one
+      table sales with another table customers, a query might find results from
+      100 different customers who made a total of 5000 purchases. In that case, you would specify SELECT
+      ... FROM sales JOIN customers ..., putting customers on the right side because it
+      is smaller in the context of this query.
+    
+
+      The Impala query planner chooses between different techniques for performing join queries, depending on the
+      absolute and relative sizes of the tables. Broadcast joins are the default, where the right-hand table
+      is considered to be smaller than the left-hand table, and its contents are sent to all the other nodes
+      involved in the query. The alternative technique is known as a partitioned join (not related to a
+      partitioned table), which is more suitable for large tables of roughly equal size. With this technique,
+      portions of each table are sent to appropriate other nodes where those subsets of rows can be processed in
+      parallel. The choice of broadcast or partitioned join also depends on statistics being available for all
+      tables in the join, gathered by the COMPUTE STATS statement.
+    
+ To see which join strategy is used for a particular query, issue an
+        EXPLAIN statement for the query. If you find that a
+      query uses a broadcast join when you know through benchmarking that a
+      partitioned join would be more efficient, or vice versa, add a hint to the
+      query to specify the precise join mechanism to use.
+How Joins Are Processed when Statistics Are Unavailable
+ If table or column statistics are not available for some tables in a
+        join, Impala still reorders the tables using the information that is
+        available. Tables with statistics are placed on the left side of the
+        join order, in descending order of cost based on overall size and
+        cardinality. Tables without statistics are treated as zero-size, that
+        is, they are always placed on the right side of the join order. 
+
+Overriding Join Reordering with STRAIGHT_JOIN
+ If an Impala join query is inefficient because of outdated statistics
+        or unexpected data distribution, you can keep Impala from reordering the
+        joined tables by using the STRAIGHT_JOIN keyword
+        immediately after the SELECT and any
+          DISTINCT or ALL keywords. The
+          STRAIGHT_JOIN keyword turns off the reordering of
+        join clauses that Impala does internally, and produces a plan that
+        relies on the join clauses being ordered optimally in the query text. 
+noteThe STRAIGHT_JOIN hint affects the join order of
+        table references in the query block containing the hint. It does not
+        affect the join order of nested queries, such as views, inline views, or
+          WHERE-clause subqueries. To use this hint for
+        performance tuning of complex queries, apply the hint to all query
+        blocks that need a fixed join order. 
+
+
+Parent topic: Performance Considerations

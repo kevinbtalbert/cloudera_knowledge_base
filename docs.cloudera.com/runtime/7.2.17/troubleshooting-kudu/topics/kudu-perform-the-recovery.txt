@@ -1,0 +1,97 @@
+Perform the recoveryCloudera Docs
+Perform the recovery
+After you have identified a reference master, you need to copy the master data to the
+    replacement master node. You need to bring the Kudu clusters down. Therefore, identify at least
+    a one-hour maintenance window for this task.
+
+Remove the dead master from the Raft configuration of the master using the kudu
+            master remove command.
+In the following example dead master master-2 is being
+          recovered:$ sudo -u kudu kudu master remove master-1,master-2 master-2
+
+On the replacement master host, add the replacement master to the cluster using the
+            kudu master add command. 
+
+Look for any success or error messages on the console or the replacement master log
+            file. The command is designed to be idempotent so in case of an error after the issue
+            mentioned in the error messages is fixed, run the same command again to make forward
+            progress. After the completion of the procedure irrespective of whether the procedure is
+            successful, the replacement master is shutdown. In the following example, replacement
+            master master-2 is used. In case DNS alias is not being used, use the
+            hostname of the replacement master.
+$ sudo -u kudu kudu master add master-1 master-2 --fs_wal_dir=/data/kudu/master/wal \
+--fs_data_dirs=/data/kudu/master/data
+
+
+If the cluster was set up with DNS aliases, reconfigure the DNS alias for the dead master to point at the replacement master.
+          
+        
+
+If the cluster was set up without DNS aliases, perform the following steps:
+
+
+Modify the value of the master_addresses configuration parameter
+              for each live master removing the dead master and substituting it with the replacement
+              master. 
+The new value must be a comma-separated list of all of the masters. Each entry is
+              a string of the form <hostname>:<port>:
+ hostname 
+
+ The master's previously recorded hostname or alias 
+
+ port 
+
+ The master's previously recorded RPC port number 
+
+
+
+
+Restart the remaining live masters.
+
+
+
+Start the replacement master.
+
+If the cluster was set up without DNS aliases, perform the following steps for tablet
+          servers:
+
+
+Modify the value of the tserver_master_addr configuration
+              parameter for each live master removing the dead master and substituting it with the
+              replacement master. 
+The new value must be a comma-separated list of all of the masters. Each entry is
+              a string of the form <hostname>:<port>:
+ hostname 
+
+ The master's previously recorded hostname or alias 
+
+ port 
+
+ The master's previously recorded RPC port number 
+
+
+
+
+Restart all tablet servers.
+
+
+
+
+To verify that all masters are working properly, consider performing the
+        following checks: 
+
+ Using a browser, visit each master’s web UI and navigate to the
+                /masters page. All the masters should now be listed there with one
+              master in the LEADER role and the others in the
+                FOLLOWER role. The contents of /masters on each
+              master should be the same. 
+
+
+ Run a Kudu system check (ksck) on the cluster using the
+                kudu command line tool.
+
+
+
+
+
+Parent topic: Recover from a dead Kudu master in a multi-master deployment

@@ -1,0 +1,196 @@
+Streaming Profile ExamplesCloudera Docs
+Streaming Profile
+    Examples
+You can use the streaming profiler examples to better understand the functionality
+    provided by the profiler. Each example shows the configuration that would be required to
+    generate the profile.
+These examples assume a fictitious input message stream that looks something like the
+      following:
+{
+  "ip_src_addr": "10.0.0.1",
+  "protocol": "HTTPS",
+  "length": "10",
+  "bytes_in": "234"
+},
+{
+  "ip_src_addr": "10.0.0.2",
+  "protocol": "HTTP",
+  "length": "20",
+  "bytes_in": "390"
+},
+{
+  "ip_src_addr": "10.0.0.3",
+  "protocol": "DNS",
+  "length": "30",
+  "bytes_in": "560"
+}
+
+Example 1
+
+The total number of bytes of HTTP data for each host. The following configuration would be
+      used to generate this profile.
+{
+  "profiles": [
+    {
+      "profile": "example1",
+      "foreach": "ip_src_addr",
+      "onlyif": "protocol == 'HTTP'",
+      "init": {
+        "total_bytes": 0.0
+      },
+      "update": {
+        "total_bytes": "total_bytes + bytes_in"
+      },
+      "result": "total_bytes",
+      "expires": 30
+    }
+  ]
+}
+This creates a profile with the following parameters:
+
+
+Named ‘example1’
+
+
+That for each IP source address
+
+
+Only if the 'protocol' field equals 'HTTP'
+
+
+Initializes a counter ‘total_bytes’ to zero
+
+
+Adds to ‘total_bytes’ the value of the message's ‘bytes_in’ field
+
+
+Returns ‘total_bytes’ as the result
+
+
+The profile data will expire in 30 days
+
+
+
+Example 2
+
+The ratio of DNS traffic to HTTP traffic for each host. The following configuration would
+      be used to generate this profile.
+{
+  "profiles": [
+    {
+      "profile": "example2",
+      "foreach": "ip_src_addr",
+      "onlyif": "protocol == 'DNS' or protocol == 'HTTP'",
+      "init": {
+        "num_dns": 1.0,
+        "num_http": 1.0
+      },
+      "update": {
+        "num_dns": "num_dns + (if protocol == 'DNS' then 1 else 0)",
+        "num_http": "num_http + (if protocol == 'HTTP' then 1 else 0)"
+      },
+      "result": "num_dns / num_http"
+    }
+  ]
+}
+
+This creates a profile with the following parameters:
+
+
+Named ‘example2’
+
+
+That for each IP source address
+
+
+Only if the 'protocol' field equals 'HTTP' or 'DNS'
+
+
+Accumulates the number of DNS requests
+
+
+Accumulates the number of HTTP requests
+
+
+Returns the ratio of these as the result
+
+
+
+Example 3
+
+The average of the length field of HTTP traffic. The following configuration
+      would be used to generate this profile.
+{
+  "profiles": [
+    {
+      "profile": "example3",
+      "foreach": "ip_src_addr",
+      "onlyif": "protocol == 'HTTP'",
+      "update": { "s": "STATS_ADD(s, length)" },
+      "result": "STATS_MEAN(s)"
+    }
+  ]
+}
+
+This creates a profile with the following parameters:
+
+
+Named ‘example3’
+
+
+That for each IP source address
+
+
+Only if the 'protocol' field is 'HTTP'
+
+
+Adds the length field from each message
+
+
+Calculates the average as the result
+
+
+
+Example 4
+
+It is important to note that
+        the profiler can persist any serializable Object, not just numeric values. An alternative to
+        the previous example could take advantage of this.
+Instead of storing the mean of the length, the profile could store a more generic summary
+      of the length. This summary can then be used at a later time to calculate the mean, min, max,
+      percentiles, or any other sensible metric. This provides a much greater degree of
+      flexibility.
+{
+  "profiles": [
+    {
+      "profile": "example4",
+      "foreach": "ip_src_addr",
+      "onlyif": "protocol == 'HTTP'",
+      "update": { "s": "STATS_ADD(s, length)" },
+      "result": "s"
+    }
+  ]
+}
+The following Stellar REPL session shows how you might use this summary to calculate
+      different metrics with the same underlying profile data.
+Retrieve the last 30 minutes of profile measurements for a specific host.
+$ bin/stellar -z node1:2181
+
+[Stellar]>>> stats := PROFILE_GET("example4", "10.0.0.1", PROFILE_FIXED(30, "MINUTES"))
+[Stellar]>>> stats
+[org.apache.metron.common.math.stats.OnlineStatisticsProvider@79fe4ab9, ...]
+Calculate different metrics with the same profile data.
+[Stellar]>>> STATS_MEAN( GET_FIRST( stats))
+15979.0625
+
+[Stellar]>>> STATS_PERCENTILE( GET_FIRST(stats), 90)
+30310.958
+
+Merge all of the profile measurements over the past 30 minutes into a single summary and
+      calculate the 90th percentile.
+[Stellar]>>> merged := STATS_MERGE( stats)
+[Stellar]>>> STATS_PERCENTILE(merged, 90)
+29810.992
+
+
+Parent topic: Streaming Profiler

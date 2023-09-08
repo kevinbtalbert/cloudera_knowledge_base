@@ -1,0 +1,83 @@
+Restoring a collectionCloudera Docs
+Restoring a collection
+You can restore a Solr collection from a backup stored on either a remote cluster or
+    the local cluster using the solrctl utility. You must pass a unique request identifier as part
+    of the restore command in the solrctl utility while initiating the restore operation for
+    tracking the process. 
+
+If you are using a secure (Kerberos-enabled) cluster, specify your
+          jaas.conf file by adding the following parameter to each
+        command:-jaas [***/PATH/TO/JAAS.CONF***]
+If TLS is enabled for the Solr service, specify the truststore and password by using the
+          ZKCLI_JVM_FLAGS environment variable before you begin the
+        procedure:export ZKCLI_JVM_FLAGS="-Djavax.net.ssl.trustStore=[***/PATH/TO/TRUSTSTORE \
+-Djavax.net.ssl.trustStorePassword=[***TRUST_STORE_PASSWORD***]"
+
+
+If you are restoring from a backup stored on a remote cluster, copy the backup from the
+          remote cluster to the local cluster. If you are restoring from a local backup, skip this
+          step. 
+
+Run the following commands on the cluster to which you want to restore the
+            collection:
+hdfs dfs -mkdir -p [***PATH/TO/RESTORE/STAGING***]hadoop distcp [***PROTOCOL***]://[***NAMENODE***]:[***PORT***]/[***PATH/TO/BACKUP***] [***/PATH/TO/RESTORE-STAGING***]
+
+
+For example:
+HDFSwebHDFS
+
+HDFS
+                  protocol:hadoop distcp hdfs://nn01.example.com:8020/path/to/backups/tweets-202103281043 /path/to/restore-staging
+
+
+
+WebHDFS
+                  protocol:hadoop distcp webhdfs://nn01.example.com:20101/path/to/backups/tweets-202103281043 /path/to/restore-staging
+
+
+
+
+Start the restore procedure. Run the following command:
+
+solrctl collection --restore [***NAME_OF_THE_RESTORED_COLLECTION***] -l [***BACKUP_LOCATION***] -b [***NAME_OF_THE_SNAPSHOT_TO_BE_RESTORED***] -i [***REQUEST_ID***]
+Make sure that you use a unique [***REQUEST_ID***] each time you run
+            this command. 
+note
+ Statuses of historic job runs are stored in ZooKeeper and can be
+                            retrieved using the solrctl collection --request-status
+                                    [***REQUEST_ID***] command. The
+                            number  of async call responses stored in a cluster is limited to
+                            10,000.
+Status information can be removed from ZooKeeper using the  DELETESTATUS
+                            API call.
+
+
+
+For example:
+solrctl collection --restore tweets -l /path/to/restore-staging -b tweets-202103281043 -i restore-tweets
+
+
+Monitor the status of the restore operation. Run the following command periodically: 
+
+solrctl collection --request-status [***REQUEST_ID***]
+Look for <str name="state"> in the output. For example (emphasis
+            added):
+solrctl collection --request-status restore-tweets
+ <?xml version="1.0" encoding="UTF-8"?> <response> <lst name="responseHeader"> <int name="status"> 0</int> <int name="QTime"> 1</int> </lst> \
+<lst name="status"> <str name="state"> completed</str> <str name="msg"> found restore-tweets in completed tasks</str> </lst> </response>
+The state parameter can be one of the following:
+
+
+running: The restore operation is running.
+
+completed: The restore operation is complete.
+
+failed: The restore operation failed.
+
+notfound: The specified [***REQUEST_ID***] does
+              not exist.
+
+
+
+
+Related informationsolrctl Reference

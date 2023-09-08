@@ -1,0 +1,94 @@
+Introducing the S3A CommittersCloudera Docs
+Introducing the S3A Committers
+Amazon's S3 Object Store is not a filesystem: some expected behaviors of a filesystem
+    are missing. Some of the following aspects of S3 that are different from a filesystem are as follows:
+
+Directory listings are only eventually consistent.
+File overwrites and deletes are only eventually consistent: readers may get old data.
+There is no rename operation; it is mimicked in the S3A client by listing a directory and
+        copying each file underneath, one-by-one.
+
+Because directory rename is mimicked by listing and then copying files the eventual
+        consistency of both listing and reading fails may result in incorrect data. And, because of
+        the copying: it is slow.
+S3Guard addresses the listing inconsistency problem.
+      However, it does not address the update consistency or performance.
+    
+The normal means by which Hadoop MapReduce and Apache Spark commit work
+      from multiple tasks is through renaming the output. Each task attempt writes to
+      a private task attempt directory; when the task is given permission to commit
+      by the MapReduce Application Master or Spark Driver, this task attempt directory
+      is renamed into the job attempt directory. When the job is ready to commit,
+      the output of all the tasks is merged into the final output directory, again
+      by renaming files and directories.
+    
+This is fast and safe on HDFS and similar filesystems, and on object stores with rename
+        operations, such as Azure WASB. On S3, it is unreliable without S3Guard, and even with
+        S3Guard, the the time to commit work to S3 is proportional to the amount of data written. An
+        operation which may work well during development can turn out to be unusable in
+        production.
+To address this the S3A committers were developed. They allow the output of MapReduce
+      and Spark jobs to be written directly to S3, with a time to commit the job
+      independent of the amount of data created.
+What Are the S3A Committers?
+The S3A committers are three different committers which can be used to commit work
+        directly to Map-reduce and Spark. They differ in how they deal with conflict and how they
+        upload data to the destination bucket —but underneath they all share much of the same
+        code.
+They rely on a specific S3 feature: multipart upload of large files.
+When writing a large object to S3, S3A and other S3 clients use a mechanism called
+        “Multipart Upload”.
+The caller initiates a “multipart upload request”, listing the destination path and
+        receiving an upload ID to use in the upload operations.
+The caller then uploads the data in a series of HTTP POST requests, closing with a final
+        POST listing the blocks uploaded.
+The uploaded data is not visible until that final POST request is made, at which point
+        it is published in a single atomic operation.
+This mechanism is always used by S3A whenever it writes large files; the size of each
+        part is set to the value of fs.s3a.multipart.size
+The S3A Committers use the same multipart upload process, but convert it into a
+        mechanism for committing the work of tasks because of a special feature of the mechanism:
+        The final POST request does not need to be issued by the same process or host which uploaded
+        the data.
+The output of each worker task can be uploaded to S3 as a multipart upload, but without
+        issuing the final POST request to complete the upload. Instead, all the information needed
+        to issue that request is saved to a cluster-wide filesystem (HDFS or potentially S3
+        itself)
+When a job is committed, this information is loaded, and the upload completed. If a a
+        task is aborted of fails: the upload is not completed, so the output does not become
+        visible. If the entire job fails, none of its output becomes visible.
+For further reading, see:
+
+
+HADOOP-13786: Add S3A committers for zero-rename commits to S3
+            endpoints.
+
+
+S3A Committers: Architecture and Implementation.
+
+
+A
+              Zero-Rename Committer: Object-storage as a Destination for Apache Hadoop and
+            Spark.
+
+
+The Three Committers
+The three different S3A committers are directory committer, partitioned committer, magic
+        committer.
+Directory Committer: Buffers working data to the local disk, uses HDFS to
+          propagate commit information from tasks to job committer, and manages conflict across the
+          entire destination directory tree.
+Partitioned Committer: Identical to the Directory committer except that conflict
+          is managed on a partition-by-partition basis. This allows it to be used for in-place
+          updates of existing datasets. It is only suitable for use with Spark.
+Magic Committer: Data is written directly to S3, but “magically”
+          re-targeted at the final destination. Conflict is managed across the directory tree. It
+          requires a consistent S3 object store, which means S3Guard is a mandatory
+          pre-requisite.
+
+We currently recommend use of the “Directory” committer: it is the simplest of
+      the set, and by using HDFS to propagate data from workers to the job committer, does not
+      directly require S3Guard – this makes it easier to set up.
+The rest of the documentation only covers the Directory Committer: to explore the other
+        options, consult the Apache documentation.
+Parent topic: Safely Writing to S3 Through the S3A Committers

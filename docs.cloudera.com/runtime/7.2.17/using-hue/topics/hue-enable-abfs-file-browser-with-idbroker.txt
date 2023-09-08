@@ -1,0 +1,72 @@
+Enabling ABFS file browser for Hue configured with IDBrokerCloudera Docs
+Enabling ABFS file browser for Hue configured with IDBroker
+You can directly access the Azure file storage from Hue to upload files and tables to
+        Azure file storage and import CSV files as tables directly in Hue by enabling the ABFS file
+        browser on the Hue user interface.
+
+If you have set up authentication using Knox IDBroker on your cluster, then Hue
+                automatically detects and uses the IDBroker mappings from your cluster’s
+                    core-site.xml file. Verify that the following property is
+                present in the core-site.xml
+                file:<property>
+  <name>fs.azure.ext.cab.address</name>
+  <value>https://<idbrokerurl>:8444/gateway</value>
+</property>
+This property is automatically appended to the core-site.xml file
+                when you enable Knox IDBroker on your cluster.
+You can also check whether there is a mapped role for the group(s) associated with
+                the authenticated user by going to Management Console > Environments > Actions > Manage Access > IDBroker Mappings. If no role is mapped, then you may see the following error:
+                    Failed to obtain storage credentials from IDBroker with error: 403
+                    Client Error: Forbidden for url: <url> { "error": "There is no mapped role
+                    for the group(s) associated with the authenticated user.", "auth_id":
+                    "<user-id>" }. To resolve this, add the user and the
+                    Data Access role to the current mappings on the
+                    IDBroker Mappings page.
+
+
+Sign in to Cloudera Manager as an Admin user.
+
+Go to Clusters > Hue service > Configuration.
+
+Specify the following in the Hue Server Advanced Configuration
+                        Snippet (Safety Valve) for hue_safety_valve_server.ini
+                    field:
+
+[desktop]
+# Remove the file browser from the blacklisted apps.
+# Tweak the app_blacklist property to suit your app configuration.
+app_blacklist=spark,zookeeper,hive,hbase,search,oozie,jobsub,pig,sqoop,security
+[azure]
+[[abfs_clusters]]
+[[[default]]]   
+ 	fs_defaultfs=abfs://<container_name>@<storage_name>.dfs.core.windows.net
+	webhdfs_url=https://<storage_name>.dfs.core.windows.net/
+
+The custom configuration is stored in the
+                        hue_safety_valve_server.ini file.
+
+(Optional) If the Knox server and Hue are not present on the same host, then
+                    add the add the Hue server's FQDN to the trusted origins property in the
+                        Hue Server Advanced Configuration Snippet (Safety Valve) for
+                        hue_safety_valve_server.ini field:
+
+[desktop]
+[[session]]
+trusted_origins=[***HUE-SERVER-FQDN***]
+
+
+Click Save Changes.
+
+Restart the Hue service.
+The ABFS file browser icon appears on the left Assist panel as well as on the
+                    left navigation bar on the Hue web interface.
+
+
+You must manually grant the following application permission to non-admin users and
+                groups for them to be able to view and access ABFS File Browser in Hue:
+                    filebrowser.abfs_access:Access to ABFS from filebrowser and
+                    filepicker.
+You must also add the CDP users and groups to IAM role mappings.
+
+
+Related informationGranting permission to access S3 and ABFS File Browser in HueAdding CDP user/group to IAM role mappingsParent topic: Using Azure Data Lake Storage Gen2 with Hue

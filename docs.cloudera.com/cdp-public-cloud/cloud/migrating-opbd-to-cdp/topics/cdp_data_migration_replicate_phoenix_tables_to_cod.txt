@@ -1,0 +1,55 @@
+Replicating Phoenix tables for versions lower than 4.14Cloudera Docs
+Replicating Phoenix tables for versions lower than 4.14
+For Phoenix versions lower than 4.14, you must treat both the Phoenix data tables and
+        Phoenix index tables similar to any other HBase table.
+
+Copy the contents of your Phoenix data table in the source cluster to COD in
+                    the same manner that you would do for an HBase table (either using CDP
+                    Replication Manager or through the HBase ExportSnapshot utility). To copy the
+                    contents of the Phoenix data table, see HBase migration steps 1-11.
+
+
+noteEnsure the name of the HBase table that you
+                            provide in snapshot operations is the same as your Phoenix table name.
+                            When creating the Phoenix table, ensure it appears within the quotation
+                            marks. Otherwise, it appears in capital letters. 
+hbase> disable 'myTable'
+hbase> restore_snapshot 'myTableSnapshot-122112'
+
+
+
+Validate that the data is readable by scanning the restored table in HBase
+                    through hbase shell before proceeding further.
+
+Verify if the corresponding HBase table for your Phoenix data table exists in
+                    COD.
+
+Obtain the DDL statement (CREATE TABLE) that you have used
+                    to create the table in your legacy system.
+
+Run the CREATE TABLE command in phoenix-sqlline in COD with
+                    the option COLUMN_ENCODED_BYTES=0 appended to it.
+
+For example, if the original create table statement is:
+jdbc:phoenix> CREATE TABLE MY_DATA(rk VARCHAR NOT NULL PRIMARY KEY, col1 INTEGER) SALT_BUCKETS = 4;
+
+The corresponding statement to run in COD will be:
+
+jdbc:phoenix> CREATE TABLE MY_DATA(rk VARCHAR NOT NULL PRIMARY KEY, col1 INTEGER) SALT_BUCKETS = 4, 
+COLUMN_ENCODED_BYTES=0;
+
+This option disables the column encoding feature, which is enabled
+                        by default since Phoenix versions 4.14 till 5.0. This feature uses binary
+                        representations in the HBase column qualifier rather than the column name
+                        provided to Phoenix. If the data in the Phoenix table does not match this
+                        configuration, Phoenix does not display any data on query but the data
+                        appears if queried through the HBase APIs. Running a create table command
+                        when an HBase table already exists creates the corresponding internal
+                        Phoenix metadata while leaving all other data in place. 
+
+
+Validate that query using phoenix-sqlline. This must return the expected data
+                    from your Phoenix table.
+
+
+Parent topic: Replicating Phoenix Data Tables

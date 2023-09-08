@@ -1,0 +1,112 @@
+Query isolationCloudera Docs
+Query isolation
+Query isolation is an option you can set while creating a Hive Virtual Warehouse.
+    Understand how you can enable query isolation to configure the SQL engine to isolate queries
+    that involve lengthy scanning, how to determine the default scan size threshold, and the queries
+    types that benefit from query isolation.
+What is query isolation
+Query Isolation enables you to isolate scan-heavy queries by dedicating
+        compute resources to handle these scans, leaving other resources free to handle less
+        intensive jobs, such as ad-hoc queries. When you enable query isolation, you can configure
+        maximum concurrent isolated queries that a Hive Virtual Warehouse should support and maximum
+        nodes that must be reserved for each isolated query. These parameters allow you to control
+        resource usage and costs.
+
+How query isolation works
+While creating a Hive Virtual Warehouse, you select the value for Max Concurrent
+          Isolated Queries, which corresponds to the 
+          hive.query.isolation.max.queries property. Any query that exceeds the
+          hive.query.isolation.scan.size.threshold value runs in isolation. An
+        isolated standalone executor group is spawned to run the data-intensive query. Concurrency
+        auto-scaling, auto-suspending, and auto-resume features of the core executor groups are not
+        impacted by any isolated queries that are running.
+After you specify the default scan size threshold, optimize your Virtual Warehouse using
+        the controls described in Hive auto-scaling and enable query isolation for the Virtual
+        Warehouse. When the query planner encounters a scan-heavy, data-intensive query whose scan
+        size exceeds the value set for the threshold, it launches the query isolation feature. Query
+        isolation automatically spawns an “on-demand” executor group with the estimated correct
+        number of executors for the scan-heavy query.
+
+
+
+When Analysts connect to Hive Virtual Warehouses using SQL applications such as Hue or
+        other SQL clients that use JDBC or ODBC, the query is handled by HiveServer. First
+        HiveServer generates a preliminary query execution plan that does not include distributing
+        the query tasks across executors. The query planner also determines the data scan size of
+        the query.
+For standard BI-type queries with smaller scan sizes: HiveServer locates an available
+            query coordinator in the Virtual Warehouse to handle the query.
+For data-intensive queries with larger scan sizes: You can enable the query isolation
+            feature and specify a scan size threshold when you are setting up your Virtual
+            Warehouse. The query isolation feature spawns an on-demand executor group with the
+            estimated correct number of executors to handle the single query. The executor group is
+            limited in size by the values you specify for the query isolation parameters.
+
+
+What query isolation is best suited for
+Query isolation is designed for scan-heavy, data-intensive queries.
+
+How query isolation is enabled
+While creating or editing a Hive Virtual Warehouse, you can enable or disable query
+        isolation and configure the following parameters:
+
+Max Concurrent Isolated Queries
+            (hive.query.isolation.max.queries)
+Sets the maximum number of isolated queries that can run concurrently in their own
+            dedicated executor nodes or the maximum number of queries that can spawn dedicated
+            executor groups at one time. Select this number based on the scan size of the data for
+            your average scan-heavy, data-intensive query. For example, if Max Concurrent
+              Isolated Queries is set to 3 and a dedicated executor group is spawned for
+            each data-intensive query, only 3 dedicated executor groups can be running at one time.
+            If another data-intensive query is received, it must wait in a queue to run.
+Max Nodes Per Isolated Query
+              (hive.query.isolation.max.nodes.per.query)
+Sets how many executor nodes can be created for each isolated data-intensive
+            query.
+
+
+
+How the default scan size threshold is determined
+To determine the default scan size threshold
+          (hive.query.isolation.scan.size.threshold), you need to calculate a
+        threshold based on your Virtual Warehouse T-shirt size, and then set the default scan size
+        parameter accordingly.
+Multiply the executors in your Virtual Warehouse core executor group by the default data
+        cache size. For example, for a MEDIUM-sized Virtual Warehouse, which has 20 executors, you
+        set the scan size threshold to 20 x 200GB = 4TB.
+Any query that scans more than 4TB of data runs in isolation, the number of executors
+        spawned to run the query does not exceed the default setting for the
+          hive.query.isolation.max.nodes.per.query parameter, which defaults to 2
+        times the T-shirt size. For a MEDIUM-sized Virtual Warehouse, which has 20 executors, 40
+        executors (2 x 20) are spawned to run the isolated query.
+When the isolated query is running, if HiveServer receives another query, which scans less
+        than 4 TB of data, the planner runs that query in the core executor group and does not spawn
+        an isolated executor group to run it. If there is capacity in the core executor group, the
+        query runs immediately or concurrency auto-scaling provisions more capacity in the core
+        executor group.
+Assuming the original data-intensive "scan-heavy" isolated query is still running, if
+        HiveServer receives an additional "scan-heavy" query, which scans more than 4 TB of data,
+        another isolated executor group is spawned to run the additional query. However, if two
+        additional "scan-heavy" queries are received, unless the default value (2) is changed for
+        the hive.query.isolation.max.queries parameter, one scan-heavy query runs,
+        while the other is queued until execution of one of the other isolated queries is
+        complete.
+For more information about setting the default scan size threshold, see Tuning Hive Virtual
+        Warehouses.
+
+How the scan size threshold for Hive query isolation is set
+Query Isolation enables your Virtual Warehouse to determine, based on the value you set for
+        the hive.query.isolation.scan.size.threshold configuration parameter,
+        whether to spawn dedicated nodes to run scan-heavy, data-intensive queries. You can set this
+        threshold parameter in the Virtual Warehouses page as follows:
+Log in to the Data Warehouse service as DWAdmin.
+Go to Virtual Warehouse >  > Edit > CONFIGURATIONS > Hiveserver2 and select hive-site from the
+              Configuration files drop-down menu.
+Specify the value for the hive.query.isolation.scan.size.threshold
+            parameter in the VALUE text box in storage units. For example,
+            400 GB.
+Click Apply Changes.
+
+
+
+Parent topic: Hive warehouse configuration options

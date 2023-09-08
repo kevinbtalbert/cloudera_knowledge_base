@@ -1,0 +1,510 @@
+Impala conditional functionsCloudera Docs
+Impala conditional functions
+Impala supports the following conditional functions for testing equality, comparison
+    operators, and nullity.
+
+CASE
+
+
+CASE2
+
+
+COALESCE
+
+
+DECODE
+
+
+IF
+
+
+IFNULL
+
+
+ISFALSE
+
+
+ISNOTFALSE
+
+
+ISNOTTRUE
+
+
+ISNULL
+
+
+ISTRUE
+
+
+NONNULLVALUE
+
+
+NULLIF
+
+
+NULLIFZERO
+
+
+NULLVALUE
+
+
+NVL
+
+
+NVL2
+
+
+ZEROIFNULL
+
+
+
+CASE a WHEN b THEN c [WHEN d THEN e]... [ELSE f] END
+
+
+Purpose: Compares an expression to one or more possible values, and returns a
+          corresponding result when a match is found.
+          
+Return type: same as the initial argument value, except that integer values are promoted to
+        BIGINT and floating-point values are promoted to DOUBLE; use
+        CAST() when inserting into a smaller numeric column
+      
+
+Usage notes:
+
+
+            In this form of the CASE expression, the initial value
+            A being evaluated for each row it typically a column reference, or
+            an expression involving a column. This form can only compare against a set of
+            specified values, not ranges, multi-value comparisons such as
+            BETWEEN or IN, regular expressions, or
+            NULL.
+          
+
+Examples:
+
+
+            Although this example is split across multiple lines, you can put any or all parts
+            of a CASE expression on a single line, with no punctuation or other
+            separators between the WHEN, ELSE, and
+            END clauses.
+          
+select case x
+    when 1 then 'one'
+    when 2 then 'two'
+    when 0 then 'zero'
+    else 'out of range'
+  end
+    from t1;
+
+
+
+CASE WHEN a THEN b [WHEN c THEN d]... [ELSE e] END
+
+
+Purpose: Tests whether any of a sequence of expressions is
+          TRUE, and returns a corresponding result for the first
+          TRUE expression.
+          
+Return type: same as the initial argument value, except that integer values are promoted to
+        BIGINT and floating-point values are promoted to DOUBLE; use
+        CAST() when inserting into a smaller numeric column
+      
+
+Usage notes:
+
+
+CASE expressions without an initial test value have more
+            flexibility. For example, they can test different columns in different
+            WHEN clauses, or use comparison operators such as
+            BETWEEN, IN and IS NULL rather
+            than comparing against discrete values.
+          
+
+CASE expressions are often the foundation of long queries that
+            summarize and format results for easy-to-read reports. For example, you might use a
+            CASE function call to turn values from a numeric column into
+            category strings corresponding to integer values, or labels such as Small,
+            Medium and Large based on ranges. Then subsequent parts of the query
+            might aggregate based on the transformed values, such as how many values are
+            classified as small, medium, or large. You can also use CASE to
+            signal problems with out-of-bounds values, NULL values, and so on.
+          
+
+            By using operators such as OR, IN,
+            REGEXP, and so on in CASE expressions, you can
+            build extensive tests and transformations into a single query. Therefore,
+            applications that construct SQL statements often rely heavily on
+            CASE calls in the generated SQL code.
+          
+
+            Because this flexible form of the CASE expressions allows you to
+            perform many comparisons and call multiple functions when evaluating each row, be
+            careful applying elaborate CASE expressions to queries that process
+            large amounts of data. For example, when practical, evaluate and transform values
+            through CASE after applying operations such as aggregations that
+            reduce the size of the result set; transform numbers to strings after performing
+            joins with the original numeric values.
+          
+
+Examples:
+
+
+            Although this example is split across multiple lines, you can put any or all parts
+            of a CASE expression on a single line, with no punctuation or other
+            separators between the WHEN, ELSE, and
+            END clauses.
+          
+select case
+    when dayname(now()) in ('Saturday','Sunday') then 'result undefined on weekends'
+    when x > y then 'x greater than y'
+    when x = y then 'x and y are equal'
+    when x is null or y is null then 'one of the columns is null'
+    else null
+  end
+    from t1;
+
+
+
+COALESCE(type v1, type v2, ...)
+
+
+Purpose: Returns the first specified argument that is not
+          NULL, or NULL if all arguments are
+          NULL.
+          
+Return type: same as the initial argument value, except that integer values are promoted to
+        BIGINT and floating-point values are promoted to DOUBLE; use
+        CAST() when inserting into a smaller numeric column
+      
+
+
+DECODE(type expression, type search1, type result1 [, type search2, type result2
+          ...] [, type default] )
+
+
+Purpose: Compares the first argument, expression, to the
+          search expressions using the IS NOT DISTINCT
+          operator, and returns:
+          
+
+              The corresponding result when a match is found.
+            
+
+              The first corresponding result if there are more than one
+              matching search expressions.
+            
+
+              The default expression if none of the search expressions matches
+              the first argument expression.
+            
+
+NULL if the final default expression is omitted
+              and none of the search expressions matches the first argument.
+            
+
+
+Return type: Same as the first argument with the following exceptions:
+            
+
+                Integer values are promoted to BIGINT.
+              
+
+                Floating-point values are promoted to DOUBLE.
+              
+
+                Use CAST() when inserting into a smaller numeric column.
+              
+
+
+
+Usage notes:
+
+
+
+              Can be used as shorthand for a CASE expression.
+            
+
+              The first argument, expression, and the search expressions must
+              be of the same type or convertible types.
+            
+
+              The result expression can be a different type, but all result expressions must be
+              of the same type.
+            
+
+              Returns a successful match if the first argument is NULL and a
+              search expression is also NULL.
+            
+
+NULL can be used as a search expression.
+            
+
+
+Examples:
+
+
+            The following example translates numeric day values into weekday names, such as 1 to
+            Monday, 2 to Tuesday, etc.
+          
+SELECT event, DECODE(day_of_week, 1, "Monday", 2, "Tuesday", 3, "Wednesday",
+  4, "Thursday", 5, "Friday", 6, "Saturday", 7, "Sunday", "Unknown day")
+  FROM calendar;
+
+
+
+IF(BOOLEAN condition, type ifTrue, type ifFalseOrNull)
+
+
+Purpose: Tests an expression and returns a corresponding result depending on
+          whether the result is TRUE, FALSE, or
+          NULL.
+          
+Return type: Same as the ifTrue argument value
+          
+
+
+IFNULL(type a, type ifNull)
+
+
+Purpose: Alias for the ISNULL() function, with the same
+          behavior. To simplify porting SQL with vendor extensions to Impala.
+          
+Added in: Impala 1.3.0
+      
+
+
+          ISFALSE(BOOLEAN expression)
+        
+
+Purpose: Returns TRUE if the expression is
+          FALSE. Returns FALSE if the expression is
+          TRUE or NULL.
+          
+            Same as the IS FALSE operator.
+          
+
+            Similar to ISNOTTRUE(), except it returns the opposite value for a
+            NULL argument.
+          
+
+Return type: BOOLEAN
+
+
+Usage notes:
+
+ In Impala 2.1.1 and higher,
+        you can use the operators IS [NOT] TRUE and IS [NOT] FALSE
+        as equivalents for the built-in functions ISTRUE(),
+          ISNOTTRUE(), ISFALSE(), and
+          ISNOTFALSE(). 
+
+
+ISNOTFALSE(BOOLEAN expression)
+
+
+Purpose: Tests if a Boolean expression is not FALSE (that is,
+          either TRUE or NULL). Returns TRUE
+          if so. If the argument is NULL, returns TRUE.
+          
+            Same as the IS NOT FALSE operator.
+          
+
+            Similar to ISTRUE(), except it returns the opposite value for a
+            NULL argument.
+          
+
+Return type: BOOLEAN
+
+
+Usage notes: Primarily for compatibility with code containing industry extensions to SQL.
+      
+
+Usage notes:
+
+ In Impala 2.1.1 and higher,
+        you can use the operators IS [NOT] TRUE and IS [NOT] FALSE
+        as equivalents for the built-in functions ISTRUE(),
+          ISNOTTRUE(), ISFALSE(), and
+          ISNOTFALSE(). 
+
+
+          ISNOTTRUE(BOOLEAN expression)
+        
+
+Purpose: Tests if a Boolean expression is not TRUE (that is,
+          either FALSE or NULL). Returns TRUE
+          if so. If the argument is NULL, returns TRUE.
+          
+            Same as the IS NOT TRUE operator.
+          
+
+            Similar to ISFALSE(), except it returns the opposite value for a
+            NULL argument.
+          
+
+Return type: BOOLEAN
+
+
+Usage notes:
+
+ In Impala 2.1.1 and higher,
+        you can use the operators IS [NOT] TRUE and IS [NOT] FALSE
+        as equivalents for the built-in functions ISTRUE(),
+          ISNOTTRUE(), ISFALSE(), and
+          ISNOTFALSE(). 
+
+
+ISNULL(type a, type ifNull)
+
+
+Purpose: Tests if an expression is NULL, and returns the
+          expression result value if not. If the first argument is NULL,
+          returns the second argument.
+          
+Compatibility notes: Equivalent to the NVL() function from
+            Oracle Database or IFNULL() from MySQL. The NVL()
+            and IFNULL() functions are also available in Impala.
+          
+
+Return type: Same as the first argument value
+          
+
+
+          ISTRUE(BOOLEAN expression)
+        
+
+Purpose: Returns TRUE if the expression is
+          TRUE. Returns FALSE if the expression is
+          FALSE or NULL.
+          
+            Same as the IS TRUE operator.
+          
+
+            Similar to ISNOTFALSE(), except it returns the opposite value for a
+            NULL argument.
+          
+
+Return type: BOOLEAN
+
+
+Usage notes: Primarily for compatibility with code containing industry extensions to SQL.
+      
+
+Usage notes:
+
+ In Impala 2.1.1 and higher,
+        you can use the operators IS [NOT] TRUE and IS [NOT] FALSE
+        as equivalents for the built-in functions ISTRUE(),
+          ISNOTTRUE(), ISFALSE(), and
+          ISNOTFALSE(). 
+
+
+NONNULLVALUE(type expression)
+
+
+Purpose: Tests if an expression (of any type) is NULL or not.
+            Returns FALSE if so. The converse of nullvalue(). 
+Return type: BOOLEAN
+
+Usage notes: Primarily for compatibility with code containing industry extensions to SQL.
+      
+
+
+NULLIF(expr1, expr2)
+
+
+Purpose: Returns NULL if the two specified arguments are equal.
+            If the specified arguments are not equal, returns the value of expr1.
+            The data types of the expressions must be compatible, according to the conversion rules
+            from Impala SQL data types. You cannot use an expression that
+            evaluates to NULL for expr1; that way, you can
+            distinguish a return value of NULL from an argument value of
+              NULL, which would never match expr2. 
+Usage notes: This function is effectively shorthand for a CASE
+              expression of the form: 
+CASE
+  WHEN expr1 = expr2 THEN NULL
+  ELSE expr1
+END
+ It is commonly used in division expressions, to produce a NULL
+              result instead of a divide-by-zero error when the divisor is equal to zero: 
+select 1.0 / nullif(c1,0) as reciprocal from t1;
+ You might also use it for compatibility with other database systems that support the
+              same NULLIF() function. 
+
+Return type: same as the initial argument value, except that integer values are promoted to
+        BIGINT and floating-point values are promoted to DOUBLE; use
+        CAST() when inserting into a smaller numeric column
+      
+
+
+NULLIFZERO(numeric_expr)
+
+
+Purpose: Returns NULL if the numeric expression evaluates to 0,
+            otherwise returns the result of the expression. 
+Usage notes: Used to avoid error conditions such as divide-by-zero in numeric
+              calculations. Serves as shorthand for a more elaborate CASE
+              expression, to simplify porting SQL with vendor extensions to Impala. 
+
+Return type: Same type as the input argument 
+
+
+NULLVALUE(expression)
+
+
+Purpose: Tests if an expression (of any type) is NULL or not.
+          Returns TRUE if so. The converse of nonnullvalue().
+          
+Return type: BOOLEAN
+
+
+Usage notes: Primarily for compatibility with code containing industry extensions to SQL.
+      
+
+
+NVL(type a, type ifNull)
+
+
+Purpose: Alias for the ISNULL() function. Returns the first
+            argument if the first argument is not NULL. Returns the second argument
+            if the first argument is NULL.  Equivalent to the
+                NVL() function in Oracle Database or IFNULL() in
+              MySQL. 
+
+Return type: Same as the first argument value 
+
+
+NVL2(type a, type ifNotNull, type ifNull)
+
+
+Purpose: Returns the second argument, ifNotNull, if the first
+            argument is not NULL. Returns the third argument,
+              ifNull, if the first argument is NULL. 
+              Equivalent to the NVL2() function in Oracle Database. 
+
+Return type: Same as the first argument value 
+
+Examples:
+
+
+SELECT NVL2(NULL, 999, 0); -- Returns 0
+SELECT NVL2('ABC', 'Is Not Null', 'Is Null'); -- Returns 'Is Not Null'
+
+
+ZEROIFNULL(numeric_expr)
+
+
+Purpose: Returns 0 if the numeric expression evaluates to
+          NULL, otherwise returns the result of the expression.
+          
+Usage notes: Used to avoid unexpected results due to unexpected propagation
+            of NULL values in numeric calculations. Serves as shorthand for a
+            more elaborate CASE expression, to simplify porting SQL with vendor
+            extensions to Impala.
+          
+
+Return type: Same type as the input argument
+          
+
+

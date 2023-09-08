@@ -1,0 +1,102 @@
+Transition the configuration using Cloudera Manager versions 7.3.1 or higherCloudera Docs
+Transition the configuration using Cloudera Manager versions 7.3.1 or higher
+The migration script transforms configuration metadata before the actual upgrade and
+        checks its validity for the target Solr version. In case it identifies incompatibilities it
+        cannot resolve, the script stops, letting you fix the input file with the incompatibility.
+        Afterwards, you can rerun the script to continue with the transition process.
+
+When running the script, you must specify the location of the CDH 5 Solr binaries
+                using the CDH_SOLR_HOME environment variable. Solr binaries are
+                located at /opt/cloudera/parcels/CDH/lib/solr.
+For example:
+export CDH_SOLR_HOME=/opt/cloudera/parcels/CDH/lib/solr
+For information on solr-upgrade.sh command syntax and usage options,
+                run the following command:
+./solr-upgrade.sh help
+warningAlthough the configuration
+        transformation script addresses known incompatibilities, there might be incompatible
+        configurations that are not detected by the script. Do not upgrade your production Cloudera
+        Search services to Cloudera Runtime 7.1.1
+    or higher until you have
+        tested the migrated configuration with Cloudera Runtime 7.1.1
+    or higher on a testing or development
+        cluster.
+
+
+In this procedure you run solr-upgrade.sh with the
+                    upgrade-metadata option. It transforms configuration metadata
+                to make it compatible with the target Solr version. The input of the script
+                    ([***/SOLR/METADATA/INPUT/DIRECTORY***]) is the Solr
+                configuration that you have downloaded from the ZooKeeper service of the source
+                version. 
+The Solr configuration transition script, solr-upgrade.sh, is
+                included with Cloudera Manager 7.1 agent software. This enables you to run the
+                script after upgrading to Cloudera Manager 7.1, but before upgrading to Cloudera Runtime 7.1.1
+    or higher.
+The script is located at
+                    /opt/cloudera/cm/solr-upgrade/solr-upgrade.sh.
+
+
+Make sure that you run the script on a host that is assigned a Solr
+                        Server or Solr service Gateway role.
+                    Confirm that the SOLR_ZK_ENSEMBLE environment variable is set
+                    in /etc/solr/conf/solr-env.sh:
+cat /etc/solr/conf/solr-env.shexport SOLR_ZK_ENSEMBLE=[***zk01.example.com:2181,zk02.example.com:2181/solr***] \
+export SENTRY_CONF_DIR=/etc/solr/[***conf.example.SOLR-1888]/sentry-confReplace
+                        [***zk01.example.com:2181,zk02.example.com:2181/solr***]
+                    and [***conf.example.SOLR-1***] with actual values valid in
+                    your environment.
+
+Run the migration script:
+/opt/cloudera/cm/solr-upgrade/solr-upgrade.sh upgrade-metadata \
+-c [***/SOLR/METADATA/INPUT/DIRECTORY***] \
+-d [***SOLR/METADATA/OUTPUT/DIRECTORY***]Replace
+                        [***/SOLR/METADATA/INPUT/DIRECTORY***] and
+                        [***SOLR/METADATA/OUTPUT/DIRECTORY***] with actual values
+                    valid in your environment.
+For
+                    example:/opt/cloudera/cm/solr-upgrade/solr-upgrade.sh upgrade-metadata \
+-c $HOME/cr7-solr-migration -d $HOME/cr7-migrated-solr-config
+
+If you have enabled Kerberos, specify your JAAS configuration file by adding
+                            --jaas
+                            [***PATH/TO/SOLR/JAAS.CONF***] to the
+                        command.
+
+For
+                    example:/opt/cloudera/cm/solr-upgrade/solr-upgrade.sh \
+--jaas [***PATH/TO/SOLR/JAAS.CONF***] \
+upgrade-metadata -c $HOME/cr7-solr-migration -d $HOME/cr7-migrated-solr-config 
+
+The output directory does not only contain the migrated configuration files
+                        but several *_validation.html files for all the steps of
+                        the migration and a new index_validation.html file linking
+                        to these files.
+The output contains the following logs at the beginning and end of
+                        the steps:
+---------- upgrading ...
+---------- upgrade successful for …
+
+If a step reports an error, the script stops at that point and the
+                            METADATA UPGRADE SUCCESSFUL message is missing. Check
+                        the output for the problematic step. If the script stops on error, the last
+                        step printed only has the upgrading but not the
+                            upgrade successful line.
+
+
+Fix the erroneous file in the input directory
+                        ($HOME/cr7-solr-migration in this example) and re-run the
+                    script.
+
+ Each time you run the script, the files in the output directory
+                            ($HOME/cr7-migrated-solr-config in this example) are
+                        overwritten. Repeat until the script outputs no incompatibilities.
+
+If the script runs successfully, the last line of the output is the
+                        following:METADATA UPGRADE SUCCESSFUL FOR METADATA IN [***/SOLR/METADATA/INPUT/DIRECTORY***] 
+OUTPUT STORED IN [***SOLR/METADATA/OUTPUT/DIRECTORY***]For
+                    example:METADATA UPGRADE SUCCESSFUL FOR METADATA IN $HOME/cr7-solr-migration 
+OUTPUT STORED IN $HOME/cr7-migrated-solr-config
+
+
+Parent topic: Transition Solr configuration

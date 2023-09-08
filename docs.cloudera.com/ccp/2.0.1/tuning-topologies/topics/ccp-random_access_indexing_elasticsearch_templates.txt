@@ -1,0 +1,195 @@
+Tune Random Access Indexing Elasticsearch TemplatesCloudera Docs
+Tune Random Access Indexing
+    Elasticsearch Templates
+Before tuning the Elasticsearch indexing topology, the Elasticsearch templates for the
+      appropriate sensors should be created and uploaded to Elasticsearch. 
+
+Use a curl request to upload the Elasticsearch templates:
+
+curl -X POST \
+  http://<ES Master IP>:9200/_template/<sensor>_index \
+  -H 'content-type: application/json' \
+  -d <Template JSON>
+
+
+
+{
+  "template": "<sensor>_index*",
+  "mappings": {
+        "_default_": {
+      "_all": {
+          "enabled": "false"
+      }
+    },
+    },
+    "<sensor>_doc": {
+      "dynamic_templates": [
+        {
+          "geo_location_point": {
+            "match": "enrichments:geo:*:location_point",
+            "match_mapping_type": "*",
+            "mapping": {
+              "type": "geo_point"
+            }
+          }
+        },
+        {
+          "geo_country": {
+            "match": "enrichments:geo:*:country",
+            "match_mapping_type": "*",
+            "mapping": {
+              "type": "keyword"
+            }
+          }
+        },
+        {
+        "geo_city": {
+        "match": "enrichments:geo:*:city",
+        "match_mapping_type": "*",
+        "mapping": {
+        "type": "keyword"
+        }
+        }
+        },
+        {
+        "geo_location_id": {
+        "match": "enrichments:geo:*:locID",
+        "match_mapping_type": "*",
+        "mapping": {
+        "type": "keyword"
+        }
+        }
+        },
+        {
+        "geo_dma_code": {
+        "match": "enrichments:geo:*:dmaCode",
+        "match_mapping_type": "*",
+        "mapping": {
+        "type": "keyword"
+        }
+        }
+        },
+        {
+        "geo_postal_code": {
+        "match": "enrichments:geo:*:postalCode",
+        "match_mapping_type": "*",
+        "mapping": {
+        "type": "keyword"
+        }
+        }
+        },
+        {
+        "geo_latitude": {
+        "match": "enrichments:geo:*:latitude",
+        "match_mapping_type": "*",
+        "mapping": {
+        "type": "float"
+        }
+        }
+        },
+        {
+        "geo_longitude": {
+        "match": "enrichments:geo:*:longitude",
+        "match_mapping_type": "*",
+        "mapping": {
+        "type": "float"
+        }
+        }
+        },
+        {
+        "timestamps": {
+        "match": "*:ts",
+        "match_mapping_type": "*",
+        "mapping": {
+        "type": "date",
+        "format": "epoch_millis"
+        }
+        }
+        },
+        {
+        "threat_triage_score": {
+        "mapping": {
+        "type": "float"
+        },
+        "match": "threat:triage:*score",
+        "match_mapping_type": "*"
+        }
+        },
+        {
+        "threat_triage_reason": {
+        "mapping": {
+        "type": "text",
+        "fielddata": "true"
+        },
+        "match": "threat:triage:rules:*:reason",
+        "match_mapping_type": "*"
+        }
+        },
+        {
+        "threat_triage_name": {
+        "mapping": {
+        "type": "text",
+        "fielddata": "true"
+        },
+        "match": "threat:triage:rules:*:name",
+        "match_mapping_type": "*"
+        }
+        }
+        ],
+        "properties": {
+        "timestamp": {
+        "type": "date",
+        "format": "epoch_millis"
+        },
+        "source:type": {
+        "type": "text",
+        "fielddata": "true"
+        }
+        "is_alert": {
+        "type": "boolean"
+        },
+        "alert": {
+        "type": "nested"
+        }
+        }
+        }
+        },
+        "aliases": {},
+        "settings": {
+        "number_of_shards": 16,
+        "number_of_replicas": 2
+        }
+        }
+
+
+
+Modify the template to specify all other fields that can appear in an HCP event
+               under the properties section:
+…     
+     "ip_src_addr": { 
+          "type": "ip" 
+     }, 
+     "ip_src_port": { 
+          "type": "integer" 
+    },
+    "action": {
+         "type": "keyword"
+    },
+    "ciscotag": {
+         "type": "keyword"
+    }
+    …
+
+noteIt is very important for the specified type to be the minimum size required for
+            the field. For example, if you do not specify “int”, the value would be auto-detected as
+            “long” which will consume more system resources. If there is a string field, it is
+            advised to specify it as “keyword” only and not “text”. See the following link for full
+            list of data types: https://www.elastic.co/guide/en/elasticsearch/reference/5.2/mapping-types.html. Duplication of fields should be avoided as it can
+            lead to large performance impacts when indexing. Some consideration should also be given
+            to the index.refresh_interval parameter in Ambari. This specifies the
+            interval at which Elasticsearch creates a new segment. Increasing this value can improve
+            indexing performance by allowing larger segments to flush and decreasing merge pressure. 
+
+
+
+Parent topic: Tuning a Random Access Indexing Topology

@@ -1,0 +1,171 @@
+STRING data typeCloudera Docs
+STRING data type
+A data type used in CREATE TABLE and ALTER TABLE
+    statements.
+Syntax:
+
+      In the column definition of a CREATE TABLE and
+        ALTER TABLE statements:
+    column_name STRING
+Length:
+
+      If you need to manipulate string values with precise or
+        maximum lengths, in Impala 2.0 and higher you can declare columns as
+            VARCHAR(max_length) or
+            CHAR(length), but for best
+        performance use STRING where practical.
+
+      Take the following considerations for STRING
+      lengths:
+    
+
+        The hard limit on the size of a STRING and the total
+        size of a row is 2 GB.
+
+        
+          If a query tries to process or create a string
+          larger than this limit, it will return an error to the user.
+        
+
+
+        The limit is 1 GB on STRING when writing to Parquet
+        files.
+      
+
+        Queries operating on strings with 32 KB or less will work reliably and
+        will not cause significant performance or memory problems (unless you have
+        very complex queries, very many columns, etc.)
+      
+
+        Performance and memory consumption may degrade with strings larger
+        than 32 KB.
+      
+ The row size, i.e. the total size of all string and other columns, is subject to lower
+          limits at various points in query execution that support spill-to-disk. A few examples for
+          lower row size limits are: 
+ Rows coming from the right side of any hash join 
+ Rows coming from either side of a hash join that spills to disk 
+ Rows being sorted by the SORT operator without a limit 
+ Rows in a grouping aggregation 
+
+ The max row size is configurable on a per-query basis with the
+              MAX_ROW_SIZE query option. Rows up to MAX_ROW_SIZE
+            (which defaults to 512 KB) can always be processed in the above cases. Rows larger than
+              MAX_ROW_SIZE are processed on a best-effort basis.
+
+
+Character sets:
+
+      For full support in all Impala subsystems, restrict string values to the
+      ASCII character set. Although some UTF-8 character data can be stored in
+      Impala and retrieved through queries, UTF-8 strings containing non-ASCII
+      characters are not guaranteed to work properly in combination with many
+      SQL aspects, including but not limited to:
+    
+
+        String manipulation functions.
+      
+
+        Comparison operators.
+      
+
+        The ORDER BY clause.
+      
+ Values in partition key columns.
+      
+
+      For any national language aspects such as collation order or
+      interpreting extended ASCII variants such as ISO-8859-1 or ISO-8859-2
+      encodings, Impala does not include such metadata with the table
+      definition. If you need to sort, manipulate, or display data depending on
+      those national language characteristics of string data, use logic on the
+      application side.
+    
+Conversions:
+
+
+ Impala does not automatically convert STRING to any numeric type.
+            Impala does automatically convert STRING to TIMESTAMP
+            if the value matches one of the accepted TIMESTAMP formats.
+
+
+
+          You can use CAST() to convert
+            STRING values to TINYINT,
+            SMALLINT, INT,
+            BIGINT, FLOAT,
+            DOUBLE, or TIMESTAMP.
+        
+
+
+
+          You cannot directly cast a STRING value to
+            BOOLEAN. You can use a CASE
+          expression to evaluate string values such as 'T',
+            'true', and so on and return Boolean
+            true and false values as
+          appropriate.
+        
+
+
+
+          You can cast a BOOLEAN value to
+            STRING, returning '1' for
+            true values and '0' for
+            false values.
+        
+
+
+Partitioning:
+
+      Although it might be convenient to use STRING columns
+      for partition keys, even when those columns contain numbers, for
+      performance and scalability it is much better to use numeric columns as
+      partition keys whenever practical. Although the underlying HDFS directory
+      name might be the same in either case, the in-memory storage for the
+      partition key columns is more compact, and computations are faster, if
+      partition key columns such as YEAR,
+        MONTH, DAY and so on are declared as
+        INT, SMALLINT, and so on.
+    
+Zero-length strings: For purposes of clauses such as DISTINCT and GROUP
+        BY, Impala considers zero-length strings (""), NULL, and space
+        to all be different values.
+      
+Text table considerations: Values of this type are potentially larger in text tables than in tables
+        using Parquet or other binary formats.
+      Avro considerations: The Avro specification
+        allows string values up to 2**64 bytes in length. Impala queries for Avro tables use 32-bit
+        integers to hold string lengths. In Impala 2.5 and higher, Impala truncates
+          CHAR and VARCHAR values in Avro tables to (2**31)-1
+        bytes. If a query encounters a STRING value longer than (2**31)-1 bytes in
+        an Avro table, the query fails. In earlier releases, encountering such long values in an
+        Avro table could cause a crash. 
+Column statistics considerations: Because the values of this type have variable size, none of the
+        column statistics fields are filled in until you run the COMPUTE STATS statement.
+      
+Examples:
+
+      The following examples demonstrate double-quoted and single-quoted
+      string literals, and required escaping for quotation marks within string
+      literals:
+    SELECT 'I am a single-quoted string';
+SELECT "I am a double-quoted string";
+SELECT 'I\'m a single-quoted string with an apostrophe';
+SELECT "I\'m a double-quoted string with an apostrophe";
+SELECT 'I am a "short" single-quoted string containing quotes';
+SELECT "I am a \"short\" double-quoted string containing quotes";
+
+      The following examples demonstrate calls to string manipulation
+      functions to concatenate strings, convert numbers to strings, or pull out
+      substrings:
+    SELECT CONCAT("Once upon a time, there were ", CAST(3 AS STRING), ' little pigs.');
+SELECT SUBSTR("hello world",7,5);
+
+      The following examples show how to perform operations on
+        STRING columns within a table:
+    CREATE TABLE t1 (s1 STRING, s2 STRING);
+INSERT INTO t1 VALUES ("hello", 'world'), (CAST(7 AS STRING), "wonders");
+SELECT s1, s2, length(s1) FROM t1 WHERE s2 LIKE 'w%';
+
+Related informationMAX_ROW_SIZE query optionTIMESTAMP data typeParent topic: Impala SQL data types

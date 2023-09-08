@@ -1,0 +1,96 @@
+Using HashTable and SyncTable tools to copy data between COD clustersCloudera Docs
+Using HashTable and SyncTable tools to copy data between COD clusters
+You can use the HashTable and SyncTable tools to copy data from one CDP Operational
+        Database (COD) cluster to another. You can use these tools to synchronize data prior to
+        replication.
+
+You can use the HashTable and SyncTable CLI tools as a one way synchronization method
+                for data in COD clusters. The CldrSyncTable job is an extension of the upstream
+                SyncTable tool. For more information about the HashTable and SyncTable tools, see
+                    Use HashTable and SyncTable tool.
+When you use these tools, ensure that you place the HashTable output directory and
+                the source table at the same location where the CLI exists. This means that you
+                cannot set the sourcezkcluster and the
+                    sourcehashdir properties to a remote cluster that the
+                command-line executor cannot authenticate.
+
+
+
+
+Ensure that all RegionServers and DataNodes on the source cluster are
+                        accessible by NodeManagers on the target cluster where SyncTable job tasks
+                        are running.
+In case of secured clusters, users on the target cluster who execute the
+                        SyncTable job must be able to do the following on the HDFS and HBase
+                        services of the source cluster:
+Authenticate: for example, using the centralized authentication or
+                                cross-realm setup.
+Be authorized: having at least read permission.
+
+Ensure that the target table is created and enabled on the target
+                        cluster.
+
+
+
+
+Ensure that the following properties have the correct values in the
+                        hbase-site.xml configuration file of the target
+                    cluster:
+
+<property>
+	  <name>hbase.security.replication.credential.provider.path</name>
+	  <value>cdprepjceks://hdfs@[***NAMENODE_HOST***]:[***NAMENODE_PORT***]/hbase-replication/credentials.jceks</value>
+	</property>
+	<property>
+	  <name>hbase.security.replication.user.name</name>
+	  <value>srv_[***WORKLOAD USER NAME***]</value>
+	</property>
+
+
+
+Ensure that the source cluster can communicate with the target cluster.
+
+
+Get the ZooKeeper quorum address of the target cluster.
+
+
+Set a subnet that allows connection from the source cluster.
+For example, enabling the port 2181 for the ZooKeeper client.
+
+
+
+Run the HashTable job from the source cluster to generate a hash of a table on
+                    the source cluster:
+
+hbase org.apache.hadoop.hbase.mapreduce.HashTable 
+[***TABLE NAME***] [***HASH OUTPUT PATH***]
+hdfs dfs -ls -R [***HASH OUTPUT PATH***]
+
+
+Run the CldrSyncTable job from the source cluster to compare the generated
+                    hashes:
+Use the --cldr.cross.domain or the
+                        --cldr.unsecure.peer option:Secure target clusterUnsecure target clusterUse the
+                                --cldr.cross.domain option when running the
+                            CldrSyncTable job in a secure
+                            cluster:hbase org.apache.hadoop.hbase.mapreduce.CldrSyncTable 
+--cldr.cross.domain --targetzkcluster=[***TARGET ZOOKEEPER 
+QUORUM***]:[***TARGET ZOOKEEPER PORT***]:[***TARGET ZOOKEEPER ROOT FOR HBASE***]
+[***HASH OUTPUT PATH***] [***SOURCE TABLE NAME***] 
+[***TARGET TABLE NAME ON THE TARGET CLUSTER***]Use the
+                                --cldr.unsecure.peer option when running the
+                            CdrSyncTable job in an unsecure
+                            cluster::hbase org.apache.hadoop.hbase.mapreduce.CldrSyncTable 
+--cldr.unsecure.peer
+ --targetzkcluster=[***TARGET ZOOKEEPER QUORUM***]:[***TARGET 
+ZOOKEEPER PORT***]:[***TARGET ZOOKEEPER ROOT FOR HBASE***] 
+[***HASH OUTPUT PATH***] [***SOURCE TABLE NAME***] 
+[***TARGET TABLE NAME ON THE TARGET CLUSTER***]
+
+After the job is completed, check the data copied on the target cluster.
+
+scan '[***TARGET TABLE NAME***]'
+
+
+
+Related informationUse HashTable and SyncTable toolParent topic: Cloudera Operational Database data replication

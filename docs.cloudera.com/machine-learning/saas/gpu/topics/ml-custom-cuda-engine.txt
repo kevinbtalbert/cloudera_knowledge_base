@@ -1,0 +1,77 @@
+Custom CUDA-capable Engine ImageCloudera Docs
+Custom CUDA-capable Engine Image
+
+noteBefore proceeding with creating a custom CUDA-capable engine, the Administrator needs to install
+   the Nvidia plugin.
+The base engine image
+     (docker.repository.cloudera.com/CML/engine:<version>) that ships with
+    Cloudera Machine Learning will need to be extended with CUDA libraries to make it possible to
+    use GPUs in jobs and sessions.The following sample Dockerfile illustrates an
+    engine on top of which machine learning frameworks such as Tensorflow and PyTorch can be used.
+    This Dockerfile uses a deep learning library from NVIDIA called NVIDIA CUDA Deep
+     Neural Network (cuDNN). For detailed information about compatibility between NVIDIA
+    driver versions and CUDA, refer the cuDNN installation guide (prerequisites).
+    
+When creating the Dockerfile for the custom image, you must delete the Cloudera repository 
+    that is inaccessible because of the paywall by running the following:
+RUN rm /etc/apt/sources.list.d/*
+Make sure you
+    also check with the machine learning framework that you intend to use in order to know which
+    version of cuDNN is needed. As an example, Tensorflow's NVIDIA hardware and software
+    requirements for GPU support are listed in the 
+     Tensorflow documentation here. 
+     Additionally, the Tensorflow version
+    compatibility matrix for CUDA and cuDNN is documented 
+     here.
+     The following sample Dockerfile uses NVIDIA's
+   official Dockerfiles for CUDA and cuDNN images.
+   cuda.Dockerfile
+FROM docker.repository.cloudera.com/cloudera/cdsw/engine:14-cml-2021.05-1
+    
+RUN rm /etc/apt/sources.list.d/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+gnupg2 curl ca-certificates && \
+curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/7fa2af80.pub | apt-key add - && \
+echo "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64 /" > /etc/apt/sources.list.d/cuda.list && \
+echo "deb https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1804/x86_64 /" > /etc/apt/sources.list.d/nvidia-ml.list && \
+apt-get purge --autoremove -y curl && \
+rm -rf /var/lib/apt/lists/*
+    
+ENV CUDA_VERSION 10.1.243
+LABEL com.nvidia.cuda.version="${CUDA_VERSION}"
+    
+ENV CUDA_PKG_VERSION 10-1=$CUDA_VERSION-1
+RUN apt-get update && apt-get install -y --no-install-recommends \
+cuda-cudart-$CUDA_PKG_VERSION && \
+cuda-libraries-$CUDA_PKG_VERSION && \
+ln -s cuda-10.1 /usr/local/cuda && \
+rm -rf /var/lib/apt/lists/*
+    
+RUN echo "/usr/local/cuda/lib64" >> /etc/ld.so.conf.d/cuda.conf && \
+ldconfig
+    
+RUN echo "/usr/local/nvidia/lib" >> /etc/ld.so.conf.d/nvidia.conf && \
+echo "/usr/local/nvidia/lib64" >> /etc/ld.so.conf.d/nvidia.conf
+    
+ENV PATH /usr/local/nvidia/bin:/usr/local/cuda/bin:${PATH}
+ENV LD_LIBRARY_PATH /usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda-10.2/targets/x86_64-linux/lib/
+    
+RUN echo "deb http://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu1604/x86_64 /" > /etc/apt/sources.list.d/nvidia-ml.list
+    
+ENV CUDNN_VERSION 7.6.5.32
+LABEL com.nvidia.cudnn.version="${CUDNN_VERSION}"
+    
+RUN apt-get update && apt-get install -y --no-install-recommends \
+libcudnn7=$CUDNN_VERSION-1+cuda10.1 && \
+apt-mark hold libcudnn7 && \
+rm -rf /var/lib/apt/lists/*
+
+
+Use the following example command to build the custom engine image using the 
+   cuda.Dockerfile command:
+docker build --network host -t <company-registry>/CML-cuda:13 . -f cuda.Dockerfile
+Push this new engine image to a public Docker registry so that it can be made available for 
+   Cloudera Machine Learning workloads. For example:
+docker push <company-registry>/CML-cuda:13
+
+Parent topic: Using GPUs with Legacy Engines

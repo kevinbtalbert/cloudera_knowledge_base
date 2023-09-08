@@ -1,0 +1,209 @@
+Configure authentication using SAMLCloudera Docs
+Configure authentication using SAML
+How to configure authentication using SAML in Cloudera Manager..
+
+
+Cloudera Manager supports the Security Assertion Markup Language (SAML), an XML-based open
+        standard data format for exchanging authentication and authorization data between parties,
+        in particular, between an identity provider (IDP) and a service provider (SP). The SAML
+        specification defines three roles: the principal (typically a user), the IDP, and the SP. In
+        the use case addressed by SAML, the principal (user agent) requests a service from the
+        service provider. The service provider requests and obtains an identity assertion from the
+        IDP. On the basis of this assertion, the SP can make an access control decision—in other
+        words it can decide whether to perform some service for the connected principal.
+The primary SAML use case is called web browser single sign-on (SSO). A user wielding a
+        user agent (usually a web browser) requests a web resource protected by a SAML SP. The SP,
+        wanting to know the identity of the requesting user, issues an authentication request to a
+        SAML IDP through the user agent. In the context of this terminology, Cloudera Manager
+        operates as a SP. This topic discusses the Cloudera Manager part of the configuration
+        process; it assumes that you are familiar with SAML and SAML configuration in a general
+        sense, and that you have a functioning IDP already deployed.
+note
+
+Cloudera Manager supports both SP- and IDP-initiated SSO.
+The logout action in Cloudera Manager will send a single-logout request to the
+            IDP.
+SAML authentication has been tested with specific configurations of SiteMinder and
+            Shibboleth. While SAML is a standard, there is a great deal of variability in
+            configuration between different IDP products, so it is possible that other IDP
+            implementations, or other configurations of SiteMinder and Shibboleth, may not
+            interoperate with Cloudera Manager.
+To bypass SSO if SAML configuration is incorrect or not working, you can login using a
+            Cloudera Manager local account using the URL:
+              http://cm_host:7180/cmf/localLogin
+
+
+
+
+Parent topic: Configuring external authentication and authorization for Cloudera Manager
+Prepare Files
+
+
+You will need to prepare the following files and information, and provide these to
+          Cloudera Manager:
+A Java keystore containing a private key for Cloudera Manager to use to sign/encrypt
+              SAML messages.
+              
+The SAML metadata XML file from your IDP. This file must contain the public
+              certificates needed to verify the sign/encrypt key used by your IDP per the SAML
+              Metadata Interoperability Profile. For example, if you are using the Shibboleth IdP,
+              the metadata file is available at:
+                https://<IdPHOST>:8080/idp/shibboleth.noteFor
+                guidance on how to obtain the metadata XML file from your IDP, either contact your
+                IDP administrator or consult the documentation for the version of the IDP you are
+                using. 
+The entity ID that should be used to identify the Cloudera Manager instance
+How the user ID is passed in the SAML authentication response:
+As an attribute. If so, what identifier is used.
+As the NameID.
+
+The method by which the Cloudera Manager role will be established:
+From an attribute in the authentication response:
+What identifier will be used for the attribute
+What values will be passed to indicate each role
+
+From an external script that will be called for each use:
+The script takes user ID as $1
+The script sets an exit code to reflect successful
+                      authentication. Valid values for the exit codes are
+                      between 0 and 127. These values are used in Cloudera
+                      Manager to map authenticated users to user roles within
+                      Cloudera Manager.
+
+
+
+
+
+
+Configure Cloudera Manager
+
+
+Log in to Cloudera Manager Admin Console.
+
+Select Administration > Settings.
+
+Select External Authentication for the
+                Category filter to display the settings. 
+
+Set the External Authentication Type property to SAML (the
+              Authentication Backend Order property is ignored for SAML).
+
+Set the Path to SAML IDP Metadata File property to point to the IDP metadata
+              file.
+
+Set the Path to SAML Keystore File property to point to the Java keystore
+              prepared earlier.
+
+In the SAML Keystore Password property, set the keystore password.
+
+In the Alias of SAML Sign/Encrypt Private Key property, set the alias used
+              to identify the private key for Cloudera Manager to use.
+
+In the SAML Sign/Encrypt Private Key Password property, set the private key
+              password.
+
+Set the SAML Entity ID property if:
+
+
+There is more than one Cloudera Manager instance being used with the same IDP
+                  (each instance needs a different entity ID).
+Entity IDs are assigned by organizational policy.
+
+
+
+In the Source of User ID in SAML Response property, set whether the user ID
+              will be obtained from an attribute or the NameID.
+If an attribute will be used, set the attribute name in the SAML attribute
+                identifier for user ID property. The default value is the normal OID used for
+              user IDs and so may not need to be changed.
+
+In the SAML Role assignment mechanism property, set whether the role
+              assignment will be done from an attribute or an external script.
+
+
+If an attribute will be used:
+In the SAML attribute identifier for user role property, set the
+                      attribute name if necessary. The default value is the normal OID used for
+                      OrganizationalUnits and so may not need to be changed.
+
+If an external script will be used, set the path to that script in the Path
+                    to SAML Role Assignment Script property. Make sure that the script is
+                  executable (an executable binary is fine - it does not need to be a shell
+                  script).
+
+
+
+Save the changes. Cloudera Manager will run a set of validations that ensure it can
+              find the metadata XML and the keystore, and that the passwords are correct. If you see
+              a validation error, correct the problem before proceeding.
+
+Restart the Cloudera Manager Server.
+
+
+After you configure authentication for Cloudera Manager, configure authorization for
+            the authenticated users. This is done by mapping the authenticated users to Cloudera
+            Manager user roles.
+            
+
+
+
+
+
+Configuring the IDP
+
+
+After the Cloudera Manager Server is restarted, it will attempt to redirect to the IDP
+          login page instead of showing the normal CM page. This may or may not succeed, depending
+          on how the IDP is configured. In either case, the IDP will need to be configured to
+          recognize CM before authentication will actually succeed. The details of this process are
+          specific to each IDP implementation - refer to your IDP documentation for details.
+          
+
+
+Download the Cloudera Manager’s SAML metadata XML file from
+                http://hostname:7180/saml/metadata.
+
+Inspect the metadata file and ensure that any URLs contained in the file can be
+            resolved by users’ web browsers. The IDP will redirect web browsers to these URLs at
+            various points in the process. If the browser cannot resolve them, authentication will
+            fail. If the URLs are incorrect, you can manually fix the XML file or set the Entity
+            Base URL in the CM configuration to the right value, and then re-download the
+            file.
+
+Provide this metadata file to your IDP using whatever mechanism your IDP
+            provides.
+
+Ensure that the IDP has access to whatever public certificates are necessary to
+            validate the private key that was provided to Cloudera Manager earlier.
+
+Ensure that the IDP is configured to provide the User ID and Role using the attribute
+            names that Cloudera Manager was configured to expect, if relevant.
+
+Ensure the changes to the IDP configuration have taken effect (a restart may be
+            necessary).
+
+
+
+
+Verifying Authentication and Authorization
+
+
+Return to the Cloudera Manager Admin Console and refresh the login page.
+
+Attempt to log in with credentials for a user that is entitled. The authentication
+            should complete and you should see the Home > Status tab.
+
+If authentication fails, you will see an IDP provided error message. Cloudera Manager
+            is not involved in this part of the process, and you must ensure the IDP is working
+            correctly to complete the authentication.
+
+If authentication succeeds but the user is not authorized to use Cloudera Manager,
+            they will be taken to an error page by Cloudera Manager that explains the situation. If
+            an user who should be authorized sees this error, then you will need to verify their
+            role configuration, and ensure that it is being properly communicated to Cloudera
+            Manager, whether by attribute or external script. The Cloudera Manager log will provide
+            details on failures to establish a user’s role. If any errors occur during role mapping,
+            Cloudera Manager will assume the user is unauthorized.
+
+
+

@@ -1,0 +1,388 @@
+Known Issues in Apache SolrCloudera Docs
+Known Issues in Apache Solr
+Learn about the known issues in Apache Solr, the impact or changes to the
+    functionality, and the workaround.
+
+
+Changing the default value of Client Connection Registry HBase
+          configuration parameter causes HBase MRIT job to fail
+
+If the value of the HBase configuration property Client Connection
+              Registry is changed from the default ZooKeeper Quorum to
+              Master Registry then the Yarn job started by HBase MRIT fails with a
+            similar error message:
+Caused by: org.apache.hadoop.hbase.exceptions.MasterRegistryFetchException: Exception making rpc to masters [quasar-bmyccr-2.quasar-bmyccr.root.hwx.site,22001,-1]
+        at org.apache.hadoop.hbase.client.MasterRegistry.lambda$groupCall$1(MasterRegistry.java:244)
+        at org.apache.hadoop.hbase.util.FutureUtils.lambda$addListener$0(FutureUtils.java:68)
+        at java.util.concurrent.CompletableFuture.uniWhenComplete(CompletableFuture.java:774)
+        at java.util.concurrent.CompletableFuture.uniWhenCompleteStage(CompletableFuture.java:792)
+        at java.util.concurrent.CompletableFuture.whenComplete(CompletableFuture.java:2153)
+        at org.apache.hadoop.hbase.util.FutureUtils.addListener(FutureUtils.java:61)
+        at org.apache.hadoop.hbase.client.MasterRegistry.groupCall(MasterRegistry.java:228)
+        at org.apache.hadoop.hbase.client.MasterRegistry.call(MasterRegistry.java:265)
+        at org.apache.hadoop.hbase.client.MasterRegistry.getMetaRegionLocations(MasterRegistry.java:282)
+        at org.apache.hadoop.hbase.client.ConnectionImplementation.locateMeta(ConnectionImplementation.java:900)
+        at org.apache.hadoop.hbase.client.ConnectionImplementation.locateRegion(ConnectionImplementation.java:867)
+        at org.apache.hadoop.hbase.client.ConnectionImplementation.relocateRegion(ConnectionImplementation.java:850)
+        at org.apache.hadoop.hbase.client.ConnectionImplementation.locateRegionInMeta(ConnectionImplementation.java:981)
+        at org.apache.hadoop.hbase.client.ConnectionImplementation.locateRegion(ConnectionImplementation.java:870)
+        at org.apache.hadoop.hbase.client.RpcRetryingCallerWithReadReplicas.getRegionLocations(RpcRetryingCallerWithReadReplicas.java:319)
+        ... 21 more
+Caused by: org.apache.hadoop.hbase.client.RetriesExhaustedException: Failed contacting masters after 1 attempts.
+Exceptions:
+java.io.IOException: Call to address=quasar-bmyccr-2.quasar-bmyccr.root.hwx.site/172.27.19.4:22001 failed on local exception: java.io.IOException: java.lang.RuntimeException: Found no valid authentication method from options
+        at org.apache.hadoop.hbase.client.MasterRegistry.lambda$groupCall$1(MasterRegistry.java:243)
+        ... 35 more 
+
+Add the following line to the MRIT command
+          line:-D 'hbase.client.registry.impl=org.apache.hadoop.hbase.client.ZKConnectionRegistry'
+
+
+Unable to see single valued and multivalued empty string values
+          when querying collections after upgrade to CDP
+After upgrading from CDH or HDP to CDP, you are not able to see
+          single valued and multi Valued empty string values in CDP.This behavior in CDP is due
+            to the remove-blank processor present in
+              solrconfig.xml in Solr 8.
+Remove the remove-blank processor from
+            solr-config.xml.
+
+
+Cannot create multiple heap dump files because of file name
+          error
+Heap dump generation fails with a similar error
+          message:java.lang.OutOfMemoryError: Java heap space
+Dumping heap to /data/tmp/solr_solr-SOLR_SERVER-fc9dacc265fabfc500b92112712505e3_pid{{PID}}.hprof ...
+Unable to create /data/tmp/solr_solr-SOLR_SERVER-fc9dacc265fabfc500b92112712505e3_pid{{PID}}.hprof: File existsThe
+          cause of the problem is that {{PID}} does not get substituted during dump
+          file creation with an actual process ID and because of that, a generic file name is
+          generated. This causes the next dump file creation to fail, as the existing file with the
+          same name cannot be overwritten.
+You need to manually delete the existing dump file.
+
+
+Solr coreAdmin status throws Null Pointer Exception
+You get a Null Pointer Exception with a similar
+          stacktrace:Caused by: java.lang.NullPointerException
+    at org.apache.solr.core.SolrCore.getInstancePath(SolrCore.java:333)
+    at org.apache.solr.handler.admin.CoreAdminOperation.getCoreStatus(CoreAdminOperation.java:324)
+    at org.apache.solr.handler.admin.StatusOp.execute(StatusOp.java:46)
+    at org.apache.solr.handler.admin.CoreAdminOperation.execute(CoreAdminOperation.java:362)This
+          is caused by an error in handling solr admin core STATUS after collections are
+          rebuilt.
+Restart the Solr server.
+
+
+Applications fail because of mixed authentication methods within
+          dependency chain of services
+Using different types of authentication methods within a
+          dependency chain, for example, configuring your indexer tool to authenticate using
+          Kerberos and configuring your Solr Server to use LDAP for authentication may cause your
+          application to time out and eventually fail.
+Make sure that all services in a dependency chain use the
+          same type of authentication.
+
+
+API calls fail with error when used with alias, but work with
+          collection name
+API calls fail with a similar error message when used with an
+          alias, but they work when made using the collection
+          name:[   ] o.a.h.s.t.d.w.DelegationTokenAuthenticationFilter Authentication exception: User: xyz@something.example.com is not allowed to impersonate xyz@something.example.com
+  [c:RTOTagMetaOdd s:shard3 r:core_node11 x:RTOTagMetaOdd_shard3_replica_n8] o.a.h.s.t.d.w.DelegationTokenAuthenticationFilter Authentication exception: User: xyz@something.example.com is not allowed to impersonate xyz@something.example.com
+Make sure there is a replica of the collection on every
+          host.
+
+
+Mergeindex operation with --go-live fails after CDH 6 to CDP
+          upgrade
+
+During an upgrade from CDH6 to CDP, collections are not reindexed because Lucene 8
+            (CDP) can read Lucene 7 (CDH6) indexes.
+If you try to execute MapReduceIndexerTool (MRIT) or HBase Indexer MRIT with
+              --go-live against such a collection, you get a similar error
+            message:Caused by: java.lang.IllegalArgumentException: Cannot merge a segment that has been created with major version 8 into this index which has been created by major version 7
+        at org.apache.lucene.index.IndexWriter.validateMergeReader(IndexWriter.java:2894)
+        at org.apache.lucene.index.IndexWriter.addIndexes(IndexWriter.java:2960)
+        at org.apache.solr.update.DirectUpdateHandler2.mergeIndexes(DirectUpdateHandler2.java:570)
+        at org.apache.solr.update.processor.RunUpdateProcessor.processMergeIndexes(RunUpdateProcessorFactory.java:95)
+        at org.apache.solr.update.processor.UpdateRequestProcessor.processMergeIndexes(UpdateRequestProcessor.java:63) 
+This happens because CDP MRIT  and HBase indexer use Solr 8 as embedded Solr, which
+            creates a Lucene 8 index. It cannot be merged (using MERGEINDEXES) into an older Lucene
+            7 index.
+
+
+In the case of MRIT the only way to move past this issue is to drop the entire
+            collection, delete the data in HDFS and recreate the collection with Solr 8 configs. 
+For HBase Indexer MRIT an alternative workaround is setting the number of reducers to 0
+              (--reducers 0) because in this case documents are sent directly from
+            the mapper tasks to live Solr servers instead of using MERGEINDEXES.
+
+
+
+Apache Tika upgrade may break morphlines indexing
+The upgrade of Apache Tika from 1.27 to 2.3.0 brought potentially
+          breaking changes for morphlines indexing. Duplicate/triplicate keys names were removed and
+          certain parser class names were changed (For example,
+            org.apache.tika.parser.jpeg.JpegParser changed to
+            org.apache.tika.parser.image.JpegParser). 
+To avoid morphline commands failing after the upgrade, do the
+          following:
+
+Check if key name changes affect your morphlines. For more information, see
+                Removed duplicate/triplicate keys in Migrating to Tika 2.0.0.
+Check if the name of any parser you use has changed. For more information, see the
+              Apache Tika API documentation.
+Update your morphlines if necessary.
+
+
+CDPD-28006: Solr access via Knox fails with impersonation error
+          though auth_to_local and proxy user configs are set
+Currently the names of system users which are impersonating users
+          with Solr should match with the names of their respective Kerberos principals. 
+If, for some reason, this is not feasible, you must add the
+          user name you want to associate with the custom Kerberos principal to Solr configuration
+          via the Solr Service Environment Advanced Configuration Snippet (Safety
+            Valve) environment variable in Cloudera Manager. For more information,
+            see Configuring custom Kerberos principals and custom
+              system users.
+
+
+
+
+CDH-77598: Indexing fails with socketTimeout
+
+Starting from CDH 6.0, the HTTP client library used by Solr
+   has a default socket timeout of 10 minutes. Because of this, if a single request sent from an
+   indexer executor to Solr takes more than 10 minutes to be serviced, the indexing process  fails
+   with a timeout error.
+This timeout has been raised to 24 hours. Nevertheless, there still may be use cases
+            where even this extended timeout period proves insufficient. 
+
+
+If your MapreduceIndexerTool or HBaseMapreduceIndexerTool batch indexing jobs fail with
+            a timeout error during the go-live (Live merge, MERGEINDEXES) phase (This means the
+            merge takes longer than 24 hours).
+Use the --go-live-timeout option where the timeout can be specified in
+            milliseconds.
+
+
+CDPD-12450: CrunchIndexerTool Indexing fails with socketTimeout
+The http client library uses a socket timeout of 10 minutes. The
+          Spark Crunch Indexer does not override this value, and in case a single batch takes more
+          than 10 minutes, the entire indexing job fails. This can happen especially if the
+          morphlines contain DeleteByQuery requests.
+Try the following workarounds: 
+Check the batch size of your indexing job. Sending too large batches to Solr might
+              increase the time needed on the Solr server to process the incoming batch.
+If your indexing job uses deleteByQuery requests, consider using deleteById wherever
+              possible as deleteByQuery involves a complex locking mechanism on the Solr side which
+              makes processing the requests slower.
+Check the number of executors for your Spark Crunch Indexer job. Too many executors
+              can overload the Solr service. You can configure the number of executors by using the
+              --mappers parameter
+Check that your Solr installation is correctly sized to accommodate the indexing
+              load, making sure that the number of Solr servers and the number of shards in your
+              target collection are adequate.
+The socket timeout for the connection can be configured in the morphline file. Add
+              the solrClientSocketTimeout parameter to the
+                solrLocator command Example
+              SOLR_LOCATOR :
+{ 
+  collection : test_collection 
+  zkHost : "zookeeper1.example.corp:2181/solr" 
+# 10 minutes in milliseconds 
+  solrClientSocketTimeout: 600000  
+  # Max number of documents to pass per RPC from morphline to Solr Server
+  # batchSize : 10000
+
+}
+
+
+CDPD-29289: HBaseMapReduceIndexerTool fails with socketTimeout
+The http client library uses a socket timeout of 10 minutes. The
+          HBase Indexer does not override this value, and in case a single batch takes more than 10
+          minutes, the entire indexing job fails.
+You can overwrite the default 600000 millisecond (10 minute)
+          socket timeout in HBase indexer using the --solr-client-socket-timeout optional argument
+          for the direct writing mode (when the value of the --reducers optional argument is set to
+          0 and mappers directly send the data to the live Solr).
+
+
+
+CDPD-20577: Splitshard operation on HDFS index checks local
+          filesystem and fails
+
+When performing a shard split on an index that is stored on HDFS,
+              SplitShardCmd still evaluates free disk space on the local file
+            system of the server where Solr is installed. This may cause the command to fail,
+            perceiving that there is no adequate disk space to perform the shard split.
+
+
+Run the following command to skip the check for sufficient disk space altogether:
+On nonsecure
+                clusters:curl 'http://$[***SOLR_SERVER_HOSTNAME***]:8983/solr/admin/collections?action=SPLITSHARD&collection=[***COLLECTION_NAME***]&shard=[***SHARD_TO_SPLIT***]&skipFreeSpaceCheck=true'
+On secure
+                clusters:curl -k -u : --negotiate 'http://$[***SOLR_SERVER_HOSTNAME***]:8985/solr/admin/collections?action=SPLITSHARD&collection=[***COLLECTION_NAME***]&shard=[***SHARD_TO_SPLIT***]&skipFreeSpaceCheck=true'
+
+Replace [***SOLR_SERVER_HOSTNAME***] with a valid Solr server
+            hostname, [***COLLECTION_NAME***] with the collection name, and
+              [***SHARD_TO_SPLIT***] with the ID of the to split.
+To verify that the command executed succesfully, check overseer logs for a similar
+            entry:
+2021-02-02 12:43:23.743 INFO  (OverseerThreadFactory-9-thread-5-processing-n:myhost.example.com:8983_solr) [c:example s:shard1  ] o.a.s.c.a.c.SplitShardCmd Skipping check for sufficient disk space
+
+
+
+
+
+
+DOCS-5717: Lucene index handling limitation
+The Lucene index can only be upgraded by one major version. Solr 8
+          will not open an index that was created with Solr 6 or earlier.
+None, you need to reindex collections.
+
+
+
+
+CDH-22190: CrunchIndexerTool which includes Spark indexer requires
+          specific input file format specifications
+If the --input-file-format option is specified
+          with CrunchIndexerTool, then its argument must be text,
+            avro, or avroParquet, rather than a fully qualified
+          class name. 
+None
+
+
+
+
+CDH-26856: Field value class guessing and Automatic schema field
+          addition are not supported with the MapReduceIndexerTool nor with the
+          HBaseMapReduceIndexerTool
+The MapReduceIndexerTool and the HBaseMapReduceIndexerTool can be
+          used with a Managed Schema created via NRT indexing of documents or via the Solr Schema
+          API. However, neither tool supports adding fields automatically to the schema during
+          ingest.
+Define the schema before running the MapReduceIndexerTool or
+          HBaseMapReduceIndexerTool. In non-schemaless mode, define in the schema using the
+            schema.xml file. In schemaless mode, either define the schema using the
+          Solr Schema API or index sample documents using NRT indexing before invoking the tools. In
+          either case, Cloudera recommends that you verify that the schema is what you expect, using
+          the List Fields API command.
+
+
+
+
+CDH-19407: The Browse and Spell Request Handlers are
+          not enabled in schemaless mode
+The Browse and Spell Request Handlers require
+          certain fields to be present in the schema. Since those fields cannot be guaranteed to
+          exist in a Schemaless setup, the Browse and Spell Request Handlers are not
+          enabled by default.
+If you require the Browse and Spell Request
+          Handlers, add them to the solrconfig.xml configuration file. Generate a
+          non-schemaless configuration to see the usual settings and modify the required fields to
+          fit your schema.
+
+
+
+
+CDH-17978: Enabling blockcache writing may result in unusable
+          indexes
+It is possible to create indexes with
+            solr.hdfs.blockcache.write.enabled set to true. Such
+          indexes may appear corrupt to readers, and reading these indexes may irrecoverably corrupt
+          indexes. Blockcache writing is disabled by default.
+None
+
+
+
+
+CDH-58276: Users with insufficient Solr permissions may receive a
+          "Page Loading" message from the Solr Web Admin UI
+Users who are not authorized to use the Solr Admin UI are not
+          given a page explaining that access is denied to them, instead receive a web page that
+          never finishes loading.
+None
+
+
+
+
+CDH-15441: Using MapReduceIndexerTool or HBaseMapReduceIndexerTool
+          multiple times may produce duplicate entries in a collection
+Repeatedly running the MapReduceIndexerTool on the same set of
+          input files can result in duplicate entries in the Solr collection. This occurs because
+          the tool can only insert documents and cannot update or delete existing Solr documents.
+          This issue does not apply to the HBaseMapReduceIndexerTool unless it is run with more than
+          zero reducers.
+To avoid this issue, use HBaseMapReduceIndexerTool with zero
+            reducers.noteThis workaround is only valid for
+            HBaseMapReduceIndexerTool. There is no workaround for MapReduceIndexerTool
+
+
+
+
+CDH-58694: Deleting collections might fail if hosts are
+          unavailable
+It is possible to delete a collection when hosts that host some of
+          the collection are unavailable. After such a deletion, if the previously unavailable hosts
+          are brought back online, the deleted collection may be restored.
+ Ensure all hosts are online before deleting
+          collections.
+
+
+
+
+CDPD-13923: Every Configset is Untrusted Without Kerberos
+Solr 8 introduces the concept of ‘untrusted configset’, denoting configsets
+          that were uploaded without authentication. Collections created with an untrusted configset
+          will not initialize if <lib> directives are used in the configset.
+Select one of the following options if you would like to use
+          untrusted configsets with <lib> directives:
+
+If the configset contains external libraries, but you do not want to use
+                them, simply upload the configsets after deleting the <lib> directives.
+
+
+If the configset contains external libraries, and you want to use them,
+                choose one from the following options:
+
+
+Secure your cluster before reuploading the configset.
+
+
+Add the libraries to Solr’s classpath, then reupload the configset
+                    without the <lib> directives.
+
+
+
+
+
+
+Unsupported features
+The following Solr features are currently not supported in Cloudera Data Platform:
+Package Management System
+HTTP/2
+Solr SQL/JDBC
+Graph Traversal
+Cross Data Center Replication (CDCR)
+SolrCloud Autoscaling
+HDFS Federation
+Saving search results
+Solr contrib modules (Spark, MapReduce and Lily HBase indexers are not
+              contrib modules but part of the Cloudera Search product itself, therefore they
+            are supported).
+
+
+Limitations
+
+Default Solr core names cannot be changed
+Although it is technically possible to give user-defined Solr core names during core
+            creation, it is to be avoided in te context of Cloudera Search. Cloudera Manager expects
+            core names in the default "collection_shardX_replicaY" format. Altering core names
+            results in Cloudera Manager being unable to fetch Solr metrics for the given core and
+            this, eventually, may corrupt data collection for co-located core, or even shard and
+            server level charts.
+
+
+
+Parent topic: Known issues in Cloudera Runtime 7.1.8

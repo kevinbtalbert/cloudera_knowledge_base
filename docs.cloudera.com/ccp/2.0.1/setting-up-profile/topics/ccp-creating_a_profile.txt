@@ -1,0 +1,174 @@
+Create a ProfileCloudera Docs
+Create a Profile
+After you install Profiler, you must define the profile and upload the definition to
+      ZooKeeper. Create a table within HBase that will store the profile data.   
+
+$ /usr/hdp/current/hbase-client/bin/hbase shell
+hbase(main):001:0> create 'profiler', 'P'
+
+The table name and column family must match the Profiler's configuration.
+ Define the profile in a file located at
+                  $METRON_HOME/config/zookeeper/profiler.json.     
+The following example JSON creates a profile that simply counts the number of
+               messages per ip_src_addr during each sampling interval.
+
+{
+  "profiles": [
+    {
+      "profile": "test",
+      "foreach": "ip_src_addr",
+      "init":    { "count": 0 },
+      "update":  { "count": "count + 1" },
+      "result":  "count"
+    }
+  ]
+}
+
+The following table lists the supported profile elements:
+
+
+
+
+Name
+
+
+Description
+
+
+
+
+profile
+Required
+A unique name identifying the profile. The field is treated as a
+                              string.
+
+
+foreach
+Required
+
+A separate profile is maintained 'for each' of these. This is
+                                 effectively the entity that the profile is describing. The field is
+                                 expected to contain a Stellar expression whose result is the entity
+                                 name.
+For example, if ip_src_addr then a separate
+                                 profile would be maintained for each unique IP source address in
+                                 the data; 10.0.0.1, 10.0.0.2, etc.
+
+
+
+onlyif
+Optional
+An expression that determines if a message should be applied to
+                              the profile. A Stellar expression that returns a Boolean is expected.
+                              A message is only applied to a profile if this expression is true.
+                              This allows a profile to filter the messages that get applied to
+                              it.
+
+
+groupBy
+Optional
+
+One or more Stellar expressions used to group the profile
+                                 measurements when persisted. This is intended to sort the Profile
+                                 data to allow for a contiguous scan when accessing subsets of the
+                                 data.
+The 'groupBy' expressions can refer to any field within
+                                    aorg.apache.metron.profiler.ProfileMeasurement.
+                                 A common use case would be grouping by day of week. This allows a
+                                 contiguous scan to access all profile data for Mondays only. Using
+                                 the following definition would achieve this.
+"groupBy": [ "DAY_OF_WEEK()" ] 
+
+
+
+init
+Optional
+
+One or more expressions executed at the start of a window period. A
+                                 map is expected where the key is the variable name and the value is
+                                 a Stellar expression. The map can contain 0 or more
+                                 variables/expressions. At the start of each window period the
+                                 expression is executed once and stored in a variable with the given
+                                 name.
+"init": {
+  "var1": "0",
+  "var2": "1"
+}
+
+
+
+update
+Required
+
+One or more expressions executed when a message is applied to the
+                                 profile. A map is expected where the key is the variable name and
+                                 the value is a Stellar expression. The map can include 0 or more
+                                 variables/expressions. When each message is applied to the profile,
+                                 the expression is executed and stored in a variable with the given
+                                 name.
+"update": {
+  "var1": "var1 + 1",
+  "var2": "var2 + 1"
+}
+
+
+
+result
+Required
+
+A Stellar expression that is executed when the window period
+                                 expires. The expression is expected to summarize the messages that
+                                 were applied to the profile over the window period. The expression
+                                 must result in a numeric value such as a Double, Long, Float,
+                                 Short, or Integer.
+For more advanced use cases, a profile can generate two types of
+                                 results. A profile can define one or both of these result types at
+                                 the same time.
+
+
+profile: A required expression that defines
+                                       a value that is persisted for later retrieval.
+triage: An optional expression that defines
+                                       values that are accessible within the Threat Triage
+                                       process.
+
+
+
+
+
+expires
+Optional
+A numeric value that defines how many days the profile data is
+                              retained. After this time, the data expires and is no longer
+                              accessible. If no value is defined, the data does not expire.
+
+
+
+ Upload the profile definition to ZooKeeper:  
+
+$ cd /$METRON_HOME/
+$ bin/zk_load_configs.sh -m PUSH -i config/zookeeper/ -z $ZOOKEEPER_HOST:2181
+ Start the Profiler topology:  
+
+$ bin/start_profiler_topology.sh
+ Ensure that test messages are being sent to the Profiler's input topic in Kafka.  
+The Profiler will consume messages from the inputTopic defined in
+               the Profiler's configuration. Check the HBase table to validate that the Profiler is writing the profile.    
+
+$ /usr/hdp/current/hbase-client/bin/hbase shell
+hbase(main):001:0> count 'profiler'
+*** Output Information ***
+
+Remember that the Profiler is flushing the profile every 15 minutes. You will need
+               to wait at least this long to start seeing profile data in HBase. Use the Profiler Client to read the profile data.   
+The following example PROFILE_GET command reads data written by
+               the sample profile given above, if 10.0.0.1 is one of the input values for
+                  ip_src_addr. For more information on using the API client, refer
+               to Accessing Profiles.
+
+$ bin/stellar -z $ZOOKEEPER_HOST:2181
+
+[Stellar]>>> PROFILE_GET( "test", "10.0.0.1", PROFILE_FIXED(30, "MINUTES"))
+[451, 448]
+
+Parent topic: Setting Up a Profile Overview

@@ -1,0 +1,80 @@
+Configuring automatic group offset synchronizationCloudera Docs
+Configuring automatic group offset synchronization
+Automatic group offset synchronization is a feature in Streams Replication Manager
+    (SRM) that automates the export and application of translated consumer group offsets. Enabling
+    this feature can simplify the manual steps that you need to take to migrate consumer groups in a
+    failover or failback scenario. 
+
+SRM automatically translates consumer group offsets between clusters.
+        While the offset mappings are created by SRM, they are not applied by default to the
+        consumer groups of the target cluster. As a result, by default, migrating consumer groups
+        from one cluster to another involves running the srm-control offsets and
+          kafka-consumer-groups tools. The srm-control offsets
+        tool exports translated offsets, kafka-consumer-groups resets and applies
+        the translated offsets on the target cluster.
+This process can be automated by enabling automatic group offset synchronization. If
+        automatic group offset synchronization is enabled, the translated group offsets of the
+        source cluster are automatically exported from the source cluster and are applied on the
+        target cluster (they are written to the __consumer_offsets topic ). If you
+        choose to enable this feature, running srm-control offsets and
+          kafka-consumer-groups is not required to migrate consumer groups. You
+        only need to restart and redirect consumers to consume from the new cluster. 
+Although automatic group offset synchronization can simplify migrating consumer groups,
+        ensure that you understand the following about its behavior:
+Automatic group offset synchronization does not fully automate a failover or
+            failback
+            process. It only allows you to skip certain manual
+            steps.
+            Consumers must be restarted and redirected to the new cluster even if the feature is
+            enabled. 
+Offsets are synced at a configured interval. As a result, it is not guaranteed that
+            the latest translated offsets are applied. If you want to have the latest offsets
+            applied, Cloudera recommends that you export and apply consumer group offsets
+            manually.
+            The exact interval depends on sync.group.offsets.interval.seconds and
+              emit.checkpoints.interval.seconds.
+The checkpointing frequency configured for SRM can have an effect on the group offset
+            synchronization frequency. The frequency of group offset synchronization can be
+            configured with sync.group.offsets.interval.seconds. However,
+            specifying an interval using this property might not result in the offsets being
+            synchronized at the set frequency. This depends on how
+              emit.checkpoints.interval is configured. The
+              emit.checkpoints.interval property specifies how frequently offset
+            information is fetched (checkpointing). Because offset synchronization can only happen
+            after offset information is available, the frequency configured with the
+              emit.checkpoints.interval
+            property might introduce additional latency. For example, assume that
+            you set offset synchronization to 60 seconds (default), but have checkpointing set to
+            120 seconds. In a case like this, offset
+            synchronization
+            happens
+            every 60 seconds, but because offset information is only refreshed every 120 seconds, in
+            practice offsets are only synchronized every 120 seconds.
+Offsets are only synchronized for the consumers that are inactive in the target
+            cluster. This is done so that the SRM does not override the offsets in the target
+            cluster.
+
+
+
+In Cloudera Manager, select Streams Replication Manager. Go to Configuration.Find the Streams Replication Manager's Replication Configs
+          and add the following configuration entries:
+sync.group.offsets.enabled = true
+sync.group.offsets.interval.seconds = [***TIME IN SECONDS***]
+
+In this example, all properties are set on a global level. This means that automatic
+            group offset synchronization is applied to all replications. Depending on your setup,
+            you can also choose to set these properties for specific
+            replications
+            using appropriate replication prefixes. 
+The sync.group.offsets.enabled property enables automatic group offset
+            synchronization. The sync.group.offsets.interval.seconds property
+            controls how frequently offsets are synched. You only need to specify this property if
+            you want to customize synchronization frequency.
+Enter a Reason for change, and then click Save
+            Changes to commit the changes.
+Restart Streams Replication Manager.
+
+Automatic group offset synchronization is enabled. From now on, SRM automatically
+      exports the translated offsets of the configured source clusters and applies them to the
+      configured target clusters.
+

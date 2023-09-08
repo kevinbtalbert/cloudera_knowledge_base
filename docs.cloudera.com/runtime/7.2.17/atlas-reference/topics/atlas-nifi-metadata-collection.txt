@@ -1,0 +1,117 @@
+NiFi metadata collectionCloudera Docs
+NiFi metadata collection
+Atlas collects metadata of events from NiFi clusters to illustrate the high-level
+    relationships among processes and data sets and potentially detailed NiFi event-level
+    lineage.
+The metadata connector between NiFi and Atlas is implemented as the NiFi reporting task
+        ReportLineageToAtlas.
+This reporting task stores two types of NiFi flow information:
+
+
+NiFi flow structure describes the components running within a NiFi flow and how
+          they are connected. 
+
+
+NiFi data lineage describes how NiFi flows interact with different data assets
+          such as HDFS files or Hive tables. Lineage is determined by analyzing NiFi provenance
+          events.
+
+
+When the Atlas reporting task runs in a NiFi cluster, the primary node performs the
+      one-time task of inserting the NiFi-specific entity types in Atlas. The primary node sends
+      metadata to Atlas as and when an event occurs in the NiFi cluster. Every node (including
+      primary node) analyzes NiFi provenance events stored in a provenance event repository to
+      create lineage between NiFi and other data assets such as Hive tables and HDFS paths. 
+The NiFi reporting tasks provide a number of properties to control what metadata is
+      collected and at what level of NiFi events are described in lineage. The implementation
+      details to be aware of are:
+
+Mapping the NiFi cluster to a cluster name identifier in the Atlas environment.
+          You must specifically note the following:
+
+Which cluster name should be used to represent the current NiFi
+              cluster?
+
+
+When NiFi components perform operations on data assets, which cluster does
+              the data asset reside in?
+
+The mapping can be defined by Dynamic Properties with a name in the
+            'hostnamePattern.ClusterName' format, having its value as a set of Regular
+          Expression Patterns to match IP addresses or host names to a particular cluster name.
+          This mapping is described in detail in Cluster Hostname Resolution in the
+            Apache NiFi documentation.
+Level of lineage graph detail.NiFi Lineage Strategy
+
+Choose a strategy for showing lineage information in Atlas by using one of the
+      following:
+
+Simple Path
+
+A high-level view of NiFi processes that summarizes how each data asset and NiFi
+      process are related when the data flows among services. Specifically, this strategy maps data
+      I/O provenance events such as SEND/RECEIVE to 'nifi_flow_path' created by NiFi flow structure
+      analysis. The result is that if different data assets go through the same 'nifi_flow_path',
+      the lineage picture gives the impression that there is a relationship among the data assets
+      because they are processed in the same flow. No information is lost; however, as you can use
+      the NiFi provenance events to investigate the details. 
+This strategy generates the least amount of data in Atlas. 
+
+Complete Path
+
+Lineage is created by traversing provenance events backwards from a DROP event,
+      reporting the entire lineage for a given FlowFile including where it is created, and where it
+      goes. This strategy generates more detail and shows separate lineage pictures for data sets
+      that are not related but happen to be processed through the same flow path. 
+However, reporting complete flow paths for every single FlowFile produces too many
+      entities in Atlas and needs more computing resources to collect the relevant metadata. 
+Choose the strategy before implementing lineage collection in a production
+      environment because switching among strategies can leave you with residual entities shown in
+      lineage pictures and the lineage pictures may show different entities for otherwise equivalent
+      processes.
+About Namespaces
+An entity in Atlas can be identified either by its GUID for any existing objects,
+        or type name and unique attribute if GUID is not known. A qualified name is commonly used as
+        the unique attribute.
+One Atlas instance can be used to manage multiple environments, and objects in
+        different environments may have the same name. For example, a Hive table 'request_logs' in
+        two different clusters, 'cluster-A' and 'cluster-B'. For this reason the qualified names
+        contain a so-called metadata namespace.
+It is common practice to provide the cluster name as the namespace, but the
+        cluster name it can be any arbitrary string.
+With this, a qualified name has a 'componentId@namespace' format. For example, a
+        Hive table qualified name is dbName.tableName@namespace
+        (default.request_logs@cluster-A).
+From this NiFi reporting task standpoint, a namespace is needed to be resolved in
+        the following situations:
+
+To register NiFi component entities. Which namespace should be used to
+          represent the current NiFi environment?
+To create lineages from NiFi components to other datasets. Which environment
+          does the dataset reside in?
+
+To answer such questions, ReportLineageToAtlas reporting
+        task provides a way to define mappings from IP address or hostname to a namespace. The
+        mapping can be defined by Dynamic Properties with a name in the 'hostnamePattern.namespace'
+        format, having its value as a set of Regular Expression Patterns to match IP addresses or
+        host names to a particular namespace.
+As an example, following mapping definition resolves namespace 'namespace-A' for
+        IP address such as '192.168.30.123' or hostname 'namenode1.a.example.com', and 'namespace-B'
+        for '192.168.40.223' or 'nifi3.b.example.com'.
+# Dynamic Property Name for namespace-A
+hostnamePattern.namespace-A
+# Value can have multiple Regular Expression patterns separated by new
+          line
+192\.168\.30\.\d+
+[^\.]+\.a\.example\.com
+# Dynamic Property Name for namespace-B
+hostnamePattern.namespace-B
+# Values
+192\.168\.40\.\d+
+[^\.]+\.b\.example\.com
+
+If no namespace mapping matches, then a name defined at 'Atlas Default Metadata
+        Namespace' is used.
+
+
+How Lineage strategy worksTo illustrate the difference between lineage strategies, consider a sample NiFi         flow.Understanding the data that flow into AtlasThe reporting task stores two types of NiFi flow information.NiFi lineageAtlas collects metadata from NiFi to represent the lineage among data assets in the             Lineage tab.Atlas NiFi relationshipsAtlas shows the related entities in the Relationships tab in         the Dashboard.Atlas NiFi audit entriesAtlas lists changes to metadata entities in the Audits tab in the         Dashboard.How the reporting task runs in a NiFi clusterWhen the reporting task runs in a NiFi cluster, the following tasks are executed only         by the primary node:Analysing event analysisTo create lineage describing which NiFi component interacts with what datasets,         dataset entity, and Process entity need to be created in Atlas. Specifically, at least three         entities are required to draw a lineage graph on Atlas UI.Limitations of Atlas-NiFi integrationSome limitations of this integration.

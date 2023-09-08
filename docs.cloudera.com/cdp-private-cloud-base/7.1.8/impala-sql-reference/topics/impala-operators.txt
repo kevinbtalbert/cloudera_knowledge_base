@@ -1,0 +1,931 @@
+Impala SQL operatorsCloudera Docs
+Impala SQL operators
+SQL operators are used primarily in the WHERE
+    clause to perform operations, such as comparison operations and arithmetic
+    operations.
+Arithmetic operators
+The arithmetic operators use expressions with a left-hand argument, the operator, and then
+        (in most cases) a right-hand argument. 
+
+Syntax:
+
+left_hand_arg binary_operator right_hand_arg
+unary_operator single_arg
+
+
+
++ and -: Can be used either as unary or binary
+          operators. 
+
+ With unary notation, such as +5, -2.5, or
+                    -col_name, they multiply their single
+                numeric argument by +1 or -1. Therefore, unary
+                  + returns its argument unchanged, while unary -
+                flips the sign of its argument. Although you can double up these operators in
+                expressions such as ++5 (always positive) or -+2
+                or +-2 (both always negative), you cannot double the unary minus
+                operator because -- is interpreted as the start of a comment. (You
+                can use a double unary minus operator if you separate the -
+                characters, for example with a space or parentheses.) 
+
+
+ With binary notation, such as 2+2, 5-2.5, or
+                    col1 + col2, they add or
+                subtract respectively the right-hand argument to (or from) the left-hand argument.
+                Both arguments must be of numeric types. 
+
+
+
+
+
+* and /: Multiplication and division respectively.
+            Both arguments must be of numeric types. 
+ When multiplying, the shorter argument is promoted if necessary (such as
+              SMALLINT to INT or BIGINT, or
+              FLOAT to DOUBLE), and then the result is promoted
+            again to the next larger type. Thus, multiplying a TINYINT and an
+              INT produces a BIGINT result. Multiplying a
+              FLOAT and a FLOAT produces a DOUBLE
+            result. Multiplying a FLOAT and a DOUBLE or a
+              DOUBLE and a DOUBLE produces a
+              DECIMAL(38,17), because DECIMAL values can represent
+            much larger and more precise values than DOUBLE. 
+ When dividing, Impala always treats the arguments and result as
+              DOUBLE values to avoid losing precision. If you need to insert the
+            results of a division operation into a FLOAT column, use the
+              CAST() function to convert the result to the correct type. 
+
+
+
+DIV: Integer division. Arguments are not promoted to a floating-point
+            type, and any fractional result is discarded. For example, 13 DIV 7
+            returns 1, 14 DIV 7 returns 2, and 15 DIV 7 returns 2.
+            This operator is the same as the QUOTIENT() function. 
+
+
+
+%: Modulo operator. Returns the remainder of the left-hand argument
+            divided by the right-hand argument. Both arguments must be of one of the integer types.
+          
+
+
+
+&, |, ~, and ^:
+            Bitwise operators that return the logical AND, logical OR, NOT, or
+            logical XOR (exclusive OR) of their argument values. Both arguments must be of one of
+            the integer types. If the arguments are of different type, the argument with the smaller
+            type is implicitly extended to match the argument with the longer type. 
+
+
+ You can chain a sequence of arithmetic expressions, optionally grouping them with
+        parentheses. 
+ The arithmetic operators generally do not have equivalent calling conventions using
+        functional notation. For example, prior to Impala 2.2, there is no MOD()
+        function equivalent to the % modulo operator. Conversely, there are some
+        arithmetic functions that do not have a corresponding operator. For example, for
+        exponentiation you use the POW() function, but there is no
+          ** exponentiation operator. See Impala Mathematical
+          Functions for the arithmetic functions you can use. 
+
+Complex type considerations:
+
+ To access a column with a complex
+        type (ARRAY, STRUCT, or MAP) in an
+        aggregation function, you unpack the individual elements using join notation in the query,
+        and then apply the function to the final scalar item, field, key, or value at the bottom of
+        any nested type hierarchy in the column. 
+
+The following example demonstrates calls to several aggregation functions
+using values from a column containing nested complex types
+(an ARRAY of STRUCT items).
+The array is unpacked inside the query using join notation.
+The array elements are referenced using the ITEM
+pseudocolumn, and the structure fields inside the array elements
+are referenced using dot notation.
+Numeric values such as SUM() and AVG()
+are computed using the numeric R_NATIONKEY field, and
+the general-purpose MAX() and MIN()
+values are computed from the string N_NAME field.
+describe region;
++-------------+-------------------------+---------+
+| name        | type                    | comment |
++-------------+-------------------------+---------+
+| r_regionkey | smallint                |         |
+| r_name      | string                  |         |
+| r_comment   | string                  |         |
+| r_nations   | array<struct<           |         |
+|             |   n_nationkey:smallint, |         |
+|             |   n_name:string,        |         |
+|             |   n_comment:string      |         |
+|             | >>                      |         |
++-------------+-------------------------+---------+
+
+select r_name, r_nations.item.n_nationkey
+  from region, region.r_nations as r_nations
+order by r_name, r_nations.item.n_nationkey;
++-------------+------------------+
+| r_name      | item.n_nationkey |
++-------------+------------------+
+| AFRICA      | 0                |
+| AFRICA      | 5                |
+| AFRICA      | 14               |
+| AFRICA      | 15               |
+| AFRICA      | 16               |
+| AMERICA     | 1                |
+| AMERICA     | 2                |
+| AMERICA     | 3                |
+| AMERICA     | 17               |
+| AMERICA     | 24               |
+| ASIA        | 8                |
+| ASIA        | 9                |
+| ASIA        | 12               |
+| ASIA        | 18               |
+| ASIA        | 21               |
+| EUROPE      | 6                |
+| EUROPE      | 7                |
+| EUROPE      | 19               |
+| EUROPE      | 22               |
+| EUROPE      | 23               |
+| MIDDLE EAST | 4                |
+| MIDDLE EAST | 10               |
+| MIDDLE EAST | 11               |
+| MIDDLE EAST | 13               |
+| MIDDLE EAST | 20               |
++-------------+------------------+
+
+select
+  r_name,
+  count(r_nations.item.n_nationkey) as count,
+  sum(r_nations.item.n_nationkey) as sum,
+  avg(r_nations.item.n_nationkey) as avg,
+  min(r_nations.item.n_name) as minimum,
+  max(r_nations.item.n_name) as maximum,
+  ndv(r_nations.item.n_nationkey) as distinct_vals
+from
+  region, region.r_nations as r_nations
+group by r_name
+order by r_name;
++-------------+-------+-----+------+-----------+----------------+---------------+
+| r_name      | count | sum | avg  | minimum   | maximum        | distinct_vals |
++-------------+-------+-----+------+-----------+----------------+---------------+
+| AFRICA      | 5     | 50  | 10   | ALGERIA   | MOZAMBIQUE     | 5             |
+| AMERICA     | 5     | 47  | 9.4  | ARGENTINA | UNITED STATES  | 5             |
+| ASIA        | 5     | 68  | 13.6 | CHINA     | VIETNAM        | 5             |
+| EUROPE      | 5     | 77  | 15.4 | FRANCE    | UNITED KINGDOM | 5             |
+| MIDDLE EAST | 5     | 58  | 11.6 | EGYPT     | SAUDI ARABIA   | 5             |
++-------------+-------+-----+------+-----------+----------------+---------------+
+
+
+
+        You cannot refer to a column with a complex data type (ARRAY, STRUCT, or MAP)
+        directly in an operator. You can apply operators only to scalar values that make up a complex type
+        (the fields of a STRUCT, the items of an ARRAY,
+        or the key or value portion of a MAP) as part of a join query that refers to
+        the scalar value using the appropriate dot notation or ITEM, KEY, or VALUE
+        pseudocolumn names.
+      
+ The following example shows how to do an arithmetic operation using a numeric
+        field of a STRUCT type that is an item within an ARRAY
+        column. Once the scalar numeric value R_NATIONKEY is extracted, it can be
+        used in an arithmetic expression, such as multiplying by 10: 
+
+-- The SMALLINT is a field within an array of structs.
+describe region;
++-------------+-------------------------+---------+
+| name        | type                    | comment |
++-------------+-------------------------+---------+
+| r_regionkey | smallint                |         |
+| r_name      | string                  |         |
+| r_comment   | string                  |         |
+| r_nations   | array<struct<           |         |
+|             |   n_nationkey:smallint, |         |
+|             |   n_name:string,        |         |
+|             |   n_comment:string      |         |
+|             | >>                      |         |
++-------------+-------------------------+---------+
+
+-- When we refer to the scalar value using dot notation,
+-- we can use arithmetic and comparison operators on it
+-- like any other number.
+select r_name, nation.item.n_name, nation.item.n_nationkey * 10
+  from region, region.r_nations as nation
+where nation.item.n_nationkey < 5;
++-------------+-------------+------------------------------+
+| r_name      | item.n_name | nation.item.n_nationkey * 10 |
++-------------+-------------+------------------------------+
+| AMERICA     | CANADA      | 30                           |
+| AMERICA     | BRAZIL      | 20                           |
+| AMERICA     | ARGENTINA   | 10                           |
+| MIDDLE EAST | EGYPT       | 40                           |
+| AFRICA      | ALGERIA     | 0                            |
++-------------+-------------+------------------------------+
+
+
+BETWEEN operator
+ In a WHERE clause, compares an expression to both a
+        lower and upper bound. The comparison is successful is the expression is
+        greater than or equal to the lower bound, and less than or equal to the
+        upper bound. If the bound values are switched, so the lower bound is
+        greater than the upper bound, does not match any values. 
+
+Syntax:
+
+expression BETWEEN lower_bound AND upper_bound
+
+Data types: Typically used with numeric data types. Works with
+        any data type, although not very practical for BOOLEAN
+        values. (BETWEEN false AND true will match all
+          BOOLEAN values.) Use CAST() if
+        necessary to ensure the lower and upper bound values are compatible
+        types. Call string or date/time functions if necessary to extract or
+        transform the relevant portion to compare, especially if the value can
+        be transformed into a number. 
+
+Usage notes:
+
+ Be careful when using short string operands. A longer string that
+        starts with the upper bound value will not be included, because it is
+        considered greater than the upper bound. For example, BETWEEN
+          'A' and 'M' would not match the string value
+          'Midway'. Use functions such as
+          upper(), lower(),
+          substr(), trim(), and so on if
+        necessary to ensure the comparison works as expected. 
+
+Complex type considerations:
+
+
+        You cannot refer to a column with a complex data type (ARRAY, STRUCT, or MAP)
+        directly in an operator. You can apply operators only to scalar values that make up a complex type
+        (the fields of a STRUCT, the items of an ARRAY,
+        or the key or value portion of a MAP) as part of a join query that refers to
+        the scalar value using the appropriate dot notation or ITEM, KEY, or VALUE
+        pseudocolumn names.
+      
+
+Examples:
+
+ The following example shows how to do a
+          BETWEEN comparison using a numeric field of a
+          STRUCT type that is an item within an
+          ARRAY column. Once the scalar numeric value
+          R_NATIONKEY is extracted, it can be used in a
+        comparison operator: 
+
+-- The SMALLINT is a field within an array of structs.
+describe region;
++-------------+-------------------------+---------+
+| name        | type                    | comment |
++-------------+-------------------------+---------+
+| r_regionkey | smallint                |         |
+| r_name      | string                  |         |
+| r_comment   | string                  |         |
+| r_nations   | array<struct<           |         |
+|             |   n_nationkey:smallint, |         |
+|             |   n_name:string,        |         |
+|             |   n_comment:string      |         |
+|             | >>                      |         |
++-------------+-------------------------+---------+
+
+-- When we refer to the scalar value using dot notation,
+-- we can use arithmetic and comparison operators on it
+-- like any other number.
+select r_name, nation.item.n_name, nation.item.n_nationkey
+from region, region.r_nations as nation
+where nation.item.n_nationkey between 3 and 5
++-------------+-------------+------------------+
+| r_name      | item.n_name | item.n_nationkey |
++-------------+-------------+------------------+
+| AMERICA     | CANADA      | 3                |
+| MIDDLE EAST | EGYPT       | 4                |
+| AFRICA      | ETHIOPIA    | 5                |
++-------------+-------------+------------------+
+
+
+Comparison operators
+ Impala supports the familiar comparison operators for checking
+        equality and sort order for the column data types: 
+
+Syntax:
+
+left_hand_expression comparison_operator right_hand_expression
+
+
+=, !=, <>:
+          apply to all scalar types. 
+
+<, <=, >,
+            >=: apply to all scalar types; for
+            BOOLEAN, TRUE is considered
+          greater than FALSE. 
+
+
+Alternatives:
+
+ The IN and BETWEEN operators provide
+        shorthand notation for expressing combinations of equality, less than,
+        and greater than comparisons with a single operator. 
+ Because comparing any value to NULL produces
+          NULL rather than TRUE or
+          FALSE, use the IS NULL and
+          IS NOT NULL operators to check if a value is
+          NULL or not. 
+
+Complex type considerations:
+
+
+        You cannot refer to a column with a complex data type (ARRAY, STRUCT, or MAP)
+        directly in an operator. You can apply operators only to scalar values that make up a complex type
+        (the fields of a STRUCT, the items of an ARRAY,
+        or the key or value portion of a MAP) as part of a join query that refers to
+        the scalar value using the appropriate dot notation or ITEM, KEY, or VALUE
+        pseudocolumn names.
+      
+ The following example shows how to do an arithmetic
+        operation using a numeric field of a STRUCT type that
+        is an item within an ARRAY column. Once the scalar
+        numeric value R_NATIONKEY is extracted, it can be used
+        with a comparison operator such as <: 
+
+-- The SMALLINT is a field within an array of structs.
+describe region;
++-------------+-------------------------+---------+
+| name        | type                    | comment |
++-------------+-------------------------+---------+
+| r_regionkey | smallint                |         |
+| r_name      | string                  |         |
+| r_comment   | string                  |         |
+| r_nations   | array<struct<           |         |
+|             |   n_nationkey:smallint, |         |
+|             |   n_name:string,        |         |
+|             |   n_comment:string      |         |
+|             | >>                      |         |
++-------------+-------------------------+---------+
+
+-- When we refer to the scalar value using dot notation,
+-- we can use arithmetic and comparison operators on it
+-- like any other number.
+select r_name, nation.item.n_name, nation.item.n_nationkey
+from region, region.r_nations as nation
+where nation.item.n_nationkey < 5
++-------------+-------------+------------------+
+| r_name      | item.n_name | item.n_nationkey |
++-------------+-------------+------------------+
+| AMERICA     | CANADA      | 3                |
+| AMERICA     | BRAZIL      | 2                |
+| AMERICA     | ARGENTINA   | 1                |
+| MIDDLE EAST | EGYPT       | 4                |
+| AFRICA      | ALGERIA     | 0                |
++-------------+-------------+------------------+
+
+
+EXISTS operator
+The EXISTS operator tests whether a subquery returns
+        any results. You typically use it to find values from one table that
+        have corresponding values in another table. 
+ The converse, NOT EXISTS, helps to find all the
+        values from one table that do not have any corresponding values in
+        another table. 
+
+Syntax:
+
+EXISTS (subquery)
+NOT EXISTS (subquery)
+
+
+Usage notes:
+
+ The subquery can refer to a different table than the outer query
+        block, or the same table. For example, you might use
+          EXISTS or NOT EXISTS to check the
+        existence of parent/child relationships between two columns of the same
+        table. 
+ You can also use operators and function calls within the subquery to
+        test for other kinds of relationships other than strict equality. For
+        example, you might use a call to COUNT() in the
+        subquery to check whether the number of matching values is higher or
+        lower than some limit. You might call a UDF in the subquery to check
+        whether values in one table matches a hashed representation of those
+        same values in a different table. 
+
+NULL considerations:
+
+ If the subquery returns any value at all (even NULL),
+          EXISTS returns TRUE and NOT
+          EXISTS returns false. 
+
+Restrictions:
+
+
+        Correlated subqueries used in EXISTS and IN operators cannot include a
+        LIMIT clause.
+      
+ Prior to Impala 2.6, the NOT EXISTS
+        operator required a correlated subquery. In Impala 2.6 and higher,
+          NOT EXISTS works with uncorrelated queries also. 
+
+Complex type considerations:
+
+
+        You cannot refer to a column with a complex data type (ARRAY, STRUCT, or MAP)
+        directly in an operator. You can apply operators only to scalar values that make up a complex type
+        (the fields of a STRUCT, the items of an ARRAY,
+        or the key or value portion of a MAP) as part of a join query that refers to
+        the scalar value using the appropriate dot notation or ITEM, KEY, or VALUE
+        pseudocolumn names.
+      
+
+ILIKE operator
+A case-insensitive comparison operator for STRING
+        data, with basic wildcard capability using _ to match a
+        single character and % to match any characters.
+        The argument expression must match the entire string value. Typically,
+        it is more efficient to put any % wildcard match at the
+        end of the string. 
+ This operator, available in Impala 2.5 and higher, is the equivalent
+        of the LIKE operator, but with case-insensitive
+        comparisons. 
+
+Syntax:
+
+string_expression ILIKE wildcard_expression
+string_expression NOT ILIKE wildcard_expression
+
+
+Complex type considerations:
+
+
+        You cannot refer to a column with a complex data type (ARRAY, STRUCT, or MAP)
+        directly in an operator. You can apply operators only to scalar values that make up a complex type
+        (the fields of a STRUCT, the items of an ARRAY,
+        or the key or value portion of a MAP) as part of a join query that refers to
+        the scalar value using the appropriate dot notation or ITEM, KEY, or VALUE
+        pseudocolumn names.
+      
+
+IN operator
+The IN operator compares an argument value to a set of
+        values, and returns TRUE if the argument matches any
+        value in the set. The NOT IN operator reverses the
+        comparison, and checks if the argument value is not part of a set of
+        values. 
+
+Syntax:
+
+expression IN (expression [, expression])
+expression IN (subquery)
+
+expression NOT IN (expression [, expression])
+expression NOT IN (subquery)
+
+ The left-hand expression and the set of comparison values must be of
+        compatible types. 
+ The left-hand expression must consist only of a single value, not a
+        tuple. Although the left-hand expression is typically a column name, it
+        could also be some other value. For example, the WHERE
+        clauses WHERE id IN (5) and WHERE 5 IN
+          (id) produce the same results. 
+ The set of values to check against can be specified as
+        constants, function calls, column names, or other expressions in the
+        query text. The maximum number of expressions in the IN
+        list is 9999. (The maximum number of elements of a single expression is
+        10,000 items, and the IN operator itself counts as
+        one.) 
+ In Impala 2.0 and higher, the set of values can also be
+        generated by a subquery. IN can evaluate an unlimited
+        number of results using a subquery. 
+
+Usage notes:
+
+ Any expression using the IN operator could be
+        rewritten as a series of equality tests connected with
+          OR, but the IN syntax is often
+        clearer, more concise, and easier for Impala to optimize. For example,
+        with partitioned tables, queries frequently use IN
+        clauses to filter data by comparing the partition key columns to
+        specific values. 
+
+NULL considerations:
+
+ If there really is a matching non-null value, IN
+        returns TRUE: 
+ If the searched value is not found in the comparison values, and the
+        comparison values include NULL, the result is
+          NULL: 
+ If the left-hand argument is NULL,
+          IN always returns NULL. This rule
+        applies even if the comparison values include NULL. 
+
+Complex type considerations:
+
+
+        You cannot refer to a column with a complex data type (ARRAY, STRUCT, or MAP)
+        directly in an operator. You can apply operators only to scalar values that make up a complex type
+        (the fields of a STRUCT, the items of an ARRAY,
+        or the key or value portion of a MAP) as part of a join query that refers to
+        the scalar value using the appropriate dot notation or ITEM, KEY, or VALUE
+        pseudocolumn names.
+      
+
+Restrictions:
+
+
+        Correlated subqueries used in EXISTS and IN operators cannot include a
+        LIMIT clause.
+      
+
+IREGEXP operator
+ Tests whether a value matches a regular expression, using
+        case-insensitive string comparisons. Uses the POSIX regular expression
+        syntax where ^ and $ match the
+        beginning and end of the string, . represents any
+        single character, * represents a sequence of zero or
+        more items, + represents a sequence of one or more
+        items, ? produces a non-greedy match, and so on. 
+ This operator, available in Impala 2.5 and higher, is the equivalent
+        of the REGEXP operator, but with case-insensitive
+        comparisons. 
+
+Syntax:
+
+string_expression IREGEXP regular_expression
+
+
+Usage notes:
+
+ The | symbol is the alternation operator,
+        typically used within () to match different sequences.
+        The () groups do not allow backreferences. To retrieve
+        the part of a value matched within a () section, use
+        the regexp_extract() built-in function. (Currently,
+        there is not any case-insensitive equivalent for the
+          regexp_extract() function.) 
+ In Impala 1.3.1 and higher, the REGEXP
+        and RLIKE operators now match a regular expression string that occurs
+        anywhere inside the target string, the same as if the regular expression was enclosed on
+        each side by .*. Previously, these operators only succeeded when the
+        regular expression matched the entire target string. This change improves compatibility with
+        the regular expression support for popular database systems. There is no change to the
+        behavior of the regexp_extract() and regexp_replace()
+        built-in functions. 
+ In Impala 2.0 and later, the Impala regular expression syntax
+        conforms to the POSIX Extended Regular Expression syntax used by the Google RE2 library. For
+        details, see the RE2 documentation. It has most idioms familiar from regular
+        expressions in Perl, Python, and so on, including .*? for non-greedy
+        matches. 
+ In Impala 2.0 and later, a change
+        in the underlying regular expression library could cause changes in the
+        way regular expressions are interpreted by this function. Test any
+        queries that use regular expressions and adjust the expression patterns
+        if necessary.
+
+Complex type considerations:
+
+
+        You cannot refer to a column with a complex data type (ARRAY, STRUCT, or MAP)
+        directly in an operator. You can apply operators only to scalar values that make up a complex type
+        (the fields of a STRUCT, the items of an ARRAY,
+        or the key or value portion of a MAP) as part of a join query that refers to
+        the scalar value using the appropriate dot notation or ITEM, KEY, or VALUE
+        pseudocolumn names.
+      
+
+IS DISTINCT FROM operator
+The IS DISTINCT FROM operator, and its converse the
+          IS NOT DISTINCT FROM operator, test whether or not
+        values are identical. IS NOT DISTINCT FROM is similar
+        to the = operator, and IS DISTINCT
+          FROM is similar to the != operator, except
+        that NULL values are treated as identical. Therefore,
+          IS NOT DISTINCT FROM returns true
+        rather than NULL, and IS DISTINCT FROM
+        returns false rather than NULL, when
+        comparing two NULL values. If one of the values being
+        compared is NULL and the other is not, IS
+          DISTINCT FROM returns true and IS
+          NOT DISTINCT FROM returns false, again
+        instead of returning NULL in both cases. 
+
+Syntax:
+
+expression1 IS DISTINCT FROM expression2
+
+expression1 IS NOT DISTINCT FROM expression2
+expression1 <=> expression2
+
+ The operator <=> is an alias for IS NOT
+          DISTINCT FROM. It is typically used as a
+          NULL-safe equality operator in join queries. That is,
+          A <=> B is true if A equals
+          B or if both A and
+          B are NULL. 
+
+Usage notes:
+
+ This operator provides concise notation for comparing two values and
+        always producing a true or false
+        result, without treating NULL as a special case.
+        Otherwise, to unambiguously distinguish between two values requires a
+        compound expression involving IS [NOT] NULL tests of
+        both operands in addition to the = or
+          != operator. 
+ The <=> operator, used like an equality
+        operator in a join query, is more efficient than the equivalent clause:
+          IF (A IS NULL OR B IS NULL, A IS NULL AND B IS NULL, A =
+          B). The <=> operator can use a hash
+        join, while the IF expression cannot. 
+
+IS NULL operator
+ The IS NULL operator, and its converse the IS
+          NOT NULL operator, test whether a specified value is
+          NULL. Because using NULL with any of
+        the other comparison operators such as = or
+          != also returns NULL rather than
+          TRUE or FALSE, you use a
+        special-purpose comparison operator to check for this special condition. 
+ In Impala 2.1.1 and higher, you can use the
+        operators IS UNKNOWN and IS NOT
+          UNKNOWN as synonyms for IS NULL and
+          IS NOT NULL, respectively. 
+
+Syntax:
+
+expression IS NULL
+expression IS NOT NULL
+
+expression IS UNKNOWN
+expression IS NOT UNKNOWN
+
+
+Usage notes:
+
+ In many cases, NULL values indicate some incorrect or
+        incomplete processing during data ingestion or conversion. You might
+        check whether any values in a column are NULL, and if
+        so take some followup action to fill them in. 
+ With sparse data, often represented in wide tables, it is
+        common for most values to be NULL with only an
+        occasional non-NULL value. In those cases, you can use
+        the IS NOT NULL operator to identify the rows
+        containing any data at all for a particular column, regardless of the
+        actual value. 
+ With a well-designed database schema, effective use of
+          NULL values and IS NULL and
+          IS NOT NULL operators can save having to design
+        custom logic around special values such as 0, -1,
+        'N/A', empty string, and so on. NULL
+        lets you distinguish between a value that is known to be 0, false, or
+        empty, and a truly unknown value. 
+
+Complex type considerations:
+
+ The IS [NOT] UNKNOWN operator, as with
+        the IS [NOT] NULL operator, is not applicable to
+        complex type columns (STRUCT, ARRAY,
+        or MAP). Using a complex type column with this operator
+        causes a query error. 
+
+IS TRUE operator
+ This variation of the IS operator tests for truth or
+        falsity, with right-hand arguments [NOT] TRUE,
+          [NOT] FALSE, and [NOT] UNKNOWN. 
+
+Syntax:
+
+expression IS TRUE
+expression IS NOT TRUE
+
+expression IS FALSE
+expression IS NOT FALSE
+
+
+
+Usage notes:
+
+ This IS TRUE and IS FALSE forms are
+        similar to doing equality comparisons with the Boolean values
+          TRUE and FALSE, except that
+          IS TRUE and IS FALSE always return
+        either TRUE or FALSE, even if the
+        left-hand side expression returns NULL
+
+ These operators let you simplify Boolean
+        comparisons that must also check for NULL, for example
+          X != 10 AND X IS NOT NULL is equivalent to (X
+          != 10) IS TRUE. 
+ In Impala 2.1.1 and higher,
+        you can use the operators IS [NOT] TRUE and IS [NOT] FALSE
+        as equivalents for the built-in functions ISTRUE(),
+          ISNOTTRUE(), ISFALSE(), and
+          ISNOTFALSE(). 
+
+Complex type considerations:
+
+ The IS [NOT] TRUE and IS [NOT]
+          FALSE operators are not applicable to complex type columns
+          (STRUCT, ARRAY, or
+          MAP). Using a complex type column with these
+        operators causes a query error. 
+
+LIKE operator
+A comparison operator for STRING data, with basic
+        wildcard capability using the underscore (_) to match a
+        single character and the percent sign (%) to match
+        any characters. The argument expression must match the entire
+        string value. Typically, it is more efficient to put any
+          % wildcard match at the end of the string. 
+
+Syntax:
+
+string_expression LIKE wildcard_expression
+string_expression NOT LIKE wildcard_expression
+
+
+Complex type considerations:
+
+
+        You cannot refer to a column with a complex data type (ARRAY, STRUCT, or MAP)
+        directly in an operator. You can apply operators only to scalar values that make up a complex type
+        (the fields of a STRUCT, the items of an ARRAY,
+        or the key or value portion of a MAP) as part of a join query that refers to
+        the scalar value using the appropriate dot notation or ITEM, KEY, or VALUE
+        pseudocolumn names.
+      
+
+Examples:
+
+select distinct c_last_name from customer where c_last_name like 'Mc%' or c_last_name like 'Mac%';
+select count(c_last_name) from customer where c_last_name like 'M%';
+select c_email_address from customer where c_email_address like '%.edu';
+
+-- We can find 4-letter names beginning with 'M' by calling functions...
+select distinct c_last_name from customer where length(c_last_name) = 4 and substr(c_last_name,1,1) = 'M';
+-- ...or in a more readable way by matching M followed by exactly 3 characters.
+select distinct c_last_name from customer where c_last_name like 'M___';
+ For case-insensitive comparisons, see the
+          ILIKE operator. For a more general kind of search
+        operator using regular expressions, see the REGEXP
+        operator or its case-insensitive counterpart the
+          IREGEXP operator. 
+
+Logical operators
+ Logical operators return a BOOLEAN value, based on a
+        binary or unary logical operation between arguments that are also
+          BOOLEAN values. Typically, the argument expressions
+        use comparison operators. 
+
+Syntax:
+
+boolean_expression binary_logical_operator boolean_expression
+unary_logical_operator boolean_expression
+
+ The Impala logical operators are: 
+
+
+AND: A binary operator that returns
+            true if its left-hand and right-hand arguments both
+          evaluate to true, NULL if either
+          argument is NULL, and false
+          otherwise. 
+
+OR: A binary operator that returns
+            true if either of its left-hand and right-hand
+          arguments evaluate to true, NULL if
+          one argument is NULL and the other is either
+            NULL or false, and
+            false otherwise. 
+
+NOT: A unary operator that flips the state of a
+          Boolean expression from true to
+            false, or false to
+            true. If the argument expression is
+            NULL, the result remains NULL.
+          (When NOT is used this way as a unary logical
+          operator, it works differently than the IS NOT NULL
+          comparison operator, which returns true when applied
+          to a NULL.) 
+
+
+Complex type considerations:
+
+
+        You cannot refer to a column with a complex data type (ARRAY, STRUCT, or MAP)
+        directly in an operator. You can apply operators only to scalar values that make up a complex type
+        (the fields of a STRUCT, the items of an ARRAY,
+        or the key or value portion of a MAP) as part of a join query that refers to
+        the scalar value using the appropriate dot notation or ITEM, KEY, or VALUE
+        pseudocolumn names.
+      
+ The following example shows how to do an arithmetic
+        operation using a numeric field of a STRUCT type that
+        is an item within an ARRAY column. Once the scalar
+        numeric value R_NATIONKEY is extracted, it can be used
+        in an arithmetic expression, such as multiplying by 10: 
+
+-- The SMALLINT is a field within an array of structs.
+describe region;
++-------------+-------------------------+---------+
+| name        | type                    | comment |
++-------------+-------------------------+---------+
+| r_regionkey | smallint                |         |
+| r_name      | string                  |         |
+| r_comment   | string                  |         |
+| r_nations   | array<struct<           |         |
+|             |   n_nationkey:smallint, |         |
+|             |   n_name:string,        |         |
+|             |   n_comment:string      |         |
+|             | >>                      |         |
++-------------+-------------------------+---------+
+
+-- When we refer to the scalar value using dot notation,
+-- we can use arithmetic and comparison operators on it
+-- like any other number.
+select r_name, nation.item.n_name, nation.item.n_nationkey
+  from region, region.r_nations as nation
+where
+  nation.item.n_nationkey between 3 and 5
+  or nation.item.n_nationkey < 15;
++-------------+----------------+------------------+
+| r_name      | item.n_name    | item.n_nationkey |
++-------------+----------------+------------------+
+| EUROPE      | UNITED KINGDOM | 23               |
+| EUROPE      | RUSSIA         | 22               |
+| EUROPE      | ROMANIA        | 19               |
+| ASIA        | VIETNAM        | 21               |
+| ASIA        | CHINA          | 18               |
+| AMERICA     | UNITED STATES  | 24               |
+| AMERICA     | PERU           | 17               |
+| AMERICA     | CANADA         | 3                |
+| MIDDLE EAST | SAUDI ARABIA   | 20               |
+| MIDDLE EAST | EGYPT          | 4                |
+| AFRICA      | MOZAMBIQUE     | 16               |
+| AFRICA      | ETHIOPIA       | 5                |
++-------------+----------------+------------------+
+
+
+REGEXP operator
+Tests whether a value matches a regular expression. Uses the POSIX
+        regular expression syntax where ^ and
+          $ match the beginning and end of the string,
+          . represents any single character, *
+        represents a sequence of zero or more items, +
+        represents a sequence of one or more items, ? produces
+        a non-greedy match, and so on. 
+
+Syntax:
+
+string_expression REGEXP regular_expression
+
+
+Usage notes:
+
+ The RLIKE operator is a synonym for
+          REGEXP. 
+ The | symbol is the alternation operator, typically
+        used within () to match different sequences. The
+          () groups do not allow backreferences. To retrieve
+        the part of a value matched within a () section, use
+        the regexp_extract() built-in function. 
+ In Impala 1.3.1 and higher, the REGEXP
+        and RLIKE operators now match a regular expression string that occurs
+        anywhere inside the target string, the same as if the regular expression was enclosed on
+        each side by .*. Previously, these operators only succeeded when the
+        regular expression matched the entire target string. This change improves compatibility with
+        the regular expression support for popular database systems. There is no change to the
+        behavior of the regexp_extract() and regexp_replace()
+        built-in functions. 
+ In Impala 2.0 and later, the Impala regular expression syntax
+        conforms to the POSIX Extended Regular Expression syntax used by the Google RE2 library. For
+        details, see the RE2 documentation. It has most idioms familiar from regular
+        expressions in Perl, Python, and so on, including .*? for non-greedy
+        matches. 
+ In Impala 2.0 and later, a change
+        in the underlying regular expression library could cause changes in the
+        way regular expressions are interpreted by this function. Test any
+        queries that use regular expressions and adjust the expression patterns
+        if necessary.
+
+Complex type considerations:
+
+
+        You cannot refer to a column with a complex data type (ARRAY, STRUCT, or MAP)
+        directly in an operator. You can apply operators only to scalar values that make up a complex type
+        (the fields of a STRUCT, the items of an ARRAY,
+        or the key or value portion of a MAP) as part of a join query that refers to
+        the scalar value using the appropriate dot notation or ITEM, KEY, or VALUE
+        pseudocolumn names.
+      
+Example:
+- Find all customers whose first name starts with 'J', followed by 0 or more of any character.
+select c_first_name, c_last_name from customer where c_first_name regexp '^J.*';
+
+-- Match multiple character sequences, either 'Mac' or 'Mc'.
+select c_first_name, c_last_name from customer where c_last_name regexp '^(Mac|Mc)donald$';
+
+
+
+RLIKE operator
+ It is a synonym for the REGEXP operator.
+
+
+Related informationImpala mathematical functionsRE2 documentation on GitHub

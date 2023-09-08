@@ -1,0 +1,96 @@
+TriggersCloudera Docs
+Triggers
+
+A trigger is a statement that specifies an action to be taken
+      when one or more specified conditions are met for a service, role, role configuration group,
+      or host. The conditions are expressed as a tsquery statement, and the action to be taken is to
+      change the health for the service, role, role configuration group, or host to either
+      Concerning (yellow) or Bad (red).
+Triggers can be created for services, roles, role configuration groups,
+      or hosts. Create a trigger by doing one of the following:
+Directly editing the configuration for the service, role (or role
+          configuration group), or host configuration.
+Clicking Create Trigger on the drop-down menu for most
+          charts. Note that the Create Trigger command is not available on the
+          drop-down menu for charts where no context (role, service, and so on)
+          is defined, such as on the
+              Home > Status
+            tab.importantBecause triggers are
+            a new and evolving feature, backward compatibility between releases
+            is not guaranteed at this time.
+Use the Create Trigger expression builder.
+
+
+The Structure of Triggers
+A trigger is defined by a JSON formatted string that includes four
+          parts:
+Name
+Expression
+Stream threshold
+Whether or not the trigger should be enabled
+Each of the four parts of a trigger is described in the following
+        sections.
+
+Name (required)
+A trigger's name must be unique in the context for which the trigger is
+        defined. That is, there cannot be two triggers for the same service or
+        role with the same name. Different services or different roles can have
+        triggers with the same name.
+
+Expression (required)
+A trigger expression takes the form:
+IF (CONDITIONS) DO
+            HEALTH_ACTION
+When the conditions of the trigger are met, the trigger is considered
+        to be firing. A condition is any valid tsquery  statement. In most cases
+        conditions employ stream filters to filter out streams below or above a
+        certain threshold. For example, the following tsquery can be used to
+        retrieve the streams for DataNodes with more than 500 open file
+        descriptors:SELECT fd_open WHERE roleType=DataNode AND last(fd_open) > 500
+The stream filter used here, last(fd_open) > 50, is
+        composed of four parts:
+A scalar producing function "last" that takes a stream and returns
+            its last data point
+A metric to operate on
+A comparator
+A scalar value
+
+Other scalar producing functions are available, like
+          min or max, and they can be combined
+        to create arbitrarily complex
+        expressions:last(moving_avg(fd_open)) >= 500
+See the tsquery documentation for more details.
+Conditions can be combined using the logical operators
+          AND and OR. For example, here is a
+        trigger expression with two
+        conditions:IF ((SELECT fd_open WHERE roleType=DataNode AND last(fd_open) > 500) OR (SELECT fd_open WHERE roleType=NameNode AND last(fd_open) > 500)) DO health:bad
+A condition is met if it returns more than the number of streams
+        specified by the streamThreshold (see below). A trigger
+        fires if the logical evaluation of all of its conditions results in a
+        met condition. When a trigger fires, two actions can be taken:
+          health:concerning or health:bad.
+        These actions change the health of the entity on which the trigger is
+        defined.
+
+Stream Threshold (optional)
+The stream threshold determines the number of streams that need to be
+        returned by the tsquery before the condition is met. The default is 0;
+        that is, if the tsquery returns any results the condition will be met.
+        For example if the stream threshold is set to 10 and the condition is
+          SELECT fd_open WHERE roleType=DataNode AND last(fd_open) >
+          500 the condition will be considered met only if there
+        are at least 10 DataNodes that have more than 500 file descriptor
+        opened, so at least 10 streams were returned by the tsquery.
+
+Enabled (optional)
+Whether the trigger is enabled. The default is true,
+        (enabled).
+
+Trigger Example
+      
+      The following is a JSON formatted trigger that fires if there are more
+      than 10 DataNodes with more than 500 file descriptors opened:
+[{"triggerName": "sample-trigger", "triggerExpression": "IF (SELECT fd_open WHERE roleType = DataNode and last(fd_open) > 500) DO health:bad", "streamThreshold": 10, "enabled": "true"}]
+
+
+Related informationtsquery LanguageCreating a Trigger Using the Expression EditorEditing, Deleting, Suppressing, or Deleting a TriggerCloudera Manager Trigger Use Cases

@@ -1,0 +1,90 @@
+Creating the CDP environment and IAM rolesCloudera Docs
+Creating the CDP environment and IAM roles
+You follows steps to register and activate a new environment to enable RAZ in
+        CDW.
+You need to register and activate a new environment to enable RAZ in CDW.
+
+Register an environment with
+                        RAZ using the CDP web interface.
+In the web interface, in Fine-grained access control on S3, select Enable
+                    Ranger Authorization for AWS S3.
+
+
+
+In Cloudera Data Warehouse Overview, locate and select the RAZ-enabled
+                    environment, and click Activate to activate the environment for CDW.
+This action disables the standard default Database Catalog that is
+                    automatically created after activation. The UMS machine user is created and
+                    attached to the environment when you activate the CDW environment. Later, you
+                    see how to add this same UMS machine user to a different UMS group for each
+                    tenant.
+
+In Activate Environment, select Enable Storage
+                    Roles.
+
+
+
+
+
+Unchecking Enable Storage Roles disables the metadata
+                    proxy associated with managed storage access.
+Repeat the following steps for each tenant:
+In AWS, manually create one or more S3 buckets for the tenant, or use existing buckets.
+                    Use bucket-level encryption and a key that is accessible by the IAM role of the tenant.
+
+In AWS, create an IAM role that has
+                    significant privileges to read/write to a tenant-specific buckets as well as
+                    across all tenants' shared SDX Data Lake bucket.
+For example, create a role named role-tenant-1 and a
+                    bucket called s3-tenant-1.
+
+In the IAM role, configure a trust relationship with the IDBROKER_ROLE.
+ For example:
+                    {
+                        "Version": "2012-10-17",
+                        "Statement": [
+                        {
+                        "Effect": "Allow",
+                        "Principal": {
+                        "Service": [
+                        "s3.amazonaws.com",
+                        "ec2.amazonaws.com"
+                        ],
+                        "AWS": "arn:aws:iam::<AWS_ACCOUNT_ID>:IDBROKER_ROLE"
+                        },
+                        "Action": "sts:AssumeRole"
+                        }
+                        ]
+                        }
+
+The IDBROKER_ROLE needs the trust relationship to assume the role
+                    role-tenant-1. 
+
+Make a note of the IAM role ARN.
+
+Attach the following AWS policies to the IAM role: AmazonEKSWorkerNodePolicy,
+                    AmazonEKS_CNI_Policy, AmazonEC2ContainerRegistryReadOnly.
+The AmazonEKSWorkerNodePolicy is shown in the next topic.
+
+Give the AWS Instance Profile (idbroker assume role), the
+                    permission to assume role of role-tenant-1. 
+
+{
+                        "Version": "2012-10-17",
+                        "Statement": [
+                        {
+                        "Sid": "VisualEditor0",
+                        "Effect": "Allow",
+                        "Action": "sts:AssumeRole",
+                        "Resource": [
+                        "arn:aws:iam::<AWS_ACCOUNT_ID>:role/idbroker-data-access-role",
+                        "arn:aws:iam::<AWS_ACCOUNT_ID>:role/mock-idbroker-admin-role",
+                        "arn:aws:iam::<AWS_ACCOUNT_ID>:role/role-tenant-1"
+                        ]
+                        }
+                        ]
+                        }
+
+
+
+Parent topic: Setting up managed storage access

@@ -1,0 +1,431 @@
+PrerequisitesCloudera Docs
+Prerequisites
+Required prerequisites for FIPS for CDP.
+Parent topic: Installing and Configuring CDP with FIPS
+About CDP with FIPS
+
+Known Issues
+
+See the Cloudera Manager release
+              notes.
+
+
+Unsupported Features
+
+
+Upgrades are not currently supported to or from CDP with
+                            FIPS.
+
+
+Replication is not currently supported. 
+
+
+
+System Requirements
+
+Operating system: RHEL/Centos 7.9. For more information, see Operating system requirements
+Java: OpenJDK 8 / Oracle JDK 8. For more information, see Java requirements
+Install and configure a database. See Step 5. Install and Configure Databases
+importantThe only database supported for CDP with FIPS is
+                                PostgresSQL 10 (The embedded version of PostgreSQL is not
+                                supported).
+
+
+
+Supported CDP Versions
+
+
+
+Cloudera Manager versions 7.2.4, 7.3.1, 7.4.4, 7.6.1,
+                                7.7.1
+
+
+CDP Private Cloud Base versions 7.1.5, 7.1.6, 7.1.7, 7.1.7
+                                SP1, 7.1.8, and 7.1.7 SP2
+
+
+
+
+Supported CDP Components
+The following components are supported in FIPS mode:
+
+Atlas
+Avro
+Cloudera Manager
+Cruise Control
+Hadoop
+Hadoop Credential Provider
+HDFS
+HBase
+Hive
+Hive-on-Tez
+Hive Meta Store
+Hive Warehouse Connector
+Hue
+Impala
+Kafka
+Kerberos
+Key Trustee Server
+Knox
+Kudu
+Livy
+Oozie
+Parquet
+Queue Manager
+Ranger
+Schema Registry
+Streams Messaging Manager
+Streams Replication Manager 
+Solr
+Spark
+Sqoop
+Tez
+TLS
+YARN
+ZooKeeper
+
+YARN
+
+
+ZooKeeper
+important
+Streams Replication Manager (SRM) FIPS support is available for
+                                technical preview and considered to be under development. Do not use
+                                this feature in your production systems. If you have questions
+                                regarding SRM FIPS support, contact support by logging a case on the
+                                    Cloudera Support Portal.
+
+note
+
+MapReduce is not FIPS-compliant.
+Navigator Encrypt is not FIPS-compliant.
+Ozone is not FIPS-compliant.
+
+
+
+
+important
+Contact your Cloudera Sales or Support team to obtain the CDP PVC Base
+                        SafeLogic FIPS modules.
+
+
+
+
+
+Step 1: Prepare hosts
+
+
+Check the available entropy. Cryptographic operations require entropy to
+                        ensure randomness.
+
+
+For information about checking available entropy and using
+                                    rng-tools, see "Entropy Requirements" in Data at Rest Encryption
+                                    Requirements. 
+For information about using the haveged entropy
+                                daemon, see the haveged
+                                    documentation. 
+
+
+
+Configure the operating system for FIPS. 
+See https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/security_guide/chap-federal_standards_and_regulations.
+
+On all hosts, run one of the following commands to verify that FIPS mode is
+                        enabled:
+
+cat /proc/sys/crypto/fips_enabled
+sysctl crypto.fips_enabled
+
+
+Configure a repository to install Cloudera Manager and other required
+                        packages.
+
+
+On the Cloudera Manager server host, download the repository file
+                                for your operating system and version:
+
+https://[username]:[password]@archive.cloudera.com/p/cm7/7.4.4/redhat7/yum/cloudera-manager.repo
+
+
+
+Open the /etc/yum.repos.d/cloudera-manager.repo
+                                file in a text editor and replace the changeme
+                                placeholder values with your user name and password.
+
+[cloudera-manager]
+name=Cloudera Manager 7.4.4
+baseurl=https://archive.cloudera.com/p/cm7/7.4.4/redhat7/yum/
+gpgkey=https://archive.cloudera.com/p/cm7/7.4.4/redhat7/yum/
+RPM-GPG-KEY-cloudera
+username=changeme
+password=changeme
+gpgcheck=1
+enabled=1
+autorefresh=0
+type=rpm-md
+
+
+
+If your hosts do not have access to https://archive.cloudera.com, you will need to set up a local repository.
+                                See Configuring a Local Package Repository.
+                            
+
+
+
+Manually install OpenJDK 8 or Oracle JDK 8 on all hosts. 
+
+
+Manually Installing OpenJDK
+Manually Installing Oracle JDK
+
+
+
+Download and Install CryptoComply for Java (CC for Java) SafeLogic - Java
+                        JCE Provider on all hosts:
+
+
+Obtain the SafeLogic CC Java module JAR file.
+
+
+Copy the ccj-3.0.1 (1).jar file to
+                                    $JAVA_HOME/jre/lib/ext.
+
+
+Obtain the SafeLogic BCTLS Java module JAR file. 
+
+
+Copy the BCTLS-safelogic.jar file to
+                                    $JAVA_HOME/jre/lib/ext.
+
+
+Change the file permissions on both the ccj-3.0.1
+                                    (1).jar and BCTLS-safelogic.jar files
+                                to root and 0644:
+
+chown root: ${java_home}/jre/lib/ext/ccj-3.0.1.jar
+chmod 0644 ${java_home}/jre/lib/ext/ccj-3.0.1.jar
+chown root: ${java_home}/jre/lib/ext/bctls-safelogic.jar
+chmod 0644 ${java_home}/jre/lib/ext/bctls-safelogic.jar
+
+
+
+
+Add the CCJ configuration to the
+                            $JAVA_HOME/jre/lib/security/java.policy file within the
+                        closed bracket as shown below:
+
+//CCJ Java Permissions
+permission java.lang.RuntimePermission "getProtectionDomain";
+permission java.lang.RuntimePermission "accessDeclaredMembers";
+permission java.util.PropertyPermission "java.runtime.name", "read";
+permission java.security.SecurityPermission "putProviderProperty.CCJ";
+//CCJ Key Export and Translation
+permission com.safelogic.cryptocomply.crypto.CryptoServicesPermission "exportKeys";
+//CCJ SSL
+permission com.safelogic.cryptocomply.crypto.CryptoServicesPermission "tlsAlgorithmsEnabled";
+//CCJ Setting of Default SecureRandom
+permission com.safelogic.cryptocomply.crypto.CryptoServicesPermission "defaultRandomConfig";
+//CCJ Setting CryptoServicesRegistrar Properties
+permission com.safelogic.cryptocomply.crypto.CryptoServicesPermission "globalConfig";
+//CCJ Enable JKS
+permission com.safelogic.cryptocomply.jca.enable_jks "true";
+}
+
+
+Edit the
+                            $JAVA_HOME/jre/lib/security/java.security
+                        file as follows:
+
+
+Add the following lines: 
+
+#
+# List of providers and their preference orders (see above):
+#
+security.provider.1=com.safelogic.cryptocomply.jcajce.provider.CryptoComplyFipsProvider
+security.provider.2=org.bouncycastle.jsse.provider.BouncyCastleJsseProvider fips:CCJ
+security.provider.3=sun.security.provider.Sun
+security.provider.4=sun.security.rsa.SunRsaSign
+security.provider.5=sun.security.ec.SunEC
+#security.provider.6=com.sun.net.ssl.internal.ssl.Provider
+security.provider.6=com.sun.crypto.provider.SunJCE
+security.provider.7=sun.security.jgss.SunProvider
+security.provider.8=com.sun.security.sasl.Provider
+security.provider.9=org.jcp.xml.dsig.internal.dom.XMLDSigRI
+#security.provider.11=sun.security.smartcardio.SunPCSC
+
+
+
+Comment out the
+                                    ssl.KeyManagerFactory.algorithm=SunX509 line
+                                and add a new line with the text
+                                    ssl.KeyManagerFactory.algorithm=X.509.
+
+#
+# Determines the default key and trust manager factory algorithms for
+# the javax.net.ssl package.
+#
+#ssl.KeyManagerFactory.algorithm=SunX509
+ssl.KeyManagerFactory.algorithm=X.509
+ssl.TrustManagerFactory.algorithm=PKIX
+
+
+
+
+
+
+
+Step 2: Install and configure the SafeLogic modules and packages
+
+
+
+important
+Please contact your Cloudera Sales or Support team to obtain the CDP PVC
+                            Base SafeLogic FIPS modules.
+Installing the SafeLogic modules and packages may overwrite existing
+                            packages on your hosts. Cloudera recommends that you test any
+                            non-Cloudera software running on the host for correct functionality.
+
+
+
+
+Obtain the CryptoComply for Libgcrypt (CC for Libgcrypt) and CryptoComply
+                        for Server (CC for Server) SafeLogic modules and packages. 
+
+Copy the CryptoComply for Server (CCS) - OpenSSL RPMs to all hosts.
+
+
+Unzip the download.
+
+
+Run the following command to install the packages.
+
+yum localinstall -y openssl-1.0.2y-1.el7.centos.x86_64.rpm \
+openssl-devel-1.0.2y-1.el7.centos.x86_64.rpm \
+openssl-libs-1.0.2y-1.el7.centos.x86_64.rpm \
+openssl-perl-1.0.2y-1.el7.centos.x86_64.rpm \
+openssl-static-1.0.2y-1.el7.centos.x86_64.rpm
+
+
+
+
+Copy the CryptoComply for Libgcrypt RPMs to all hosts.
+
+
+Unzip the file.
+
+
+Run the following command to install the packages.
+
+yum localinstall -y libgcrypt-1.5.3-12.el7.centos.1.x86_64.rpm
+
+
+
+
+
+
+
+Step 3: Install Cloudera Manager server
+
+
+Log in to the Cloudera Manager server host.
+
+Run the following command to install Cloudera Manager server.
+
+sudo yum install cloudera-manager-daemons cloudera-manager-agent cloudera-manager-server
+
+
+Add the following line at the end of  the
+                            /etc/default/cloudera-scm-server file:
+
+export CMF_JAVA_OPTS="${CMF_JAVA_OPTS} -Dcom.cloudera.cmf.fipsMode=true -Dcom.safelogic.cryptocomply.fips.approved_only=true"
+
+
+
+
+
+Step 4: Validate the CCJ and CCS installation 
+Run the following commands on each host to validate the CCJ and CCS
+            installation.
+
+Run the following command:
+
+sysctl crypto.fips_enabled
+This should return: 
+
+crypto.fips_enabled = 1
+
+
+
+Run the following command:
+
+echo greeting | openssl md5
+This command should fail, indicating that FIPS is enabled. 
+
+
+Run the following command:
+
+read -r -d '' list_providers <<EOF
+p = java.security.Security.getProviders();
+for (i = 0; i < p.length; i++) { java.lang.System.out.println(p[i]); }
+EOF
+${JAVA_HOME}/bin/jrunscript -e "$list_providers"
+This command should return the version numbers of the SafeLogic packages,
+                            for example:  
+
+CCJ version 1.01
+SUN version 1.8
+SunRsaSign version 1.8
+SunEC version 1.8
+SunJSSE version 1.8
+SunJCE version 1.8
+SunJGSS version 1.8
+SunSASL version 1.8
+XMLDSig version 1.8
+SunPCSC version 1.8
+
+
+
+Run the following command:
+
+read -r -d '' do_maxAESKeyLength <<EOF
+java.lang.System.out.println(javax.crypto.Cipher.getMaxAllowedKeyLength("AES/CBC/PKCS5Padding"));
+EOF
+answer=`${JAVA_HOME}/bin/jrunscript -Dcom.safelogic.cryptocomply.fips.approved_only=true -e "$do_maxAESKeyLength"`
+echo $answer
+This command should return:  
+
+2147483647
+
+
+
+
+
+
+Step 5: Install and configure databases
+
+
+note
+Running the embedded PostgreSQL database on a FIPS mode enabled OS,
+                        configured in a FIPS compliant manner, is not supported.
+
+
+
+Configure the database in a FIPS-compliant manner. Consult the vendor
+                        documentation for your database for details.
+
+Enable the database for TLS/SSL clients, to ensure that all JDBC
+                        connections into these databases are FIPS compliant. Consult the vendor
+                        documentation for your database for details.
+
+Configure JDBC Driver in a FIPS compliant manner with TLS/SSL and BCFKS
+                        provided by CCJ JCE provider. Consult the following Cloudera Knowledge Base
+                        article for more information: Configuring SSL/TLS from the various CDH
+                            Services to their respective PostgreSQL Databases.
+
+Complete the setup of your databases for use with Cloudera Manager and
+                        Cloudera Runtime components. See Install and Configure PostgreSQL for CDP.
+
+
+

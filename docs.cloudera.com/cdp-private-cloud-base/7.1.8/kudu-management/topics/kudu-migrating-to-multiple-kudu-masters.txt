@@ -1,0 +1,122 @@
+Migrate to a multiple Kudu master configurationCloudera Docs
+Migrate to a multiple Kudu master configuration 
+Before migrating to a multiple Kudu masters set up, you need to perform many migration
+    planning steps, such as deciding the number of masters, and choosing the nodes where to add the
+    new Kudu masters. 
+
+The migration procedure does not require stopping all the Kudu processes in the
+        entire cluster but once the migration is complete, all the Kudu processes must be restarted
+        to incorporate the newly added masters. The restarting of the Kudu processes can be done
+        without incurring downtime.
+The procedure supports adding multiple masters at the same time by selecting
+        multiple hosts.
+
+Decide how many masters to use.
+The number of masters should be odd because an even number of masters does not provide
+        any benefit over having one fewer masters. Three or five node master configurations are
+        recommended as they can tolerate the failure of one or two masters respectively.
+
+Establish a maintenance window. 
+One hour should be sufficient maintenance window time. During this time the Kudu
+        cluster will be unavailable.
+Optional: 
+Configure a DNS alias for the new master or masters. 
+The alias can be:
+a CNAME record: if the machine already has an A record in DNS
+and A record: if the machine is only known by its IP address
+importantWithout DNS aliases, it is not possible
+            to recover from permanent master failures without restarting the masters and tablet
+            servers in the cluster to pick up the replacement master node with a different hostname.
+            It is highly recommended that you use DNS aliases.
+
+Perform the following preparatory steps for each new master that you are planning to
+        add:
+
+
+Choose a node in the cluster where there is no running Kudu master yet and which
+            has enough spare CPU and memory capacity to host a new Kudu master.
+The master generates very little load so it can be collocated with other data
+            services or load-generating processes, though not with another Kudu master from the
+            same configuration.
+
+
+Choose and record the directories where the new master’s data and WAL will be
+            located.
+
+
+Choose and record the port the master should use for RPCs.
+
+
+
+In Cloudera Manager, add a new Kudu Master role to the selected new master node:
+
+
+Select the Kudu service.
+
+
+Select Instances.
+
+
+Click Add Role Instances.
+
+
+Click Select hosts under Master × 1.
+
+
+Select one or multiple host node and click OK.
+
+
+Click Continue.
+
+
+Review the changes and if everything is correct, click
+                Finish.
+
+
+
+Start the newly added master role instance or instances.
+
+Restart the Kudu service.
+Optional: 
+If you have Kudu tables that are accessed from Impala and you did not set up DNS
+          aliases, update the HMS database manually in the underlying database that provides the
+          storage for HMS: 
+
+
+Connect to the HMS database.
+
+
+Run an SQL statement similar to the following example: 
+
+UPDATE TABLE_PARAMS
+SET PARAM_VALUE =
+  'master-1.example.com,master-2.example.com,master-3.example.com'
+WHERE PARAM_KEY = 'kudu.master_addresses' AND PARAM_VALUE = 'master-1.example.com';
+
+
+
+
+In impala-shell run the following command: INVALIDATE
+              METADATA;
+
+
+
+
+To verify that all masters are working properly, consider performing the following checks:
+          
+
+ Using a browser, visit each master’s web UI and navigate to the
+                /masters page. 
+All the masters should be listed there with one master in the LEADER
+              role and the others in the FOLLOWER role. The contents of
+                /masters on each master should be the same. 
+
+
+ Run a Kudu system check (ksck) on the cluster using the
+                kudu command line tool.
+
+If applicable, run a few quick SQL queries against a couple of migrated Kudu tables
+            using impala-shell or Hue.
+
+
+

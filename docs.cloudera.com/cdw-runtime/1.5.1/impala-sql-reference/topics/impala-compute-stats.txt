@@ -1,0 +1,498 @@
+COMPUTE STATS statementCloudera Docs
+COMPUTE STATS statement
+The COMPUTE STATS statement gathers information about volume and
+    distribution of data in a table and all associated columns and partitions. The information is
+    stored in the metastore database, and used by Impala to help optimize queries. For example, if Impala can determine that a table is large or small, or has many or few distinct
+        values it can organize and parallelize the work appropriately for a join query or insert
+        operation. For details about the kinds of information gathered by this statement, see the
+          Table and column statistics topic. 
+Syntax:
+COMPUTE STATS [db_name.]table_name  [ ( column_list ) ] [TABLESAMPLE SYSTEM(percentage) [REPEATABLE(seed)]]
+
+column_list ::= column_name [ , column_name, ... ]
+
+COMPUTE INCREMENTAL STATS [db_name.]table_name [PARTITION (partition_spec)]
+
+partition_spec ::= partition_col=constant_value
+
+partition_spec ::= simple_partition_spec | complex_partition_spec
+
+simple_partition_spec ::= partition_col=constant_value
+
+complex_partition_spec ::= comparison_expression_on_partition_col
+
+        The PARTITION clause is only allowed in combination with the INCREMENTAL
+        clause. It is optional for COMPUTE INCREMENTAL STATS, and required for DROP
+        INCREMENTAL STATS. Whenever you specify partitions through the PARTITION
+        (partition_spec) clause in a COMPUTE INCREMENTAL STATS or
+        DROP INCREMENTAL STATS statement, you must include all the partitioning columns in the
+        specification, and specify constant values for all the partition key columns.
+      
+Usage notes:
+
+      Originally, Impala relied on users to run the Hive ANALYZE
+        TABLE statement, but that method of gathering statistics proved
+      unreliable and difficult to use. The Impala COMPUTE STATS
+      statement was built to improve the reliability and user-friendliness of
+      this operation. COMPUTE STATS does not require any setup
+      steps or special configuration. You only run a single Impala
+        COMPUTE STATS statement to gather both table and column
+      statistics, rather than separate Hive ANALYZE TABLE
+      statements for each kind of statistics.
+    
+      For non-incremental COMPUTE STATS
+      statement, the columns for which statistics are computed can be specified
+      with an optional comma-separate list of columns.
+    
+      If no column list is given, the COMPUTE STATS statement
+      computes column-level statistics for all columns of the table. This adds
+      potentially unneeded work for columns whose stats are not needed by
+      queries. It can be especially costly for very wide tables and unneeded
+      large string fields.
+    
+COMPUTE STATS returns an error when a specified column
+      cannot be analyzed, such as when the column does not exist, the column is
+      of an unsupported type for COMPUTE STATS, e.g. colums of complex types,
+      or the column is a partitioning column.
+
+    
+      If an empty column list is given, no column is analyzed by COMPUTE
+        STATS.
+     In Impala 2.12 and higher, an optional TABLESAMPLE
+        clause immediately after a table reference specifies that the COMPUTE STATS
+        operation only processes a specified percentage of the table data. For tables that are so
+        large that a full COMPUTE STATS operation is impractical, you can use
+          COMPUTE STATS with a TABLESAMPLE clause to extrapolate
+        statistics from a sample of the table data. See Table and column statistics
+        about the experimental stats extrapolation and sampling features.  The COMPUTE INCREMENTAL STATS variation is a shortcut for
+        partitioned tables that works on a subset of partitions rather than the entire table. The
+        incremental nature makes it suitable for large tables with many partitions, where a full
+          COMPUTE STATS operation takes too long to be practical each time a
+        partition is added or dropped.important
+For a particular table, use either COMPUTE STATS or COMPUTE
+            INCREMENTAL STATS. The two kinds of stats do not interoperate with each other
+          at the table level. Without dropping the stats, if you run COMPUTE INCREMENTAL
+            STATS it will overwrite the full compute stats or if you run COMPUTE
+            STATS it will drop all incremental stats for consistency.
+
+        When you run COMPUTE INCREMENTAL STATS on a table for the first time,
+        the statistics are computed again from scratch regardless of whether the table already
+        has statistics. Therefore, expect a one-time resource-intensive operation
+        for scanning the entire table when running COMPUTE INCREMENTAL STATS
+        for the first time on a given table.
+      
+ In Impala 3.0 and lower, approximately
+        400 bytes of metadata per column per partition are needed for caching.
+        Tables with a big number of partitions and many columns can add up to a
+        significant memory overhead as the metadata must be cached on the
+          catalogd host and on every
+          impalad host that is eligible to be a coordinator.
+        If this metadata for all tables exceeds 2 GB, you might experience
+        service downtime. In Impala 3.1 and higher, the issue was alleviated
+        with an improved handling of incremental stats.
+
+COMPUTE INCREMENTAL STATS only applies to partitioned tables. If you use the
+      INCREMENTAL clause for an unpartitioned table, Impala automatically uses the original
+      COMPUTE STATS statement. Such tables display false under the
+      Incremental stats column of the SHOW TABLE STATS output.
+    note
+
+        Because many of the most performance-critical and resource-intensive
+        operations rely on table and column statistics to construct accurate and
+        efficient plans, COMPUTE STATS is an important step at
+        the end of your ETL process. Run COMPUTE STATS on all
+        tables as your first step during performance tuning for slow queries, or
+        troubleshooting for out-of-memory conditions:
+        
+
+            Accurate statistics help Impala construct an efficient query plan
+            for join queries, improving performance and reducing memory usage.
+          
+
+            Accurate statistics help Impala distribute the work effectively
+            for insert operations into Parquet tables, improving performance and
+            reducing memory usage.
+          
+
+            Accurate statistics help Impala estimate the memory
+            required for each query, which is important when you use resource
+            management features, such as admission control and the YARN resource
+            management framework. The statistics help Impala to achieve high
+            concurrency, full utilization of available memory, and avoid
+            contention with workloads from other Hadoop components.
+          
+ In Impala 2.8 and higher, when you run the COMPUTE
+                STATS or COMPUTE INCREMENTAL STATS statement against a
+              Parquet table, Impala automatically applies the query option setting
+                MT_DOP=4 to increase the amount of intra-node parallelism during
+              this CPU-intensive operation. See MT_DOP query option for details
+              about what this query option does and how to use it with CPU-intensive
+                SELECT statements. 
+
+
+
+Computing stats for groups of partitions:
+ In Impala 2.8 and higher, you can run COMPUTE INCREMENTAL
+          STATS on multiple partitions, instead of the entire table or one partition at a
+        time. You include comparison operators other than = in the
+          PARTITION clause, and the COMPUTE INCREMENTAL STATS
+        statement applies to all partitions that match the comparison expression. 
+      For example, the INT_PARTITIONS table contains 4 partitions.
+      The following COMPUTE INCREMENTAL STATS statements affect some but not all
+      partitions, as indicated by the Updated n partition(s)
+      messages. The partitions that are affected depend on values in the partition key column X
+      that match the comparison expression in the PARTITION clause.
+    
+show partitions int_partitions;
++-------+-------+--------+------+--------------+-------------------+---------+...
+| x     | #Rows | #Files | Size | Bytes Cached | Cache Replication | Format  |...
++-------+-------+--------+------+--------------+-------------------+---------+...
+| 99    | -1    | 0      | 0B   | NOT CACHED   | NOT CACHED        | PARQUET |...
+| 120   | -1    | 0      | 0B   | NOT CACHED   | NOT CACHED        | TEXT    |...
+| 150   | -1    | 0      | 0B   | NOT CACHED   | NOT CACHED        | TEXT    |...
+| 200   | -1    | 0      | 0B   | NOT CACHED   | NOT CACHED        | TEXT    |...
+| Total | -1    | 0      | 0B   | 0B           |                   |         |...
++-------+-------+--------+------+--------------+-------------------+---------+...
+
+compute incremental stats int_partitions partition (x < 100);
++-----------------------------------------+
+| summary                                 |
++-----------------------------------------+
+| Updated 1 partition(s) and 1 column(s). |
++-----------------------------------------+
+
+compute incremental stats int_partitions partition (x in (100, 150, 200));
++-----------------------------------------+
+| summary                                 |
++-----------------------------------------+
+| Updated 2 partition(s) and 1 column(s). |
++-----------------------------------------+
+
+compute incremental stats int_partitions partition (x between 100 and 175);
++-----------------------------------------+
+| summary                                 |
++-----------------------------------------+
+| Updated 2 partition(s) and 1 column(s). |
++-----------------------------------------+
+
+compute incremental stats int_partitions partition (x in (100, 150, 200) or x < 100);
++-----------------------------------------+
+| summary                                 |
++-----------------------------------------+
+| Updated 3 partition(s) and 1 column(s). |
++-----------------------------------------+
+
+compute incremental stats int_partitions partition (x != 150);
++-----------------------------------------+
+| summary                                 |
++-----------------------------------------+
+| Updated 3 partition(s) and 1 column(s). |
++-----------------------------------------+
+
+
+Complex type considerations:
+
+      Currently, the statistics created by the COMPUTE STATS statement do not include
+      information about complex type columns. The column stats metrics for complex columns are always shown
+      as -1. For queries involving complex type columns, Impala uses
+      heuristics to estimate the data distribution within such columns.
+    
+HBase considerations:
+
+COMPUTE STATS works for HBase tables also. The statistics gathered for HBase tables are
+      somewhat different than for HDFS-backed tables, but that metadata is still used for optimization when HBase
+      tables are involved in join queries.
+    
+Amazon S3 considerations:
+
+COMPUTE STATS also works for tables where data resides in the Amazon Simple
+        Storage Service (S3).
+Performance considerations:
+ The statistics collected by COMPUTE STATS are used to optimize join queries
+          INSERT operations into Parquet tables, and other resource-intensive kinds
+        of SQL statements. 
+      For large tables, the COMPUTE STATS statement itself might take a long time and you
+      might need to tune its performance. The COMPUTE STATS statement does not work with the
+      EXPLAIN statement, or the SUMMARY command in impala-shell.
+      You can use the PROFILE statement in impala-shell to examine timing information
+      for the statement as a whole. If a basic COMPUTE STATS statement takes a long time for a
+      partitioned table, consider switching to the COMPUTE INCREMENTAL STATS syntax so that only
+      newly added partitions are analyzed each time.
+    
+Examples:
+
+      This example shows two tables, T1 and T2, with a small number distinct
+      values linked by a parent-child relationship between T1.ID and T2.PARENT.
+      T1 is tiny, while T2 has approximately 100K rows. Initially, the statistics
+      includes physical measurements such as the number of files, the total size, and size measurements for
+      fixed-length columns such as with the INT type. Unknown values are represented by -1. After
+      running COMPUTE STATS for each table, much more information is available through the
+      SHOW STATS statements. If you were running a join query involving both of these tables, you
+      would need statistics for both tables to get the most effective optimization for the query.
+    [localhost:21000] > show table stats t1;
+Query: show table stats t1
++-------+--------+------+--------+
+| #Rows | #Files | Size | Format |
++-------+--------+------+--------+
+| -1    | 1      | 33B  | TEXT   |
++-------+--------+------+--------+
+Returned 1 row(s) in 0.02s
+[localhost:21000] > show table stats t2;
+Query: show table stats t2
++-------+--------+----------+--------+
+| #Rows | #Files | Size     | Format |
++-------+--------+----------+--------+
+| -1    | 28     | 960.00KB | TEXT   |
++-------+--------+----------+--------+
+Returned 1 row(s) in 0.01s
+[localhost:21000] > show column stats t1;
+Query: show column stats t1
++--------+--------+------------------+--------+----------+----------+
+| Column | Type   | #Distinct Values | #Nulls | Max Size | Avg Size |
++--------+--------+------------------+--------+----------+----------+
+| id     | INT    | -1               | -1     | 4        | 4        |
+| s      | STRING | -1               | -1     | -1       | -1       |
++--------+--------+------------------+--------+----------+----------+
+Returned 2 row(s) in 1.71s
+[localhost:21000] > show column stats t2;
+Query: show column stats t2
++--------+--------+------------------+--------+----------+----------+
+| Column | Type   | #Distinct Values | #Nulls | Max Size | Avg Size |
++--------+--------+------------------+--------+----------+----------+
+| parent | INT    | -1               | -1     | 4        | 4        |
+| s      | STRING | -1               | -1     | -1       | -1       |
++--------+--------+------------------+--------+----------+----------+
+Returned 2 row(s) in 0.01s
+[localhost:21000] > compute stats t1;
+Query: compute stats t1
++-----------------------------------------+
+| summary                                 |
++-----------------------------------------+
+| Updated 1 partition(s) and 2 column(s). |
++-----------------------------------------+
+Returned 1 row(s) in 5.30s
+[localhost:21000] > show table stats t1;
+Query: show table stats t1
++-------+--------+------+--------+
+| #Rows | #Files | Size | Format |
++-------+--------+------+--------+
+| 3     | 1      | 33B  | TEXT   |
++-------+--------+------+--------+
+Returned 1 row(s) in 0.01s
+[localhost:21000] > show column stats t1;
+Query: show column stats t1
++--------+--------+------------------+--------+----------+----------+
+| Column | Type   | #Distinct Values | #Nulls | Max Size | Avg Size |
++--------+--------+------------------+--------+----------+----------+
+| id     | INT    | 3                | -1     | 4        | 4        |
+| s      | STRING | 3                | -1     | -1       | -1       |
++--------+--------+------------------+--------+----------+----------+
+Returned 2 row(s) in 0.02s
+[localhost:21000] > compute stats t2;
+Query: compute stats t2
++-----------------------------------------+
+| summary                                 |
++-----------------------------------------+
+| Updated 1 partition(s) and 2 column(s). |
++-----------------------------------------+
+Returned 1 row(s) in 5.70s
+[localhost:21000] > show table stats t2;
+Query: show table stats t2
++-------+--------+----------+--------+
+| #Rows | #Files | Size     | Format |
++-------+--------+----------+--------+
+| 98304 | 1      | 960.00KB | TEXT   |
++-------+--------+----------+--------+
+Returned 1 row(s) in 0.03s
+[localhost:21000] > show column stats t2;
+Query: show column stats t2
++--------+--------+------------------+--------+----------+----------+
+| Column | Type   | #Distinct Values | #Nulls | Max Size | Avg Size |
++--------+--------+------------------+--------+----------+----------+
+| parent | INT    | 3                | -1     | 4        | 4        |
+| s      | STRING | 6                | -1     | 14       | 9.3      |
++--------+--------+------------------+--------+----------+----------+
+Returned 2 row(s) in 0.01s
+      The following example shows how to use the INCREMENTAL clause, available in Impala 2.1.0 and
+      higher. The COMPUTE INCREMENTAL STATS syntax lets you collect statistics for newly added or
+      changed partitions, without rescanning the entire table.
+    -- Initially the table has no incremental stats, as indicated
+-- 'false' under Incremental stats.
+show table stats item_partitioned;
++-------------+-------+--------+----------+--------------+---------+------------------
+| i_category  | #Rows | #Files | Size     | Bytes Cached | Format  | Incremental stats
++-------------+-------+--------+----------+--------------+---------+------------------
+| Books       | -1    | 1      | 223.74KB | NOT CACHED   | PARQUET | false
+| Children    | -1    | 1      | 230.05KB | NOT CACHED   | PARQUET | false
+| Electronics | -1    | 1      | 232.67KB | NOT CACHED   | PARQUET | false
+| Home        | -1    | 1      | 232.56KB | NOT CACHED   | PARQUET | false
+| Jewelry     | -1    | 1      | 223.72KB | NOT CACHED   | PARQUET | false
+| Men         | -1    | 1      | 231.25KB | NOT CACHED   | PARQUET | false
+| Music       | -1    | 1      | 237.90KB | NOT CACHED   | PARQUET | false
+| Shoes       | -1    | 1      | 234.90KB | NOT CACHED   | PARQUET | false
+| Sports      | -1    | 1      | 227.97KB | NOT CACHED   | PARQUET | false
+| Women       | -1    | 1      | 226.27KB | NOT CACHED   | PARQUET | false
+| Total       | -1    | 10     | 2.25MB   | 0B           |         |
++-------------+-------+--------+----------+--------------+---------+------------------
+
+-- After the first COMPUTE INCREMENTAL STATS,
+-- all partitions have stats. The first
+-- COMPUTE INCREMENTAL STATS scans the whole
+-- table, discarding any previous stats from
+-- a traditional COMPUTE STATS statement.
+compute incremental stats item_partitioned;
++-------------------------------------------+
+| summary                                   |
++-------------------------------------------+
+| Updated 10 partition(s) and 21 column(s). |
++-------------------------------------------+
+show table stats item_partitioned;
++-------------+-------+--------+----------+--------------+---------+------------------
+| i_category  | #Rows | #Files | Size     | Bytes Cached | Format  | Incremental stats
++-------------+-------+--------+----------+--------------+---------+------------------
+| Books       | 1733  | 1      | 223.74KB | NOT CACHED   | PARQUET | true
+| Children    | 1786  | 1      | 230.05KB | NOT CACHED   | PARQUET | true
+| Electronics | 1812  | 1      | 232.67KB | NOT CACHED   | PARQUET | true
+| Home        | 1807  | 1      | 232.56KB | NOT CACHED   | PARQUET | true
+| Jewelry     | 1740  | 1      | 223.72KB | NOT CACHED   | PARQUET | true
+| Men         | 1811  | 1      | 231.25KB | NOT CACHED   | PARQUET | true
+| Music       | 1860  | 1      | 237.90KB | NOT CACHED   | PARQUET | true
+| Shoes       | 1835  | 1      | 234.90KB | NOT CACHED   | PARQUET | true
+| Sports      | 1783  | 1      | 227.97KB | NOT CACHED   | PARQUET | true
+| Women       | 1790  | 1      | 226.27KB | NOT CACHED   | PARQUET | true
+| Total       | 17957 | 10     | 2.25MB   | 0B           |         |
++-------------+-------+--------+----------+--------------+---------+------------------
+
+-- Add a new partition...
+alter table item_partitioned add partition (i_category='Camping');
+-- Add or replace files in HDFS outside of Impala,
+-- rendering the stats for a partition obsolete.
+!import_data_into_sports_partition.sh
+refresh item_partitioned;
+drop incremental stats item_partitioned partition (i_category='Sports');
+-- Now some partitions have incremental stats
+-- and some do not.
+show table stats item_partitioned;
++-------------+-------+--------+----------+--------------+---------+------------------
+| i_category  | #Rows | #Files | Size     | Bytes Cached | Format  | Incremental stats
++-------------+-------+--------+----------+--------------+---------+------------------
+| Books       | 1733  | 1      | 223.74KB | NOT CACHED   | PARQUET | true
+| Camping     | -1    | 1      | 408.02KB | NOT CACHED   | PARQUET | false
+| Children    | 1786  | 1      | 230.05KB | NOT CACHED   | PARQUET | true
+| Electronics | 1812  | 1      | 232.67KB | NOT CACHED   | PARQUET | true
+| Home        | 1807  | 1      | 232.56KB | NOT CACHED   | PARQUET | true
+| Jewelry     | 1740  | 1      | 223.72KB | NOT CACHED   | PARQUET | true
+| Men         | 1811  | 1      | 231.25KB | NOT CACHED   | PARQUET | true
+| Music       | 1860  | 1      | 237.90KB | NOT CACHED   | PARQUET | true
+| Shoes       | 1835  | 1      | 234.90KB | NOT CACHED   | PARQUET | true
+| Sports      | -1    | 1      | 227.97KB | NOT CACHED   | PARQUET | false
+| Women       | 1790  | 1      | 226.27KB | NOT CACHED   | PARQUET | true
+| Total       | 17957 | 11     | 2.65MB   | 0B           |         |
++-------------+-------+--------+----------+--------------+---------+------------------
+
+-- After another COMPUTE INCREMENTAL STATS,
+-- all partitions have incremental stats, and only the 2
+-- partitions without incremental stats were scanned.
+compute incremental stats item_partitioned;
++------------------------------------------+
+| summary                                  |
++------------------------------------------+
+| Updated 2 partition(s) and 21 column(s). |
++------------------------------------------+
+show table stats item_partitioned;
++-------------+-------+--------+----------+--------------+---------+------------------
+| i_category  | #Rows | #Files | Size     | Bytes Cached | Format  | Incremental stats
++-------------+-------+--------+----------+--------------+---------+------------------
+| Books       | 1733  | 1      | 223.74KB | NOT CACHED   | PARQUET | true
+| Camping     | 5328  | 1      | 408.02KB | NOT CACHED   | PARQUET | true
+| Children    | 1786  | 1      | 230.05KB | NOT CACHED   | PARQUET | true
+| Electronics | 1812  | 1      | 232.67KB | NOT CACHED   | PARQUET | true
+| Home        | 1807  | 1      | 232.56KB | NOT CACHED   | PARQUET | true
+| Jewelry     | 1740  | 1      | 223.72KB | NOT CACHED   | PARQUET | true
+| Men         | 1811  | 1      | 231.25KB | NOT CACHED   | PARQUET | true
+| Music       | 1860  | 1      | 237.90KB | NOT CACHED   | PARQUET | true
+| Shoes       | 1835  | 1      | 234.90KB | NOT CACHED   | PARQUET | true
+| Sports      | 1783  | 1      | 227.97KB | NOT CACHED   | PARQUET | true
+| Women       | 1790  | 1      | 226.27KB | NOT CACHED   | PARQUET | true
+| Total       | 17957 | 11     | 2.65MB   | 0B           |         |
++-------------+-------+--------+----------+--------------+---------+------------------
+
+File format considerations:
+ The COMPUTE STATS statement works with tables created with any of the file
+        formats supported by Impala. The following considerations apply to COMPUTE
+          STATS depending on the file format of the table. 
+      The COMPUTE STATS statement works with text tables with no restrictions. These tables can be
+      created through either Impala or Hive.
+    
+      The COMPUTE STATS statement works with Parquet tables. These tables can be created through
+      either Impala or Hive.
+     The COMPUTE STATS statement works with Avro tables without restriction in
+        Impala 2.2 and higher. In earlier releases, COMPUTE STATS worked only for
+        Avro tables created through Hive, and required the CREATE TABLE statement
+        to use SQL-style column names and types rather than an Avro-style schema specification. 
+      The COMPUTE STATS statement works with RCFile tables with no restrictions. These tables can
+      be created through either Impala or Hive.
+    
+      The COMPUTE STATS statement works with SequenceFile tables with no restrictions. These
+      tables can be created through either Impala or Hive.
+    
+      The COMPUTE STATS statement works with partitioned tables, whether all the partitions use
+      the same file format, or some partitions are defined through ALTER TABLE to use different
+      file formats.
+    
+Statement type: DDL
+      
+Cancellation: Certain multi-stage statements (CREATE TABLE AS SELECT and
+        COMPUTE STATS) can be cancelled during some stages, when running INSERT
+        or SELECT operations internally. To cancel this statement, use Ctrl-C from the
+        impala-shell interpreter, the Cancel button from the
+        Watch page in Hue, Actions > Cancel from the
+        Queries list in Cloudera Manager, or Cancel from the list of
+        in-flight queries (for a particular node) on the Queries tab in the Impala web UI
+        (port 25000).
+      
+Restrictions:
+note Prior to Impala 1.4.0,
+          COMPUTE STATS counted the number of
+          NULL values in each column and recorded that figure
+        in the metastore database. Because Impala does not currently use the
+          NULL count during query planning, Impala 1.4.0 and
+        higher speeds up the COMPUTE STATS statement by
+        skipping this NULL counting. 
+Internal details:
+
+      Behind the scenes, the COMPUTE STATS statement
+      executes two statements: one to count the rows of each partition
+      in the table (or the entire table if unpartitioned) through the
+      COUNT(*) function,
+      and another to count the approximate number of distinct values
+      in each column through the NDV() function.
+      You might see these queries in your monitoring and diagnostic displays.
+      The same factors that affect the performance, scalability, and
+      execution of other queries (such as parallel execution, memory usage,
+      admission control, and timeouts) also apply to the queries run by the
+      COMPUTE STATS statement.
+    
+HDFS permissions:
+
+      The user ID that the impalad daemon runs under,
+      typically the impala user, must have read
+      permission for all affected files in the source directory:
+      all files in the case of an unpartitioned table or
+      a partitioned table in the case of COMPUTE STATS;
+      or all the files in partitions without incremental stats in
+      the case of COMPUTE INCREMENTAL STATS.
+      It must also have read and execute permissions for all
+      relevant directories holding the data files.
+      (Essentially, COMPUTE STATS requires the
+      same permissions as the underlying SELECT queries it runs
+      against the table.)
+    Kudu considerations:
+      The COMPUTE STATS statement applies to Kudu tables.
+      Impala does not compute the number of rows for each partition for
+      Kudu tables. Therefore, you do not need to re-run the operation when
+      you see -1 in the # Rows column of the output from
+      SHOW TABLE STATS. That column always shows -1 for
+      all Kudu tables.
+    
+Parent topic: Impala SQL statements

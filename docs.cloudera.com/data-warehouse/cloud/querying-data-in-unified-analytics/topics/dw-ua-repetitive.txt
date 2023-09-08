@@ -1,0 +1,38 @@
+Running the repetitive queries exampleCloudera Docs
+Running the repetitive queries example
+You see how the recommender cost model takes repetitive queries into account when generating final recommendations.    
+ The input directory workload-insights/demo/queries contains 21 .sql files,
+            queryA.sql, queryA1.sql - queryA19.sql, and queryB.sql. 
+
+Go to the workload-insights directory.
+The Workload Insights (wi) script is located in this directory. 
+
+Run the script on the directory that simulates the common, repetitive query situation.
+               
+./wi -i "queries/queryA.sql, queries/queryAx19.sql, queries/queryB.sql" -u jdbc:hive2://localhost:10000 -r SPJ
+Recommendations are: ...
+Recommended views:
+-- merged_59:
+CREATE MATERIALIZED VIEW `merged_59` AS
+SELECT `store_returns`.`sr_item_sk` AS `$f2`, SUM(`store_returns`.`sr_net_loss`) AS `$f1`
+FROM `default`.`reason`,`default`.`store_returns`
+WHERE `store_returns`.`sr_reason_sk` = `reason`.`r_reason_sk` AND 'Found a better price in a store' = `reason`.`r_reason_desc`
+GROUP BY `store_returns`.`sr_item_sk`;
+-- materialized_view_0:
+CREATE MATERIALIZED VIEW `materialized_view_0` AS
+SELECT `store_returns`.`sr_item_sk`, `store_returns`.`sr_reason_sk`, `store_returns`.`sr_ticket_number`, `store_returns`.`sr_net_loss`, `store_returns`.`sr_reason_sk` AS `sr_reason_sk0`
+FROM `default`.`reason`,`default`.`store_returns`
+WHERE `store_returns`.`sr_reason_sk` = `reason`.`r_reason_sk` AND 'Found a better price in a store' = `reason`.`r_reason_desc` AND `store_returns`.`sr_item_sk` IS NOT NULL AND `store_returns`.`sr_ticket_number` IS NOT NULL;
+-----------------------------------------------------               
+Details in the output look something like this:
+Query details:
+-- queryA:SELECT `t0`.`sr_item_sk`, SUM(`t0`.`sr_net_loss`) AS `$f1` FROM (SELECT `sr_item_sk`, `sr_reason_sk`, `sr_net_loss` FROM `default`.`store_returns` WHERE `sr_reason_sk` IS NOT NULL) AS `t0` INNER JOIN (SELECT `r_reason_sk` FROM `default`.`reason` WHERE `r_reason_desc` = 'Found a better price in a store' AND `r_reason_sk` IS NOT NULL) AS `t2` ON `t0`.`sr_reason_sk` = `t2`.`r_reason_sk` GROUP BY `t0`.`sr_item_sk`
+-- RECOMMENDATION : merged_59
+-- queryA1:SELECT `t0`.`sr_item_sk`, SUM(`t0`.`sr_net_loss`) AS `$f1` FROM (SELECT `sr_item_sk`, `sr_reason_sk`, `sr_net_loss` FROM `default`.`store_returns` WHERE `sr_reason_sk` IS NOT NULL) AS `t0` INNER JOIN (SELECT `r_reason_sk` FROM `default`.`reason` WHERE `r_reason_desc` = 'Found a better price in a store' AND `r_reason_sk` IS NOT NULL) AS `t2` ON `t0`.`sr_reason_sk` = `t2`.`r_reason_sk` GROUP BY `t0`.`sr_item_sk`
+
+...                
+-----------------------------------------------------      
+
+
+
+Parent topic: Running Recommender examples

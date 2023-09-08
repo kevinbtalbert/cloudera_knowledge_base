@@ -1,0 +1,59 @@
+Creating a multi-AZ Data Hub on AWSCloudera Docs
+Creating a multi-AZ Data Hub on AWS
+By default,
+  CDP provisions Data Hubs in a single AWS availability zone (AZ), but you can optionally choose to
+  deploy them across multiple availability zones (multi-AZ). 
+For general information about multi-AZ in CDP, refer to Deploying CDP in multiple AWS availability zones.
+Create a multi-AZ Data Hub
+You can create a multi-AZ Data Hub via CDP UI or CDP CLI within an environment. Note that the
+    CLI allows you to manually specify subnets, which is not possible via the UI. 
+Steps
+CDP UICDP CLI
+Create your Data Hub as usual. In the Advanced Options > Network and
+       Availability, you select the multiple subnets across which the Data Hub is to be
+      provisioned. If multiple subnets are selected, the Cloudera Manager node group will only have
+      one subnet for each AZ; All other nodes will have all the selected subnets. 
+
+When creating a multi-AZ Data Hub, the creation request should contain the
+       --multi-az option. For example:
+
+cdp datahub create-aws-cluster \
+--cluster-name tb-datamart-multiaz \
+--environment-name tb-multiaz-env \
+--cluster-template-name "7.2.15 - COD Edge Node" \
+--instance-groups nodeCount=3,instanceGroupName=coordinator,instanceGroupType=CORE,instanceType=r5d.4xlarge,rootVolumeSize=100,attachedVolumeConfiguration=\[\{volumeSize=300,volumeCount=2,volumeType=ephemeral\}\],recoveryMode=MANUAL,volumeEncryption=\{enableEncryption=false\} nodeCount=1,instanceGroupName=master,instanceGroupType=GATEWAY,instanceType=r5.4xlarge,rootVolumeSize=100,attachedVolumeConfiguration=\[\{volumeSize=100,volumeCount=1,volumeType=standard\}\],recoveryMode=MANUAL,volumeEncryption=\{enableEncryption=false\} nodeCount=2,instanceGroupName=executor,instanceGroupType=CORE,instanceType=r5d.4xlarge,rootVolumeSize=100,attachedVolumeConfiguration=\[\{volumeSize=300,volumeCount=2,volumeType=ephemeral\}\],recoveryMode=MANUAL,volumeEncryption=\{enableEncryption=false\} \
+--image id=23e20852-7865-4980-a045-539296340b55,catalogName=cdp-default \
+--profile mowdev \
+--multi-az
+
+By default, Data Hub instances are distributed across the subnets provided during
+      environment registration. If you prefer to specify the subnets manually, you can add the
+       --subnet-ids option and specify subnets where you would like to deploy the
+      hosts, overwriting the default node distribution. For
+      example:--subnet-ids "subnet-013855b2fc32c2cd8" "subnet-02b9054ec829374fe" "subnet-085c9ff36b38c0b35"
+If multiple subnets are provided, the Cloudera Manager node group will only have
+      one subnet for each AZ; All other nodes will have all the selected subnets.
+The subnets passed via the --subnet-ids option will be applied to
+      all cluster instance groups. If you would like to specify custom subnet ID lists for any given
+      instance group, you can pass them in the subnetIds inside the
+       --instance-groups option.
+
+
+Scaling a multi-AZ Data Hub
+If there is an availability zone that is offline, CDP may not detect the outage. In
+    such a case, if you know that a certain availability zone is offline, you can scale your cluster
+    and manually specify where the new nodes should be provisioned. 
+When scaling a multi-AZ cluster, CDP automatically distributes the new nodes in a round-robin
+    fashion across all available availability zones, prioritizing the least used availability zones.
+    If you prefer to manually control the distribution of nodes across subnets during Data Hub
+    scaling, the desired availability zones can be controlled via the related subnets during
+    upscales with the optional --preferred-subnet-ids field.
+For example:
+    cdp datahub scale-cluster --cluster-name tb-datamart-multiaz \
+  --instance-group-name "coordinator" \
+  --instance-group-desired-count 5 \
+  --preferred-subnet-ids "subnet-013855b2fc32c2cd8" "subnet-02b9054ec829374fe" "subnet-085c9ff36b38c0b35"
+If you manually specify the subnets in this manner, this overwrites the default
+    behavior. 
+
+

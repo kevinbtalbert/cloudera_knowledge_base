@@ -1,0 +1,371 @@
+Examples of creating and using UDFsCloudera Docs
+Examples of creating and using UDFs
+This section demonstrates how to create and use all kinds of
+        user-defined functions (UDFs).
+
+ For downloadable examples that you can experiment with, adapt, and use as templates for
+        your own functions, see the Cloudera sample UDF github. You must have already installed the
+        appropriate header files, as explained in Installing the UDF development package. 
+
+Sample C++ UDFs: HasVowels, CountVowels, StripVowels
+
+ This example shows 3 separate UDFs that operate on strings and
+              return different data types. In the C++ code, the functions are
+                HasVowels() (checks if a string contains any
+              vowels), CountVowels() (returns the number of
+              vowels in a string), and StripVowels() (returns a
+              new string with vowels removed). 
+ First, we add the signatures for these functions to
+                udf-sample.h in the demo build environment: 
+BooleanVal HasVowels(FunctionContext* context, const StringVal& input);
+IntVal CountVowels(FunctionContext* context, const StringVal& arg1);
+StringVal StripVowels(FunctionContext* context, const StringVal& arg1);
+ Then, we add the bodies of these functions to
+                udf-sample.cc: 
+BooleanVal HasVowels(FunctionContext* context, const StringVal& input)
+{
+        if (input.is_null) return BooleanVal::null();
+
+        int index;
+        uint8_t *ptr;
+
+        for (ptr = input.ptr, index = 0; index <= input.len; index++, ptr++)
+        {
+                uint8_t c = tolower(*ptr);
+                if (c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u')
+                {
+                        return BooleanVal(true);
+                }
+        }
+        return BooleanVal(false);
+}
+
+IntVal CountVowels(FunctionContext* context, const StringVal& arg1)
+{
+        if (arg1.is_null) return IntVal::null();
+
+        int count;
+        int index;
+        uint8_t *ptr;
+
+        for (ptr = arg1.ptr, count = 0, index = 0; index <= arg1.len; index++, ptr++)
+        {
+                uint8_t c = tolower(*ptr);
+                if (c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u')
+                {
+                        count++;
+                }
+        }
+        return IntVal(count);
+}
+
+StringVal StripVowels(FunctionContext* context, const StringVal& arg1)
+{
+        if (arg1.is_null) return StringVal::null();
+
+        int index;
+        std::string original((const char *)arg1.ptr,arg1.len);
+        std::string shorter("");
+
+        for (index = 0; index < original.length(); index++)
+        {
+                uint8_t c = original[index];
+                uint8_t l = tolower(c);
+
+                if (l == 'a' || l == 'e' || l == 'i' || l == 'o' || l == 'u')
+                {
+                        ;
+                }
+                else
+                {
+                    shorter.append(1, (char)c);
+                }
+        }
+// The modified string is stored in 'shorter', which is destroyed when this function ends. We need to make a string val
+// and copy the contents.
+        StringVal result(context, shorter.size()); // Only the version of the ctor that takes a context object allocates new memory
+        memcpy(result.ptr, shorter.c_str(), shorter.size());
+        return result;
+}
+ We build a shared library, libudfsample.so,
+              and put the library file into HDFS where Impala can read it: 
+$ make
+[  0%] Generating udf_samples/uda-sample.ll
+[ 16%] Built target uda-sample-ir
+[ 33%] Built target udasample
+[ 50%] Built target uda-sample-test
+[ 50%] Generating udf_samples/udf-sample.ll
+[ 66%] Built target udf-sample-ir
+Scanning dependencies of target udfsample
+[ 83%] Building CXX object CMakeFiles/udfsample.dir/udf-sample.o
+Linking CXX shared library udf_samples/libudfsample.so
+[ 83%] Built target udfsample
+Linking CXX executable udf_samples/udf-sample-test
+[100%] Built target udf-sample-test
+$ hdfs dfs -put ./udf_samples/libudfsample.so /user/hive/udfs/libudfsample.so
+ Finally, we go into the impala-shell
+              interpreter where we set up some sample data, issue CREATE
+                FUNCTION statements to set up the SQL function names,
+              and call the functions in some queries: 
+[localhost:21000] > create database udf_testing;
+[localhost:21000] > use udf_testing;
+
+[localhost:21000] > create function has_vowels (string) returns boolean location '/user/hive/udfs/libudfsample.so' symbol='HasVowels';
+[localhost:21000] > select has_vowels('abc');
++------------------------+
+| udfs.has_vowels('abc') |
++------------------------+
+| true                   |
++------------------------+
+Returned 1 row(s) in 0.13s
+[localhost:21000] > select has_vowels('zxcvbnm');
++----------------------------+
+| udfs.has_vowels('zxcvbnm') |
++----------------------------+
+| false                      |
++----------------------------+
+Returned 1 row(s) in 0.12s
+[localhost:21000] > select has_vowels(null);
++-----------------------+
+| udfs.has_vowels(null) |
++-----------------------+
+| NULL                  |
++-----------------------+
+Returned 1 row(s) in 0.11s
+[localhost:21000] > select s, has_vowels(s) from t2;
++-----------+--------------------+
+| s         | udfs.has_vowels(s) |
++-----------+--------------------+
+| lower     | true               |
+| UPPER     | true               |
+| Init cap  | true               |
+| CamelCase | true               |
++-----------+--------------------+
+Returned 4 row(s) in 0.24s
+
+[localhost:21000] > create function count_vowels (string) returns int location '/user/hive/udfs/libudfsample.so' symbol='CountVowels';
+[localhost:21000] > select count_vowels('cat in the hat');
++-------------------------------------+
+| udfs.count_vowels('cat in the hat') |
++-------------------------------------+
+| 4                                   |
++-------------------------------------+
+Returned 1 row(s) in 0.12s
+[localhost:21000] > select s, count_vowels(s) from t2;
++-----------+----------------------+
+| s         | udfs.count_vowels(s) |
++-----------+----------------------+
+| lower     | 2                    |
+| UPPER     | 2                    |
+| Init cap  | 3                    |
+| CamelCase | 4                    |
++-----------+----------------------+
+Returned 4 row(s) in 0.23s
+[localhost:21000] > select count_vowels(null);
++-------------------------+
+| udfs.count_vowels(null) |
++-------------------------+
+| NULL                    |
++-------------------------+
+Returned 1 row(s) in 0.12s
+
+[localhost:21000] > create function strip_vowels (string) returns string location '/user/hive/udfs/libudfsample.so' symbol='StripVowels';
+[localhost:21000] > select strip_vowels('abcdefg');
++------------------------------+
+| udfs.strip_vowels('abcdefg') |
++------------------------------+
+| bcdfg                        |
++------------------------------+
+Returned 1 row(s) in 0.11s
+[localhost:21000] > select strip_vowels('ABCDEFG');
++------------------------------+
+| udfs.strip_vowels('abcdefg') |
++------------------------------+
+| BCDFG                        |
++------------------------------+
+Returned 1 row(s) in 0.12s
+[localhost:21000] > select strip_vowels(null);
++-------------------------+
+| udfs.strip_vowels(null) |
++-------------------------+
+| NULL                    |
++-------------------------+
+Returned 1 row(s) in 0.16s
+[localhost:21000] > select s, strip_vowels(s) from t2;
++-----------+----------------------+
+| s         | udfs.strip_vowels(s) |
++-----------+----------------------+
+| lower     | lwr                  |
+| UPPER     | PPR                  |
+| Init cap  | nt cp                |
+| CamelCase | CmlCs                |
++-----------+----------------------+
+Returned 4 row(s) in 0.24s
+
+
+
+Sample C++ UDA: SumOfSquares
+
+[localhost:21000] > insert overwrite sos values (1, 1), (2, 0), (3, 1), (4, 0);
+Inserted 4 rows in 1.24s
+
+[localhost:21000] > -- Compute 1 squared + 3 squared, and 2 squared + 4 squared;
+[localhost:21000] > select y, sum_of_squares(x) from sos group by y;
++---+------------------------+
+| y | udfs.sum_of_squares(x) |
++---+------------------------+
+| 1 | 10                     |
+| 0 | 20                     |
++---+------------------------+
+Returned 2 row(s) in 0.43s
+ This example demonstrates a user-defined aggregate function
+              (UDA) that produces the sum of the squares of its input values. 
+ The coding for a UDA is a little more involved than a scalar
+              UDF, because the processing is split into several phases, each
+              implemented by a different function. Each phase is relatively
+              straightforward: the update and merge phases, where
+              most of the work is done, read an input value and combine it with
+              some accumulated intermediate value. 
+ As in our sample UDF from the previous example, we add function
+              signatures to a header file (in this case,
+                uda-sample.h). Because this is a
+              math-oriented UDA, we make two versions of each function, one
+              accepting an integer value and the other accepting a
+              floating-point value. 
+void SumOfSquaresInit(FunctionContext* context, BigIntVal* val);
+void SumOfSquaresInit(FunctionContext* context, DoubleVal* val);
+
+void SumOfSquaresUpdate(FunctionContext* context, const BigIntVal& input, BigIntVal* val);
+void SumOfSquaresUpdate(FunctionContext* context, const DoubleVal& input, DoubleVal* val);
+
+void SumOfSquaresMerge(FunctionContext* context, const BigIntVal& src, BigIntVal* dst);
+void SumOfSquaresMerge(FunctionContext* context, const DoubleVal& src, DoubleVal* dst);
+
+BigIntVal SumOfSquaresFinalize(FunctionContext* context, const BigIntVal& val);
+DoubleVal SumOfSquaresFinalize(FunctionContext* context, const DoubleVal& val);
+ We add the function bodies to a C++ source file (in this case,
+                uda-sample.cc): 
+void SumOfSquaresInit(FunctionContext* context, BigIntVal* val) {
+  val->is_null = false;
+  val->val = 0;
+}
+void SumOfSquaresInit(FunctionContext* context, DoubleVal* val) {
+  val->is_null = false;
+  val->val = 0.0;
+}
+
+void SumOfSquaresUpdate(FunctionContext* context, const BigIntVal& input, BigIntVal* val) {
+  if (input.is_null) return;
+  val->val += input.val * input.val;
+}
+void SumOfSquaresUpdate(FunctionContext* context, const DoubleVal& input, DoubleVal* val) {
+  if (input.is_null) return;
+  val->val += input.val * input.val;
+}
+
+void SumOfSquaresMerge(FunctionContext* context, const BigIntVal& src, BigIntVal* dst) {
+  dst->val += src.val;
+}
+void SumOfSquaresMerge(FunctionContext* context, const DoubleVal& src, DoubleVal* dst) {
+  dst->val += src.val;
+}
+
+BigIntVal SumOfSquaresFinalize(FunctionContext* context, const BigIntVal& val) {
+  return val;
+}
+DoubleVal SumOfSquaresFinalize(FunctionContext* context, const DoubleVal& val) {
+  return val;
+}
+ As with the sample UDF, we build a shared library and put it
+              into HDFS: 
+$ make
+[  0%] Generating udf_samples/uda-sample.ll
+[ 16%] Built target uda-sample-ir
+Scanning dependencies of target udasample
+[ 33%] Building CXX object CMakeFiles/udasample.dir/uda-sample.o
+Linking CXX shared library udf_samples/libudasample.so
+[ 33%] Built target udasample
+Scanning dependencies of target uda-sample-test
+[ 50%] Building CXX object CMakeFiles/uda-sample-test.dir/uda-sample-test.o
+Linking CXX executable udf_samples/uda-sample-test
+[ 50%] Built target uda-sample-test
+[ 50%] Generating udf_samples/udf-sample.ll
+[ 66%] Built target udf-sample-ir
+[ 83%] Built target udfsample
+[100%] Built target udf-sample-test
+$ hdfs dfs -put ./udf_samples/libudasample.so /user/hive/udfs/libudasample.so
+ To create the SQL function, we issue a CREATE AGGREGATE
+                FUNCTION statement and specify the underlying C++
+              function names for the different phases: 
+[localhost:21000] > use udf_testing;
+
+[localhost:21000] > create table sos (x bigint, y double);
+[localhost:21000] > insert into sos values (1, 1.1), (2, 2.2), (3, 3.3), (4, 4.4);
+Inserted 4 rows in 1.10s
+
+[localhost:21000] > create aggregate function sum_of_squares(bigint) returns bigint
+  > location '/user/hive/udfs/libudasample.so'
+  > init_fn='SumOfSquaresInit'
+  > update_fn='SumOfSquaresUpdate'
+  > merge_fn='SumOfSquaresMerge'
+  > finalize_fn='SumOfSquaresFinalize';
+
+[localhost:21000] > -- Compute the same value using literals or the UDA;
+[localhost:21000] > select 1*1 + 2*2 + 3*3 + 4*4;
++-------------------------------+
+| 1 * 1 + 2 * 2 + 3 * 3 + 4 * 4 |
++-------------------------------+
+| 30                            |
++-------------------------------+
+Returned 1 row(s) in 0.12s
+[localhost:21000] > select sum_of_squares(x) from sos;
++------------------------+
+| udfs.sum_of_squares(x) |
++------------------------+
+| 30                     |
++------------------------+
+Returned 1 row(s) in 0.35s
+ Until we create the overloaded version of the UDA, it can only
+              handle a single data type. To allow it to handle
+                DOUBLE as well as BIGINT, we
+              issue another CREATE AGGREGATE FUNCTION
+              statement: 
+[localhost:21000] > select sum_of_squares(y) from sos;
+ERROR: AnalysisException: No matching function with signature: udfs.sum_of_squares(DOUBLE).
+
+[localhost:21000] > create aggregate function sum_of_squares(double) returns double
+  > location '/user/hive/udfs/libudasample.so'
+  > init_fn='SumOfSquaresInit'
+  > update_fn='SumOfSquaresUpdate'
+  > merge_fn='SumOfSquaresMerge'
+  > finalize_fn='SumOfSquaresFinalize';
+
+[localhost:21000] > -- Compute the same value using literals or the UDA;
+[localhost:21000] > select 1.1*1.1 + 2.2*2.2 + 3.3*3.3 + 4.4*4.4;
++-----------------------------------------------+
+| 1.1 * 1.1 + 2.2 * 2.2 + 3.3 * 3.3 + 4.4 * 4.4 |
++-----------------------------------------------+
+| 36.3                                          |
++-----------------------------------------------+
+Returned 1 row(s) in 0.12s
+[localhost:21000] > select sum_of_squares(y) from sos;
++------------------------+
+| udfs.sum_of_squares(y) |
++------------------------+
+| 36.3                   |
++------------------------+
+Returned 1 row(s) in 0.35s
+ Typically, you use a UDA in queries with GROUP
+                BY clauses, to produce a result set with a separate
+              aggregate value for each combination of values from the
+                GROUP BY clause. Let's change our sample table
+              to use 0 to indicate rows containing even values,
+              and 1 to flag rows containing odd values. Then
+              the GROUP BY query can return two values, the sum
+              of the squares for the even values, and the sum of the squares for
+              the odd values:
+
+
+
+
+Parent topic: User-defined functions (UDFs)

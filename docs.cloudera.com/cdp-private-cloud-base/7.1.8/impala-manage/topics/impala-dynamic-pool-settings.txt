@@ -1,0 +1,131 @@
+Dynamic Resource Pool SettingsCloudera Docs
+Dynamic Resource Pool Settings
+Use the following settings to configure your dynamic resource pools
+    for Impala.
+
+ Max Memory 
+Maximum amount of aggregate memory available across the cluster to
+          all queries executing in this pool. This should be a portion of the
+          aggregate configured memory for Impala daemons, which will be shown in
+          the settings dialog next to this option for convenience. Setting this
+          to a non-zero value enables memory based admission control.Impala
+            determines the expected maximum memory used by all queries in the
+            pool and holds back any further queries that would result in Max
+              Memory being exceeded. If you specify Max
+            Memory, you should specify the amount of memory to allocate to
+            each query in this pool. You can do this in two ways:
+By setting Maximum Query Memory Limit and Minimum
+                Query Memory Limit. Setting them gives Impala flexibility to
+              set aside more memory to queries that are expected to be
+              memory-hungry.
+By setting Default Query Memory Limit to the exact amount
+              of memory that Impala should set aside for queries in that
+              pool.
+Note that if you do not set any of the above options, or set
+              Default Query Memory Limit to 0, Impala will rely entirely
+            on memory estimates to determine how much memory to set aside for
+            each query. This is not recommended because it can result in queries
+            not running or being starved for memory if the estimates are
+            inaccurate.For example, consider the following scenario: 
+The cluster is running impalad daemons on five
+              hosts.
+A dynamic resource pool has Max Memory set to 100
+              GB.
+The Maximum Query Memory Limit for the pool is 10 GB and
+                Minimum Query Memory Limit is 2 GB. Therefore, any query
+              running in this pool could use up to 50 GB of memory (Maximum
+                Query Memory Limit * number of Impala nodes).
+Impala will run varying numbers of queries concurrently
+              because queries may be given memory limits anywhere between 2 GB
+              and 10 GB, depending on the estimated memory requirements. For
+              example, Impala may run up to 10 small queries with 2 GB
+              memory limits or two large queries with 10 GB memory limits
+              because that is what will fit in the 100 GB cluster-wide limit
+              when executing on five hosts.
+The executing queries may use less memory than the per-host
+              memory limit or the Max Memory cluster-wide limit if they
+              do not need that much memory. In general this is not a problem so
+              long as you are able to run enough queries concurrently to
+              meet your needs.
+
+Minimum Query Memory Limit and Maximum Query Memory Limit
+These two options determine the minimum and maximum per-host memory
+          limit that will be chosen by Impala Admission control for queries in
+          this resource pool. If set, Impala admission control will choose a
+          memory limit between the minimum and maximum value based on the
+          per-host memory estimate for the query. The memory limit chosen
+          determines the amount of memory that Impala admission control will set
+          aside for this query on each host that the query is running on. The
+          aggregate memory across all of the hosts that the query is running on
+          is counted against the pool’s Max Memory.Minimum Query
+              Memory Limit must be less than or equal to Maximum Query
+              Memory Limit and Max Memory.You can override
+          Impala’s choice of memory limit by setting the
+            MEM_LIMIT query option. If the Clamp MEM_LIMIT
+            Query Option is selected and the user sets
+            MEM_LIMIT to a value that is outside of the range
+          specified by these two options, then the effective memory limit will
+          be either the minimum or maximum, depending on whether
+            MEM_LIMIT is lower than or higher than the
+          range.
+ Max Running Queries 
+Maximum number of concurrently running queries in this pool. The
+            default value is unlimited. The maximum number of queries that
+          can run concurrently in this pool. The default value is unlimited. Any
+          queries for this pool that exceed Max Running
+            Queries are added to the admission control queue until
+          other queries finish. You can use Max Running
+            Queries in the early stages of resource management, when
+          you do not have extensive data about query memory usage, to determine
+          if the cluster performs better overall if throttling is applied to
+          Impala queries.  For a workload with many small queries, you
+            typically specify a high value for this setting, or leave the
+            default setting of unlimited. For a workload with expensive
+            queries, where some number of concurrent queries saturate the
+            memory, I/O, CPU, or network capacity of the cluster, set the value
+            low enough that the cluster resources are not overcommitted for
+            Impala. Once you have enabled memory-based admission control
+            using other pool settings, you can still use Max Running
+              Queries as a safeguard. If queries exceed either the
+            total estimated memory or the maximum number of concurrent queries,
+            they are added to the queue. 
+
+ Max Queued Queries 
+ Maximum number of queries that can be queued in this pool. The
+          default value is 200. (optional)
+ Queue Timeout 
+ The amount of time, in milliseconds, that a query waits in the
+          admission control queue for this pool before being canceled. The
+          default value is 60,000 milliseconds. It the following cases,
+              Queue Timeout is not significant, and you
+            can specify a high value to avoid canceling queries unexpectedly:
+In a low-concurrency workload where few or no queries are
+                queued
+In an environment without a strict SLA, where it does not
+                matter if queries occasionally take longer than usual because
+                they are held in admission control
+You might also need to increase the value to use Impala with
+            some business intelligence tools that have their own timeout
+            intervals for queries. In a high-concurrency workload,
+            especially for queries with a tight SLA, long wait times in
+            admission control can cause a serious problem. For example, if a
+            query needs to run in 10 seconds, and you have tuned it so that it
+            runs in 8 seconds, it violates its SLA if it waits in the admission
+            control queue longer than 2 seconds. In a case like this, set a low
+            timeout value and monitor how many queries are cancelled because of
+            timeouts. This technique helps you to discover capacity, tuning, and
+            scaling problems early, and helps avoid wasting resources by running
+            expensive queries that have already missed their SLA.  If you
+            identify some queries that can have a high timeout value, and others
+            that benefit from a low timeout value, you can create separate pools
+            with different values for this setting. 
+
+ Clamp MEM_LIMIT Query Option
+If this field is not selected, the MEM_LIMIT query
+          option will not be bounded by the Maximum Query Memory Limit
+          and the Minimum Query Memory Limit values specified for this
+          resource pool. By default, this field is selected. The field is
+          disabled if both Minimum Query Memory Limit and Maximum
+            Query Memory Limit are not set.
+
+

@@ -1,0 +1,227 @@
+Update from 1.4.1 or 1.5.0 to 1.5.1 (ECS)Cloudera Docs
+Update from 1.4.1 or 1.5.0 to 1.5.1 (ECS)
+You can update your existing CDP Private Cloud Data Services
+    1.4.1 or 1.5.0 to 1.5.1 without performing an uninstall. 
+
+
+Review the Software Support Matrix for ECS. 
+Run the following commands on the ECS server hosts: 
+TOLERATION='{"spec": { "template": {"spec": { "tolerations": [{ "effect": "NoSchedule","key": "node-role.kubernetes.io/control-plane","operator": "Exists" }]}}}}'
+
+kubectl patch deployment/yunikorn-admission-controller -n yunikorn -p "$TOLERATION"
+
+kubectl patch deployment/yunikorn-scheduler -n yunikorn -p "$TOLERATION"
+
+Upgrading the Embedded Container Service (ECS) version, while CDE service is enabled, it
+          fails to launch the Jobs page in the old CDE virtual cluster. You
+          must back up CDE jobs in the CDE virtual cluster, and then delete the CDE service and CDE
+          virtual cluster. Restore it after the upgrade. For more information about backup and
+          restore CDE jobs, see  Backing up and restoring CDE jobs.
+
+As of CDP Private Cloud Data Services
+            1.5.1, external Control Plane metadata databases are no longer supported. If you are
+            upgrading from CDP Private Cloud Data Services 1.4.1 or
+            1.5.0 to 1.5.1, and you were previously using an external Control Plane database, you
+            must run the following psql commands to create the required databases.
+            You should also ensure that the two new databases are owned by the common database users
+            known by the control plane.
+
+CREATE DATABASE db-cadence;
+CREATE DATABASE db-cadence-visibility;
+
+
+If you are upgrading from CDP Private Cloud Data Services 1.4.1 or
+          1.5.0 to 1.5.1, and you were previously using an external Control Plane database, you must
+          regenerate the DB certificate with SAN before upgrading to CDP Private Cloud Data Services 1.5.1. For
+          more information see Pre-upgrade - Regenerate external DB cert as SAN (if applicable). 
+Make a backup of the OpenShift routes before upgrading to 1.5.1. 
+
+
+
+noteThis procedure requires downtime during the upgrade. 
+importantWhen the control plane is upgraded from 1.4.1 to
+        1.5.1, the Kubernates version changes to 1.24. The Livy pods running in existing Virtual
+        Clusters (VCs) use a deprecated networking API for creating ingress for Spark driver pods.
+        Because the old networking API is deprecated and does not exist in Kubernates 1.24, any new
+        job run will not work for the existing VCs. 
+
+
+In Cloudera Manager, navigate to CDP Private Cloud Data Services and click the  icon, then click
+          Update.
+
+
+
+
+
+
+On the Getting Started page, you can select the Install
+                    method - Air Gapped or Internet
+                    and proceed.
+
+Internet install method
+
+
+
+
+
+Air Gapped install method
+
+
+
+Click Continue.
+
+
+On the Collect Information page, click
+                        Continue.
+
+
+
+
+
+
+On the Install Parcels page, click
+                        Continue.
+
+
+
+
+
+
+On the Update Progress page, you can see the
+          progress of your update. Click Continue after
+          the update is complete .
+
+
+
+noteThe upgrade might occasionally fail with error messages or
+              conditions such as the following: 
+Error message:  During the following step:
+                    Execute command Install Tolerations Webhook on
+                    service ECS-3 the Upgrade progress page mentions
+                  a failure waiting for kube-proxy to come
+                      up.Workaround:
+Log in using ssh to one of the ECS Server nodes and
+                        run the following command:
+                        /var/lib/rancher/rke2/bin/kubectl get nodesThe
+                        output will look similar to the following:
+                        NAME                     STATUS     ROLES                       AGE     VERSION
+ecs-abc-1.vpc.myco.com   Ready      control-plane,etcd,master   4h50m   v1.21.8+rke2r2
+ecs-abc-2.vpc.myco.com   NotReady   <none>                      4h48m   v1.20.8+rke2r1
+ecs-abc-3.vpc.myco.com   Ready      <none>                      4h48m   v1.21.8+rke2r2
+ecs-abc-4.vpc.myco.com   NotReady   <none>                      4h48m   v1.20.8+rke2r1
+ecs-abc-5.vpc.myco.com   NotReady   <none>                      4h48m   v1.20.8+rke2r1 If
+                        any of the version numbers in the last column are lower
+                        than the expected version, reboot those nodes. (For
+                        example, v1.20.8 in the output
+                        above.)
+In the Command Output window, in the step that failed,
+                        click Resume. 
+
+Upgrade hangs on the Execute command Post upgrade
+                    configuration on service ECS step for more than
+                  an hour.Workaround:
+Log in to one of the ECS server nodes and run the
+                        following command:
+                        kubectl get nodesThe output looks
+                        similar to the following:
+                        NAME                     STATUS     ROLES                       AGE     VERSION
+ecs-abc-1.vpc.myco.com   Ready      control-plane,etcd,master   3h47m   v1.21.11+rke2r1
+ecs-abc-2.vpc.myco.com   NotReady   <none>                      3h45m   v1.21.8+rke2r2
+ecs-abc-3.vpc.myco.com   NotReady   <none>                      3h45m   v1.21.8+rke2r2
+ecs-abc-4.vpc.myco.com   NotReady   <none>                      3h45m   v1.21.8+rke2r2If
+                        you any nodes display a status of
+                          NotReady, click the
+                          Abort button in the command
+                        output window. 
+Reboot all nodes showing
+                        NotReady.
+Check the node status again as shown above. After all
+                        the nodes show Ready, click the
+                          Resume button in the command
+                        output window to continue with the upgrade. 
+
+
+
+
+
+After the update is complete, the Summary
+          page appears. You can now Launch CDP Private
+            Cloud from here.
+If you see a Longhorn Health Test message about a degraded
+          Longhorn volume, wait for the cluster repair to complete. 
+
+Or you can navigate to the CDP Private Cloud Data
+              Services page and click Open CDP Private
+              Cloud Data Services.
+
+CDP Private Cloud Data Services opens
+          up in a new window.
+
+
+
+If the upgrade stalls, do the following:
+Check the status of all pods by running the following command on
+              the ECS server node:
+              kubectl get pods --all-namespaces 
+If there are any pods stuck in “Terminating” state, then force
+              terminate the pod using the following
+                command:kubectl delete pods <NAME OF THE POD> -n <NAMESPACE> --grace-period=0 —force If
+                the upgrade still does not resume, continue with the remaining
+                steps. 
+In the Cloudera Manager Admin Console, go to the ECS service and
+              click Web UI > Storage
+                  UI.The Longhorn dashboard opens.
+              
+
+Check the "in Progress" section of the dashboard to see whether
+                there are any volumes stuck in the attaching/detaching state in.
+                If a volume is that state, reboot its host. 
+
+
+
+
+
+You may see the following error message during the
+            Upgrade Cluster > Reapplying all settings > kubectl-patch
+          :kubectl rollout status deployment/rke2-ingress-nginx-controller -n kube-system --timeout=5m
+error: timed out waiting for the conditionIf you see this
+          error, do the following: 
+Check whether all the Kubernetes nodes are ready for scheduling.
+              Run the following command from the ECS Server
+              node:kubectl get nodesYou
+              will see output similar to the
+              following:NAME STATUS ROLES AGE VERSION
+<node1> Ready,SchedulingDisabled control-plane,etcd,master 103m v1.21.11+rke2r1
+<node2> Ready <none> 101m v1.21.11+rke2r1
+<node3> Ready <none> 101m v1.21.11+rke2r1
+<node4> Ready <none> 101m v1.21.11+rke2r1
+
+Run the following command from the ECS Server node for the node
+                showing a status of
+                SchedulingDisabled:kubectl uncordon You
+                will see output similar to the following:
+                <node1>node/<node1> uncordoned
+
+Scale down and scale up the
+                rke2-ingress-nginx-controller pod by
+              running the following command on the ECS Server
+              node:kubectl delete pod  rke2-ingress-nginx-controller-<pod number> -n kube-system
+Resume the upgrade.
+
+
+
+
+
+After upgrade, the Cloudera Manager admin role may be missing the Host Administrators
+          privilege in an upgraded cluster. The cluster administrator should run the following
+          command to manually add this privilege to the
+          role.ipa role-add-privilege <cmadminrole> --privileges="Host Administrators"
+If you specified a custom certificate, select the ECS cluster in Cloudera Manager, then
+          select Actions > Update Ingress Controller. This command copies the
+            cert.pem and key.pem files from the Cloudera Manager
+          server host to the ECS Management Console host.
+
+
+
+
+Parent topic: Upgrading

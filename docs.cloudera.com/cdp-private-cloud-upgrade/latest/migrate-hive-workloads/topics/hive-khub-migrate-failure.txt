@@ -1,0 +1,45 @@
+Handing a failed verificationCloudera Docs
+Handing a failed verification
+Although you stopped ETL jobs and set Ranger policies to prevent writes to databases,
+        a database write still might occur. This causes a verification failure. You need to find out
+        if such a write caused the failure.
+
+
+
+
+You completed the replication of Hive data from HDP to CDP.
+The last event id in the output is at least the checkpoint id for all databases,
+                    but does not match the checkpoint id. 
+You noted the HDP notification event id, which you use later as a checkpoint
+                    id.
+
+
+
+On the backend RDBMS of the HDP cluster, run a query to determine if any writes
+                    occurred during replication.
+select * from NOTIFICATION_LOG where event_id > <HDP notification event id > and event_type = 'COMMIT_TXN';
+                    This query gets all commit transaction (TXN) events after the HDP checkpoint
+                    event-id.  
+If there are no commit events, the output looks something like this:
+
+If there are no commit events, assume all valid writes are replicated.
+                    Skip the rest of the steps. The migration is done.If there are commit events,
+                        continue to the next step.
+
+Run a query to get information about the writes. 
+
+select event_type,db_name, count(*) from NOTIFICATION_LOG 
+where event_id > <HDP notification event id >  
+group by db_name,event_type order by db_name;
+
+The output might look something like this: 
+
+
+
+Identify clients who wrote to the database, and stop further attempts.
+You can use Ranger audits, if enabled, to identify such clients as described in Managing Auditing.
+
+Repeat the procedure "Verifying replication".
+
+
+Parent topic: Verifying the Hive data replication from HDP 3.1.5 to 7.1.6

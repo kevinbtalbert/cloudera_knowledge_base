@@ -1,0 +1,107 @@
+Generating surrogate keysCloudera Docs
+Generating surrogate keys
+You can use the built-in SURROGATE_KEY user-defined function (UDF) to automatically
+        generate numerical Ids for rows as you enter data into a table. The generated surrogate keys
+        can replace wide, multiple composite keys.
+Hive supports the surrogate keys on ACID tables only, as described in the following
+            matrix of table types:  
+
+Table Type
+ACID
+Surrogate Keys
+File Format
+INSERT
+UPDATE/DELETE
+
+
+
+Managed: CRUD transactional
+Yes
+Yes
+ORC
+Yes
+Yes
+
+
+Managed: Insert-only transactional
+Yes
+Yes
+Any
+Yes
+No
+
+
+Managed: Temporary 
+No
+No
+Any
+Yes
+No
+
+
+External
+No
+No
+Any
+Yes
+No
+
+ The table you want to join using surrogate keys cannot have column types that
+            need casting. These data types must be primitives, such as INT or STRING. 
+Joins using the generated keys are faster than joins using strings. Using 
+            generated keys does not force data into a single node by a row number. You can 
+            generate keys as abstractions of natural keys.
+                Surrogate keys have an advantage over UUIDs, which are slower and probabilistic.
+                The SURROGATE_KEY UDF generates a unique Id for every row that you insert into a table. It
+                generates keys based on the execution environment in a distributed system, which
+                includes a number of factors, such as internal data structures, the state of a
+                table, and the last transaction id. Surrogate key generation does not require any
+                coordination between compute tasks.
+The UDF takes either no arguments or two arguments: 
+Write Id bits
+Task Id bits
+
+
+Create a students table in the default ORC format that has ACID
+                    properties.
+
+CREATE TABLE students (row_id INT, name VARCHAR(64), dorm INT);
+
+
+Insert data into the table. For example:
+INSERT INTO TABLE students VALUES (1, 'fred flintstone', 100), (2, 'barney rubble', 200);
+
+Create a version of the students table using the SURROGATE_KEY UDF.
+
+CREATE TABLE students_v2 
+(`ID` BIGINT DEFAULT SURROGATE_KEY(),
+ row_id INT,
+ name VARCHAR(64), 
+ dorm INT, 
+ PRIMARY KEY (ID) DISABLE NOVALIDATE);
+
+
+Insert data, which automatically generates surrogate keys for the primary keys.
+INSERT INTO students_v2 (row_id, name, dorm) SELECT * FROM students;
+
+Take a look at the surrogate keys.
+SELECT * FROM students_v2;
+
++-----------------+---------------------+-------------------+-------------------+
+| students_v2.id  | students_v2.row_id  | students_v2.name  | students_v2.dorm  |
++-----------------+---------------------+-------------------+-------------------+
+| 1099511627776   | 1                   | fred flintstone   | 100               |
+| 1099511627777   | 2                   | barney rubble     | 200               |
++-----------------+---------------------+-------------------+-------------------+               
+
+Add the surrogate keys as a foreign key to another table, such as a
+                    student_grades table, to speed up subsequent joins of the tables.
+
+ALTER TABLE student_grades ADD COLUMNS (gen_id BIGINT);
+ 
+MERGE INTO student_grades g USING students_v2 s ON g.row_id = s.row_id
+WHEN MATCHED THEN UPDATE SET gen_id = s.id;
+
+Now you can achieve fast joins on the surrogate keys.
+
+

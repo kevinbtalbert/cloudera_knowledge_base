@@ -1,0 +1,118 @@
+Rolling Encryption KeysCloudera Docs
+Rolling Encryption Keys
+When you roll an EZ key, you are essentially creating a new version of the key
+      (ezKeyVersionName). Rolling EZ keys regularly helps enterprises minimize the
+    risk of key exposure. If a malicious attacker were to obtain the EZ key and decrypt encrypted
+    data encryption keys (EDEKs) into DEKs, they could gain the ability to decrypt HDFS files.
+    Rolling an EZ key ensures that all DEKs for newly-created files will be encrypted with the new
+    version of the EZ key. The older EZ key version that the attacker obtained cannot decrypt these
+    EDEKs. 
+Before attempting to roll an encryption key (also known as an
+      encryption zone key, or EZ key),you must be familiar with the concepts associated with
+      Navigator Data Encryption and the HDFS Transparent Encryption.
+You may want to roll the encryption key periodically, as part
+      of your security policy or when an external security compromise is detected.
+Optional: 
+Before rolling any keys, log in as HDFS Superuser and verify/identify the encryption
+          zones to which the current key applies.
+This operation also helps clarify the relationship between the EZ key and encryption
+          zones, and, if necessary, makes it easier to identify more important, high priority
+          zones.$ hdfs crypto –listZones
+/ez key1
+/ez2 key2
+/user key1
+The first column identifies the encryption zone paths; the second column identifies
+          the encryption key name. 
+Optional: 
+You can verify that the files inside an encryption zone are encrypted using the
+            hdfs crypto -getFileEncryptionInfo command. 
+Note the EZ key version name and value, which you can use for comparison and
+          verification after rolling the EZ
+          key.$ hdfs crypto –getFileEncryptionInfo –path /ez/f
+{cipherSuite: {name: AES/CTR/NoPadding, algorithmBlockSize: 16}. cryptoProtocolVersion:
+CryptoProtocolVersion{description=’Encryption zones’, version=2, unknownValue=null}, edek: 373c0c2e919c27e58c1c343f54233cbd,
+iv: d129c913c8a34cde6371ec95edfb7337, keyName: key1, ezKeyVersionName: 7mbvopZ0Weuvs0XtTkpGw3G92KuWc4e4xcTXl0bXCpF}
+
+Log off as HDFS Superuser and log in as Key Administrator.
+Because keys can be rolled, a key can have multiple key versions, where each key
+          version has its own key material (the actual secret bytes used during DEK encryption and
+          EDEK decryption). You can fetch an encryption key by either its key name, returning the
+          latest version of the key, or by a specific key version.
+Roll the encryption key (previously identified/confirmed by the HDFS Superuser in step
+          1. Here, the <key name> is
+          key1.hadoop key roll key1
+This operation contacts the KMS and rolls the keys there. Note that this can take a
+          considerable amount of time, depending on the number of key versions residing in the KMS.
+          Rolling key version from KeyProvider: org.apache.hadoop.crypto.key.kms.LoadBalancingKMSClientProvider@5ea434c8
+for keyName: key1
+key1 has been successfully rolled.
+org.apache.hadoop.crypto.key.kms.LoadBalancingKMSClientProvider@5ea434c8 has been updated.
+
+Log out as Key Administrator, and log in as HDFS Superuser. Verify that new files in
+          the encryption zone have a new EZ key version. 
+
+noteFor performance reasons, the NameNode caches EDEKs, so after rolling an encryption
+            key, you may not be able to see the new version encryption key immediately, or at least
+            until after the EDEK cache is consumed. Of course, the file decryption and encryption
+            still works with these EDEKs. If you require that all files' DEKs in an encryption zone
+            are encrypted using the latest version encryption key, please re-encrypt the
+            EDEKs.
+$ hdfs crypto –getFileEncryptionInfo –path /ez/new_file
+{cipherSuite: {name: AES/CTR/NoPadding, algorithmBlockSize: 16}. cryptoProtocolVersion:
+CryptoProtocolVersion{description=’Encryption zones’, version=2, unknownValue=null}, edek: 9aa13ea4a700f96287cfe1349f6ff4f2,
+iv: 465c878ad9325e42fa460d2a22d12a72, keyName: key1, ezKeyVersionName: 4tuvorJ6Feeqk8WiCfdDs9K32KuEj7g2ydCAv0gNQbY}
+
+Alternatively, you can use KMS Rest API to view key metadata and key versions.
+          Elements appearing in brackets should be replaced with your actual values. So in this
+          case, before rolling a key, you can view the key metadata and versions as follows:
+
+$ curl -k --negotiate -u: "https://<KMS_HOSTNAME>:16000/kms/v1/key/<key-name>/_metadata"
+{
+  "name" : "<key-name>",
+  "cipher" : "<cipher>",
+  "length" : <length>,
+  "description" : "<decription>",
+  "created" : <millis-epoc>,
+  "versions" : <versions> (For example, 1)
+}
+
+$ curl -k  --negotiate -u: "https://<KMS_HOSTNAME>:16000/kms/v1/key/<key-name>/_currentversion"
+{
+  "material" : "<material>",
+  "name" : "<key-name>",
+  "versionName" : "<versionName>" (For example, version 1)
+}
+
+Roll the key and compare the results: 
+
+$ hadoop key roll key1
+
+Rolling key version from KeyProvider: KMSClientProvider[https://<KMS_HOSTNAME>:16000/kms/v1/]
+
+  for key name: <key-name>
+
+key1 has been successfully rolled.
+
+KMSClientProvider[https://<KMS_HOSTNAME>/kms/v1/] has been updated.
+
+$ curl -k  --negotiate -u: "https://<KMS_HOSTNAME>:16000/kms/v1/key/<key-name>/_currentversion"
+
+{
+  "material" : "<material>", (New material)
+  "name" : "<key-name>",
+  "versionName" : "<versionName>" (New version name. For example, version 2)
+}
+
+$ curl -k --negotiate -u: "https://<KMS_HOSTNAME>:16000/kms/v1/key/<key-name>/_metadata"
+{
+  "name" : "<key-name>",
+  "cipher" : "<cipher>",
+  "length" : <length>,
+  "description" : "<decription>",
+  "created" : <millis-epoc>,
+  "versions" : <versions> (For example, version 2)
+}
+
+
+
+Parent topic: Managing Encryption Keys and Zones

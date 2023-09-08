@@ -1,0 +1,337 @@
+ORDER BY clauseCloudera Docs
+ORDER BY clause
+The ORDER BY clause of a SELECT statement sorts the
+    result set based on the values from one or more columns.
+First, data is sorted locally by each impalad daemon,
+        then streamed to the coordinator daemon, which merges the sorted result
+        sets. For distributed queries, this is a relatively expensive operation
+        and can require more memory capacity than a query without ORDER
+          BY. Even if the query takes approximately the same time to
+        finish with or without the ORDER BY clause,
+        subjectively it can appear slower because no results are available until
+        all processing is finished, rather than results coming back gradually as
+        rows matching the WHERE clause are found. Therefore, if
+        you only need the first N results from the sorted result set, also
+        include the LIMIT clause, which reduces network
+        overhead and the memory requirement on the coordinator node. 
+
+Syntax:
+
+ The full syntax for the ORDER BY clause is: 
+ORDER BY col_ref [, col_ref ...] [ASC | DESC] [NULLS FIRST | NULLS LAST]
+
+col_ref ::= column_name | integer_literal
+
+ Although the most common usage is ORDER BY
+            column_name, you can also specify
+          ORDER BY 1 to sort by the first column of the result
+        set, ORDER BY 2 to sort by the second column, and so
+        on. The number must be a numeric literal, not some other kind of
+        constant expression. (If the argument is some other expression, even a
+          STRING value, the query succeeds but the order of
+        results is undefined.) 
+
+ORDER BY column_number can only be
+        used when the query explicitly lists the columns in the
+          SELECT list, not with SELECT *
+        queries. 
+
+Ascending and descending sorts:
+
+ The default sort order (the same as using the ASC
+        keyword) puts the smallest values at the start of the result set, and
+        the largest values at the end. Specifying the DESC
+        keyword reverses that order. 
+
+Sort order for NULL values:
+
+ See the NULL section for details about how
+          NULL values are positioned in the sorted result set,
+        and how to use the NULLS FIRST and NULLS
+          LAST clauses. (The sort position for NULL
+        values in ORDER BY ... DESC queries is changed in
+        Impala 1.2.1 and higher to be more standards-compliant, and the
+          NULLS FIRST and NULLS LAST keywords
+        are new in Impala 1.2.1.) 
+ Prior to Impala 1.4.0, Impala required any query
+        including an ORDER_BY clause to also use a LIMIT clause.
+        In Impala 1.4.0 and higher, the LIMIT clause is optional for ORDER
+          BY queries. In cases where sorting a huge result set requires enough memory to
+        exceed the Impala memory limit for a particular executor Impala daemon, Impala automatically
+        uses a temporary disk work area to perform the sort operation. 
+
+Complex type considerations:
+
+ In Impala 2.3 and higher, the complex data types
+          STRUCT, ARRAY, and
+          MAP are available. These columns cannot be referenced
+        directly in the ORDER BY clause. When you query a
+        complex type column, you use join notation to unpack the elements
+        of the complex type, and within the join query you can include an
+          ORDER BY clause to control the order in the result
+        set of the scalar elements from the complex type.
+ The following query shows how a complex type column cannot be directly
+        used in an ORDER BY clause: 
+CREATE TABLE games (id BIGINT, score ARRAY <BIGINT>) STORED AS PARQUET;
+...use LOAD DATA to load externally created Parquet files into the table...
+SELECT id FROM games ORDER BY score DESC;
+ERROR: AnalysisException: ORDER BY expression 'score' with complex type 'ARRAY<BIGINT>' is not supported.
+
+
+Examples:
+
+ The following query retrieves the user ID and score, only for scores
+        greater than one million, with the highest scores for each user listed
+        first. Because the individual array elements are now represented as
+        separate rows in the result set, they can be used in the ORDER
+          BY clause, referenced using the ITEM
+        pseudo-column that represents each array element. 
+SELECT id, item FROM games, games.score
+  WHERE item > 1000000
+ORDER BY id, item desc;
+
+ The following queries use similar ORDER BY techniques
+        with variations of the GAMES table, where the complex
+        type is an ARRAY containing STRUCT or
+          MAP elements to represent additional details about
+        each game that was played. For an array of structures, the fields of the
+        structure are referenced as
+          ITEM.field_name. For an array of
+        maps, the keys and values within each array element are referenced as
+          ITEM.KEY and ITEM.VALUE. 
+CREATE TABLE games2 (id BIGINT, play array < struct <game_name: string, score: BIGINT, high_score: boolean> >) STORED AS PARQUET
+...use LOAD DATA to load externally created Parquet files into the table...
+SELECT id, item.game_name, item.score FROM games2, games2.play
+  WHERE item.score > 1000000
+ORDER BY id, item.score DESC;
+
+CREATE TABLE games3 (id BIGINT, play ARRAY < MAP <STRING, BIGINT> >) STORED AS PARQUET;
+...use LOAD DATA to load externally created Parquet files into the table...
+SELECT id, info.key AS k, info.value AS v from games3, games3.play AS plays, games3.play.item AS info
+  WHERE info.KEY = 'score' AND info.VALUE > 1000000
+ORDER BY id, info.value desc;
+
+
+Usage notes:
+
+ Although the LIMIT clause is now optional on
+          ORDER BY queries, if your query only needs some
+        number of rows that you can predict in advance, use the
+          LIMIT clause to reduce unnecessary processing. For
+        example, if the query has a clause LIMIT 10, each
+        executor Impala daemon sorts its portion of the relevant result set and
+        only returns 10 rows to the coordinator node. The coordinator node picks
+        the 10 highest or lowest row values out of this small intermediate
+        result set. 
+ If an ORDER BY clause is applied to an early phase of
+        query processing, such as a subquery or a view definition, Impala
+        ignores the ORDER BY clause. To get ordered results
+        from a subquery or view, apply an ORDER BY clause to
+        the outermost or final SELECT level. 
+
+ORDER BY is often used in combination with
+          LIMIT to perform top-N queries: 
+SELECT user_id AS "Top 10 Visitors", SUM(page_views) FROM web_stats
+  GROUP BY page_views, user_id
+  ORDER BY SUM(page_views) DESC LIMIT 10;
+
+
+ORDER BY is sometimes used in combination with
+          OFFSET and LIMIT to paginate query
+        results, although it is relatively inefficient to issue multiple queries
+        like this against the large tables typically used with Impala: 
+SELECT page_title AS "Page 1 of search results", page_url FROM search_content
+  WHERE LOWER(page_title) LIKE '%game%')
+  ORDER BY page_title LIMIT 10 OFFSET 0;
+SELECT page_title AS "Page 2 of search results", page_url FROM search_content
+  WHERE LOWER(page_title) LIKE '%game%')
+  ORDER BY page_title LIMIT 10 OFFSET 10;
+SELECT page_title AS "Page 3 of search results", page_url FROM search_content
+  WHERE LOWER(page_title) LIKE '%game%')
+  ORDER BY page_title LIMIT 10 OFFSET 20;
+
+Internal details:
+ Impala sorts the intermediate results of an ORDER BY
+        clause in memory whenever practical. In a cluster of N executor Impala
+        daemons, each daemon sorts roughly 1/Nth of the result set, the exact
+        proportion varying depending on how the data matching the query is
+        distributed in HDFS. 
+ If the size of the sorted intermediate result set on any executor
+        Impala daemon would cause the query to exceed the Impala memory limit,
+        Impala sorts as much as practical in memory, then writes partially
+        sorted data to disk. (This technique is known in industry terminology as
+          external sorting and spilling to disk.) As each 8 MB
+        batch of data is written to disk, Impala frees the corresponding memory
+        to sort a new 8 MB batch of data. When all the data has been processed,
+        a final merge sort operation is performed to correctly order the
+        in-memory and on-disk results as the result set is transmitted back to
+        the coordinator node. When external sorting becomes necessary, Impala
+        requires approximately 60 MB of RAM at a minimum for the buffers needed
+        to read, write, and sort the intermediate results. If more RAM is
+        available on the Impala daemon, Impala will use the additional RAM to
+        minimize the amount of disk I/O for sorting. 
+ This external sort technique is used as appropriate on each Impala
+        daemon (possibly including the coordinator node) to sort the portion of
+        the result set that is processed on that node. When the sorted
+        intermediate results are sent back to the coordinator node to produce
+        the final result set, the coordinator node uses a merge sort technique
+        to produce a final sorted result set without using any extra resources
+        on the coordinator node. 
+Sorting considerations:
+Although you can specify an ORDER BY clause in an
+          INSERT ... SELECT statement, any ORDER
+          BY clause is ignored, and the results are not necessarily
+        sorted. 
+
+        An ORDER BY clause without an additional LIMIT clause is ignored in any
+        view definition. If you need to sort the entire result set from a view, use an ORDER BY
+        clause in the SELECT statement that queries the view. You can still make a simple top
+        10 report by combining the ORDER BY and LIMIT clauses in the same
+        view definition:
+[localhost:21000] > create table unsorted (x bigint);
+[localhost:21000] > insert into unsorted values (1), (9), (3), (7), (5), (8), (4), (6), (2);
+[localhost:21000] > create view sorted_view as select x from unsorted order by x;
+[localhost:21000] > select x from sorted_view; -- ORDER BY clause in view has no effect.
++---+
+| x |
++---+
+| 1 |
+| 9 |
+| 3 |
+| 7 |
+| 5 |
+| 8 |
+| 4 |
+| 6 |
+| 2 |
++---+
+[localhost:21000] > select x from sorted_view order by x; -- View query requires ORDER BY at outermost level.
++---+
+| x |
++---+
+| 1 |
+| 2 |
+| 3 |
+| 4 |
+| 5 |
+| 6 |
+| 7 |
+| 8 |
+| 9 |
++---+
+[localhost:21000] > create view top_3_view as select x from unsorted order by x limit 3;
+[localhost:21000] > select x from top_3_view; -- ORDER BY and LIMIT together in view definition are preserved.
++---+
+| x |
++---+
+| 1 |
+| 2 |
+| 3 |
++---+
+
+
+ With the lifting of the requirement to include a
+          LIMIT clause in every ORDER BY query
+        (in Impala 1.4 and higher): 
+
+
+ Now the use of scratch disk space raises the possibility of an
+              out of disk space error on a particular Impala daemon, as
+            opposed to the previous possibility of an out of memory
+            error. Make sure to keep at least 1 GB free on the filesystem used
+            for temporary sorting work. 
+
+
+
+        In Impala 1.2.1 and higher, all NULL values come at the end of the result set for
+        ORDER BY ... ASC queries, and at the beginning of the result set for ORDER BY ...
+        DESC queries. In effect, NULL is considered greater than all other values for
+        sorting purposes. The original Impala behavior always put NULL values at the end, even for
+        ORDER BY ... DESC queries. The new behavior in Impala 1.2.1 makes Impala more compatible
+        with other popular database systems. In Impala 1.2.1 and higher, you can override or specify the sorting
+        behavior for NULL by adding the clause NULLS FIRST or NULLS
+        LAST at the end of the ORDER BY clause.
+      
+[localhost:21000] > create table numbers (x int);
+[localhost:21000] > insert into numbers values (1), (null), (2), (null), (3);
+[localhost:21000] > select x from numbers order by x nulls first;
++------+
+| x    |
++------+
+| NULL |
+| NULL |
+| 1    |
+| 2    |
+| 3    |
++------+
+[localhost:21000] > select x from numbers order by x desc nulls first;
++------+
+| x    |
++------+
+| NULL |
+| NULL |
+| 3    |
+| 2    |
+| 1    |
++------+
+[localhost:21000] > select x from numbers order by x nulls last;
++------+
+| x    |
++------+
+| 1    |
+| 2    |
+| 3    |
+| NULL |
+| NULL |
++------+
+[localhost:21000] > select x from numbers order by x desc nulls last;
++------+
+| x    |
++------+
+| 3    |
+| 2    |
+| 1    |
+| NULL |
+| NULL |
++------+
+
+Using ORDER BY for collections of fixed length types in SELECT list
+You can now use collections of fixed length types in the sorting tuple. However, you cannot
+        sort by these collection columns but they can be in the SELECT list along with other
+        column(s) by which you sort.
+Example of a supported query:
+select id, int_array from complextypestbl order by id;
+Example of an unsupported query:
+select int_array from complextypestbl order by int_array;
+Also note that structs that contain any type of collection (even fixed length)
+        are not allowed in the sorting tuple.
+Examples:
+# Sort a collection.
+
+select id, int_array from complextypestbl order by id;
+
+# Sort collection from HMS view.
+select id, int_array from complextypes_arrays_only_view order by id;
+# Sort collection from WITH-clause inline view.
+
+ with v as (select id, int_array from complextypestbl)
+ select id, int_array from v order by id;
+
+# Sort collection from nested query inline view.
+
+select id, int_array 
+from (select id, int_array from complextypestbl) v 
+order by id;
+
+
+Related information:
+
+ See the SELECT
+        statement for further examples of queries with the ORDER
+          BY clause. 
+ Analytic functions use the ORDER BY clause in a
+        different context to define the sequence in which rows are analyzed. See
+          Impala analytic functions for
+        details. 
+
+Parent topic: SELECT statement

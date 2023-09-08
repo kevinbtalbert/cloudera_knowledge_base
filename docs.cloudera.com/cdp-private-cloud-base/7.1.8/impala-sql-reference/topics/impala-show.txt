@@ -1,0 +1,354 @@
+SHOW statementCloudera Docs
+SHOW statement
+Use the SHOW statement to get information about
+    different types of Impala objects.
+
+Syntax:
+SHOW DATABASES [[LIKE] 'pattern']
+SHOW SCHEMAS [[LIKE] 'pattern'] - an alias for SHOW DATABASES
+SHOW TABLES [IN database_name] [[LIKE] 'pattern']
+SHOW [AGGREGATE | ANALYTIC] FUNCTIONS [IN database_name] [[LIKE] 'pattern']
+SHOW CREATE TABLE [database_name].table_name
+SHOW CREATE VIEW [database_name].view_name
+SHOW TABLE STATS [database_name.]table_name
+SHOW COLUMN STATS [database_name.]table_name
+SHOW [RANGE] PARTITIONS [database_name.]table_name
+SHOW FILES IN [database_name.]table_name [PARTITION (key_col_expression [, key_col_expression]]
+
+
+SHOW GRANT USER user_name ON SERVER
+SHOW GRANT USER user_name ON DATABASE database_name
+SHOW GRANT USER user_name ON TABLE table_name
+SHOW GRANT USER user_name ON TABLE [database_name].table_name.column_name
+SHOW GRANT USER user_name ON URI uri
+    
+
+SHOW GRANT GROUP group_name ON SERVER
+SHOW GRANT GROUP group_name ON DATABASE database_name
+SHOW GRANT GROUP group_name ON TABLE table_name
+SHOW GRANT GROUP group_name ON TABLE [database_name].table_name.column_name
+SHOW GRANT GROUP group_name ON URI uri
+
+
+SHOW GRANT ROLE role_name ON SERVER
+SHOW GRANT ROLE role_name ON DATABASE database_name
+SHOW GRANT ROLE role_name ON TABLE table_name
+SHOW GRANT ROLE role_name ON TABLE [database_name].table_name.column_name
+SHOW GRANT ROLE role_name ON URI uri
+
+note
+      SHOW GRANT USER/GROUP/ROLE is not supported without specifying a resource.
+    
+
+      Issue a SHOW object_type statement to see the appropriate objects in the
+      current database, or SHOW object_type IN database_name
+      to see objects in a specific database.
+    
+      The optional pattern argument is a quoted string literal, using Unix-style
+      * wildcards and allowing | for alternation. The preceding
+      LIKE keyword is also optional. All object names are stored in lowercase, so use all
+      lowercase letters in the pattern string. For example:
+    show databases 'a*';
+show databases like 'a*';
+show tables in some_db like '*fact*';
+use some_db;
+show tables '*dim*|*fact*';
+Cancellation: Cannot be cancelled.
+      SHOW FILES statement The SHOW FILES statement displays the files that constitute a specified table,
+  or a partition within a partitioned table. This syntax is available in Impala 2.2 and
+  higher only. The output includes the names of the files, the size of each file, and the
+  applicable partition for a partitioned table. The size includes a suffix of
+  B for bytes, MB for megabytes, and GB
+  for gigabytes.  In Impala 2.8 and higher, you can use general expressions with operators such
+    as <, IN, LIKE, and
+    BETWEEN in the PARTITION clause, instead of only
+    equality operators. For example:
+    
+      show files in sample_table partition (j < 5);
+      show files in sample_table partition (k = 3, l between 1 and 10);
+      show files in sample_table partition (month like 'J%');
+      
+    
+note
+    This statement applies to tables and partitions stored on HDFS, or in the Amazon Simple Storage System (S3).
+    It does not apply to views.
+    It does not apply to tables mapped onto HBase or Kudu,
+    because those data management systems do not use the same file-based storage layout.
+  
+Usage notes:
+
+    You can use this statement to verify the results of your ETL process: that is, that
+    the expected files are present, with the expected sizes. You can examine the file information
+    to detect conditions such as empty files, missing files, or inefficient layouts due to
+    a large number of small files. When you use INSERT statements to copy
+    from one table to another, you can see how the file layout changes due to file format
+    conversions, compaction of small input files into large data blocks, and
+    multiple output files from parallel queries and partitioned inserts.
+  
+    The output from this statement does not include files that Impala considers to be hidden
+    or invisible, such as those whose names start with a dot or an underscore, or that
+    end with the suffixes .copying or .tmp.
+  
+    The information for partitioned tables complements the output of the SHOW PARTITIONS
+    statement, which summarizes information about each partition. SHOW PARTITIONS
+    produces some output for each partition, while SHOW FILES does not
+    produce any output for empty partitions because they do not include any data files.
+  
+HDFS permissions:
+
+    The user ID that the impalad daemon runs under,
+    typically the impala user, must have read
+    permission for all the table files, read and execute permission for all the directories that make up the table,
+    and execute permission for the database directory and all its parent directories.
+  SHOW GRANT USER statement The SHOW GRANT USER statement shows the list of privileges
+        for a given user. This statement is only allowed for administrative
+        users. However, the current user can run SHOW GRANT
+          USER for themselves. 
+Security considerations:
+ When authorization is enabled, the output of the SHOW
+        statement only shows those objects for which you have the privilege to view. If you believe
+        an object exists but you cannot see it in the SHOW output, check with the
+        system administrator if you need to be granted a new privilege for that object.
+HDFS permissions: This statement does not touch any HDFS files or directories,
+        therefore no HDFS permissions are required.
+      SHOW DATABASES
+              The SHOW DATABASES statement is often the first one you issue when connecting to an
+              instance for the first time. You typically issue SHOW DATABASES to see the names you can
+              specify in a USE db_name statement, then after switching to a database
+              you issue SHOW TABLES to see the names you can specify in SELECT and
+              INSERT statements.
+             In Impala 2.5 and higher, the output includes a second column showing
+              any associated comment for each database. 
+                The output of SHOW DATABASES includes the special _impala_builtins
+                database, which lets you view definitions of built-in functions, as described under SHOW
+                  FUNCTIONS.
+              
+Security considerations:
+ When authorization is enabled, the output of the SHOW
+        statement only shows those objects for which you have the privilege to view. If you believe
+        an object exists but you cannot see it in the SHOW output, check with the
+        system administrator if you need to be granted a new privilege for that object.
+HDFS permissions: This statement does not touch any HDFS files or directories,
+        therefore no HDFS permissions are required.
+      SHOW TABLES statement
+                  Displays the names of tables. By default, lists tables in the current database, or with the
+                  IN clause, in a specified database. By default, lists all tables, or with the
+                  LIKE clause, only those whose name match a pattern with * wildcards.
+                
+Security considerations:
+ When authorization is enabled, the output of the SHOW
+        statement only shows those objects for which you have the privilege to view. If you believe
+        an object exists but you cannot see it in the SHOW output, check with the
+        system administrator if you need to be granted a new privilege for that object.
+                  The user ID that the impalad daemon runs under,
+                  typically the impala user, must have read and execute
+                  permissions for all directories that are part of the table.
+                  (A table could span multiple different HDFS directories if it is partitioned.
+                  The directories could be widely scattered because a partition can reside
+                  in an arbitrary HDFS directory based on its LOCATION attribute.)
+                
+HDFS permissions: This statement does not touch any HDFS files or directories,
+        therefore no HDFS permissions are required.
+      SHOW CREATE TABLE statement
+                  As a schema changes over time, you might run a CREATE TABLE statement followed by several
+                  ALTER TABLE statements. To capture the cumulative effect of all those statements,
+                  SHOW CREATE TABLE displays a CREATE TABLE statement that would reproduce
+                  the current structure of a table. You can use this output in scripts that set up or clone a group of
+                  tables, rather than trying to reproduce the original sequence of CREATE TABLE and
+                  ALTER TABLE statements. When creating variations on the original table, or cloning the
+                  original table on a different system, you might need to edit the SHOW CREATE TABLE output
+                  to change things such as the database name, LOCATION field, and so on that might be
+                  different on the destination system.
+                
+                  If you specify a view name in the SHOW CREATE TABLE,
+                  it returns a CREATE VIEW statement with column names
+                  and the original SQL statement to reproduce the view. You need the
+                  VIEW_METADATA privilege on the view and
+                  SELECT privilege on all underlying views and tables to
+                  successfully run the SHOW CREATE VIEW statement for a
+                  view. The SHOW CREATE VIEW is available as an alias for
+                  SHOW CREATE TABLE.
+                
+Security considerations:
+ When authorization is enabled, the output of the SHOW
+        statement only shows those objects for which you have the privilege to view. If you believe
+        an object exists but you cannot see it in the SHOW output, check with the
+        system administrator if you need to be granted a new privilege for that object.
+HDFS permissions: This statement does not touch any HDFS files or directories,
+        therefore no HDFS permissions are required.
+      Kudu considerations:
+                  For Kudu tables:
+                
+
+
+                      The column specifications include attributes such as NULL,
+                      NOT NULL, ENCODING, and COMPRESSION.
+                      If you do not specify those attributes in the original CREATE TABLE statement,
+                      the SHOW CREATE TABLE output displays the defaults that were used.
+                    
+
+
+
+                      The specifications of any RANGE clauses are not displayed in full.
+                      To see the definition of the range clauses for a Kudu table, use the SHOW RANGE PARTITIONS statement.
+                    
+
+
+
+                      The TBLPROPERTIES output reflects the Kudu master address
+                      and the internal Kudu name associated with the Impala table.
+                    
+
+SHOW CREATE VIEW statement The SHOW CREATE VIEW, it returns a CREATE
+                  VIEW statement with column names and the original SQL
+                  statement to reproduce the view. You need the
+                  VIEW_METADATA privilege on the view and
+                  SELECT privilege on all underlying views and tables to
+                  successfully run the SHOW CREATE VIEW statement for a
+                  view. 
+                    The SHOW CREATE VIEW is an alias for SHOW
+                      CREATE TABLE.
+                  SHOW TABLE STATS statement
+                    The SHOW TABLE STATS and SHOW COLUMN STATS variants are important for
+                    tuning performance and diagnosing performance issues, especially with the largest tables and the most
+                    complex join queries.
+                  
+                    Any values that are not available (because the COMPUTE STATS statement has not been run
+                    yet) are displayed as -1.
+                  
+SHOW TABLE STATS provides some general information about the table, such as the number of
+                    files, overall size of the data, whether some or all of the data is in the HDFS cache, and the file format,
+                    that is useful whether or not you have run the COMPUTE STATS statement. A
+                    -1 in the #Rows output column indicates that the COMPUTE
+                      STATS statement has never been run for this table. If the table is partitioned, SHOW TABLE
+                        STATS provides this information for each partition. (It produces the same output as the
+                    SHOW PARTITIONS statement in this case.)
+                  
+                    The output of SHOW COLUMN STATS is primarily only useful after the COMPUTE
+                      STATS statement has been run on the table. A -1 in the #Distinct
+                        Values output column indicates that the COMPUTE STATS statement has never been
+                    run for this table. Currently, Impala always leaves the #Nulls column as
+                    -1, even after COMPUTE STATS has been run.
+                  
+                    These SHOW statements work on actual tables only, not on views.
+                  
+Security considerations:
+ When authorization is enabled, the output of the SHOW
+        statement only shows those objects for which you have the privilege to view. If you believe
+        an object exists but you cannot see it in the SHOW output, check with the
+        system administrator if you need to be granted a new privilege for that object.Kudu considerations: Because Kudu tables do not have characteristics
+        derived from HDFS, such as number of files, file format, and HDFS cache
+        status, the output of SHOW TABLE STATS reflects
+        different characteristics that apply to Kudu tables. If the Kudu table
+        is created with the clause PARTITIONS 20, then the
+        result set of SHOW TABLE STATS consists of 20 rows,
+        each representing one of the numbered partitions. 
+                    Impala does not compute the number of rows for each partition for
+                    Kudu tables. Therefore, you do not need to re-run COMPUTE STATS
+                    when you see -1 in the # Rows column of the output from
+                    SHOW TABLE STATS. That column always shows -1 for
+                    all Kudu tables.
+                  
+HDFS permissions:
+
+                    The user ID that the impalad daemon runs under,
+                    typically the impala user, must have read and execute
+                    permissions for all directories that are part of the table.
+                    (A table could span multiple different HDFS directories if it is partitioned.
+                    The directories could be widely scattered because a partition can reside
+                    in an arbitrary HDFS directory based on its LOCATION attribute.)
+                    The Impala user must also have execute
+                    permission for the database directory, and any parent directories of the database directory in HDFS.
+                  SHOW COLUMN STATS statement
+                    The SHOW TABLE STATS and SHOW COLUMN STATS variants are important for
+                    tuning performance and diagnosing performance issues, especially with the largest tables and the most
+                    complex join queries.
+                  
+Security considerations:
+ When authorization is enabled, the output of the SHOW
+        statement only shows those objects for which you have the privilege to view. If you believe
+        an object exists but you cannot see it in the SHOW output, check with the
+        system administrator if you need to be granted a new privilege for that object.Kudu considerations:
+                    The output for SHOW COLUMN STATS includes
+                    the relevant information for Kudu tables.
+                    The information for column statistics that originates in the
+                    underlying Kudu storage layer is also represented in the
+                    metastore database that Impala uses.
+                  
+HDFS permissions:
+
+                    The user ID that the impalad daemon runs under,
+                    typically the impala user, must have read and execute
+                    permissions for all directories that are part of the table.
+                    (A table could span multiple different HDFS directories if it is partitioned.
+                    The directories could be widely scattered because a partition can reside
+                    in an arbitrary HDFS directory based on its LOCATION attribute.)
+                    The Impala user must also have execute
+                    permission for the database directory, and any parent directories of the database directory in HDFS.
+                  SHOW PARTITIONS statement
+SHOW PARTITIONS displays information about each partition for a
+                    partitioned table. (The output is the same as the SHOW TABLE STATS
+                    statement, but SHOW PARTITIONS only works on a partitioned table.)
+                    Because it displays table statistics for all partitions, the output is more informative if
+                    you have run the COMPUTE STATS statement after creating all the
+                    partitions. For example, on a CENSUS table partitioned on the
+                    YEAR column:  Because Kudu tables are all considered to be
+        partitioned, the SHOW PARTITIONS statement works for
+        any Kudu table. The default output is the same as for SHOW TABLE
+          STATS, with the same Kudu-specific columns in the result
+        set.
+Security considerations:
+ When authorization is enabled, the output of the SHOW
+        statement only shows those objects for which you have the privilege to view. If you believe
+        an object exists but you cannot see it in the SHOW output, check with the
+        system administrator if you need to be granted a new privilege for that object.Kudu considerations:
+                      The optional RANGE clause only applies to Kudu tables. It displays only the partitions
+                      defined by the RANGE clause of CREATE TABLE or ALTER TABLE.
+                    
+                      Although you can specify < or
+                      <= comparison operators when defining
+                      range partitions for Kudu tables, Kudu rewrites them if necessary
+                      to represent each range as
+                      low_bound <= VALUES < high_bound.
+                      This rewriting might involve incrementing one of the boundary values
+                      or appending a \0 for string values, so that the
+                      partition covers the same range as originally specified.
+                    
+HDFS permissions:
+
+                      The user ID that the impalad daemon runs under,
+                      typically the impala user, must have read and execute
+                      permissions for all directories that are part of the table.
+                      (A table could span multiple different HDFS directories if it is partitioned.
+                      The directories could be widely scattered because a partition can reside
+                      in an arbitrary HDFS directory based on its LOCATION attribute.)
+                      The Impala user must also have execute
+                      permission for the database directory, and any parent directories of the database directory in HDFS.
+                    SHOW FUNCTIONS statement
+                      By default, SHOW FUNCTIONS displays user-defined functions (UDFs) and SHOW
+                        AGGREGATE FUNCTIONS displays user-defined aggregate functions (UDAFs) associated with a particular
+                      database. The output from SHOW FUNCTIONS includes the argument signature of each function.
+                      You specify this argument signature as part of the DROP FUNCTION statement. You might have
+                      several UDFs with the same name, each accepting different argument data types.
+                    
+Usage notes:
+ In Impala 2.5 and higher, the SHOW FUNCTIONS output includes a new
+                      column, labelled is persistent. This property is true
+                      for Impala built-in functions, C++ UDFs, and Java UDFs created using the new
+                      CREATE FUNCTION syntax with no signature. It is false
+                      for Java UDFs created using the old CREATE FUNCTION syntax that includes
+                      the types for the arguments and return value. Any functions with false
+                      shown for this property must be created again by the CREATE FUNCTION
+                      statement each time the Impala catalog server is restarted. See CREATE
+                        FUNCTION for information on switching to the new syntax, so that Java UDFs are
+                      preserved across restarts. Java UDFs that are persisted this way are also easier to share
+                      across Impala and Hive. 
+Security considerations:
+ When authorization is enabled, the output of the SHOW
+        statement only shows those objects for which you have the privilege to view. If you believe
+        an object exists but you cannot see it in the SHOW output, check with the
+        system administrator if you need to be granted a new privilege for that object.
+HDFS permissions: This statement does not touch any HDFS files or directories,
+        therefore no HDFS permissions are required.
+      
+Parent topic: Impala SQL statements

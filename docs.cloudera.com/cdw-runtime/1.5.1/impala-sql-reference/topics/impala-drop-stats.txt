@@ -1,0 +1,214 @@
+DROP STATS statementCloudera Docs
+DROP STATS statement
+The DROP STATS statement removes the specified statistics from a table
+    or partition. The statistics were originally created by the COMPUTE STATS or
+      COMPUTE INCREMENTAL STATS statement.
+Syntax:
+DROP STATS [database_name.]table_name
+DROP INCREMENTAL STATS [database_name.]table_name PARTITION (partition_spec)
+
+partition_spec ::= partition_col=constant_value
+
+        The PARTITION clause is only allowed in combination with the INCREMENTAL
+        clause. It is optional for COMPUTE INCREMENTAL STATS, and required for DROP
+        INCREMENTAL STATS. Whenever you specify partitions through the PARTITION
+        (partition_spec) clause in a COMPUTE INCREMENTAL STATS or
+        DROP INCREMENTAL STATS statement, you must include all the partitioning columns in the
+        specification, and specify constant values for all the partition key columns.
+      
+DROP STATS removes all statistics from the table, whether created by COMPUTE
+      STATS or COMPUTE INCREMENTAL STATS.
+    
+DROP INCREMENTAL STATS only affects incremental statistics for a single partition, specified
+      through the PARTITION clause. The incremental stats are marked as outdated, so that they are
+      recomputed by the next COMPUTE INCREMENTAL STATS statement.
+    
+Usage notes:
+
+      You typically use this statement when the statistics for a table or a partition have become stale due to data
+      files being added to or removed from the associated HDFS data directories, whether by manual HDFS operations
+      or INSERT, INSERT OVERWRITE, or LOAD DATA statements, or
+      adding or dropping partitions.
+    
+      When a table or partition has no associated statistics, Impala treats it as essentially zero-sized when
+      constructing the execution plan for a query. In particular, the statistics influence the order in which
+      tables are joined in a join query. To ensure proper query planning and good query performance and
+      scalability, make sure to run COMPUTE STATS or COMPUTE INCREMENTAL STATS on
+      the table or partition after removing any stale statistics.
+    
+      Dropping the statistics is not required for an unpartitioned table or a partitioned table covered by the
+      original type of statistics. A subsequent COMPUTE STATS statement replaces any existing
+      statistics with new ones, for all partitions, regardless of whether the old ones were outdated. Therefore,
+      this statement was rarely used before the introduction of incremental statistics.
+     Dropping the statistics is required for a partitioned table containing incremental statistics,
+        to make a subsequent COMPUTE INCREMENTAL STATS statement rescan an existing
+        partition. See the Tables and columns topic for information about incremental
+        statistics, a new feature available in Impala 2.1.0 and higher. 
+Statement type: DDL
+      
+Cancellation: Cannot be cancelled.
+      
+HDFS permissions:
+
+      The user ID that the impalad daemon runs under,
+      typically the impala user, does not need any
+      particular HDFS permissions to perform this statement.
+      All read and write operations are on the metastore database,
+      not HDFS files and directories.
+    
+Examples:
+
+      The following example shows a partitioned table that has associated statistics produced by the
+      COMPUTE INCREMENTAL STATS statement, and how the situation evolves as statistics are dropped
+      from specific partitions, then the entire table.
+    
+      Initially, all table and column statistics are filled in.
+    show table stats item_partitioned;
++-------------+-------+--------+----------+--------------+---------+-----------------
+| i_category  | #Rows | #Files | Size     | Bytes Cached | Format  | Incremental stats
++-------------+-------+--------+----------+--------------+---------+-----------------
+| Books       | 1733  | 1      | 223.74KB | NOT CACHED   | PARQUET | true
+| Children    | 1786  | 1      | 230.05KB | NOT CACHED   | PARQUET | true
+| Electronics | 1812  | 1      | 232.67KB | NOT CACHED   | PARQUET | true
+| Home        | 1807  | 1      | 232.56KB | NOT CACHED   | PARQUET | true
+| Jewelry     | 1740  | 1      | 223.72KB | NOT CACHED   | PARQUET | true
+| Men         | 1811  | 1      | 231.25KB | NOT CACHED   | PARQUET | true
+| Music       | 1860  | 1      | 237.90KB | NOT CACHED   | PARQUET | true
+| Shoes       | 1835  | 1      | 234.90KB | NOT CACHED   | PARQUET | true
+| Sports      | 1783  | 1      | 227.97KB | NOT CACHED   | PARQUET | true
+| Women       | 1790  | 1      | 226.27KB | NOT CACHED   | PARQUET | true
+| Total       | 17957 | 10     | 2.25MB   | 0B           |         |
++-------------+-------+--------+----------+--------------+---------+-----------------
+show column stats item_partitioned;
++------------------+-----------+------------------+--------+----------+--------------
+| Column           | Type      | #Distinct Values | #Nulls | Max Size | Avg Size
++------------------+-----------+------------------+--------+----------+--------------
+| i_item_sk        | INT       | 19443            | -1     | 4        | 4
+| i_item_id        | STRING    | 9025             | -1     | 16       | 16
+| i_rec_start_date | TIMESTAMP | 4                | -1     | 16       | 16
+| i_rec_end_date   | TIMESTAMP | 3                | -1     | 16       | 16
+| i_item_desc      | STRING    | 13330            | -1     | 200      | 100.302803039
+| i_current_price  | FLOAT     | 2807             | -1     | 4        | 4
+| i_wholesale_cost | FLOAT     | 2105             | -1     | 4        | 4
+| i_brand_id       | INT       | 965              | -1     | 4        | 4
+| i_brand          | STRING    | 725              | -1     | 22       | 16.1776008605
+| i_class_id       | INT       | 16               | -1     | 4        | 4
+| i_class          | STRING    | 101              | -1     | 15       | 7.76749992370
+| i_category_id    | INT       | 10               | -1     | 4        | 4
+| i_manufact_id    | INT       | 1857             | -1     | 4        | 4
+| i_manufact       | STRING    | 1028             | -1     | 15       | 11.3295001983
+| i_size           | STRING    | 8                | -1     | 11       | 4.33459997177
+| i_formulation    | STRING    | 12884            | -1     | 20       | 19.9799995422
+| i_color          | STRING    | 92               | -1     | 10       | 5.38089990615
+| i_units          | STRING    | 22               | -1     | 7        | 4.18690013885
+| i_container      | STRING    | 2                | -1     | 7        | 6.99259996414
+| i_manager_id     | INT       | 105              | -1     | 4        | 4
+| i_product_name   | STRING    | 19094            | -1     | 25       | 18.0233001708
+| i_category       | STRING    | 10               | 0      | -1       | -1
++------------------+-----------+------------------+--------+----------+--------------
+
+      To remove statistics for particular partitions, use the DROP INCREMENTAL STATS statement.
+      After removing statistics for two partitions, the table-level statistics reflect that change in the
+      #Rows and Incremental stats fields. The counts, maximums, and averages of
+      the column-level statistics are unaffected.
+    note
+      (It is possible that the row count might be preserved in future after a DROP INCREMENTAL
+      STATS statement. Check the resolution of the issue
+      IMPALA-1615.)
+    drop incremental stats item_partitioned partition (i_category='Sports');
+drop incremental stats item_partitioned partition (i_category='Electronics');
+
+show table stats item_partitioned
++-------------+-------+--------+----------+--------------+---------+------------------
+| i_category  | #Rows | #Files | Size     | Bytes Cached | Format  | Incremental stats
++-------------+-------+--------+----------+--------------+---------+-----------------
+| Books       | 1733  | 1      | 223.74KB | NOT CACHED   | PARQUET | true
+| Children    | 1786  | 1      | 230.05KB | NOT CACHED   | PARQUET | true
+| Electronics | -1    | 1      | 232.67KB | NOT CACHED   | PARQUET | false
+| Home        | 1807  | 1      | 232.56KB | NOT CACHED   | PARQUET | true
+| Jewelry     | 1740  | 1      | 223.72KB | NOT CACHED   | PARQUET | true
+| Men         | 1811  | 1      | 231.25KB | NOT CACHED   | PARQUET | true
+| Music       | 1860  | 1      | 237.90KB | NOT CACHED   | PARQUET | true
+| Shoes       | 1835  | 1      | 234.90KB | NOT CACHED   | PARQUET | true
+| Sports      | -1    | 1      | 227.97KB | NOT CACHED   | PARQUET | false
+| Women       | 1790  | 1      | 226.27KB | NOT CACHED   | PARQUET | true
+| Total       | 17957 | 10     | 2.25MB   | 0B           |         |
++-------------+-------+--------+----------+--------------+---------+-----------------
+show column stats item_partitioned
++------------------+-----------+------------------+--------+----------+--------------
+| Column           | Type      | #Distinct Values | #Nulls | Max Size | Avg Size
++------------------+-----------+------------------+--------+----------+--------------
+| i_item_sk        | INT       | 19443            | -1     | 4        | 4
+| i_item_id        | STRING    | 9025             | -1     | 16       | 16
+| i_rec_start_date | TIMESTAMP | 4                | -1     | 16       | 16
+| i_rec_end_date   | TIMESTAMP | 3                | -1     | 16       | 16
+| i_item_desc      | STRING    | 13330            | -1     | 200      | 100.302803039
+| i_current_price  | FLOAT     | 2807             | -1     | 4        | 4
+| i_wholesale_cost | FLOAT     | 2105             | -1     | 4        | 4
+| i_brand_id       | INT       | 965              | -1     | 4        | 4
+| i_brand          | STRING    | 725              | -1     | 22       | 16.1776008605
+| i_class_id       | INT       | 16               | -1     | 4        | 4
+| i_class          | STRING    | 101              | -1     | 15       | 7.76749992370
+| i_category_id    | INT       | 10               | -1     | 4        | 4
+| i_manufact_id    | INT       | 1857             | -1     | 4        | 4
+| i_manufact       | STRING    | 1028             | -1     | 15       | 11.3295001983
+| i_size           | STRING    | 8                | -1     | 11       | 4.33459997177
+| i_formulation    | STRING    | 12884            | -1     | 20       | 19.9799995422
+| i_color          | STRING    | 92               | -1     | 10       | 5.38089990615
+| i_units          | STRING    | 22               | -1     | 7        | 4.18690013885
+| i_container      | STRING    | 2                | -1     | 7        | 6.99259996414
+| i_manager_id     | INT       | 105              | -1     | 4        | 4
+| i_product_name   | STRING    | 19094            | -1     | 25       | 18.0233001708
+| i_category       | STRING    | 10               | 0      | -1       | -1
++------------------+-----------+------------------+--------+----------+--------------
+
+      To remove all statistics from the table, whether produced by COMPUTE STATS or
+      COMPUTE INCREMENTAL STATS, use the DROP STATS statement without the
+      INCREMENTAL clause). Now, both table-level and column-level statistics are reset.
+    drop stats item_partitioned;
+
+show table stats item_partitioned
++-------------+-------+--------+----------+--------------+---------+------------------
+| i_category  | #Rows | #Files | Size     | Bytes Cached | Format  | Incremental stats
++-------------+-------+--------+----------+--------------+---------+------------------
+| Books       | -1    | 1      | 223.74KB | NOT CACHED   | PARQUET | false
+| Children    | -1    | 1      | 230.05KB | NOT CACHED   | PARQUET | false
+| Electronics | -1    | 1      | 232.67KB | NOT CACHED   | PARQUET | false
+| Home        | -1    | 1      | 232.56KB | NOT CACHED   | PARQUET | false
+| Jewelry     | -1    | 1      | 223.72KB | NOT CACHED   | PARQUET | false
+| Men         | -1    | 1      | 231.25KB | NOT CACHED   | PARQUET | false
+| Music       | -1    | 1      | 237.90KB | NOT CACHED   | PARQUET | false
+| Shoes       | -1    | 1      | 234.90KB | NOT CACHED   | PARQUET | false
+| Sports      | -1    | 1      | 227.97KB | NOT CACHED   | PARQUET | false
+| Women       | -1    | 1      | 226.27KB | NOT CACHED   | PARQUET | false
+| Total       | -1    | 10     | 2.25MB   | 0B           |         |
++-------------+-------+--------+----------+--------------+---------+------------------
+show column stats item_partitioned
++------------------+-----------+------------------+--------+----------+----------+
+| Column           | Type      | #Distinct Values | #Nulls | Max Size | Avg Size |
++------------------+-----------+------------------+--------+----------+----------+
+| i_item_sk        | INT       | -1               | -1     | 4        | 4        |
+| i_item_id        | STRING    | -1               | -1     | -1       | -1       |
+| i_rec_start_date | TIMESTAMP | -1               | -1     | 16       | 16       |
+| i_rec_end_date   | TIMESTAMP | -1               | -1     | 16       | 16       |
+| i_item_desc      | STRING    | -1               | -1     | -1       | -1       |
+| i_current_price  | FLOAT     | -1               | -1     | 4        | 4        |
+| i_wholesale_cost | FLOAT     | -1               | -1     | 4        | 4        |
+| i_brand_id       | INT       | -1               | -1     | 4        | 4        |
+| i_brand          | STRING    | -1               | -1     | -1       | -1       |
+| i_class_id       | INT       | -1               | -1     | 4        | 4        |
+| i_class          | STRING    | -1               | -1     | -1       | -1       |
+| i_category_id    | INT       | -1               | -1     | 4        | 4        |
+| i_manufact_id    | INT       | -1               | -1     | 4        | 4        |
+| i_manufact       | STRING    | -1               | -1     | -1       | -1       |
+| i_size           | STRING    | -1               | -1     | -1       | -1       |
+| i_formulation    | STRING    | -1               | -1     | -1       | -1       |
+| i_color          | STRING    | -1               | -1     | -1       | -1       |
+| i_units          | STRING    | -1               | -1     | -1       | -1       |
+| i_container      | STRING    | -1               | -1     | -1       | -1       |
+| i_manager_id     | INT       | -1               | -1     | 4        | 4        |
+| i_product_name   | STRING    | -1               | -1     | -1       | -1       |
+| i_category       | STRING    | 10               | 0      | -1       | -1       |
++------------------+-----------+------------------+--------+----------+----------+
+
+Parent topic: Impala SQL statements

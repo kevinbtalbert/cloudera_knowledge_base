@@ -1,0 +1,118 @@
+Batch indexing into offline Solr shardsCloudera Docs
+Batch indexing into offline Solr shards
+Batch indexing into offline Solr shards is mainly intended for offline use-cases by
+    advanced users. Use cases requiring read-only indexes for searching can be handled by using
+    batch indexing without the --go-live option. By not using GoLive, you can avoid
+    copying datasets between segments, thereby reducing resource utilization.
+
+Running the MapReduce job without GoLive causes the job to create a set of Solr index
+        shards from a set of input files and write the indexes to HDFS. You can then explicitly
+        point each Solr server to one of the HDFS output shard directories.
+If you are working with a secured cluster, configure your client JAAS file
+            ($HOME/jaas.conf) as follows:
+
+Client {
+ com.sun.security.auth.module.Krb5LoginModule required
+ useKeyTab=false
+ useTicketCache=true
+ principal="solr@EXAMPLE.COM";
+ };
+If you are using Kerberos, kinit as the user that has privileges to update the
+          collection: 
+
+kinit jdoe@EXAMPLE.COM
+Replace EXAMPLE.COM with your Kerberos realm name.
+Delete any existing documents in the cloudera_tutorial_tweets collection. If
+          your cluster does not have security enabled, run the following commands as the
+            solr user by adding sudo -u solr before the command: 
+
+solrctl collection --deletedocs cloudera_tutorial_tweets
+Delete the contents of the outdir directory: 
+
+hdfs dfs -rm -r -skipTrash /user/jdoe/outdir/*
+Run the MapReduce job as follows, replacing nn01.example.com in the command
+          with your NameNode hostname. 
+
+
+
+Security enabled:
+YARN_OPTS="-Djava.security.auth.login.config=/path/to/jaas.conf" yarn jar /opt/cloudera/parcels/CDH/lib/solr/contrib/mr/search-mr-*-job.jar org.apache.solr.hadoop.MapReduceIndexerTool -D 'mapred.child.java.opts=-Xmx500m' -D 'mapreduce.job.user.classpath.first=true' --log4j /opt/cloudera/parcels/CDH/share/doc/search*/examples/solr-nrt/log4j.properties --morphline-file /opt/cloudera/parcels/CDH/share/doc/search*/examples/solr-nrt/test-morphlines/tutorialReadAvroContainer.conf --output-dir hdfs://nn01.example.com:8020/user/jdoe/outdir --verbose --zk-host zk01.example.com:2181/solr --collection cloudera_tutorial_tweets --shards 2 hdfs://nn01.example.com:8020/user/jdoe/indir
+
+
+Check the job status at: 
+http://rm01.example.com:8088/ui2/#/yarn-apps/appsFor
+          secure clusters, replace http with
+            https and port 8088 with
+            8090.After the job is completed, check the generated index files. Individual shards are written to
+          the results directory with names of the form part-00000,
+            part-00001, part-00002, and so on. This example has
+          two shards: 
+
+hdfs dfs -ls /user/jdoe/outdir/results
+hdfs dfs -ls /user/jdoe/outdir/results/part-00000/data/index
+In the Cloudera Manager web console for the cluster, stop
+          the Solr service (Solr service > Actions > Stop).
+Identify the paths to each Solr core: 
+
+hdfs dfs -ls /solr/cloudera_tutorial_tweets
+Found 2 items
+drwxr-xr-x   - solr solr          0 2017-03-13 06:20 /solr/cloudera_tutorial_tweets/core_node1
+drwxr-xr-x   - solr solr          0 2017-03-13 06:20 /solr/cloudera_tutorial_tweets/core_node2
+Move the index shards into place. 
+
+
+(Kerberos only) Switch to the solr user:
+
+kinit solr@EXAMPLE.COM
+
+
+
+Remove outdated files. If your cluster does not have security enabled, run the
+              following commands as the solr user by adding sudo -u
+                solr before the command:
+
+hdfs dfs -rm -r -skipTrash /solr/cloudera_tutorial_tweets/core_node1/data/index
+hdfs dfs -rm -r -skipTrash /solr/cloudera_tutorial_tweets/core_node1/data/tlog
+hdfs dfs -rm -r -skipTrash /solr/cloudera_tutorial_tweets/core_node2/data/index
+hdfs dfs -rm -r -skipTrash /solr/cloudera_tutorial_tweets/core_node2/data/tlog
+
+
+
+Change ownership of the results directory to
+              solr. If your cluster has security enabled, kinit as
+              the HDFS superuser (hdfs by default) before running the following
+              command. If your cluster does not have security enabled, run the command as the HDFS
+              superuser by adding sudo -u hdfs before the command:
+
+hdfs dfs -chown -R solr /user/jdoe/outdir/results
+
+
+
+(Kerberos only) Switch to the solr user:
+
+kinit solr@EXAMPLE.COM
+
+
+
+Move the two index shards into place. If your cluster does not have security
+              enabled, run the following commands as the solr user by adding
+                sudo -u solr before the command:
+
+hdfs dfs -mv /user/jdoe/outdir/results/part-00000/data/index /solr/cloudera_tutorial_tweets/core_node1/data
+hdfs dfs -mv /user/jdoe/outdir/results/part-00001/data/index /solr/cloudera_tutorial_tweets/core_node2/data
+
+
+In the Cloudera Manager web console for the cluster, start
+          the Solr service (Solr service > Actions > Start).
+Run some Solr queries. For example, for a Solr server
+          running on search01.example.com, go to one of the
+          following URLs in a browser, depending on whether you have enabled
+          security on your cluster:
+
+
+Security enabled:
+https://search01.example.com:8985/solr/cloudera_tutorial_tweets/select?q=*:*
+
+If indexing was successful, this page displays the first 10 query
+          results.
+Parent topic: Using MapReduce batch indexing to index sample Tweets

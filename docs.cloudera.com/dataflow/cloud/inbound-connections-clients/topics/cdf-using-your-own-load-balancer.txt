@@ -1,0 +1,86 @@
+Using Inbound Connections with an external load balancerCloudera Docs
+Using Inbound Connections with an external load balancer
+Once a dataflow deployment with an Inbound Connection Endpoint is available, you can go
+  on and connect an external load balancer to start sending data. 
+Inbound Connection Endpoints are created in CDF with an internal Layer 4 (L4) load
+   balancer (LB). Nevertheless, it is also possible to use your own native Layer 7 (L7) LB
+   (Application Gateway on Azure, Application Load Balancer on AWS, respectively) in front of the
+   Cloudera managed L4 LB. 
+Cloudera recommends achieving this by configuring your L7 LB to use the DataFlow
+   deployment LB as a backend. Enabling TLS between your LB and the DataFlow LB is recommended, but
+   mTLS is not possible for the backend connection. This means that your Listen Processor (e.g.,
+   ListenHTTP) in your NiFi flow cannot be configured with Client Auth = Required
+   when using an external LB as a gateway. . 
+You may configure the listening side of your LB and routing rules according to the
+   requirements of your organization.
+Alternatively, you may be required to use a L4 LB provided by your organization in
+   front of the Cloudera managed LB. This is also possible, although Cloudera recommends directly
+   using the CDP managed L4 LB when possible.
+
+
+
+Typically, when using an external load balancer to act as a gateway, the internal managed load
+   balancer should stay private. This can be accomplished by deselecting the “Use Public Endpoint”
+   option when enabling DataFlow for your environment, which limits DataFlow to only use private
+   subnets for all resources. If public access is needed, that would be done by exposing private
+   resources via the external gateway load balancer.
+Configuration workflow
+Currently, an Inbound Connection Endpoint can only be created during flow deployment, and
+    cannot be reassigned without terminating the flow deployment for which it was created.
+To configure an external load balancer, you need to go through the following steps: 
+
+Design a flow to accept inbound connections.
+
+
+If the flow will be used with a Layer 7 LB, a compatible Layer 7 processor (such
+        as ListenHTTP or HandleHttpRequest) must be used.
+
+
+Decide if TLS will be used between your LB and your flow deployment
+
+
+Cloudera recommends enabling TLS, which is done by configuring your listen
+          processor to use an SSL Context Service named Inbound SSL Context
+           Service. CDF will manage the certificates for this context service when
+          deployed. mTLS between cloud native load balancers is generally not supported, so unless
+          you know that your Gateway LB supports client certificates and mTLS for the backend
+          connection, it is recommended to configure the Client Auth property for
+          your Listen processor to something other than REQUIRED (that is, use
+           NONE, AUTO, or WANT)
+
+
+If you will terminate TLS at your Gateway LB, you can optionally choose to use
+          an unencrypted connection on the backend, which you can do by configuring your listen
+          processor with no SSL Context Service.
+
+
+
+
+Upload the flow to your CDF-PC Flow Catalog.Create a flow deployment, with an Inbound Connection Endpoint.noteIf
+      you have an existing endpoint left over after terminating a previous flow deployment, you can
+      reuse it within the same environment.Download the client certificate and client key, note down the Endpoint Host
+      Name, port number and protocol from the flow deployment where you want to send
+     data using the external LB.
+
+
+Once the deployment has been created successfully,
+                                        select it in the Dashboard and click
+                                            Manage Deployment.
+
+
+In the Deployment Settings
+                                        section, navigate to the NiFi
+                                            Configuration tab to find information about
+                                        the associated inbound connection endpoint.
+
+
+Copy the endpoint hostname and port and download
+                                        the certificate and private key.
+
+
+notePorts are flow-specific, all the other attributes are specific
+      to the individual endpoint host.Create a Layer 7 Load Balancer in your environment and configure its backend using the
+     endpoint information obtained from the flow deployment.
+
+
+Configure an Application Gateway in AzureLearn about the settings required to set up an Azure Application Gateway to communicate   with an Inbound Connection Endpoint.

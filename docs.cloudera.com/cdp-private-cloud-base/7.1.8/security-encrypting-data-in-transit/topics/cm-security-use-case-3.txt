@@ -1,0 +1,175 @@
+Use case 3: Enabling Auto-TLS with Existing CertificatesCloudera Docs
+Use case 3: Enabling Auto-TLS with Existing Certificates
+You can manually generate the certificates signed by an existing Root CA and upload
+    them to Cloudera Manager
+If you have an existing cluster where you need to enable Auto-TLS, or if there is a need to
+      get the host certificates signed individually by the company’s existing CA, you can use this
+      option of enabling Auto-TLS with existing certificates. This option adds operational overhead
+      of generating certificates for any new hosts and uploading to Cloudera Manager through an API
+      request. In this option, certificates signed by CA are staged and Auto-TLS is enabled by
+      calling a Cloudera Manager API. 
+Create the Auto-TLS directory /opt/cloudera/AutoTLS in the Cloudera Manager server. The
+          directory must be owned by the cloudera-scm user.
+Create a public/private key for each host and generate the corresponding Certificate
+          Signing request (CSR). Have these CSRs signed by the company’s Certificate Authority (CA).
+          You can generate private keys and CSRs by using your existing PKI tools and
+            processes, or manually with common utilities like keytool or openssl. In this example
+            using openssl, the private key and CSR files are located under the /tmp/auto-tls
+            directory. The password used for the private key is stored in key.pwd.
+          openssl req -newkey rsa:4096 -sha256 -days 356 \
+-keyout /tmp/auto-tls/keys/host1.example.com-key.pem \
+-out /tmp/auto-tls/host1.example.com.csr \
+-passout file:/tmp/auto-tls/keys/key.pwd \
+-subj '/CN=host1.example.com, O=Cloudera Test, C=US' \
+-extensions san -config <( echo '[req]'; echo 'distinguished_name=req'; echo 'req_extensions=san';echo '[san]'; echo 'subjectAltName=DNS:host1.example.com DNS:loadbalancer.example.com') 
+          The same procedure is used for all cluster hosts.
+        
+Prepare all the certificates signed by the company’s CA on the Cloudera Manager server.
+          In this example, all the certificates are located under the /tmp/auto-tls directory. The
+          password used for keystore and truststore are present in key.pwd and truststore.pwd files
+          respectively.
+Set the ownership of the /tmp/auto-tls directory to cloudera-scm.
+          chown --recursive cloudera-scm:cloudera-scm /tmp/auto-tls
+Refer the example API given below. Customize this API to match the deployment that has
+          been set up and then run the
+            API.> curl -i -v -uadmin:admin -X POST --header 'Content-Type: application/json' --header 'Accept: application/json' -d '{
+"location" : "/opt/cloudera/AutoTLS",
+"customCA" : true,
+"interpretAsFilenames" : true,
+"cmHostCert" : "/tmp/auto-tls/certs/ccycloud-7.vcdp71.root.hwx.site.pem",
+"cmHostKey" : "/tmp/auto-tls/keys/ccycloud-7.vcdp71.root.hwx.site-key.pem",
+"caCert" : "/tmp/auto-tls/ca-certs/cfssl-chain-truststore.pem",
+"keystorePasswd" : "/tmp/auto-tls/keys/key.pwd",
+"truststorePasswd" : "/tmp/auto-tls/ca-certs/truststore.pwd",
+"trustedCaCerts" : "/tmp/auto-tls/ca-certs.pem", //This is a path to a PEM file on the Cloudera Manager host which contains 
+a list of CA certificates that should be imported into the truststores of all hosts. This is an optional field.
+"hostCerts" : [ {
+"hostname" : "ccycloud-7.vcdp71.root.hwx.site",
+"certificate" : "/tmp/auto-tls/certs/ccycloud-7.vcdp71.root.hwx.site.pem",
+"key" : "/tmp/auto-tls/keys/ccycloud-7.vcdp71.root.hwx.site-key.pem"
+}, {
+"hostname" : "ccycloud-3.vcdp71.root.hwx.site",
+"certificate" : "/tmp/auto-tls/certs/ccycloud-3.vcdp71.root.hwx.site.pem",
+"key" : "/tmp/auto-tls/keys/ccycloud-3.vcdp71.root.hwx.site-key.pem"
+}, {
+"hostname" : "ccycloud-2.vcdp71.root.hwx.site",
+"certificate" : "/tmp/auto-tls/certs/ccycloud-3.vcdp71.root.hwx.site.pem",
+"key" : "/tmp/auto-tls/keys/ccycloud-3.vcdp71.root.hwx.site-key.pem"
+}, {
+"hostname" : "ccycloud-1.vcdp71.root.hwx.site",
+"certificate" : "/tmp/auto-tls/certs/ccycloud-1.vcdp71.root.hwx.site.pem",
+"key" : "/tmp/auto-tls/keys/ccycloud-1.vcdp71.root.hwx.site-key.pem"
+} ],
+"configureAllServices" : "true",
+"sshPort" : 22,
+"userName" : "root",
+"password" : "cloudera"
+}' 'http://ccycloud-7.vcdp71.root.hwx.site:7180/api/v41/cm/commands/generateCmca' ////This link is valid if you have 
+not enabled TLS in the Cloudera Manager UI. If you enable TLS for the same deployment in the Cloudera Manager UI later, 
+the port number and the protocol changes for the API calls and for accessing the link from a browser. In such a scenario, 
+the correct API call is as follows: https://ccycloud-7.vcdp71.root.hwx.site:7183/api/v41/cm/commands/generateCmca.If
+            a new deployment is set up without TLS encryption, the API uses HTTP and port 7180. If
+            you are converting the deployment to an Auto-TLS setup from an existing Manual TLS
+            setup, the Cloudera Manager UI is converted to HTTPS. In such cases, the URL for the API
+            calls has to be modified.
+noteIf you need to use an SSH private key instead of a password, then replace "password" in the
+            above example with "privateKey" and provide the SSH private key as an argument to that
+            field. The SSH private key must be properly JSON-encoded, including replacing newlines
+            with '\n'. The following awk command will output to the terminal the contents of
+            ~/.ssh/id_rsa with newlines replaced, and can be used as input to the "privateKey"
+            argument:
+            awk 'NF {sub(/\r/, ""); printf "%s\\n",$0;}' ~/.ssh/id_rsa
+Table 1. JSON file key properties
+
+Property
+Data type
+Description
+
+
+
+customCA
+boolean
+Option to generate an internal Cloudera Manager CA (false) or use
+                    user-provided certificates (true). When set to true (user-provided
+                    certificates), the following other arguments must be given: * cmHostCert *
+                    cmHostKey * caCert * keystorePasswd * truststorePasswd
+
+
+cmHostCert
+string
+The certificate for the Cloudera Manager host in PEM format. Only used if
+                    customCA == true.
+
+
+cmHostKey
+string
+The private key for the Cloudera Manager host in PEM format. Only used if
+                    customCA == true.
+
+
+caCert
+string
+The certificate for the user-provided certificate authority in PEM format.
+                    Only used if customCA == true.
+
+
+trustedCaCerts
+string
+A list of CA certificates that will be imported into the Auto-TLS
+                    truststore and distributed to all hosts.
+
+
+When this API returns successfully, you should see the recent command run as
+            follows.
+
+
+When this API is executing you can check
+            /var/log/cloudera-scm-server/cloudera-scm-server.log for API
+          logs.
+Restart the Cloudera Manager service. Then restart the Cloudera Manager agents on all
+          cluster servers.
+The Cloudera Manager UI/API is now available on the TLS port. Now restart all the
+          Cloudera Manager management services.
+Restart the Cluster services. Now all the services are configured for wire
+          encryption.
+When adding new hosts to this cluster, the following additional steps need to be
+          performed to upload the CA signed host certificates to Cloudera Manager. 
+The add hosts wizard will prompt the following screen with instructions to upload
+              the certificates.
+
+
+Upload the certificates to Cloudera Manager using the following example
+              command:curl -u admin:admin -X POST --header 'Content-Type:
+application/json' --header 'Accept: application/json' -d '{
+  "location": "/opt/cloudera/AutoTLS",
+  "interpretAsFilenames": true,
+  "hostCerts": [ {
+      "hostname": "ccycloud-10.vcdp71.root.hwx.site",
+      "certificate":
+"/tmp/auto-tls/certs/ccycloud-10.vcdp71.root.hwx.site.pem",
+      "key":
+"/tmp/auto-tls/certs/ccycloud-10.vcdp71.root.hwx.site.pem"
+    } ]
+}' 'https://ccycloud-7.vcdp71.root.hwx.site:7183/api/v41/cm/commands/addCustomCerts'
+              In the curl command example above, the "location" should be omitted if Auto-TLS was
+              enabled or rotated after 7.1, and the file paths should point to files on the CM
+              server host. 
+Continue to add hosts.
+
+In this example, the CA used to sign all the certificates is  Sec Lab
+        Intermediate CA which can be found in the screenshot below:
+Cloudera Manager UI: 
+
+
+Knox UI: 
+
+
+Rotate Auto-TLS Certificate Authority and Host Certificates
+After the certificate files in the specified paths have been replaced with the new
+        certificates, run the API calls that were used when enabling Auto-TLS. Refer Step 4 in this
+        use case to run the Cloudera Manager API. You do not need to run the
+          addCustomCerts API if you are performing the steps given in this use
+        case.
+
+
+Related informationUse case 1: Use Cloudera Manager to generate internal CA and corresponding certificatesUse case 2: Enabling Auto-TLS with an intermediate CA signed by an existing Root CAParent topic: Configuring TLS Encryption for Cloudera Manager Using Auto-TLS

@@ -1,0 +1,339 @@
+Troubleshooting Docker on YARNCloudera Docs
+Troubleshooting Docker on YARN
+A list of common Docker on YARN related problem and how to resolve them.
+Docker is not enabled
+
+
+Problem statement
+Started an application on Docker, but the containers are running as regular
+              containers.
+Root cause
+Docker is not enabled.
+Resolution
+Enable Docker in Cloudera Manager.
+
+
+
+YARN_CONTAINER_RUNTIME_TYPE runtime environment variable is not
+        provided during Application submission
+
+
+Problem statement
+Started an application on Docker, but the containers are running as regular
+              containers.
+Root cause
+YARN_CONTAINER_RUNTIME_TYPE runtime environment variable is not
+              provided during Application submission.
+Resolution
+Provide the environment variable when submitting the application.
+
+
+
+LCE enforces running user to be nobody in an unsecure cluster
+
+
+Problem statement
+On an unsecure cluster, Appattempt exited with exitCode -1000 with
+              diagnostic
+              message:[...]
+main : run as user is nobody
+main : requested yarn user is yarn
+Can't create directory /yarn/nm/usercache/yarn/appcache/application_1570626013274_0001 - Permission denied
+
+Root cause
+LCE enforces running user to be nobody in an unsecure cluster if
+                yarn.nodemanager.linux-container-executor.nonsecure-mode.limit-users
+              is set.
+Resolution
+
+In Cloudera Manager, add the following configuration to the YARN Service
+                  Advanced Configuration Snippet (Safety Valve) for yarn-site.xml
+                safety-valve by clicking the plus icon:
+
+Key:
+                      yarn.nodemanager.linux-container-executor.nonsecure-mode.limit-users
+Value: false
+Then use a user who has the correct permissions or add more permissive access
+                to these folders for the nobody user. For more information, see YARN force nobody user on all jobs.
+
+
+
+
+The Docker binary is not found
+
+
+Problem Statement
+Container launch fails with the following
+              message:Container launch fails
+Exit code: 29
+Exception message: Launch container failed
+Shell error output: sh: <docker binary path, /usr/bin/docker by default>: No such file or directory
+Could not inspect docker network to get type /usr/bin/docker network inspect host --format='{{.Driver}}'.
+Error constructing docker command, docker error code=-1, error message='Unknown error'
+Root cause
+The Docker binary is not found.
+Resolution
+The Docker binary is either not installed or installed to a different folder.
+              Install Docker binary and provide the path to the binaries by specifying it using the
+              Docker Binary Path (docker.binary) property in Cloudera Manager.
+
+
+
+The Docker daemon is not running or does not respond
+
+
+Problem statement
+Container launch fails with the following
+              message:[timestamp] Exception from container-launch.
+Container id: container_e06_1570629976081_0004_01_000003
+Exit code: 29
+Exception message: Launch container failed
+Shell error output: Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?
+Could not inspect docker network to get type /usr/bin/docker network inspect host --format='{{.Driver}}'.
+Error constructing docker command, docker error code=-1, error message='Unknown error'
+Root cause
+The Docker daemon is not running or does not respond.
+Resolution
+Start or restart the Docker daemon with the dockerd command.
+
+
+
+Docker rpm misses some symbolic link
+
+
+Problem statement
+On Centos 7.5 container launch fails with the following
+              message:[...]
+[layer hash]: Pull complete
+[layer hash]: Pull complete
+Digest: sha256:[sha]
+Status: Downloaded newer image for [image]
+/usr/bin/docker-current: Error response from daemon: shim error: docker-runc not installed on system.
+Root cause
+Docker rpm misses some symbolic link.
+Resolution
+Create the missing symbolic link using the following command in a
+                terminal:sudo ln -s /usr/libexec/docker/docker-runc-current
+                /usr/bin/docker-runc
+
+
+
+YARN_CONTAINER_RUNTIME_DOCKER_IMAGE is not set
+
+
+Problem statement
+Container launch fails with the following
+              message:[timestamp]Exception from container-launch.
+Container id: container_e06_1570629976081_0004_01_000003
+Exit code: -1
+Exception message: YARN_CONTAINER_RUNTIME_DOCKER_IMAGE not set!
+Shell error output: <unknown>
+Shell output: <unknown>
+Root cause
+YARN_CONTAINER_RUNTIME_DOCKER_IMAGE is not set.
+Resolution
+Set the YARN_CONTAINER_RUNTIME_DOCKER_IMAGE environment variable
+              when submitting the application.
+
+
+
+Image is not trusted
+
+
+Problem statement
+Container launch fails with the following
+              message:[timestamp] Exception from container-launch.
+Container id: container_e06_1570629976081_0004_01_000003
+Exit code: 127
+Exception message: Launch container failed
+Shell error output: image: [image] is not trusted.
+Disable mount volume for untrusted image
+image: library/ibmjava:8 is not trusted.
+Disable cap-add for untrusted image
+Docker capability disabled for untrusted image
+[...]
+Root cause
+The image is not trusted.
+Resolution
+Add the image’s registry to the list of trusted registries
+                (docker.trusted.registries). For example in case of
+                library/ubuntu:latest, add the “library” registry to that list.
+
+
+
+Docker image does not include the Snappy library
+
+
+Problem statement
+Running the hadoop-mapreduce-examples pi job fails with the following
+              error:[...]
+[timestamp] INFO mapreduce.Job:  map 0% reduce 0%
+[timestamp] INFO mapreduce.Job: Task Id : attempt_1570629976081_0001_m_000000_0, Status : FAILED
+Error: org/apache/hadoop/util/NativeCodeLoader.buildSupportsSnappy()Z
+Root cause
+The provided Docker image does not include the Snappy library. MapReduce needs this
+              if compression is used and the Snappy codec is chosen for compression.
+Resolution
+Either add the Snappy library to the image or change the “Compression Codec of
+              MapReduce Map Output” to some other codec
+
+
+
+Hadoop UserGroupInformation class does not have access to the user permissions in the
+        host system
+
+
+Problem statement
+Container fails shortly after start with the following
+              exception:Exception in thread "main" org.apache.hadoop.security.KerberosAuthException: failure to login: javax.security.auth.login.LoginException: java.lang.NullPointerException: invalid null input: name
+	At com.sun.security.auth.UnixPrincipal.<init>(UnixPrincipal.java:71)
+	at com.sun.security.auth.module.UnixLoginModule.login(UnixLoginModule.java:133)
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+	at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl. java:62)
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke( DelegatingMethodAccessorImpl.java:43)
+Root cause
+The Hadoop UserGroupInformation class does not have access to the user permissions
+              in the host system.
+Resolution
+Mount the /etc/passwd to the image. More configuration issues can be found in
+              upstream Hadoop 3.2 documentation: Launching Applications Using Docker Containers
+                upstream documentation.
+
+
+
+Kerberos configuration is not mounted for Docker containers
+
+
+Problem Statement
+MapReduce and Spark jobs fail with Docker on a secure cluster. It cannot get
+              Kerberos
+              realm.user@<hostname> /]$ cd /yarn/container-logs/application_1573764921308_0002/container_e147_1573764921308_0002_01_000005
+[user@<hostname> container_e147_1573764921308_0002_01_000005]$ ll
+total 8
+-rw-r--r-- 1 systest yarn   0 Nov 14 12:57 prelaunch.err
+-rw-r--r-- 1 systest yarn  70 Nov 14 12:57 prelaunch.out
+-rw-r--r-- 1 systest yarn   0 Nov 14 12:57 stderr
+-rw-r----- 1 systest yarn   0 Nov 14 12:57 stderr.txt
+-rw-r--r-- 1 systest yarn   0 Nov 14 12:57 stdout
+-rw-r----- 1 systest yarn   0 Nov 14 12:57 stdout.txt
+-rw-r--r-- 1 systest yarn 892 Nov 14 12:57 syslog
+[user@<hostname> container_e147_1573764921308_0002_01_000005]$ cat syslog
+2019-11-14 20:57:41,765 ERROR [main] org.apache.hadoop.yarn.YarnUncaughtExceptionHandler: Thread Thread[main,5,main] threw an Exception.
+java.lang.IllegalArgumentException: Can't get Kerberos realm
+    at org.apache.hadoop.security.HadoopKerberosName.setConfiguration(HadoopKerberosName.java:71)
+    at org.apache.hadoop.security.UserGroupInformation.initialize(UserGroupInformation.java:330)
+    at org.apache.hadoop.security.UserGroupInformation.setConfiguration(UserGroupInformation.java:381)
+    at org.apache.hadoop.mapred.YarnChild.main(YarnChild.java:80)
+Caused by: java.lang.IllegalArgumentException
+    at javax.security.auth.kerberos.KerberosPrincipal.<init>(KerberosPrincipal.java:136)
+    at org.apache.hadoop.security.authentication.util.KerberosUtil.getDefaultRealm(KerberosUtil.java:108)
+    at org.apache.hadoop.security.HadoopKerberosName.setConfiguration(HadoopKerberosName.java:69)
+    ... 3 more
+[user@<hostname> container_e147_1573764921308_0002_01_000005]$
+
+Root cause
+Kerberos configuration is not mounted for Docker containers.
+Resolution
+In case of MapReduce job, add the following environment variable when running the
+              job:
+                -Dmapreduce.reduce.env=YARN_CONTAINER_RUNTIME_DOCKER_MOUNTS=/etc/krb5.conf:/etc/krb5.conf:roEnsure to add /etc/krb5.conf to the Allowed
+                  Read-Only Mounts in Cloudera Manager
+                configuration.Example:yarn jar /opt/cloudera/parcels/CDH-7.0.3-1.cdh7.0.3.p0.1616399/lib/hadoop-mapreduce/hadoop-mapreduce-examples.jar pi -Dmapreduce.map.env="YARN_CONTAINER_RUNTIME_TYPE=docker,YARN_CONTAINER_RUNTIME_DOCKER_IMAGE=library/ibmjava:8,YARN_CONTAINER_RUNTIME_DOCKER_DELAYED_REMOVAL=true,YARN_CONTAINER_RUNTIME_DOCKER_MOUNTS=/etc/krb5.conf:/etc/krb5.conf:ro" -Dmapreduce.reduce.env="YARN_CONTAINER_RUNTIME_TYPE=docker,YARN_CONTAINER_RUNTIME_DOCKER_IMAGE=library/ibmjava:8,YARN_CONTAINER_RUNTIME_DOCKER_DELAYED_REMOVAL=true,YARN_CONTAINER_RUNTIME_DOCKER_MOUNTS=/etc/krb5.conf:/etc/krb5.conf:ro"  1 40000
+
+In case of Spark job, ensure that mount is added as read-only for
+                /etc/krb5.conf as spark.appMasterEnv and
+                spark.executorEnv:
+               --conf spark.yarn.appMasterEnv.YARN_CONTAINER_RUNTIME_DOCKER_MOUNTS=/etc/passwd:/etc/passwd:ro,/opt/cloudera/parcels:/opt/cloudera/parcels:ro,/etc/krb5.conf:/etc/krb5.conf:ro \  --conf spark.executorEnv.YARN_CONTAINER_RUNTIME_DOCKER_MOUNTS="/etc/passwd:/etc/passwd:ro,/opt/cloudera/parcels/:/opt/cloudera/parcels/:ro,/etc/krb5.conf:/etc/krb5.conf:ro" 
+
+
+
+The ssl-client.xml file and the truststore file is not mounted for
+        Docker containers using MapReduce
+
+
+Problem statement
+Reducer cannot connect to the shuffle service due to SSL handshake issues.CLI
+                logs:19/11/15 03:26:02 INFO impl.YarnClientImpl: Submitted application application_1573810028869_0004
+19/11/15 03:26:02 INFO mapreduce.Job: The url to track the job: <URL>
+19/11/15 03:26:02 INFO mapreduce.Job: Running job: job_1573810028869_0004
+19/11/15 03:26:12 INFO mapreduce.Job: Job job_1573810028869_0004 running in uber mode : false
+19/11/15 03:26:12 INFO mapreduce.Job:  map 0% reduce 0%
+19/11/15 03:26:23 INFO mapreduce.Job:  map 100% reduce 0%
+19/11/15 03:27:30 INFO mapreduce.Job: Task Id : attempt_1573810028869_0004_r_000000_0, Status : FAILED
+Error: org.apache.hadoop.mapreduce.task.reduce.Shuffle$ShuffleError: error in shuffle in fetcher#2
+    at org.apache.hadoop.mapreduce.task.reduce.Shuffle.run(Shuffle.java:136)
+    at org.apache.hadoop.mapred.ReduceTask.run(ReduceTask.java:377)
+    at org.apache.hadoop.mapred.YarnChild$2.run(YarnChild.java:174)
+    at java.security.AccessController.doPrivileged(AccessController.java:770)
+    at javax.security.auth.Subject.doAs(Subject.java:570)
+    at org.apache.hadoop.security.UserGroupInformation.doAs(UserGroupInformation.java:1876)
+    at org.apache.hadoop.mapred.YarnChild.main(YarnChild.java:168)
+Caused by: java.io.IOException: Exceeded MAX_FAILED_UNIQUE_FETCHES; bailing-out.
+    at org.apache.hadoop.mapreduce.task.reduce.ShuffleSchedulerImpl.checkReducerHealth(ShuffleSchedulerImpl.java:396)
+    at org.apache.hadoop.mapreduce.task.reduce.ShuffleSchedulerImpl.copyFailed(ShuffleSchedulerImpl.java:311)
+    at org.apache.hadoop.mapreduce.task.reduce.Fetcher.openShuffleUrl(Fetcher.java:291)
+    at org.apache.hadoop.mapreduce.task.reduce.Fetcher.copyFromHost(Fetcher.java:330)
+    at org.apache.hadoop.mapreduce.task.reduce.Fetcher.run(Fetcher.java:198)
+NodeManager
+                logs:2019-11-15 03:30:16,323 INFO org.apache.hadoop.yarn.server.nodemanager.NodeStatusUpdaterImpl: Removed completed containers from NM context: [container_e149_1573810028869_0004_01_000005]
+2019-11-15 03:30:50,812 ERROR org.apache.hadoop.mapred.ShuffleHandler: Shuffle error:
+javax.net.ssl.SSLException: Received fatal alert: certificate_unknown
+        at sun.security.ssl.Alerts.getSSLException(Alerts.java:208)
+        at sun.security.ssl.SSLEngineImpl.fatal(SSLEngineImpl.java:1666)
+        at sun.security.ssl.SSLEngineImpl.fatal(SSLEngineImpl.java:1634)
+        at sun.security.ssl.SSLEngineImpl.recvAlert(SSLEngineImpl.java:1800)
+        at sun.security.ssl.SSLEngineImpl.readRecord(SSLEngineImpl.java:1083)
+        at sun.security.ssl.SSLEngineImpl.readNetRecord(SSLEngineImpl.java:907)
+        at sun.security.ssl.SSLEngineImpl.unwrap(SSLEngineImpl.java:781)
+        at javax.net.ssl.SSLEngine.unwrap(SSLEngine.java:624)
+        at org.jboss.netty.handler.ssl.SslHandler.unwrap(SslHandler.java:1218)
+        at org.jboss.netty.handler.ssl.SslHandler.decode(SslHandler.java:852)
+        at org.jboss.netty.handler.codec.frame.FrameDecoder.callDecode(FrameDecoder.java:425)
+        at org.jboss.netty.handler.codec.frame.FrameDecoder.messageReceived(FrameDecoder.java:303)
+        at org.jboss.netty.channel.SimpleChannelUpstreamHandler.handleUpstream(SimpleChannelUpstreamHandler.java:70)
+        at org.jboss.netty.channel.DefaultChannelPipeline.sendUpstream(DefaultChannelPipeline.java:564)
+        at org.jboss.netty.channel.DefaultChannelPipeline.sendUpstream(DefaultChannelPipeline.java:559)
+        at org.jboss.netty.channel.Channels.fireMessageReceived(Channels.java:268)
+        at org.jboss.netty.channel.Channels.fireMessageReceived(Channels.java:255)
+        at org.jboss.netty.channel.socket.nio.NioWorker.read(NioWorker.java:88)
+        at org.jboss.netty.channel.socket.nio.AbstractNioWorker.process(AbstractNioWorker.java:108)
+        at org.jboss.netty.channel.socket.nio.AbstractNioSelector.run(AbstractNioSelector.java:337)
+        at org.jboss.netty.channel.socket.nio.AbstractNioWorker.run(AbstractNioWorker.java:89)
+        at org.jboss.netty.channel.socket.nio.NioWorker.run(NioWorker.java:178)
+        at org.jboss.netty.util.ThreadRenamingRunnable.run(ThreadRenamingRunnable.java:108)
+        at org.jboss.netty.util.internal.DeadLockProofWorker$1.run(DeadLockProofWorker.java:42)
+        at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1149)
+        at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:624)
+        at java.lang.Thread.run(Thread.java:748)
+2019-11-15 03:30:50,812 ERROR org.apache.hadoop.mapred.ShuffleHandler: Shuffle error [id: 0xf95ad8ab, /10.65.53.21:44366 => /10.65.53.21:13562] EXCEPTION: javax.net.ssl.SSLException: Received fatal alert: certificate_unknown
+2019-11-15 03:30:51,156 INFO org.apache.hadoop.yarn.server.nodemanager.containermanager.ContainerManagerImpl: Stopping container with container Id: container_e149_1573810028869_0004_01_000006
+NodeManager
+                logs
+                (Exception):2019-11-15 03:30:50,812 ERROR org.apache.hadoop.mapred.ShuffleHandler: Shuffle error:
+javax.net.ssl.SSLException: Received fatal alert: certificate_unknown
+        [...]
+2019-11-15 03:30:50,812 ERROR org.apache.hadoop.mapred.ShuffleHandler: Shuffle error [id: 0xf95ad8ab, /10.65.53.21:44366 => /10.65.53.21:13562] EXCEPTION: javax.net.ssl.SSLException: Received fatal alert: certificate_unknown
+2019-11-15 03:30:51,156 INFO org.apache.hadoop.yarn.server.nodemanager.containermanager.ContainerManagerImpl: Stopping container with container Id: container_e149_1573810028869_0004_01_000006
+
+Root cause
+For normal containers, the file ssl-client.xml defines the SSL
+              settings and it is on the classpath (normally under directory:
+                /etc/hadoop/conf.cloudera.YARN-1/ssl-client.xml). Therefore, it has
+              to be mounted for Docker containers using MapReduce. Since the
+                ssl-client.xml file refers to the truststore file as well, that
+              also had to be mounted.
+Resolution
+
+Add the following when running the
+                job:-Dmapreduce.reduce.env=YARN_CONTAINER_RUNTIME_DOCKER_MOUNTS="/etc/hadoop/conf.cloudera.YARN-1/ssl-client.xml:/etc/hadoop/conf.cloudera.YARN-1/ssl-client.xml:ro,/var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_truststore.jks:/var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_truststore.jks:ro"
+Ensure to add  /etc/hadoop/conf.cloudera.YARN-1/ssl-client.xml and
+                  /var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_truststore.jks
+                to the Allowed Read-Only Mounts in Cloudera Manager.
+Note, that the location of the truststore can vary, so verify its location from the
+                  ssl-client.xml file. You can access that file in Clouder Manager
+                through the Processes view for NodeManager.
+
+
+
+
+

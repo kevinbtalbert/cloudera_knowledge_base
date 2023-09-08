@@ -1,0 +1,132 @@
+Configure the NFS GatewayCloudera Docs
+Configure the NFS Gateway
+You must ensure that the proxy user for the NFS Gateway can proxy all the users
+        accessing the NFS mounts. In addition, you must configure settings specific to the
+        Gateway.
+
+Ensure that the proxy user for the NFS Gateway can proxy all the users
+                    accessing the NFS mounts.
+In non-secure mode, the user running the Gateway is the proxy user, while in
+                    secure mode the user in Kerberos keytab is the proxy user.
+If a user nfsserver is running the Gateway and there are
+                    users belonging to groups nfs-users1 and
+                        nfs-users2, then set the following values in
+                        core-site.xml on the NameNode.note
+Replace nfsserver with the user account that starts the
+                            Gateway in your cluster.
+set the following properties in
+NFS Gateway Advanced Configuration Snippet (Safety Valve) for hdfs-site.xml:
+Name: hadoop.proxyuser.nfsserver.groups
+Value: nfs-users1,nfs-users2
+Description: 
+    The 'nfsserver' user is allowed to proxy all members of the
+    'nfs-users1' and 'nfs-users2' groups. Set this to '*' to allow
+    nfsserver user to proxy any group.
+
+Name: hadoop.proxyuser.nfsserver.hosts
+Value: nfs-client-host1.com
+Description:
+    This is the host where the nfs gateway is running. Set this to
+    '*' to allow requests from any hosts to be proxied.
+For a Kerberized cluster, set the following properties in
+                        hdfs-site.xml:For a Kerberized cluster, set the following properties in 
+NFS Gateway Advanced Configuration Snippet (Safety Valve) for hdfs-site.xml
+Name: nfs.keytab.file
+Value: {{CMF_CONF_DIR}}/nfsserver.keytab
+
+Name: nfs.kerberos.principal
+Value: nfsserver/_HOST@YOUR-REALM.COM
+
+Configure settings for the NFS Gateway. 
+The NFS Gateway uses the same settings that are used by the NameNode and
+                    DataNode. Configure various properties based on your application's requirements: 
+
+
+Edit the hdfs-site.xml file on your NFS Gateway
+                            machine. 
+
+<property>
+  <name>dfs.namenode.accesstime.precision</name>
+  <value>3600000</value>
+  <description>
+    The access time for HDFS file is precise up to this value. 
+    The default value is 1 hour. Setting a value of 0 disables
+    access times for HDFS.
+  </description>
+</property>
+noteIf the export is mounted with access time update allowed, ensure
+                                that this property is not disabled in the configuration file. Only
+                                the NameNode needs to restart after this property is changed. If you
+                                have disabled access time update by mounting with
+                                    noatime, you do NOT have to change this
+                                property nor restart your NameNode.
+
+
+
+Add the value of the dfs.nfs3.dump.dir property in
+                                hdfs-site.xml.
+
+HDFS -> NFS Gateway -> Configuration -> search for "Temporary Dump Directory" and set the value as /tmp/.hdfs-nfs
+noteThe NFS client often reorders writes. Sequential writes can arrive
+                                at the NFS Gateway in a random order. This directory is used to
+                                temporarily save out-of-order writes before writing to HDFS. Ensure
+                                that the directory has enough space. For example, if the application
+                                uploads 10 files with each having 100MB, it is recommended for this
+                                directory to have 1GB space in case a write reorder happens to every
+                                file.
+
+
+
+Update the value of the dfs.nfs.exports.allowed.hosts
+                            property in hdfs-site.xml as specified.
+
+HDFS -> NFS Gateway -> Configuration -> search for "Allowed Hosts and Privileges" and set the value as 
+* rw
+noteBy default, the export can be mounted by any client. You must
+                                update this property to control access. The value string contains
+                                the machine name and access privilege, separated by whitespace
+                                characters. The machine name can be in single host, wildcard, or
+                                IPv4 network format. The access privilege uses rw
+                                or ro to specify readwrite or
+                                    readonly access to exports. If you do not
+                                specify an access privilege, the default machine access to exports
+                                is readonly. Separate machine entries by
+                                    ;. For example, 192.168.0.0/22 rw ;
+                                    host*.example.com ; host1.test.org ro;.
+
+
+
+Restart the NFS Gateway.
+
+Optional: 
+Customize log settings by modifying the log4j.property
+                            file.
+To change the trace level, go to HDFS > NFS Gateway > Configuration >
+                            search for "NFS Gateway Logging Advanced Configuration Snippet (Safety
+                            Valve)" and add the
+                                    following:log4j.logger.org.apache.hadoop.hdfs.nfs=DEBUG
+To view more information about ONCRPC requests, add the
+                                    following:log4j.logger.org.apache.hadoop.oncrpc=DEBUG
+
+
+
+Specify JVM heap space (HADOOP_NFS3_OPTS) for the NFS
+                    Gateway. 
+You can increase the JVM heap allocation for the NFS Gateway using this
+                    option. To set this option, go to HDFS > NFS Gateway > Configuration > search
+                    for "Java Heap Size of NFS Gateway in Bytes" and enter the value.
+                            :export
+                        HADOOP_NFS3_OPTS=<memory-setting(s)>
+The following example specifies a 2GB process heap (2GB starting size and
+                    2GB
+                    maximum):export HADOOP_NFS3_OPTS="-Xms2048m -Xmx2048m"
+
+To improve the performance of large file transfers, you can increase the values
+                    of the dfs.nfs.rtmax and dfs.nfs.wtmax
+                    properties.
+These properties are configuration settings on the NFS Gateway server that
+                    change the maximum read and write request size supported by the Gateway. The
+                    default value for both settings is 1MB.
+
+
+Parent topic: Using the NFS Gateway for accessing HDFS

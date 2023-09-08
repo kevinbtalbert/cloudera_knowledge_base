@@ -1,0 +1,109 @@
+Converting Hive CLI scripts to BeelineCloudera Docs
+Converting Hive CLI scripts to Beeline
+If you have legacy scripts that run Hive queries from edge nodes using the Hive CLI,
+        you must solve potential incompatibilities with variable substitution in these scripts. CDP
+        supports Beeline instead of Hive CLI. You can use Beeline to run legacy scripts with a few
+        caveats.
+
+In this task, you resolve incompatibilities in legacy Hive CLI scripts and
+                Beeline:
+
+Configuration variables
+                    
+Problem: You cannot refer to configuration parameters in scripts using
+                            the hiveconf namespace unless allowed.
+Solution: You include the parameter in the HiveServer allowlist
+                            (whitelist).
+
+
+Namespace problems
+Problem: Beeline does not support the
+                        system and env namespaces for
+                        variables.
+Solution: You remove these namespace references from scripts using a
+                        conversion technique described in this task.
+
+
+
+
+Create a conversion script named env_to_hivevar.sh that
+                    removes env references in your SQL scripts.
+
+#!/usr/bin/env bash
+                        
+CMD_LINE=""
+                        
+#Blank conversion of all env scoped values
+for I in `env`; do
+  CMD_LINE="$CMD_LINE --hivevar env:${I} "
+done
+echo ${CMD_LINE}
+
+
+On the command line of a node in your cluster, define and export a variable
+                    named HIVEVAR, for example, and set it to run the conversion script.
+
+export HIVEVAR=`./env_to_hivevar.sh`
+
+
+Define and export variables to hold a few variables for testing the
+                    conversion.
+
+export LOC_TIME_ZONE="US/EASTERN"
+export MY_TEST_VAR="TODAY"
+
+
+On the command line of a cluster node, test the conversion: Execute a command
+                    that references HIVEVAR to parse a SQL statement, remove the incompatible
+                    env namespace, and execute the remaining SQL. 
+
+hive ${HIVEVAR} -e 'select "${env:LOC_TIME_ZONE}";'
+
+
++-------------+
+|     _c0     |
++-------------+
+| US/EASTERN  |
++-------------+
+
+
+Create a text file named init_var.sql to simulate a legacy
+                    script that sets two configuration parameters, one in the problematic
+                    env namespace.
+
+set mylocal.test.var=hello;
+set mylocal.test.env.var=${env:MY_TEST_VAR};
+
+
+Include these configuration parameters in the allowlist: In Cloudera Manager,
+                    go to Clusters > HIVE_ON_TEZ-1 > Configuration, and search for hive-site.
+
+In HiveServer2 Advanced Configuration Snippet (Safety Valve) for
+                        hive-site.xml, add the property key:
+                        hive.security.authorization.sqlstd.confwhitelist.append.
+                
+
+Provide the property value, or values, to allowlist, for example:
+                        mylocal\..*|junk.
+This action appends mylocal.test.var and
+                        mylocal.test.env.var parameters to the allowlist.
+
+Save configuration changes, and restart any components as required.
+
+Run a command that references HIVEVAR to parse a SQL script, removes the
+                    incompatible env namespace, and runs the remaining SQL,
+                    including the whitelisted configuration parameters identified by
+                        hiveconf:.
+
+hive -i init_var.sql ${HIVEVAR} -e 'select "${hiveconf:mylocal.test.var}","${hiveconf:mylocal.test.env.var}";'                  
+
+
++--------+--------+
+|  _c0   |  _c1   |
++--------+--------+
+| hello  | TODAY  |
++--------+--------+
+
+
+
+Related informationCustom Configuration (about Cloudera Manager Safety Valve)Example of using the Cloudera Manager Safety Valve

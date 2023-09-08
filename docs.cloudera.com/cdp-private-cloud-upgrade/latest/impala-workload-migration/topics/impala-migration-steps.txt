@@ -1,0 +1,182 @@
+Steps for migrating Impala workloads to CDW Data Service on Private CloudCloudera Docs
+Steps for migrating Impala workloads to CDW Data Service on Private Cloud
+After you upgrade from CDH to CDP Private Cloud Base you can retain your compute
+  workload on CDP Private Cloud Base and continue to use Impala as your query engine. To get to the
+  latest Impala version with the full feature set, the ideal choice available to you is to move your
+  compute workload from CDP Private Cloud Base to CDW Private Cloud.
+Before you begin, acquire basic information about the CDP platform and the interfaces.
+
+Parent topic: Moving Impala compute workloads from CDP Private Cloud Base to CDW Data Service on Private Cloud
+Activate the CDP environment in CDW
+Before you can create a Database Catalog to use with a Virtual Warehouse, you must
+  activate a CDP environment in Cloudera Data Warehouse (CDW). Activating an environment causes CDP
+  to connect to the Kubernetes cluster, which provides the computing resources for the Database
+  Catalog. In addition, activating an environment enables the Cloudera Data Warehouse (CDW) service
+  to use the existing data lake that was set up for the environment, including all data, metadata,
+  and security.
+To activate an environment, see Activating OpenShift and Embedded Container Service
+    environments. Also, review the sizing information to plan resources for your environment.
+   See How to use the CDP Private Cloud Data Services sizing
+    spreadsheet.
+
+
+Setup and size an Impala Virtual Warehouse
+After activating the environment, you must create and configure an Impala Virtual
+  Warehouse. Learn about the configurations and options that Cloudera Data Warehouse (CDW) provides
+  to size the Virtual Warehouse.
+Size
+The size of a Virtual Warehouse controls the Executor group size as shown in the
+    following diagram. This controls the number of Impala executor pods that a single query runs on.
+    Select a size that is appropriate for the amount of data to be scanned or aggregrated and the
+    amount of data cache that is needed overall. By default, each executor pod and coordinator pod
+    caches 300 GB data and scratches 300 GB data.
+
+
+
+You can select a standard size (2, 10, 20, or 40, set a custom size of, say, 15 nodes in an
+    executor group) as shown in the following image:
+
+
+tipIf your query is running slow and scans take a lot of
+    time, then increase the size of the executor group.
+
+Concurrency-based auto-scaling
+Once you have selected the executor group size, concurrency-based autoscaling allows the
+    Virtual Warehouse to scale up when concurrent queries are seen. This triggers scales up the
+    Virtual Warehouse size to run the concurrent query. You can scale up the Virtual Warehouse in
+    proportion to its size. For example, if you set the Virtual Warehouse size equal to 15 nodes,
+    then the Virtual Warehouse scales up in multiples of 15 nodes, namely, 15, 30, 45, 60, and so
+    on. You can control the scale up ratio by controlling the maximum number of executors as shown
+    in the following image:
+
+
+
+Auto-suspend a Virtual Warehouse
+Virtual Warehouses automatically stop after a period of inactivity. You can disable it or set
+    the amount of time before the Virtual Warehouse suspends itself as shown in the following
+     image:
+
+
+
+Wait time
+Wait time is used to set the amount of time a query stays in a queue before a new executor
+    group is spawned, as shown in the following image:
+
+
+
+
+
+Import custom configurations
+You must import custom configurations that you used for optimizing performance,
+        mitigating the pressure on the network, avoiding resource usage spikes and out-of-memory
+        conditions, to keep long-running queries or idle sessions from tying up cluster resources,
+        and so on.
+
+Following is a list of configurations that are typically modified and should be
+                copied to the Cloudera Data Warehouse (CDW) Data Service from the base cluster:
+default_file_format and
+                            default_transactional_type
+CONVERT_LEGACY_HIVE_PARQUET_UTC_TIMESTAMPS and
+                            USE_LOCAL_TZ_FOR_UNIX_TIMESTAMP_CONVERSIONS (especially
+                        for older datasets to avoid Hive vs Impala timestamp issues)
+Runtime filters for performance: RUNTIME_BLOOM_FILTER_SIZE,
+                            RUNTIME_FILTER_MAX_SIZE,
+                            RUNTIME_FILTER_MIN_SIZE,
+                            RUNTIME_FILTER_MODE, and
+                            RUNTIME_FILTER_WAIT_TIME_MS
+PARQUET_FALLBACK_SCHEMA_RESOLUTION (to handle any column
+                        order changes)
+TIMEZONE (because CDW uses the UTC timezoone)
+COMPRESSION_CODEC (based on your need; LZ4 is
+                        recommended)
+SCHEDULE_RANDOM_REPLICA and
+                            REPLICA_PREFERENCE (to avoid hotspotting)
+EXEC_TIME_LIMIT_S, IDLE_SESSION_TIMEOUT,
+                        and QUERY_TIMEOUT_S
+DISABLE_CODEGEN_ROWS_THRESHOLD,
+                            EXEC_SINGLE_NODE_ROWS_THRESHOLD, and
+                            BROADCAST_BYTES_LIMIT
+SCRATCH_LIMIT if set to higher on CDP Private Cloud Base
+                        needs to be limited to a value between 300 and 600 GB
+Enable ALLOW_ERASURE_CODED_FILES and disable
+                            DECIMAL_V2 only if needed
+MEM_LIMIT (automatically selected between a range of 2 G to
+                        50 G)
+You can set MEM_LIMIT in the default
+                                query options, if needed
+Administrators can tweak the Impala's admission control
+                                configurations to set a reasonable range for minimum and maximum
+                                query memory limit
+
+
+
+
+Log in to the CDW service as a DWAdmin.
+
+Select the Impala Virtualk Warehouse that you want to modify and click  > Edit > CONFIGURATIONS > Impala Coordinator and select flagfile from the drop-down
+                    list.
+
+Update the configurations in the default_query_options
+                    field as shown in the following image:
+
+
+
+
+
+Similarly, make the required changes for the Impala executor (Impala executor > flagfile > default_query_options.
+
+Click APPLY.
+
+Restart the Virtual Warehouse.
+
+
+Related informationAdmission Control Architecture for Cloudera Data
+                            PlatformManaging Resources in Impala
+Create Virtual Warehouses to implement admission control
+There is only one queue in Cloudera Data Warehouse's (CDW) Virtual Warehouses that is
+  used to run all queries in a first-in-first-out (FIFO) order. If you have multiple queues on the
+  base cluster that you are migrating to CDW Impala, then you must create a Virtual Warehouse for
+  each queue or a request pool, so that you can isolate the compute environments for each of those
+  user groups.
+Related informationAdding a new Virtual Warehouse
+Modify client connections (JDBC and ODBC)
+Impala in Cloudera Data Warehouse (CDW) provides a JDBC/ODBC endpoint that can be used
+  to configure all BI tools and applications for each Virtual Warehouse. In CDW, different user
+  groups will likely get their own Virtual Warehouse, each of which has its own unique JDBC/ODBC
+  URL. Make sure that you point your BI clients to the corresponding URL.
+In the CDH environment, you had access to one monolithic Impala cluster and you used one
+   JDBC/ODBC URL to connect your Impala clients to the cluster. All your client applications used
+   that one URL. In CDW, you must direct your individual client applications to their own Virtual
+   Warehouse JDBC/ODBC URLs. The URL for each Virtual Warehouse is unique. Therefore, you can
+   recreate a Virtual Warehouse with the same name so that the URL remains the same.
+Following is a list of changes for the clients between the base cluster and CDW Data Service on
+   Private Cloud:
+Impala in CDW uses the port 443 and communicates over the http protocol, whereas, Impala on
+     the base cluster uses the binary 21050 protocol.
+Impala in CDW uses LDAP authentication, whereas, Impala on the base cluster uses Kerberos
+     and Knox. Therefore, you must specify a username and password.Kerberos authentication will
+      be available in CDW Data Service on Private Cloud in a future release.
+Impala in CDW uses the latest Simba drivers. Download the latest JDBC driver from the Cloudera
+      Downloads page, or alternatively, on the Virtual Warehouses page. Simba drivers are
+     backward-compatible.
+For granting access to the Impala-shell, click  > Copy Impala shell command on the Virtual Warehouse tile to copy the command line for invocating the
+     impala-shell. This command line contains all the required parameters, including the default
+     user ID for the Virtual Warehouse (this is the Virtual Warehouse's admin user) as required for
+     LDAP, and the network address of the Impala coordinator.The Impala-shell command line in CDW
+      contains the following parameters that are not present in the Impala-shell command line on the
+      base cluster:
+--protocol='hs2-http': The HiveServer2 protocol that
+        impala-shell uses to speak to the Impala daemon
+--ssl: Used to enable TLS/SSL for the Impala-shell. This
+        parameter is always present in the command line.
+Uses the 443 port by changing the endpoint to the Virtual Warehouse's
+        coordinator endpoint inside the Virtual Warehouse's coordinator pod. For example:
+         coordinator-default-impala.dw-demo.ylcu-atmi.cloudera.site:443
+-l: Used to specify LDAP user name and password for LDAP-based
+        authentication instead of Kerberos. LDAP authentication uses the LDAP server defined on the
+         Authentication page of the Private Cloud Management Console.
+Following is a sample Impala shell
+      command:impala-shell --protocol='hs2-http' --strict_hs2_protocol --ssl -i coordinator-default-impala.dw-demo.ylcu-atmi.cloudera.site:443' -u [***USERNAME***] -l
+
+
+Related informationSetting up ODBC connection from a BI tool 

@@ -1,0 +1,154 @@
+Cross data center replication example of multiple clustersCloudera Docs
+Cross data center replication example of multiple clusters
+Review the cross data center replication example to understand how you can configure
+    and start replication with Streams Replication Manager in a deployment with three data centers
+    that each have two Kafka clusters.
+
+In more advanced deployments, you may have multiple Kafka clusters in each of several data
+        centers. To prevent creating a fully-connected mesh of all Kafka clusters, Cloudera
+        recommends leveraging a single Kafka cluster in each data center for cross data center
+        replication.
+This example demonstrates the steps required to configure the deployment shown below.
+        Additionally, it provides example commands that start bidirectional replication of all
+        topics within each data center as well as example commands that replicate a single topic
+        across all data centers 
+Figure 1. Cross Data Center Replication of Multiple Clusters
+
+
+
+
+
+The following list of steps assume that all clusters are unsecured. 
+The following list of steps assume that both Streams Replication Manager Service and
+          Driver roles are running on all Kafka broker hosts. Additionally, both roles have a single
+          target which is their co-located cluster (the cluster they are running in).
+Clusters West 1, East 1, and South 1 are collectively referred to as primary clusters,
+          while clusters West 2, East 2, and South 2 are collectively referred to as secondary
+          clusters.
+Steps 1 through 8 must be carried out on each of the clusters individually. That is, the
+          properties presented in these steps must  be configured on all clusters. However, how you
+          configure the properties for each individual cluster (the values that you set) will be
+          different. The steps provide an explanation for each configuration and provide explicit
+          examples for the clusters in Data Center West. 
+
+
+Define the external Kafka cluster: External clusters are configured
+          with Kafka credentials. On each primary cluster you need to create a total of three Kafka
+          credentials. Two representing the other two primary clusters and another one representing
+          the secondary cluster that is in the same data center. On each secondary cluster you need
+          to create a single Kafka credential representing the primary cluster that is running in
+          the same data center.
+In Cloudera Manager, go to
+                  Administration > External
+                  Accounts.
+Go to the Kafka Credentials tab. 
+Click Add Kafka credentials.
+Configure the Kafka credentials.For example, in West 1, you need
+              to create credentials for East 1, South 1, and West 2. In West 2, you need to create a
+              credential for West 1.
+West 1East 1 CredentialSouth 1 CredentialWest 2 CredentialName=east1
+Bootstrap servers=east1-host1.cloudera.com:9092, east1-host2.cloudera.com:9092, east1-host2.cloudera.com:9092
+Security protocol=PLAINTEXT
+Name=south1
+Bootstrap servers=south1-host1.cloudera.com:9092, south1-host2.cloudera.com:9092, south1-host2.cloudera.com:9092
+Security protocol=PLAINTEXT
+Name=west2
+Bootstrap servers=west2-host1.cloudera.com:9092, west2-host2.cloudera.com:9092, west2-host2.cloudera.com:9092
+Security protocol=PLAINTEXT
+
+West 2West 1 CredentialName=west1
+Bootstrap servers=west1-host1.cloudera.com:9092, west1-host2.cloudera.com:9092, west1-host2.cloudera.com:9092
+Security protocol=PLAINTEXT
+
+
+Click Add.If credential creation is
+              successful, a new entry corresponding to the Kafka credential you specified appears on
+              the page.
+Define the co-located Kafka cluster:
+In Cloudera Manager, go to Clusters and select the
+              Streams Replication Manager service.
+Go to Configuration.
+Find and enable the Kafka Service
+            property.
+Find and configure the Streams Replication Manager Co-located
+                Kafka Cluster Alias property.The alias you configure
+              represents the co-located cluster. Enter an alias that is unique and easily
+                identifiable.For example:
+West 1west1
+West 2west2
+
+Add the clusters defined with Kafka credentials to SRM’s configuration:
+Find and configure the External Kafka Accounts
+              property.
+Click the add button and add new lines for each Kafka credential you
+              created.
+Add the names of all Kafka credentials.Add each Kafka credential
+              that you created in the cluster that you are configuring. When configured correctly,
+              the property will include three credential names in each primary and a single
+              credential name in each secondary cluster. Each Kafka credential must be added to a
+              new line. For example, in West 1 you must add the names of the Kafka credentials
+                that you created in West 1: east1
+south1
+west2In West
+                2, you must add a the name of the single credential created for West
+                1:west1
+Find and configure the Streams Replication Manager Cluster
+            alias property.Add all cluster aliases to this property. This
+          includes the aliases present in both the External Kafka Accounts and Streams
+            Replication Manager Co-located Kafka Cluster Alias properties. Delimit the aliases
+          with commas. For example:
+West 1west1, west2, east1, south1
+West 2west1, west2
+Add and enable replications:
+Find the Streams Replication Manager's Replication
+                Configs property.
+Click the add button and add new lines for each unique replication you want
+              to add and enable.
+Add and enable your replications. 
+In the case of this example, you need to enable both cross data center replication
+                and replication within each data center. This can be done by configuring three
+                replications in each primary cluster and a single replication in each of the
+                secondary clusters. Each of the replications that you configure should target the
+                cluster that you are configuring. For example:
+West
+                    1east1->west1.enabled=true
+south1->west1.enabled=true
+west2->west1.enabled=true
+West 2west1->west2.enabled=true
+
+
+
+
+Click Save Changes.Restart the SRM service.Start replication with the srm-control tool:The
+          following command examples demonstrate how you can start replication of a single topic
+          across all data centers and how you can replicate all topics within each data
+          center.
+SSH into one of the hosts in West 1 and run the following
+              commands:Replicate topic1 across data
+              centers.srm-control topics --source east1 --target west1 --add topic1,east2.topic1
+srm-control topics --source south1 --target west1 --add topic1,south2.topic1
+Replicate
+              all topics within the data
+              center.srm-control topics --source west1 --target west2 --add ".*"
+srm-control topics --source west2 --target west1 --add ".*"
+
+SSH into one of the hosts in East 1 and run the following
+              commands:Replicate topic1 across data
+              centers.srm-control topics --source west1 --target east1 --add topic1,west2.topic1
+srm-control topics --source south1 --target east1 --add topic1,south2.topic1
+Replicate
+              all topics within the data
+              center.srm-control topics --source east1 --target east2 --add ".*"
+srm-control topics --source east2 --target east1 --add ".*"
+
+SSH into one of the hosts in South 1 and run the following
+              commands:Replicate topic1 across data
+              centers.srm-control topics --source west1 --target south1 --add topic1,west2.topic1
+srm-control topics --source east1 --target south1 --add topic1,east2.topic1
+Replicate
+              all topics within the data
+              center.srm-control topics --source south1 --target south2 --add ".*"
+srm-control topics --source south2 --target south1 --add ".*"
+
+
+Parent topic: Configuration examples

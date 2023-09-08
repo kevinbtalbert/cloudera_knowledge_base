@@ -1,0 +1,65 @@
+Monitoring User EventsCloudera Docs
+Monitoring User Events
+This topic shows you how to  query the PostgresSQL database that is
+    embedded within the Cloudera Machine Learning deployment to monitor or
+    audit user events. 
+Querying the PostgresSQL database that is
+      embedded within the Cloudera Machine Learning deployment requires
+      root access to the Cloudera Machine Learning Master host.
+SSH to the Cloudera Machine Learning Master host and log
+          in as root. For example, the following
+          command connects to cdsw-master-host. as
+            root:ssh root@cdsw-master-host.yourcdswdomain.comGet the name of the database pod:
+kubectl get pods -l role=db
+The command returns information similar to the following
+            example:NAME                  READY   STATUS    RESTARTS   AGE
+db-86bbb69b54-d5q88   1/1     Running   0          4h46m
+Enter the following command to log into the database as the
+            sense user: 
+ kubectl exec <database pod> -ti -- psql -U sense
+For example, the following command logs in to the database on pod
+               db-86bbb69b54-d5q88:
+            kubectl exec db-86bbb69b54-d5q88 -ti -- psql -U sense
+You are logged into the database as the
+            sense user.Run queries against the user_events
+          table.For example, run the following query to view the
+          most recent user
+          event:select * from user_events order by created_at DESC LIMIT 1The
+          command returns information similar to the
+          following:
+id          | 3658
+user_id     | 273
+ipaddr      | ::ffff:127.0.0.1
+user_agent  | node-superagent/2.3.0
+event_name  | model created
+description | {"model":"Simple Model 1559154287-ex5yn","modelId":"50","userType":"NORMAL","username":"DonaldBatz"}
+created_at  | 2019-05-29 18:24:47.65449Optionally, you can export the user events to a CSV file for
+          further analysis:
+Copy the user_events table to a CSV
+              file:
+
+copy user_events to '/tmp/user_events.csv' DELIMITER ',' CSV HEADER;
+
+
+Find the container that the database runs on:
+docker ps | grep db-86bbb
+The command returns output similar to the
+              following:
+              c56d04bbd58 c230b2f564da "docker-entrypoint..." 7 days ago Up 7 days k8s_db_db-86bbb69b54-fcfm6_default_8b2dd23d-88b9-11e9-bc34-0245eb679f96_0The
+              first entry is the container ID.
+Copy the user_events.csv file out
+              of the container into a temporary directory on the Master
+              host:docker cp <container ID>:/tmp/user_events.csv /tmp/user_events.csvFor
+              example:
+              docker cp 8c56d04bbd58:/tmp/user_events.csv /tmp/user_events.csv
+Use SCP to copy
+            /tmp/user_events.csv from the Cloudera Machine Learning Master host to a destination of your
+              choice.For example, run the following command on your
+              local machine to copy user_events.csv to a
+              local directory named
+              events:scp root@cdsw-master-host.yourcdswdomain.com:/tmp/user_events.csv /local/directory/events/
+
+For information about the different user events, see
+        Tracked User Events.
+
+Related informationTracked User EventsParent topic: Monitoring Cloudera Machine Learning Activity

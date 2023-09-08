@@ -1,0 +1,87 @@
+Use snapshotsCloudera Docs
+Use snapshots
+A snapshot captures the state of a table at the time the snapshot was taken.
+Cloudera recommends snapshots instead of CopyTable where possible. Because no data is copied
+   when a snapshot is taken, the process is very quick. As long as the snapshot exists, cells in the
+   snapshot are never deleted from HBase, even if they are explicitly deleted by the API. Instead,
+   they are archived so that the snapshot can restore the table to its state at the time of the
+   snapshot.
+You can export snapshots from CDH 5 to CDP Private Cloud Base , and from CDP Private Cloud Base  to CDH 5, if
+   the the version of CDP Private Cloud Base  is 7.1 or higher.
+After taking a snapshot, use the clone_snapshot command to copy the data to a
+   new (immediately enabled) table in the same cluster, or the Export utility to create a new table
+   based on the snapshot, in the same cluster. This is a copy-on-write operation. The new table
+   shares HFiles with the original table until writes occur in the new table but not the old table,
+   or until a compaction or split occurs in either of the tables. This can improve performance in
+   the short term compared to CopyTable.
+To export the snapshot to a new cluster, use the ExportSnapshot
+   utility, which uses MapReduce to copy the snapshot to the new cluster.
+   Run the ExportSnapshot utility on the source cluster,
+   as a user with HBase and HDFS write permission on the destination
+   cluster, and HDFS read permission on the source cluster. This creates
+   the expected amount of IO load on the destination cluster. Optionally,
+   you can limit bandwidth consumption, which affects IO on the destination
+   cluster. After the ExportSnapshot operation completes, you can see the
+   snapshot in the new cluster using the list_snapshot
+   command, and you can use the clone_snapshot command to
+   create the table in the new cluster from the snapshot.
+For full instructions for the snapshot and
+   clone_snapshot HBase Shell commands, run the HBase
+   Shell and type help snapshot. The following example
+   takes a snapshot of a table, uses it to clone the table to a new table
+   in the same cluster, and then uses the ExportSnapshot
+   utility to copy the table to a different cluster, with 16 mappers and
+   limited to 200 Mb/sec bandwidth.
+$ bin/hbase shell
+   hbase(main):005:0> snapshot 'TestTable', 'TestTableSnapshot'
+   0 row(s) in 2.3290 seconds
+   
+   hbase(main):006:0> clone_snapshot 'TestTableSnapshot', 'NewTestTable'
+   0 row(s) in 1.3270 seconds
+   
+   hbase(main):007:0> describe 'NewTestTable'
+   DESCRIPTION                                          ENABLED
+   'NewTestTable', {NAME => 'cf1', DATA_BLOCK_ENCODING true
+   => 'NONE', BLOOMFILTER => 'ROW', REPLICATION_SCOPE
+   => '0', VERSIONS => '1', COMPRESSION => 'NONE', MI
+   N_VERSIONS => '0', TTL => 'FOREVER', KEEP_DELETED_C
+   ELLS => 'false', BLOCKSIZE => '65536', IN_MEMORY =>
+   'false', BLOCKCACHE => 'true'}, {NAME => 'cf2', DA
+   TA_BLOCK_ENCODING => 'NONE', BLOOMFILTER => 'ROW',
+   REPLICATION_SCOPE => '0', VERSIONS => '1', COMPRESS
+   ION => 'NONE', MIN_VERSIONS => '0', TTL => 'FOREVER
+   ', KEEP_DELETED_CELLS => 'false', BLOCKSIZE => '655
+   36', IN_MEMORY => 'false', BLOCKCACHE => 'true'}
+   1 row(s) in 0.1280 seconds
+   hbase(main):008:0> quit
+   
+   $ hbase org.apache.hadoop.hbase.snapshot.ExportSnapshot -snapshot TestTableSnapshot -copy-to file:///tmp/hbase -mappers 16 -bandwidth 200
+   14/10/28 21:48:16 INFO snapshot.ExportSnapshot: Copy Snapshot Manifest
+   14/10/28 21:48:17 INFO client.RMProxy: Connecting to ResourceManager at a1221.example.com/192.0.2.121:8032
+   14/10/28 21:48:19 INFO snapshot.ExportSnapshot: Loading Snapshot 'TestTableSnapshot' hfile list
+   14/10/28 21:48:19 INFO Configuration.deprecation: hadoop.native.lib is deprecated. Instead, use io.native.lib.available
+   14/10/28 21:48:19 INFO util.FSVisitor: No logs under directory:hdfs://a1221.example.com:8020/hbase/.hbase-snapshot/TestTableSnapshot/WALs
+   14/10/28 21:48:20 INFO mapreduce.JobSubmitter: number of splits:0
+   14/10/28 21:48:20 INFO mapreduce.JobSubmitter: Submitting tokens for job: job_1414556809048_0001
+   14/10/28 21:48:20 INFO impl.YarnClientImpl: Submitted application application_1414556809048_0001
+   14/10/28 21:48:20 INFO mapreduce.Job: The url to track the job: http://a1221.example.com:8088/proxy/application_1414556809048_0001/
+   14/10/28 21:48:20 INFO mapreduce.Job: Running job: job_1414556809048_0001
+   14/10/28 21:48:36 INFO mapreduce.Job: Job job_1414556809048_0001 running in uber mode : false
+   14/10/28 21:48:36 INFO mapreduce.Job:  map 0% reduce 0%
+   14/10/28 21:48:37 INFO mapreduce.Job: Job job_1414556809048_0001 completed successfully
+   14/10/28 21:48:37 INFO mapreduce.Job: Counters: 2
+   Job Counters
+   Total time spent by all maps in occupied slots (ms)=0
+   Total time spent by all reduces in occupied slots (ms)=0
+   14/10/28 21:48:37 INFO snapshot.ExportSnapshot: Finalize the Snapshot Export
+   14/10/28 21:48:37 INFO snapshot.ExportSnapshot: Verify snapshot integrity
+   14/10/28 21:48:37 INFO Configuration.deprecation: fs.default.name is deprecated. Instead, use fs.defaultFS
+   14/10/28 21:48:37 INFO snapshot.ExportSnapshot: Export Completed: TestTableSnapshot
+The url to track the job: contains the URL from which you can track the
+    ExportSnapshot job. When it finishes, a new set of HFiles, comprising all of
+   the HFiles that were part of the table when the snapshot was taken, is created at the HDFS
+   location you specified.
+You can use the SnapshotInfo command-line utility included with
+   HBase to verify or debug snapshots.
+
+Parent topic: Importing data into HBase

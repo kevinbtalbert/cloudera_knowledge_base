@@ -1,0 +1,67 @@
+Configuring replication with Apache HBase in EMRCloudera Docs
+Configuring replication with Apache HBase in EMR
+You can configure your Cloudera Operational Database (COD) experience for data
+        replication with an Amazon EMR cluster with Apache HBase. 
+
+
+
+Ensure that you have the replication plugin. Contact your Cloudera account
+                        team to get the replication plugin.
+Ensure that all the EC2 instances in the EMR cluster can communicate with
+                        COD. For example, you can configure this by placing the EMR cluster on the
+                        same VPC netwoek and subnets used by the COD instance. 
+Ensure that your COD cluster security group allows inbound TCP connections
+                        to ports 16020, 16010, and 2181 from all the EC2 instances in the EMR
+                        cluster. You can configure this using the AWS management console. The port
+                        configuration is automatically done if the EMR EC2 instances are configured
+                        with the same worker, leader, and controller (also known as master) security
+                        groups from COD.
+
+
+
+
+Copy the replication plugin to /usr/lib/hbase/lib/ on all
+                    EMR cluster RegionServer. (requires root access);
+
+importantThis step requires you to have root access to the EMR
+                        cluster.
+
+
+Add the keystore generated on the destination COD cluster to HDFS using the
+                    following command:
+
+hdfs dfs -mkdir /hbase-replication
+
+hdfs dfs -put /[***PATH***]/[***credentials.jceks***] /hbase-replication
+
+hdfs dfs -chown -R hbase:hbase /hbase-replication
+
+
+Edit the EMR /etc/hbase/conf.dist/hbase-site.xml file on
+                    each RegionServer host to add the following values:
+
+<property>
+	  <name>[***hbase.security.replication.credential.provider.path***]</name>
+	  <value>cdprepjceks://hdfs@[***NAMENODE_HOST***]:[***NAMENODE_PORT***]/hbase-replication/credentials.jceks</value>
+	</property>
+	<property>
+	  <name>[***hbase.security.replication.user.name***]</name>
+	  <value>srv_[***WORKLOAD USER NAME***]</value>
+	</property>
+
+
+Restart the EMR RegionServer by stopping the running processes. RegionServers
+                    autostarts and now uses the additional JAR files in the classpath.
+
+Use _ReplicationSetupTool_ to add the peer.
+                        _ReplicationSetupTool_ is a command line tool that enables
+                    you to create the replication peer and make necessary configuration to be peer
+                    specific.
+
+
+sudo -u hbase hbase org.apache.hadoop.hbase.client.replication.ReplicationSetupTool 
+-clusterKey "zk-host-1,zk-host-2,zk-host-3:2181:/hbase" 
+-endpointImpl "org.apache.hadoop.hbase.replication.regionserver.CldrHBaseInterClusterReplicationEndpoint" -peerId 1 
+
+
+Parent topic: Cloudera Operational Database data replication

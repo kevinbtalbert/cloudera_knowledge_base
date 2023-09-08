@@ -1,0 +1,145 @@
+Configuring MySQL server enforced with TLS 1.2 or higher to connect to HueCloudera Docs
+Configuring MySQL server enforced with TLS 1.2 or higher to connect to
+        Hue
+If
+        your MySQL server is configured to use TLS version 1.2 or higher for an encrypted connection
+        with Hue, then you may not be able to start the Hue server and the Kerberos ticket renewer.
+        One solution to fix this problem is to upgrade the MySQL client to version
+        8.
+
+One of the errors you may see while connecting to Hue if your MySQL server is
+                configured with TLS 1.2 or higher is: “The health test result for
+                HUE_SERVER_SCM_HEALTH has become bad: This role's process failed to start.” The
+                error might be because the MySQL-Python module for Hue that is shipped with CDP uses
+                an older libmysqlclient library which does not support TLS 1.2 and higher.
+importantYou must install MySQL database version 8.x to use TLS
+                1.2-enforced MySQL server with Hue because it uses a newer libmysqlclient library,
+                which supports TLS 1.2 and higher.
+
+
+SSH into the Hue server host as a root user.
+
+Change directory to /etc/cloudera-scm-agent/ and take a
+                    backup of the config.ini file.
+
+Run the following command to get a list of all the installed MySQL
+                    packages:
+
+rpm -qa | grep -i mysql*
+
+Save the list of all the installed MySQL packages for future reference.
+
+Remove all MySQL Community RPM packages and the Cloudera Manager agent:
+
+yum erase mysql-community*|cloudera-manager-agent
+
+Uninstalling the Cloudera Manager agent also uninstalls the MySQL-python
+                    library. Save the list of all the MySQL packages that are uninstalled for future
+                    reference.
+
+Reinstall the Cloudera Manager agent as follows:
+
+yum -y install cloudera-manager-agent
+
+This installs all the required
+                    packages:Package Arch Version Repository Size
+===============================================================
+Installing:
+cloudera-manager-agent x86_64 7.2.4-7594142.el7 cloudera-manager 12 M
+Installing for dependencies:
+MySQL-python x86_64 1.2.5-1.el7 base 90 k
+mysql-community-client-plugins x86_64 8.0.24-1.el7 mysql80-community 189 k
+mysql-community-common x86_64 8.0.24-1.el7 mysql80-community 614 k
+mysql-community-libs x86_64 8.0.24-1.el7 mysql80-community 4.0 M
+mysql-community-libs-compat x86_64 8.0.24-1.el7 mysql80-community 1.2 M
+
+Transaction Summary
+===============================================================
+
+Install the mysql-devel (the development header files and libraries for MySQL
+                    database client applications):
+
+yum install mysql-devel
+
+
+===============================================================
+Package Arch Version Repository Size
+===============================================================
+Installing:
+mysql-community-devel x86_64 8.0.24-1.el7 mysql80-community 6.5 M
+
+Transaction Summary
+===============================================================
+
+
+Install the Python developer package:
+
+yum install python-devel.x86_64 0:2.7.5-90.el7
+
+
+===============================================================
+Package Arch Version Repository Size
+===============================================================
+Removing:
+python-devel x86_64 2.7.5-90.el7 @updates 1.0 M
+
+Transaction Summary
+===============================================================
+
+
+Remove the existing _mysql.so file:
+
+rm -rf /opt/cloudera/parcels/CDH-[***7.x-VERSION***]/lib/hue/build/env/lib/python2.7/site-packages/_mysql.so
+
+
+Change directory to /usr/include/mysql and check whether
+                    the my_config.h file is present.
+If the my_config.h file is present, then move to the next
+                    step.
+If the my_config.h file is not present, then:
+
+
+Go to https://dev.mysql.com/doc/dev/mysql-server/latest/my__config_8h_source.html
+                            and copy the contents of the my_config.h file.
+
+
+Create a new my_config.h file using the following
+                            command:
+
+vi /usr/include/mysql/my_config.h
+
+
+
+Paste the content that you copied earlier in the
+                                /usr/include/mysql/my_config.h file and save
+                            it.
+
+
+
+Install the MySQL Python library as follows:
+
+/opt/cloudera/parcels/CDH/lib/hue/build/env/bin/pip install MySQL-python --force-reinstall --ignore-installed
+
+
+Copy the _mysql.so (MySQL client library) to Cloudera’s local
+                    parcel directory:
+
+
+Locate the _mysql.so file:
+locate _mysql.so
+Output:
+                                /usr/lib64/python2.7/site-packages/_mysql.so
+
+
+Copy the _mysql.so file to Cloudera’s local parcel
+                            directory:
+
+cp /usr/lib64/python2.7/site-packages/_mysql.so /opt/cloudera/parcels/CDH-[***7.x-VERSION***]/lib/hue/build/env/lib/python2.7/site-packages/MySQL_python-1.2.5-py2.7-linux-x86_64.egg/_mysql.so
+
+
+
+
+Log in to Cloudera Manager and restart the Hue service.
+
+
+Parent topic: Using MySQL database with Hue

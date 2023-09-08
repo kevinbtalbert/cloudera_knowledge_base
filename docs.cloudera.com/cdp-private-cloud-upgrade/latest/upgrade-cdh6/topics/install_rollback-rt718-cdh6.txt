@@ -1,0 +1,1264 @@
+Rolling Back a CDP Private Cloud Base Upgrade from version 7.1.8 to CDH 6Cloudera Docs
+Rolling Back a CDP Private Cloud Base Upgrade from version 7.1.8 to
+    CDH 6
+You can roll back an upgrade from CDP Private Cloud Base 7 to CDH 6. The rollback restores
+    your CDH cluster to the state it was in before the upgrade, including
+    Kerberos and TLS/SSL configurations.
+importantAny data created
+        after the upgrade is lost.
+In a typical upgrade, you first upgrade Cloudera Manager from version 6.x
+      to version 7.x, and then you use the upgraded version of Cloudera Manager
+      7 to upgrade CDH 6 to CDP Private Cloud Base 7. (See
+        Upgrading a CDH 6 Cluster.) If you want to roll back this
+      upgrade, follow these steps to roll back your cluster to its state prior
+      to the upgrade.
+You can roll back to CDH 6 after upgrading to CDP Private Cloud Base 7 only if the HDFS upgrade has not been
+        finalized. The rollback restores your CDH cluster to the state it
+      was in before the upgrade, including Kerberos and TLS/SSL configurations. 
+importantFollow all of the steps in the order presented in
+      this topic. Cloudera recommends that you read through the backup and
+      rollback steps before starting the backup process. You may want to create
+      a detailed plan to help you anticipate potential problems. 
+importantThese rollback steps depend on complete backups
+        taken before upgrading Cloudera Manager and CDH. See Step 2: Backing Up Cloudera Manager 6 and Step 3: Backing Up the Cluster.For
+      steps where you need to restore the contents of a directory, clear the
+      contents of the directory before copying the backed-up files to the
+      directory. If you fail to do this, artifacts from the original upgrade can
+      cause problems if you attempt the upgrade again after the rollback.
+
+
+Review Limitations
+
+The rollback procedure has the following limitations: 
+HDFS – If you have
+            finalized the HDFS upgrade, you cannot roll back your
+            cluster.
+Compute clusters – Rollback for Compute clusters is not
+            supported. You must remove any compute clusters before rolling back.  
+Configuration changes, including the addition of new
+            services or roles after the upgrade, are not retained after rolling
+            back Cloudera Manager. Cloudera recommends that you not make
+              configuration changes or add new services and roles until you have
+              finalized the HDFS upgrade and no longer require the option to
+              roll back your upgrade.
+HBase – If your cluster is
+            configured to use HBase replication, data written to HBase after the
+            upgrade might not be replicated to peers when you start your
+            rollback. This topic does not describe how to determine which, if
+            any, peers have the replicated data and how to roll back that data.
+            For more information about HBase replication, see HBase Replication.
+Sqoop 2 – As
+            described in the upgrade process, Sqoop2 had to be stopped and
+            deleted before the upgrade process and therefore will not be
+            available after the rollback.
+Kafka – Once the Kafka log
+            format and protocol version configurations (the
+              inter.broker.protocol.version and
+              log.message.format.version properties) are set to
+            the new version (or left blank, which means to use the latest
+            version), Kafka rollback is not possible. 
+
+
+
+
+Stop the Cluster
+
+
+If HBase is deployed in the cluster
+          do the following before stopping the cluster: The HBase
+            Master procedures changed between the two versions, so if a
+            procedure was started by HBase 2.2 (CDP 7.x) then the older HBase
+            2.1 won't be able to continue the procedure after the rollback. For
+            this reason the Procedure Store in HBase Master must be cleaned
+            before the rollback. If CDP 7.x HBase Master was never started, then
+            the rollback should be fine. But if HBase Master was running with
+            the new version and there is any ongoing (or stuck) HBase Master
+            Procedure present in the CDP 7 HBase Master, then the older CDH 6
+            HBase Master will fail to start after the rollback. If this happens,
+            HBase will need manual fix after the rollback (e.g. the sidelining
+            of the HBase Master Procedure WAL files and the potential fixing of
+            inconsistencies in HBase). To avoid this problem,
+            you should try to verify that no unfinished procedure is present
+            before stopping HBase Master on the CDP 7.x Cluster. Please follow
+            these steps:
+
+Make sure there was no traffic running against the
+                HBase Cluster recently (in the last 10 minutes) that can trigger
+                e.g. table creation or deletion, region assignment or split or
+                merge, etc.
+
+
+Disable automatic Balancer and Normalizer in HBase.
+                Also disable Split and Merge procedures, before stopping the CDP
+                7 Cluster. All these tools in HBase can cause the starting of
+                new HBase Master Procedures, which we want to avoid now. Issue
+                the following commands in HBase Shell:
+balance_switch false
+normalizer_switch false
+splitormerge_switch 'SPLIT', false
+splitormerge_switch 'MERGE', false
+
+
+Check the list of procedures on the HBase Master Web
+                UI (In Cloudera Manager, go to the HBase service and open the
+                    HBase Web
+                    UI > Procedures &
+                  Locks tab). Wait until you see
+                procedures only with final states like 'SUCCESS', 'FAILED' or
+                'ROLLEDBACK'.
+
+
+Get the list of procedures from HBase shell using the
+                'list_procedures' command. Wait until you see procedures only
+                with final states like 'SUCCESS', 'FAILED' or 'ROLLEDBACK'. The
+                State appears in the third column of the table returned by the
+                'list_procedures' command.
+
+ If the HBase Master doesn't start after the rollback and some
+            procedure-related exceptions are found in the role logs (like
+            "BadProcedureException" or decode errors in the
+            "ProcedureWALFormatReader" class, or "ClassNotFoundException" for
+            procedure classes), then this is most likely caused by CDP 7
+            procedures that still remain in the procedure WAL files. In this
+            case, please open a ticket for Cloudera customer support, who will
+            help you to sideline the procedure WAL files and fix any potential
+            inconsistencies in HBase.
+On the
+              Home > Status
+          tab, click the Actions menu and select
+            Stop.
+Click Stop in the confirmation screen. The
+            Command Details window shows the progress of stopping
+            services.When All services successfully stopped appears,
+            the task is complete and you can close the Command Details
+            window.
+Go to the YARN service and click
+              Actions > Clean
+              NodeManager Recovery Directory. The CDH
+          6 NodeManager will not start up after the downgrade if it finds CDP
+          7.x data in the recovery directory. The format and content of the
+          NodeManager's recovery state store was changed between CDH 6.x and CDP
+          7.x. The recovery directory used by CDP 7.x must be cleaned up as part
+          of the downgrade to CDH 6. 
+
+
+
+
+(Parcels) Downgrade the Software
+
+Follow these steps only if your cluster was upgraded using Cloudera
+          parcels.
+
+Log in to the Cloudera Manager Admin Console.
+Select
+              Hosts > Parcels.A
+            list of parcels displays. 
+Locate the CDH 6 parcel and click Activate.
+          (This automatically deactivates the CDP Private Cloud Base 7 parcel.) See Activating a Parcel for more
+          information. If the parcel is not available, use the
+            Download button to download the parcel.importantIf you added new services that are not part of CDH
+            6 during the upgrade, a list of services that need to be deleted
+            displays. You must delete these services before activating the CDH 6
+            parcel.
+
+If you include any additional components in your cluster, such as
+          Search or Impala, click Activate for those
+          parcels. 
+If the Ranger service is deployed in the cluster, disable
+          the Ranger plugin from the services below, if they are deployed in the
+          cluster: 
+HDFS: Go to the HDFS service > Configurations and
+              disable the Enable Ranger Authorization
+              configuration property. 
+Hive: Go to the Hive service > Configurations and
+              delete the  Ranger Service configuration
+              property.
+Kafka: Go to the Kafka service > Configurations and
+              delete the  Ranger Service configuration
+              property.
+Impala Go to the Impala service > Configurations >
+              delete the  Ranger Service configuration
+              property.
+
+After performing the above steps to disable the plugin, Stop the
+          Ranger service and delete it.
+ The Sentry service will be added when you perform the
+            Restore Cloudera Manager Databases steps,
+          later in this rollback procedure. The Sentry service will be added in
+          Cloudera Manager and will continue to use the database configuration
+          saved in Cloudera Manager.
+
+important
+Do not start any services. (Select the Activate
+            Only option.)
+If you accidentally restart services, stop your cluster before
+          proceeding. 
+
+
+
+
+Stop Cloudera Manager 
+
+
+ Stop the Cloudera Management Service.
+          
+Log in to the Cloudera Manager Admin Console.
+Select
+                Clusters > Cloudera
+                Management Service.
+Select
+                Actions > Stop.
+
+
+Stop the Cloudera Manager
+        Server.sudo systemctl stop cloudera-scm-server
+
+Hard stop the Cloudera Manager agents. Run the following command on
+          all hosts:
+          sudo systemctl stop cloudera-scm-supervisord.service
+
+
+
+
+Restore Cloudera Manager Databases
+
+Restore the Cloudera Manager databases from the backup of Cloudera
+        Manager that was taken before upgrading the cluster toCDP Private Cloud Base 7. See the procedures
+        provided by your database vendor. 
+MariaDB 5.5: http://mariadb.com/kb/en/mariadb/backup-and-restore-overview/
+MySQL 5.5: http://dev.mysql.com/doc/refman/5.5/en/backup-and-recovery.html
+MySQL 5.6: http://dev.mysql.com/doc/refman/5.6/en/backup-and-recovery.html
+PostgreSQL 8.4: https://www.postgresql.org/docs/8.4/static/backup.html
+PostgreSQL 9.2: https://www.postgresql.org/docs/9.2/static/backup.html
+PostgreSQL 9.3: https://www.postgresql.org/docs/9.3/static/backup.html
+Oracle 11gR2: https://docs.oracle.com/cd/E11882_01/backup.112/e10642/toc.htm
+HyperSQL: http://hsqldb.org/doc/guide/management-chapt.html#mtc_backup
+
+
+
+
+
+Restore Cloudera Manager Server
+
+Use the backup of CDH that was taken before the upgrade to restore
+        Cloudera Manager Server files and directories. Substitute the path to
+        your backup directory for cm7_cdh6
+        in the following steps:
+
+On the host where the Event Server role is configured to run,
+          restore the Events Server directory from the CM 7/CDH 6 backup.
+          cp -rp /var/lib/cloudera-scm-eventserver /var/lib/cloudera-scm-eventserver-CM<ph outputclass="cdoc-specific-cm-from"/>-CDH<ph outputclass="cdoc-specific-cdh-from"/>
+rm -rf /var/lib/cloudera-scm-eventserver/*
+cp -rp /var/lib/cloudera-scm-eventserver_cm7_cdh6/* /var/lib/cloudera-scm-eventserver/
+Remove the Agent runtime state. Run the following command on all
+          hosts:
+            rm -rf /var/run/cloudera-scm-agent /var/lib/cloudera-scm-agent/response.avroThis
+            command may return a message similar to: rm: cannot remove
+              ‘/var/run/cloudera-scm-agent/process’: Device or resource
+              busy. You can ignore this message.
+On the host where the Service Monitor is
+          running, restore the Service Monitor
+          directory:rm -rf /var/lib/cloudera-service-monitor/*
+cp -rp /var/lib/cloudera-service-monitor_cm7_cdh6/* /var/lib/cloudera-service-monitor/
+On the host where the Host Monitor is
+          running, restore the Host Monitor
+          directory:rm -rf /var/lib/cloudera-host-monitor/*
+cp -rp /var/lib/cloudera-host-monitor_cm7_cdh6/* /var/lib/cloudera-host-monitor/
+Restore the Cloudera Navigator storage directory from the CM 7/CDH 6
+          backup.rm -rf /var/lib/cloudera-scm-navigator/*
+cp -rp /var/lib/cloudera-scm-navigator_cm7_cdh6/* /var/lib/cloudera-scm-navigator/
+
+
+
+
+Start Cloudera Manager 
+
+
+Log in to the Cloudera Manager server host.
+Start the Cloudera Manager
+        Server.sudo systemctl start cloudera-scm-server
+
+Start the Cloudera Manager Agent.Run the following
+            commands on all cluster
+          hosts:sudo systemctl start cloudera-scm-agent
+ Start the Cloudera Management Service. 
+Log in to the Cloudera Manager Admin Console.
+Select
+                  Clusters > Cloudera
+                  Management Service.
+Select
+                  Actions > Start.
+
+The cluster page may indicate that services are in bad health. This
+            is normal. 
+Stop the cluster. In the Cloudera Manager Admin Console, click the
+            Actions menu for the cluster and select
+            Stop.
+
+
+
+
+Roll Back ZooKeeper
+
+
+Using the backup of Zookeeper that you created when backing up your
+          CDH 6.x cluster, restore the contents of the
+              dataDir on each ZooKeeper
+          server. These files are located in a directory specified with the
+            dataDir property in the ZooKeeper configuration.
+          The default location is /var/lib/zookeeper. For
+          example:rm -rf /var/lib/zookeeper/*
+cp -rp /var/lib/zookeeper_cm7_cdh6/* /var/lib/zookeeper/
+Using the backup of Zookeeper that you created when backing up your
+          CDH 6.x cluster, restore the contents of the
+              Transaction Log Direcgtory on
+          each ZooKeeper server. These files are located in a directory
+          specified with the Transaction Log Direcgtory
+          property in the ZooKeeper configuration. For
+          example:rm -rf /var/lib/zookeeper/*
+cp -rp /var/lib/zookeeper_cm7_cdh6/* /var/lib/zookeeper/
+Make sure that the permissions of all the directories and files are
+          as they were before the upgrade.
+Start ZooKeeper using Cloudera Manager.
+
+
+
+
+Roll Back HDFS
+
+You cannot roll back HDFS while high availability is enabled. The
+        rollback procedure in this topic creates a temporary configuration
+        without high availability. Regardless of whether high availability is
+        enabled, follow the steps in this section. 
+
+Roll back all of the Journal Nodes. (Only required for
+          clusters where high availability is enabled for HDFS). Use the JournalNode
+            backup you created when you backed up HDFS before upgrading
+          to CDP Private Cloud Base.
+Log in to each Journal Node host and run
+              the following
+              commands:rm -rf /dfs/jn/ns1/current/*cp -rp <Journal_node_backup_directory>/ns1/current/* /dfs/jn/ns1/current/
+Start the JournalNodes using Cloudera Manager:
+Go to the HDFS service.
+Select the Instances tab.
+Select all JournalNode roles from the list.
+Click Actions for Selected > Start.
+
+
+Roll back all of the
+            NameNodes. Use the NameNode backup
+            directory you created before upgrading to CDP Private Cloud Base.
+            (/etc/hadoop/conf.rollback.namenode) to perform the
+          following steps on all NameNode hosts:
+(Clusters with TLS enabled only) Edit the
+                /etc/hadoop/conf.rollback.namenode/ssl-server.xml
+              file on all NameNode hosts (located in the temporary rollback
+              directory) and update the keystore passwords with the actual
+              cleartext passwords.The passwords will
+                  have values that look like
+                  this:<property>
+    <name>ssl.server.keystore.password</name>
+    <value>********</value>
+  </property>
+  <property>
+    <name>ssl.server.keystore.keypassword</name>
+    <value>********</value>
+  </property>
+
+(TLS only) Edit the
+                /etc/hadoop/conf.rollback.namenode/ssl-server.xml
+              file and remove the
+                hadoop.security.credential.provider.path
+              property.
+(TLS only) Edit the
+                /etc/hadoop/conf.rollback.namenode/ssl-server.xml
+              file and update the ssl.server.keystore.location
+              property:# Original version of the keystore.location property:
+<property>
+  <name>ssl.server.keystore.location</name>
+  <value>/var/run/cloudera-scm-agent/process/879-hdfs-NAMENODE/cm-auto-host_keystore.jks</value>
+</property># New version of the keystore.location property:
+<property>
+  <name>ssl.server.keystore.location</name>
+  <value>/etc/hadoop/conf.rollback.namenode/cm-auto-host_keystore.jks</value>
+</property>
+
+Edit the
+            /etc/hadoop/conf.rollback.namenode/hdfs-site.xml
+          file on all NameNode hosts and make the following changes: 
+Update the
+                dfs.namenode.inode.attributes.provider.class
+              property. If Sentry was installed prior to the upgrade, change the
+              value of the property from
+                org.apache.ranger.authorization.hadoop.RangerHdfsAuthorizer
+              to
+                "org.apache.sentry.hdfs.SentryINodeAttributesProvider.
+              If Sentry was not installed, remove this property.
+Change the path in the dfs.hosts property to
+              the value shown in the example below. The file name,
+                dfs_all_hosts.txt, may have been changed by a
+              user. If so, substitute the correct file
+              name.# Original version of the dfs.hosts property:
+<property>
+<name>dfs.hosts</name>
+<value>/var/run/cloudera-scm-agent/process/63-hdfs-NAMENODE/dfs_all_hosts.txt</value>
+</property># New version of the dfs.hosts property:
+<property>
+<name>dfs.hosts</name>
+<value>/etc/hadoop/conf.rollback.namenode/dfs_all_hosts.txt</value>
+</property>
+Remove the property that has the following
+              value:com.cloudera.navigator.audit.hdfs.HdfsAuditLoggerCdh5
+
+Edit the
+            /etc/hadoop/conf.rollback.namenode/core-site.xml
+          and change the value of the
+            net.topology.script.file.name property to
+            /etc/hadoop/conf.rollback.namenode. For example:
+          # Original property
+<property>
+<name>net.topology.script.file.name</name>
+<value>/var/run/cloudera-scm-agent/process/63-hdfs-NAMENODE/topology.py</value>
+</property># New property
+<property>
+<name>net.topology.script.file.name</name>
+<value>/etc/hadoop/conf.rollback.namenode/topology.py</value>
+</property>
+Edit the
+            /etc/hadoop/conf.rollback.namenode/topology.py file
+          and change the value of MAP_FILE to
+            /etc/hadoop/conf.rollback.namenode. For example:
+          MAP_FILE = '/etc/hadoop/conf.rollback.namenode/topology.map'
+(TLS-enabled clusters only) Run the following command:
+          sudo -u hdfs kinit hdfs/<NameNode Host name> -l 7d -kt /etc/hadoop/conf.rollback.namenode/hdfs.keytab
+Run the following
+          command:sudo -u hdfs hdfs --config /etc/hadoop/conf.rollback.namenode namenode -rollback
+Restart the NameNodes and JournalNodes using Cloudera Manager:
+Go to the HDFS service.
+Select the Instances tab, and then select
+              all Failover Controller, NameNode, and JournalNode roles from the
+              list.
+Click Actions for
+                  Selected > Restart.
+
+Rollback the DataNodes. Use the DataNode
+              rollback directory you created before upgrading to CDP Private Cloud Base
+              (/etc/hadoop/conf.rollback.datanode) to perform
+            the following steps on all DataNode hosts:
+(Clusters with TLS enabled only) Edit the
+                  /etc/hadoop/conf.rollback.datanode/ssl-server.xml
+                file on all DataNode hosts (Located in the temporary rollback
+                directory.) and update the keystore passwords
+                  (ssl.server.keystore.password and
+                  ssl.server.keystore.keypassword) with the
+                actual passwords. The passwords will
+                  have values that look like
+                  this:<property>
+    <name>ssl.server.keystore.password</name>
+    <value>********</value>
+  </property>
+  <property>
+    <name>ssl.server.keystore.keypassword</name>
+    <value>********</value>
+  </property>
+
+(TLS only) Edit the
+                  /etc/hadoop/conf.rollback.datanode/ssl-server.xml
+                file and update the
+                  ssl.server.keystore.location
+                property:# Original version of the keystore.location property:
+<property>
+  <name>ssl.server.keystore.location</name>
+  <value>/var/run/cloudera-scm-agent/process/879-hdfs-NAMENODE/cm-auto-host_keystore.jks</value>
+</property># New version of the keystore.location property:
+<property>
+  <name>ssl.server.keystore.location</name>
+  <value>/etc/hadoop/conf.rollback.namenode/cm-auto-host_keystore.jks</value>
+</property>
+(TLS only) Edit the
+                  /etc/hadoop/conf.rollback.datanode/ssl-server.xml
+                file and remove the
+                  hadoop.security.credential.provider.path
+                property.
+Edit the
+                  /etc/hadoop/conf.rollback.datanode/hdfs-site.xml
+                file and remove the
+                  dfs.datanode.max.locked.memory property.
+Run one of the following commands:
+If the DataNode is running with privileged ports (usually
+                    1004 and 1006):
+                    cd /etc/hadoop/conf.rollback.datanode
+export HADOOP_SECURE_DN_USER=hdfs
+export JSVC_HOME=/opt/cloudera/parcels/<parcel_filename>/lib/bigtop-utils
+hdfs --config /etc/hadoop/conf.rollback.datanode datanode -rollback
+
+If the DataNode is not running on privileged
+                      ports:cd /etc/hadoop/conf.rollback.datanode
+sudo hdfs --config /etc/hadoop/conf.rollback.datanode datanode -rollback
+You may see the following error after
+                      issuing these
+                      commands:ERROR datanode.DataNode: Exception in secureMain
+java.io.IOException: The path component: '/var/run/hdfs-sockets' in '/var/run/hdfs-sockets/dn' has permissions 0755 uid 39998 and gid 1006. 
+It is not protected because it is owned by a user who is not root and not the effective user: '0'.The
+                      error message will also include the following command to
+                      run:chown root /var/run/hdfs-socketsAfter
+                      running this command, rerun the DataNode rollback command:
+                      sudo hdfs --config /etc/hadoop/conf.rollback.datanode datanode -rollbackThe
+                      DataNodes will now restart successfully.
+When the rolling back of the DataNodes is complete,
+                  terminate the console session by typing
+                    Control-C. Look for output from the
+                  command similar to the following that indicates when the
+                  DataNode rollback is
+                complete:Rollback of /dataroot/ycloud/dfs/dn/current/BP-<Block Group number> is complete
+If High Availability for HDFS is enabled, restart the HDFS
+                service. In the Cloudera Manager Admin Console, go to the HDFS
+                service and select
+                    Actions > Restart.
+If high availability is not enabled for HDFS, use the Cloudera
+                Manager Admin Console to restart all NameNodes and DataNodes. 
+Go to the HDFS service.
+Select the Instances tab
+Select all DataNode and NameNode roles from the list.
+Click Actions for Selected > Restart.
+
+
+If high availability is not enabled for HDFS, roll back the
+            Secondary NameNode. 
+(Clusters with TLS enabled only) Edit the
+                /etc/hadoop/conf.rollback.secondarynamenode/ssl-server.xml
+              file on all Secondary NameNode hosts (Located in the temporary
+              rollback directory.) and update the keystore passwords with the
+              actual cleartext passwords. The passwords will
+                  have values that look like
+                  this:<property>
+    <name>ssl.server.keystore.password</name>
+    <value>********</value>
+  </property>
+  <property>
+    <name>ssl.server.keystore.keypassword</name>
+    <value>********</value>
+  </property>
+
+(TLS only) Edit the
+                /etc/hadoop/conf.rollback.secondarynamenode/ssl-server.xml
+              file and remove the
+                hadoop.security.credential.provider.path
+              property.
+Log in to the Secondary NameNode host and run the following
+                commands:rm -rf /dfs/snn/*
+cd /etc/hadoop/conf.rollback.secondarynamenode/
+sudo -u hdfs hdfs --config /etc/hadoop/conf.rollback.secondarynamenode secondarynamenode -format
+When the rolling back of the Secondary
+                  NameNode is complete, terminate the console
+                session by typing Control-C. Look for
+                output from the command similar to the following that indicates
+                when the Secondary NameNode rollback is
+              complete:2020-12-21 17:09:36,239 INFO namenode.SecondaryNameNode: Web server init done
+
+
+Restart the HDFS service. Open the Cloudera Manager Admin Console,
+          go to the HDFS service page, and select
+              Actions > Restart.
+            The Restart Command page displays the
+            progress of the restart. Wait for the page to display the
+              Successfully restarted service message
+            before continuing.
+
+
+
+
+Start the HBase Service
+
+Restart the HBase Service. Open the Cloudera Manager Admin Console, go
+        to the HBase service page, and select
+            Actions > Start.
+If you have configured any HBase coprocessors, you must revert them to
+        the versions used before the upgrade. 
+If CDP 7.x HBase Master was started after the upgrade and
+        there was any ongoing (or stuck) HBase Master Procedure present in the
+        HBase Master before stopping the CDP 7 Cluster, then it is expected for
+        the CDH 6 HBase Master to fail with warnings and errors in the role log
+        from the classes like 'ProcedureWALFormatReader' and 'WALProcedureStore'
+        or 'TransitRegionStateProcedure'. These errors mean that the HBase
+        Master Write-Ahead Log files are incompatible with the CDH 6 HBase
+        version. The only way to fix this problem is to sideline the log files
+        (all the files placed under /hbase/MasterProcWALs by default), then
+        restart the HBase Master. After the HBase Master has started, Use the
+          HBCK command to find out if there are any
+        inconsistencies that will need to be fixed manually.
+You my encounter other errors when starting HBase (for
+        example, replication-related problems, region assignment related issues,
+        and meta region assignment problems). In this case you should delete the
+        znode in ZooKeeper and then start HBase again. (This will delete
+        replication peer information and you will need to re-configure your
+        replication schedules.): 
+
+
+In Cloudera Manager, look up the value of the
+              zookeeper.znode.parent property. The default
+            value is /hbase.
+Connect to the ZooKeeper ensemble by running the following command
+            from any HBase gateway host:
+              zookeeper-client -server zookeeper_ensembleTo
+              find the value to use for
+                  zookeeper_ensemble, open
+              the /etc/hbase/conf.cloudera.<HBase service
+                  name>/hbase-site.xml file on any HBase
+              gateway host. Use the value of the
+                hbase.zookeeper.quorum property. note
+If you have deployed a secure cluster, you must connect to
+                ZooKeeper using a client jaas.conf file. You
+                can find such a file in an HBase process directory
+                  (/var/run/cloudera-scm-agent/process/).
+                Specify the jaas.conf using the JVM flags by
+                running the following commands in the ZooKeeper client:
+CLIENT_JVMFLAGS=
+ "-Djava.security.auth.login.config=/var/run/cloudera-scm-agent/process/HBase_process_directory/jaas.conf"
+
+zookeeper-client -server <zookeeper_ensemble>
+The ZooKeeper command-line interface opens. 
+Enter the following
+            command:rmr /hbase
+After HBase is healthy, make sure you restore the states of the
+            Balancer and Normalizer (enable them if they were enabled before the
+            rollback). Also re-enable the Merge and Split operations you
+            disabled before the rollback to avoid the Master Procedure
+            incompatibility problem. Run the following commands in HBase Shell:
+            balance_switch true 
+normalizer_switch true 
+splitormerge_switch 'SPLIT', true 
+splitormerge_switch 'MERGE', true 
+
+
+Fixing tableinfo file format
+When you are rolling back from CDP Private Cloud Base 7.1.8 to CDH 6 if you
+          encounter a change in the tableinfo file name format from the new tableinfo file name that
+          was created during the 7.1.8 upgrade can prevent HBase from functioning normally.
+After the rollback, if HDFS rollback was not successful and Hbase is unable to
+          read the tableinfo files then use the HBCK2 tool to verify the list of
+          tableinfo files that need to be fixed.
+Follow these steps to execute the HBCK2 command on the HBCK2 tool to fix the
+          tableinfo file format:
+Contact Cloudera support to request the latest version of HBCK2
+              tool.
+Use the following HBCK2 command and run the HBCK2
+              tool without the –fix
+                option:hbase --config /path/to/client/conf hbck -j 
+~/path/to/hbck/hbase-hbck2-1.0.0-<build>.jar shortenTableinfo For
+                example:hbase --config /etc/hbase/conf hbck -j
+~/hbase-operator-tools/hbase-hbck2/target/hbase-hbck2-1.0.0-SNAPSHOT.jar shortenTableinfoThe
+                command displays the following message and the list of files to be
+                  fixed:Found the following tableinfo file names containing
+                  file sizeIf the list is empty, no additional steps are
+                needed. Go to Step 11.
+Use the following HBCK2 command and run the HBCK2
+              tool with the –fix
+              option:hbase --config /etc/hbase/conf hbck -j
+~/hbase-operator-tools/hbase-hbck2/target/hbase-hbck2-1.0.0-SNAPSHOT.jar shortenTableinfo –fix
+Check the output and verify whether all the tableinfo files are fixed.
+
+
+
+
+
+Restore CDH Databases
+
+Restore the following databases from the CDH 6 backups: 
+Hive Metastore 
+Hue
+Oozie
+Sentry Server
+
+The steps for backing up and restoring databases differ depending on
+        the database vendor and version you select for your cluster and are
+        beyond the scope of this document. 
+importantRestore the databases to their exact state as of
+        when you took the backup. Do not merge in any changes that may have
+        occurred during the subsequent upgrade.
+See the following vendor resources for more
+          information:
+MariaDB 5.5: http://mariadb.com/kb/en/mariadb/backup-and-restore-overview/
+MySQL 5.5: http://dev.mysql.com/doc/refman/5.5/en/backup-and-recovery.html
+MySQL 5.6: http://dev.mysql.com/doc/refman/5.6/en/backup-and-recovery.html
+MySQL 5.7: http://dev.mysql.com/doc/refman/5.7/en/backup-and-recovery.html
+PostgreSQL 8.4: https://www.postgresql.org/docs/8.4/static/backup.html
+PostgreSQL 9.2: https://www.postgresql.org/docs/9.2/static/backup.html
+PostgreSQL 9.3: https://www.postgresql.org/docs/9.3/static/backup.html
+Oracle 11gR2: https://docs.oracle.com/cd/E11882_01/backup.112/e10642/toc.htm
+
+
+
+
+Start the Sentry Service
+
+
+
+Roll Back Cloudera Search
+
+
+
+Start the HDFS, Zookeeper and Sentry services. 
+Delete the instancedir created during the upgrade process: 
+If the cluster is secured with Kerberos, run this command
+                Otherwise skip this step.
+                export ZKCLI_JVM_FLAGS="-Djava.security.auth.login.config=~/solr-jaas.conf 
+-DzkACLProvider=org.apache.solr.common.cloud.ConfigAwareSaslZkACLProvider" 
+
+sudo -u solr solrctl instancedir --delete localFSTemplate 
+
+3. Start the Solr service. noteIf the state of one or more
+              Solr core is down and the Solr log contains an
+                org.apache.lucene.store.LockObtainFailedException: Lock
+                obtain timed out:
+                org.apache.solr.store.hdfs.HdfsLockFactory error
+              message, it is necessary to clean up the HDFS locks in the index
+              directories. For each of the affected Solr nodes: 
+1. Stop the Solr node using Cloudera Manager. 
+2. Remove the HdfsDirectory<id>-write.lock
+                file from the index directory.
+                hdfs dfs -rm "/solr/<collection_name>/<core>/data/<index_directory_name>/HdfsDirectory@ <hex_id> lockFactory=org.apache.solr.store.hdfs.HdfsLockFactory@<hex_id>-write.lock"
+                For example:
+                hdfs dfs -rm "/solr/testCollection/core_node1/data/index/HdfsDirectory@5d07feac lockFactory=org.apache.solr.store.hdfs.HdfsLockFactory@7df08aad-write.lock" 
+3. Start the Solr node using Cloudera Manager. 
+
+
+
+
+
+
+Roll Back Hue
+
+
+Restore the file, app.reg, from your backup:
+Parcel
+              installationsrm -rf /opt/cloudera/parcels/CDH/lib/hue/app.reg
+cp -rp app.reg_cm7_cdh6_backup /opt/cloudera/parcels/CDH/lib/hue/app.reg
+Package
+              Installationsrm -rf /usr/lib/hue/app.reg
+cp -rp app.reg_cm7_cdh6_backup /usr/lib/hue/app.reg
+
+
+
+
+
+Roll Back Kafka
+
+A CDP Private Cloud Base 7 cluster that
+        is running Kafka can be rolled back to the previous CDH5/CDK versions as
+        long as theinter.broker.protocol.version and
+          log.message.format.version properties have not been
+        set to the new version or removed from the configuration. 
+To perform the rollback using Cloudera Manager:
+Activate the previous CDK parcel. Please note, that when
+            rolling back Kafka from CDP Private Cloud Base 7 to CDH 6/CDK, the
+            Kafka cluster will restart. Rolling restart is not supported for
+            this scenario. See Activating a Parcel.
+Remove the following properties from the
+              Kafka Broker Advanced Configuration Snippet (Safety
+              Valve)  configuration property. 
+Inter.broker.protocol.version
+log.message.format.version
+
+
+
+
+
+Deploy the Client Configuration
+
+
+On the Cloudera Manager
+            Home page, click
+          the Actions menu and select Deploy Client
+            Configuration.
+Click Deploy Client Configuration.
+
+
+
+
+Restart the Cluster
+
+
+On the Cloudera Manager
+            Home page, click
+          the Actions menu and select
+          Restart.
+Click Restart that appears in the next screen to confirm. If
+          you have enabled high availability for HDFS,
+          you can choose Rolling
+              Restart instead to minimize cluster downtime.
+          The Command Details window shows the progress of stopping
+          services. When All services successfully started appears,
+            the task is complete and you can close the Command Details
+            window.
+
+
+
+
+Roll Back Cloudera Navigator Encryption Components
+
+If you are rolling back any encryption components (Key Trustee Server,
+        Key Trustee KMS, HSM KMS, Key HSM, or Navigator Encrypt), first refer to:
+Backing up and Restoring Key
+              Trustee Server and Clients
+HSM KMS High Availability Backup
+              and Recovery
+Manually Backing Up Navigator
+              Encrypt
+
+
+
+Roll Back Key Trustee Server
+
+
+noteIf rolling back multiple encryption product components, it is
+            recommended that you begin with the Key Trustee Server.
+
+To roll back Key Trustee Server, replace the currently used parcel
+          (for example, the parcel for version 7.1.4) with the parcel for the
+          version to which you wish to roll back (for example, version 5.14.0).
+          See Parcels for detailed
+          instructions on using parcels.
+The Keytrustee Server 7.x upgrades the bundled Postgres engine from
+          version 9.3 to 12.1. The upgrade happens automatically, however,
+          downgrading to CDH 6 requires manual steps to roll back the database
+          engine to version 9.3. Because the previously upgraded database is
+          left unchanged, the database server will fail start. Follow these
+          steps to recreate the Postgres 9.3 compatible database:
+Open the Cloudera Manager Admin Console and go to the Key
+              Trustee Server service. If you see that Key Trustee Server has
+              stale configurations, click the yellow or blue button and follow
+              the prompts.
+Make sure that the Keytrustee Server database roles are stopped.
+              Then rename the folder containing Keytrustee Postgres database
+              data (both on master and slave hosts):
+              mv /var/lib/keytrustee/db /var/lib/keytrustee/db-12_1
+
+Open the Cloudera Manager Admin Console and go to the Key
+              Trustee Server service. 
+Select the Instances tab. 
+Select the Active Database role type. 
+Click Actions for
+                  Selected > Set Up the Key Trustee Server
+                  Database.
+Click Set Up the Key Trustee Server
+                Database to confirm. Cloudera Manager sets up the
+                Key Trustee Server database.
+On the master KTS node: running as user
+                keytrustee, restore the keytrustee database
+              from the dump created during the upgrade by running the following
+              commands:sudo -su keytrustee
+export HOME=/opt/cloudera/parcels/KEYTRUSTEE_SERVER
+export JAVA_HOME=... # Set this to your Java Home folder
+export PATH="/opt/cloudera/parcels/KEYTRUSTEE_SERVER/bin:/opt/cloudera/parcels/KEYTRUSTEE_SERVER/PG_DB/opt/postgres/9.3/bin:$PATH"
+source /opt/cloudera/parcels/KEYTRUSTEE_SERVER/meta/keytrustee_env.sh
+dropdb -p 11381 keytrustee
+If you see the message: could not change
+                directory to "/root: Permission denied on the console,
+              run the following command to check the exit code of the last
+              command:$?  You can use the exit code to
+              debug any issues.
+Run the following command to import a database dump that was
+              created during
+              upgrade:psql -p 11381 postgres -f /var/lib/keytrustee/.keytrustee/kt93dump.pg
+
+Start the Active Database role in Cloudera Manager by clicking
+                  Actions for
+                  Selected > Start.
+Click Start to confirm.
+Select the Active Database.
+Click Actions for
+                  Selected > Setup Enable Synchronous
+                  Replication in HA mode . 
+Start the Passive Database instance: select the Passive
+              Database, click Actions for
+                  Selected > Start. 
+In the Cloudera Manager Admin Console, start the active KTS
+              instance.
+In the Cloudera Manager Admin Console, start the passive KTS
+              instance.
+
+
+
+
+Start the Key Management Server
+
+Restart the Key Management Server. Open the Cloudera Manager Admin
+          Console, go to the KMS service page, and select
+              Actions > Start.
+
+
+
+Roll Back Key HSM
+
+To roll back Key HSM:
+Install the version of Navigator Key HSM to which you wish to
+                roll backInstall the Navigator Key HSM package using
+                  yum:sudo yum downgrade keytrustee-keyhsmCloudera
+                Navigator Key HSM is installed to the
+                  /usr/share/keytrustee-server-keyhsm directory
+                by default.
+Rename Previously-Created Configuration FilesFor Key
+                HSM major version rollbacks, previously-created configuration
+                files do not authenticate with the HSM and Key Trustee Server,
+                so you must recreate these files by re-executing the
+                  setup and trust commands.
+                First, navigate to the Key HSM installation directory and rename
+                the applications.properties,
+                  keystore, and truststore
+                files:
+              cd /usr/share/keytrustee-server-keyhsm/
+mv application.properties application.properties.bak
+mv keystore keystore.bak
+mv truststore truststore.bak
+Initialize Key HSMRun the service keyhsm
+                  setup command in conjunction with the name of the
+                target HSM distribution:
+                sudo service keyhsm setup [keysecure|thales|luna]For
+                more details, see Initializing Navigator Key
+                  HSM. 
+Establish Trust Between Key HSM and the Key Trustee
+                ServerThe Key HSM service must explicitly trust the Key
+                Trustee Server certificate (presented during TLS handshake). To
+                establish this trust, run the following
+                command:sudo keyhsm trust /path/to/key_trustee_server/certFor
+                more details, see Establish Trust from Key HSM to
+                  Key Trustee Server.
+Start the Key HSM ServiceStart the Key HSM
+                service:sudo service keyhsm start
+Establish Trust Between Key Trustee Server and Key HSM
+Establish trust between the Key Trustee Server and the Key HSM
+                by specifying the path to the private key and
+                certificate:sudo ktadmin keyhsm --server https://keyhsm01.example.com:9090 \
+--client-certfile /etc/pki/cloudera/certs/mycert.crt \
+--client-keyfile /etc/pki/cloudera/certs/mykey.key --trustFor
+                a password-protected Key Trustee Server private key, add the
+                  --passphrase argument to the command (enter
+                the password when
+                prompted):sudo ktadmin keyhsm --passphrase \
+--server https://keyhsm01.example.com:9090 \
+--client-certfile /etc/pki/cloudera/certs/mycert.crt \
+--client-keyfile /etc/pki/cloudera/certs/mykey.key --trustFor
+                additional details, see Integrate Key HSM and Key
+                  Trustee Server.
+Remove Configuration Files From Previous
+                InstallationAfter completing the rollback, remove the
+                saved configuration files from the previous
+                installation:cd /usr/share/keytrustee-server-keyhsm/
+rm application.properties.bak
+rm keystore.bak
+rm truststore.bak
+
+
+
+
+Roll Back Key Ranger KMS Parcels
+
+Enable the desired parcel that you wish to roll back to (for example,
+          version 6.3.4 of Key Trustee KMS). See Parcels for detailed
+          instructions on using parcels. See Parcels for detailed
+          instructions on using parcels. 
+
+
+
+Roll Back HSM KMS Parcels
+
+To roll back the HSM KMS parcels, replace the currently used parcel
+          (for example, the parcel for version 6.0.0) with the parcel for the
+          version to which you wish to roll back (for example, version 5.14.0).
+          See Parcels for detailed
+          instructions on using parcels. 
+See Upgrading HSM KMS Using
+            Packages for detailed instructions on using packages.
+
+
+
+Roll Back Navigator Encrypt
+
+To roll back Cloudera Navigator Encrypt:
+
+If you have configured and are using an RSA master key
+            file with OAEP padding, then you must revert this setting to its
+            original value:navencrypt key --change
+Stop the Navigator Encrypt mount
+            service:sudo /etc/init.d/navencrypt-mount stop
+
+Confirm that the mount-stop command
+              completed:sudo /etc/init.d/navencrypt-mount status
+
+Backup the NavEncrypt control directory:
+            sudo mkdir navencryptBAK
+sudo cp -rp /etc/navencrypt/ navencryptBAK/
+Clean the dkms/navencryptfs directory:
+            sudo rm -rf /var/lib/dkms/navencryptfs/ 
+If rolling back to a release lower than NavEncrypt 6.2:
+ Print the existing ACL rules and save that output
+                to a
+                file:sudo navencrypt acl --print+ vim acls.txt
+Delete all existing ACLs, for example, if there are
+                a total of 7 ACL rules
+                run:sudo navencrypt acl --del --line=1,2,3,4,5,6,7
+
+To fully downgrade Navigator Encrypt, manually downgrade
+            all of the associated Navigator Encrypt packages (in the order listed):
+navencrypt
+navencrypt-kernel-module (Only required for
+                operating systems other than SLES) 
+cloudera-navencryptfs-kmp (Only required for the
+                SLES operating system) 
+libkeytrustee
+
+
+If rolling back to a release less than NavEncrypt
+              6.2
+
+
+Reapply the ACL
+                  rules:sudo navencrypt acl --add --file=acls.txt
+
+
+Recompute process
+                  signatures:sudo navencrypt acl --update
+
+
+
+
+Restart the Navigator Encrypt mount
+              servicesudo /etc/init.d/navencrypt-mount start
+
+
+
+
+
+
+(Optional) Cloudera Manager Rollback Steps
+
+After you complete the rollback steps, your cluster is using Cloudera
+        Manager 7 to manage your CDH 6 or CDH 6 cluster. You can continue to use
+        Cloudera Manager 7 to manage your CDH 6 cluster, or you can downgrade to
+        Cloudera Manager 6 by following these steps: 
+
+
+Stop Cloudera Manager 
+
+
+ Stop the Cloudera Management Service.
+          
+Log in to the Cloudera Manager Admin Console.
+Select
+                Clusters > Cloudera
+                Management Service.
+Select
+                Actions > Stop.
+
+
+Stop the Cloudera Manager
+        Server.sudo systemctl stop cloudera-scm-server
+
+Hard stop the Cloudera Manager agents. Run the following command
+            on all hosts:
+            sudo systemctl stop cloudera-scm-supervisord.service
+Back up the repository directory. You can create a top-level
+            backup directory and an environment variable to reference the
+            directory using the following commands. You can also substitute
+            another directory path in the backup commands
+            below:export CM_BACKUP_DIR="`date +%F`-CM"
+mkdir -p $CM_BACKUP_DIR
+Back up the existing repository directory.
+          
+RHEL / CentOS
+
+sudo -E tar -cf $CM_BACKUP_DIR/repository.tar /etc/yum.repos.d
+
+SLES
+
+sudo -E tar -cf $CM_BACKUP_DIR/repository.tar /etc/zypp/repos.d
+
+Ubuntu
+
+sudo -E tar -cf $CM_BACKUP_DIR/repository.tar /etc/apt/sources.list.d
+
+
+
+
+
+
+Restore the Cloudera Manager 6 Repository Files
+
+Copy the repository directory from the backup taken before upgrading
+          to Cloudera Manager 7.x. 
+rm -rf /etc/yum.repos.d/*
+tar -xf cm6cdh6_backedUp_dir/repositary.tar -C CM6CDH6/
+cp -rp /etc/yum.repos.d_cm6cdh6/* /etc/yum.repos.d/
+
+
+
+Restore Packages
+
+
+Run the following commands on all hosts:
+
+Operating System
+Command
+
+
+
+RHEL
+
+sudo yum remove cloudera-manager-daemons cloudera-manager-agent
+sudo yum clean all
+sudo yum install cloudera-manager-agent
+
+
+
+SLES
+
+sudo zypper remove cloudera-manager-daemons cloudera-manager-agent
+sudo zypper refresh -s
+sudo zypper install cloudera-manager-agent
+
+
+
+Ubuntu or Debian
+
+sudo apt-get purge cloudera-manager-daemons cloudera-manager-agent
+sudo apt-get update
+sudo apt-get install cloudera-manager-agent
+
+
+
+Run the following commands on the Cloudera Manager server
+              host:
+
+Operating System
+Command
+
+
+
+RHEL
+
+sudo yum remove cloudera-manager-server
+sudo yum install cloudera-manager-server
+
+
+
+SLES
+
+sudo zypper remove cloudera-manager-server
+sudo zypper install cloudera-manager-server 
+
+
+
+Ubuntu or Debian
+
+sudo apt-get purge cloudera-manager-server
+sudo apt-get install cloudera-manager-server
+
+
+
+
+
+
+
+Restore Cloudera Manager Databases
+
+Restore the Cloudera Manager databases from the backup of Cloudera
+          Manager that was taken before upgrading to Cloudera Manager 7. See the
+          procedures provided by your database vendor. 
+These databases include the following: 
+Cloudera Manager Server
+Reports Manager
+Navigator Audit Server
+Navigator Metadata Server
+Activity Monitor (Only used for MapReduce 1 monitoring).
+
+
+
+MariaDB 5.5: http://mariadb.com/kb/en/mariadb/backup-and-restore-overview/
+MySQL 5.5: http://dev.mysql.com/doc/refman/5.5/en/backup-and-recovery.html
+MySQL 5.6: http://dev.mysql.com/doc/refman/5.6/en/backup-and-recovery.html
+PostgreSQL 8.4: https://www.postgresql.org/docs/8.4/static/backup.html
+PostgreSQL 9.2: https://www.postgresql.org/docs/9.2/static/backup.html
+PostgreSQL 9.3: https://www.postgresql.org/docs/9.3/static/backup.html
+Oracle 11gR2: https://docs.oracle.com/cd/E11882_01/backup.112/e10642/toc.htm
+HyperSQL: http://hsqldb.org/doc/guide/management-chapt.html#mtc_backup
+
+
+Here is an sample command to restore a MySQL
+          database:mysql -u username -ppassword --host=hostname cm < backup.sql
+
+
+
+
+Restore Cloudera Manager Server
+
+Use the backup of Cloudera Manager 6.x taken before upgrading to
+          Cloudera Manager 7.x for the following steps: 
+
+If you used the backup commands provided in Step 2: Backing Up Cloudera Manager 6, extract
+            the Cloudera Manager 6 backup archives you
+            created:tar -xf CM6CDH6/cloudera-scm-agent.tar -C CM6CDH6/
+tar -xf CM6CDH6/cloudera-scm-server.tar -C CM6CDH6/
+On the host where the Event Server role is configured to run,
+            restore the Events Server directory from the Cloudera Manager 6
+            backup.
+            cp -rp /var/lib/cloudera-scm-eventserver /var/lib/cloudera-scm-eventserver-CM
+rm -rf /var/lib/cloudera-scm-eventserver/*
+cp -rp /var/lib/cloudera-scm-eventserver_cm6cdh6/* /var/lib/cloudera-scm-eventserver/
+Remove the Agent runtime state. Run the following command on all
+            hosts:
+            rm -rf /var/run/cloudera-scm-agent /var/lib/cloudera-scm-agent/response.avro
+On the host where the Service Monitor is
+            running, restore the Service Monitor
+            directory:rm -rf /var/lib/cloudera-service-monitor/*
+cp -rp /var/lib/cloudera-service-monitor_cm6cdh6/* /var/lib/cloudera-service-monitor/
+On the host where the Host Monitor is
+            running, restore the Host Monitor
+            directory:rm -rf /var/lib/cloudera-host-monitor/*
+cp -rp /var/lib/cloudera-host-monitor_cm6cdh6/* /var/lib/cloudera-host-monitor/
+Restore the Cloudera Navigator Solr storage directory from the
+            CM6/CDH6
+            backup.rm -rf /var/lib/cloudera-scm-navigator/*
+cp -rp /var/lib/cloudera-scm-navigator_cm6cdh6/* /var/lib/cloudera-scm-navigator/
+On the Cloudera Manager Server, restore the
+              /etc/cloudera-scm-server/db.properties
+            file.rm -rf /etc/cloudera-scm-server/db.properties
+cp -rp cm6cdh6/etc/cloudera-scm-server/db.properties /etc/cloudera-scm-server/db.properties
+On each host in the cluster, restore the
+              /etc/cloudera-scm-agent/config.ini file from your
+            backup.
+            rm -rf /etc/cloudera-scm-agent/config.ini
+cp -rp cm6cdh6/etc/cloudera-scm-agent/config.ini /etc/cloudera-scm-agent/config.ini
+
+
+
+
+Start the Cloudera Manager Server and Agents
+
+
+Start the Cloudera Manager
+        Server.sudo systemctl start cloudera-scm-server
+
+Hard Restart the Cloudera Manager
+          Agent. 
+RHEL 7, SLES 12, Ubuntu 18.04 and higher
+
+sudo systemctl stop cloudera-scm-supervisord.service
+sudo systemctl restart cloudera-scm-agent
+
+
+
+ Start the Cloudera Management Service.
+          
+Log in to the Cloudera Manager Admin Console.
+Select
+                Clusters > Cloudera
+                Management Service.
+Select
+                Actions > Start.
+
+
+
+
+
+

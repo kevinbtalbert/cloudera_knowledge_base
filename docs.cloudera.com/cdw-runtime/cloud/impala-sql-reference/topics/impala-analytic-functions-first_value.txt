@@ -1,0 +1,134 @@
+FIRST_VALUECloudera Docs
+FIRST_VALUE
+Returns the expression value from the first row in the window.
+              If your table has null values, you can use the IGNORE
+                NULLS clause to return the first non-null value from
+              the window. This same value is repeated for all result rows for
+              the group. The return value is NULL if the input
+              expression is NULL.
+
+
+Syntax:
+
+FIRST_VALUE(expr [IGNORE NULLS]) OVER([partition_by_clause] order_by_clause [window_clause])
+ The PARTITION BY clause is optional. The
+                ORDER BY clause is required. The window clause
+              is optional. 
+
+Usage notes:
+
+ If any duplicate values occur in the tuples evaluated by the
+                ORDER BY clause, the result of this function is
+              not deterministic. Consider adding additional ORDER
+                BY columns to ensure consistent ordering. 
+
+Examples:
+
+ The following example shows a table with a wide variety of
+              country-appropriate greetings. For consistency, we want to
+              standardize on a single greeting for each country. The
+                FIRST_VALUE() function helps to produce a mail
+              merge report where every person from the same country is addressed
+              with the same greeting. 
+select name, country, greeting from mail_merge;
++---------+---------+--------------+
+| name    | country | greeting     |
++---------+---------+--------------+
+| Pete    | USA     | Hello        |
+| John    | USA     | Hi           |
+| Boris   | Germany | Guten tag    |
+| Michael | Germany | Guten morgen |
+| Bjorn   | Sweden  | Hej          |
+| Mats    | Sweden  | Tja          |
++---------+---------+--------------+
+
+select country, name,
+  first_value(greeting)
+    over (partition by country order by name, greeting) as greeting
+  from mail_merge;
++---------+---------+-----------+
+| country | name    | greeting  |
++---------+---------+-----------+
+| Germany | Boris   | Guten tag |
+| Germany | Michael | Guten tag |
+| Sweden  | Bjorn   | Hej       |
+| Sweden  | Mats    | Hej       |
+| USA     | John    | Hi        |
+| USA     | Pete    | Hi        |
++---------+---------+-----------+
+
+ Changing the order in which the names are evaluated changes
+              which greeting is applied to each group. 
+select country, name,
+  first_value(greeting)
+    over (partition by country order by name desc, greeting) as greeting
+  from mail_merge;
++---------+---------+--------------+
+| country | name    | greeting     |
++---------+---------+--------------+
+| Germany | Michael | Guten morgen |
+| Germany | Boris   | Guten morgen |
+| Sweden  | Mats    | Tja          |
+| Sweden  | Bjorn   | Tja          |
+| USA     | Pete    | Hello        |
+| USA     | John    | Hello        |
++---------+---------+--------------+
+If you introduce null values in the mail_merge
+              table, the FIRST_VALUE() function will produce a
+              different result with the IGNORE NULLS
+              clause.select * from mail_merge;
++---------+---------+--------------+
+| name    | country | greeting     |
++---------+---------+--------------+
+| Boris   | Germany | Guten tag    |
+| Peng    | China   | Nihao        |
+| Mats    | Sweden  | Tja          |
+| Bjorn   | Sweden  | Hej          |
+| Kei     | Japan   | NULL         |
+| Li      | China   | NULL         |
+| John    | USA     | Hi           |
+| Pete    | USA     | Hello        |
+| Michael | Germany | Guten morgen |
++---------+---------+--------------+
+
+select country, name,
+  first_value(greeting ignore nulls)
+    over (partition by country order by name,greeting) as greeting
+  from mail_merge;
++---------+---------+-----------+
+| country | name    | greeting  |
++---------+---------+-----------+
+| Japan   | Kei     | NULL      |
+| Germany | Boris   | Guten tag |
+| Germany | Michael | Guten tag |
+| China   | Li      | NULL      |
+| China   | Peng    | Nihao     |
+| Sweden  | Bjorn   | Hej       |
+| Sweden  | Mats    | Hej       |
+| USA     | John    | Hi        |
+| USA     | Pete    | Hi        |
++---------+---------+-----------+
+Changing the order in which the names are evaluated changes the
+              result because null values are now encountered in a different
+              order. 
+
+select country, name,
+  first_value(greeting ignore nulls)
+    over (partition by country order by name desc, greeting) as greeting
+  from mail_merge
++---------+---------+--------------+
+| country | name    | greeting     |
++---------+---------+--------------+
+| Japan   | Kei     | NULL         |
+| China   | Peng    | Nihao        |
+| China   | Li      | Nihao        |
+| Sweden  | Mats    | Tja          |
+| Sweden  | Bjorn   | Tja          |
+| USA     | Pete    | Hello        |
+| USA     | John    | Hello        |
+| Germany | Michael | Guten morgen |
+| Germany | Boris   | Guten morgen |
++---------+---------+--------------+
+
+
+

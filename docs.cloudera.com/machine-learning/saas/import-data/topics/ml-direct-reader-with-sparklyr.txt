@@ -1,0 +1,62 @@
+Use Direct Reader Mode with SparklyRCloudera Docs
+Use Direct Reader Mode with SparklyR
+
+
+You need to add the location of your data tables in the example below.
+
+
+In your session, open the workbench and add the following code.
+
+
+#Run this once
+#install.packages(“sparklyr")
+
+library(sparklyr)
+
+config <- spark_config()
+
+config$spark.security.credentials.hiveserver2.enabled="false"
+config$spark.datasource.hive.warehouse.read.via.llap="false"
+config$spark.sql.hive.hwc.execution.mode="spark"
+#config$spark.datasource.hive.warehouse.read.jdbc.mode="spark"
+
+# Required setting for HWC-direct reader - the hiveacid sqlextension does the automatic
+# switch between reading through HWC (for managed tables) or spark-native (for external)
+# depending on table type.
+config$spark.sql.extensions="com.qubole.spark.hiveacid.HiveAcidAutoConvertExtension"
+config$spark.kryo.registrator="com.qubole.spark.hiveacid.util.HiveAcidKyroRegistrator"
+
+# Pick the correct jar location by using Terminal Access 
+# to file the exact file path/name of the hwc jar under /usr/lib/hive_warehouse_connector
+config$sparklyr.jars.default <- "/usr/lib/hive_warehouse_connector/hive-warehouse-connector-assembly-1.0.0.7.2.2.0-244.jar"
+
+# File system read access - this s3a patha is available from the environment Cloud Storage.
+# To read from this location go to Environment->Manage Access->IdBroker Mappings
+#     ensure that the user (or group) has been assigned an AWS IAM role that can 
+#.     read this location.
+#config$spark.yarn.access.hadoopFileSystems="s3a://demo-aws-2/"
+config$spark.yarn.access.hadoopFileSystems="s3a://demo-aws-2/datalake/warehouse/tablespace/managed/hive"
+
+
+sc <- spark_connect(config = config)
+
+intDf1 <- sparklyr::spark_read_table(sc, 'foo')
+sparklyr::sdf_collect(intDf1)
+
+intDf1 <- sparklyr::spark_read_table(sc, 'foo_ext')
+sparklyr::sdf_collect(intDf1)
+
+spark_disconnect(sc)
+
+
+# Optional configuration - only needed if the table is in a private Data Catalog of CDW
+#config$spark.sql.hive.hiveserver2.jdbc.url="jdbc:hive2://hs2-aws-2-hive-viz.env-j2ln9x.dw.ylcu-atmi.cloudera.site/default;transportMode=http;httpPath=cliservice;ssl=true;retries=3;user=priyankp;password=!Password1"
+
+#ss <- spark_session(sc)
+#hive <- invoke_static(sc,"com.hortonworks.hwc.HiveWarehouseSession","session",ss)%>%invoke("build")
+#df <- invoke(hive,"execute","select * from default.foo limit 199")
+#sparklyr::sdf_collect(df)
+            
+        
+
+Parent topic: Accessing data with Spark

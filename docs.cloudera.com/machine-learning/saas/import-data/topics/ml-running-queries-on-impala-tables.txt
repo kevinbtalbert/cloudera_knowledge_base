@@ -1,0 +1,145 @@
+Running Queries on Impala TablesCloudera Docs
+Running Queries on Impala Tables
+This section demonstrates how to run queries
+          on the tips table created in the previous section using some common
+          Python and R libraries such as Pandas, Impyla, Sparklyr and so on. All
+          the examples in this section run the same query, but use different
+          libraries to do so.PySpark (Python)
+
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder.master('yarn').getOrCreate()
+
+# load data from .csv file in HDFS
+# tips = spark.read.csv("/user/hive/warehouse/tips/", header=True, inferSchema=True)
+
+# OR load data from table in Hive metastore
+tips = spark.table('tips')
+
+from pyspark.sql.functions import col, lit, mean
+
+# query using DataFrame API  
+tips \
+  .filter(col('sex').like("%Female%")) \
+  .groupBy('day') \
+  .agg(mean('tip').alias('avg_tip')) \
+  .orderBy('avg_tip',ascending=False) \
+  .show()
+
+# query using SQL
+spark.sql('''
+  SELECT day,AVG(tip) AS avg_tip \
+  FROM tips \
+  WHERE sex LIKE "%Female%" \
+  GROUP BY day \
+  ORDER BY avg_tip DESC''').show()
+  
+spark.stop()
+
+Impyla (Python)
+Due to an incompatibility with the thrift_sasl
+            package, Impyla has been known to fail with Python 3. 
+
+Python
+            2
+# (Required) Install the impyla package
+# !pip install impyla
+# !pip install thrift_sasl
+import os
+import pandas
+from impala.dbapi import connect
+from impala.util import as_pandas
+
+# Connect to Impala using Impyla
+# Secure clusters will require additional parameters to connect to Impala.
+# Recommended: Specify IMPALA_HOST as an environment variable in your project settings
+
+IMPALA_HOST = os.getenv('IMPALA_HOST', '<impala_daemon_hostname>')
+conn = connect(host=IMPALA_HOST, port=21050)
+
+# Execute using SQL
+cursor = conn.cursor()
+
+cursor.execute('SELECT day,AVG(tip) AS avg_tip \
+                FROM tips \
+                WHERE sex ILIKE "%Female%" \
+                GROUP BY day \
+                ORDER BY avg_tip DESC')
+
+
+# Pretty output using Pandas
+tables = as_pandas(cursor)
+tables
+
+Ibis (Python)
+
+# (Required) Install the ibis-framework[impala] package
+# !pip3 install ibis-framework[impala]
+
+import ibis
+import os
+ibis.options.interactive = True
+ibis.options.verbose = True
+
+# Connection to Impala
+# Secure clusters will require additional parameters to connect to Impala.
+# Recommended: Specify IMPALA_HOST as an environment variable in your project settings
+
+IMPALA_HOST = os.getenv('IMPALA_HOST', '<impala_daemon_hostname>')
+con = ibis.impala.connect(host=IMPALA_HOST, port=21050, database='default')
+con.list_tables()
+
+tips = con.table('tips')
+
+tips \
+  .filter(tips.sex.like(['%Female%'])) \
+  .group_by('day') \
+  .aggregate( \
+     avg_tip=tips.tip.mean() \
+  ) \
+  .sort_by(ibis.desc('avg_tip')) \
+  .execute()
+
+Sparklyr (R)
+
+# (Required) Install the sparklyr package
+# install.packages("sparklyr")
+
+library(stringr)
+library(sparklyr)
+library(dplyr)
+
+spark <- spark_connect(master = "yarn")
+
+# load data from file in HDFS
+tips <- spark_read_csv(
+  sc = spark,
+  name = "tips",
+  path = "/user/hive/warehouse/tips/"
+)
+
+# OR load data from table 
+tips <- tbl(spark, "tips")
+
+# query using dplyr
+tips %>%
+  filter(sex %like% "%Female%") %>%
+  group_by(day) %>%
+  summarise(
+    avg_tip = mean(tip, na.rm = TRUE)
+  ) %>%
+  arrange(desc(avg_tip))
+
+
+# query using SQL
+tbl(spark, sql("
+  SELECT day,AVG(tip) AS avg_tip \
+  FROM tips \
+  WHERE sex LIKE '%Female%' \
+  GROUP BY day \
+  ORDER BY avg_tip DESC"))
+
+spark_disconnect(spark)
+
+
+Parent topic: Accessing Data from Apache Impala

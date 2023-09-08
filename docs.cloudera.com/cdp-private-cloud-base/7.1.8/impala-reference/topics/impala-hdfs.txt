@@ -1,0 +1,190 @@
+Impala with HDFSCloudera Docs
+Impala with HDFS
+
+Although Impala typically works well with many large files in an HDFS
+      storage system, there are times when you might perform some file cleanup
+      to reclaim space, or advise developers on techniques to minimize space
+      consumption and file duplication. 
+
+Use compact binary file formats where practical. Numeric and
+        time-based data in particular can be stored in more compact form in
+        binary data files. Depending on the file format, various compression and
+        encoding features can reduce file size even further. You can specify the
+          STORED AS clause as part of the CREATE
+          TABLE statement, or ALTER TABLE with the
+          SET FILEFORMAT clause for an existing table or
+        partition within a partitioned table.
+
+ You manage underlying data files differently depending on whether
+          the corresponding Impala table is defined as an internal or external
+          table: 
+
+ Use the DESCRIBE FORMATTED statement to check if
+            a particular table is internal (managed by Impala) or external, and
+            to see the physical location of the data files in HDFS. 
+ For Impala-managed (internal) tables, use DROP
+              TABLE statements to remove data files.
+ For tables not managed by Impala (external) tables, use
+            appropriate HDFS-related commands such as hadoop
+            fs, hdfs dfs, or distcp,
+            to create, move, copy, or delete files within HDFS directories that
+            are accessible by the impala user. Issue a
+              REFRESH table_name statement
+            after adding or removing any files from the data directory of an
+            external table. 
+ Use external tables to reference HDFS data files in their
+            original location. With this technique, you avoid copying the files,
+            and you can map more than one Impala table to the same set of data
+            files. When you drop the Impala table, the data files are left
+            undisturbed.
+ Use the LOAD DATA statement to move HDFS files
+            into the data directory for an Impala table from inside Impala,
+            without the need to specify the HDFS path of the destination
+            directory. This technique works for both internal and external
+            tables.
+
+
+Make sure that the HDFS trashcan is configured correctly. When you
+        remove files from HDFS, the space might not be reclaimed for use by
+        other files until sometime later, when the trashcan is emptied. 
+Drop all tables in a database before dropping the database itself. 
+If an INSERT statement encounters an error, and you
+        see a directory named .impala_insert_staging or
+          _impala_insert_staging left behind in the data
+        directory for the table, it might contain temporary data files taking up
+        space in HDFS. You might be able to salvage these data files. For
+          example, delete those files through commands such as hadoop
+            fs or hdfs dfs to reclaim space before
+          re-trying the INSERT. Issue DESCRIBE
+            FORMATTED table_name to see the HDFS
+          path where you can check for temporary files. 
+
+Configuring Scratch Space for Spilling to Disk
+Impala uses intermediate files during large sorts, joins, aggregations,
+        or analytic function operations The files are removed when the operation
+        finishes. By default, intermediate files are stored in the directory
+          /tmp/impala-scratch. 
+You can specify locations of the intermediate files in one of the
+        following ways:
+By starting the impalad daemon with the
+                ‑‑scratch_dirs="path_to_directory"
+            configuration option. 
+By specifying a different location in the Cloudera Manager in the
+              Impala Daemon Scratch Directories
+            field.
+
+
+With either option above:
+ You can specify a single directory or a comma-separated list of
+            directories. 
+ You can specify an optional a capacity quota per scratch
+            directory using the colon (:) as the delimiter.  The capacity
+              quota of -1 or 0 is the same as
+              no quota for the directory. 
+
+ The scratch directories must be on the local filesystem, not in
+            HDFS. 
+ You might specify different directory paths for different hosts,
+            depending on the capacity and speed of the available storage
+            devices. 
+
+ If there is less than 1 GB free on the filesystem where that directory
+        resides, Impala still runs, but writes a warning message to its log. 
+ Impala successfully starts (with a warning written to the log) if it
+        cannot create or read and write files in one of the scratch directories. 
+ The following are examples for specifying scratch directories. 
+
+ Config option 
+ Description 
+
+
+
+
+--scratch_dirs=/dir1,/dir2
+
+ Use /dir1 and /dir2 as scratch directories with no
+                  capacity quota. 
+
+
+
+--scratch_dirs=/dir1,/dir2:25G
+
+ Use /dir1 and /dir2 as scratch directories with no
+                  capacity quota on /dir1 and the 25GB quota on /dir2. 
+
+
+
+--scratch_dirs=/dir1:5MB,/dir2
+
+ Use /dir1 and /dir2 as scratch directories with the
+                  capacity quota of 5MB on /dir1 and no quota on /dir2. 
+
+
+
+--scratch_dirs=/dir1:-1,/dir2:0
+
+ Use /dir1 and /dir2 as scratch directories with no
+                  capacity quota. 
+
+
+
+ Allocation from a scratch directory will fail if the specified limit
+        for the directory is exceeded. 
+ If Impala encounters an error reading or writing files in a scratch
+        directory during a query, Impala logs the error, and the query fails.
+      
+
+Priority Based Scratch Directory SelectionThe location of the
+        intermediate files are configured by starting the impalad daemon with the flag
+        ‑‑scratch_dirs="path_to_directory". Currently this startup flag uses the configured scratch
+        directories in a round robin fashion. Automatic selection of scratch directories in a round
+        robin fashion may not always be ideal in every situation since these directories could come
+        from different classes of storage system volumes having different performance
+        characteristics (SSD vs HDD, local storage vs network attached storage, etc.). To optimize
+        your workload, you have an option to configure the priority of the scratch directories based
+        on your storage system configuration.The scratch directories will be selected for
+        spilling based on how you configure the priorities of the directories and if you provide the
+        same priority for multiple directories then the directories will be selected in a round
+        robin fashion.The valid formats for specifying the priority directories are as shown
+        here: 
+          <dir-path>:<limit>:<priority>
+          <dir-path>::<priority>
+        Example:
+
+          /dir1:200GB:0
+          /dir1::0
+        
+The following formats use the default priority: 
+          /dir1
+          /dir1:200GB
+          /dir1:200GB:
+        In the example below, dir1 will be used as a spill target until it is
+        full and then dir2, dir3, and dir4 will be used in a round robin fashion.
+‑‑scratch_dirs="/dir1:200GB:0, /dir2:1024GB:1, /dir3:1024GB:1, /dir4:1024GB:1"
+        
+
+Increasing Scratch Capacity
+You can compress the data spilled to disk to increase the effective scratch capacity. You
+        typically more than double capacity using compression and reduce spilling to disk. Use the
+        --disk_spill_compression_codec and –-disk_spill_punch_holes startup options. The
+        --disk_spill_compression_codec takes any value supported by the COMPRESSION_CODEC query
+        option. The value is not case-sensitive. A value of ZSTD or
+          LZ4 is recommended (default is NONE).
+For example:
+--disk_spill_compression_codec=LZ4
+--disk_spill_punch_holes=true  
+
+        If you set --disk_spill_compression_codec to a value other than NONE, you must set --disk_spill_punch_holes to true.
+      
+The hole punching feature supported by many file systems is used to reclaim space in
+        scratch files during execution of a query that spills to disk. This results in lower scratch
+        space requirements in many cases, especially when combined with disk spill compression. When
+        this option is not enabled, scratch space is still recycled by a query, but less effectively
+        in many cases. 
+You can specify a compression level for ZSTD only. For example: 
+--disk_spill_compression_codec=ZSTD:10
+--disk_spill_punch_holes=true 
+Compression levels from 1 up to 22 (default 3) are supported for ZSTD. The
+        lower the compression level, the faster the speed at the cost of compression ratio. 
+
+

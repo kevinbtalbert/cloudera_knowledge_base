@@ -1,0 +1,687 @@
+
+
+
+
+Running Altus Director Behind a Proxy | 6.3.x | Cloudera Documentation
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Documentation
+
+
+Products
+Services & Support
+Solutions
+
+
+
+
+
+
+
+
+
+Cloudera Altus Director 6.3.x | Other versions
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+View All Categories
+
+Introduction
+
+Displaying Altus Director Documentation
+Altus Director Interfaces
+
+
+Release Notes
+
+New Features and Changes
+Known Issues
+Fixed Issues
+Unsupported Components and Features
+Altus Director API
+
+
+Requirements and Supported Versions
+Getting Started
+
+Amazon Web Services (AWS)
+
+Preparing Your AWS EC2 Resources
+Launching an EC2 Instance for Altus Director
+
+Choosing an AMI
+
+
+Installing Altus Director Server and Client on the EC2 Instance
+Subscribing to Altus Director in the AWS Marketplace
+Configuring a SOCKS Proxy for Amazon EC2
+Adding an Altus Director Environment on AWS
+Simple Setup: Creating a Cluster on AWS with Default Settings
+Advanced Setup: Installing Cloudera Manager and CDH on AWS
+Pausing a Cluster on AWS
+Cleaning Up Your AWS Deployment
+Using Custom DNS in AWS
+
+
+Google Cloud Platform
+
+Creating a Google Cloud Platform Project
+Configuring Tools for Your Google Cloud Platform Account
+Creating a Google Compute Engine VM Instance
+Installing Altus Director Server and Client on Google Compute Engine
+Configuring a SOCKS Proxy for Google Compute Engine
+Deploying Cloudera Manager and CDH on Google Compute Engine
+Cleaning Up Your Google Cloud Platform Deployment
+
+
+Microsoft Azure
+
+Obtaining Credentials for Altus Director
+Setting up Azure Resources
+Setting Up Dynamic DNS on Azure
+Setting Up MySQL or PostgreSQL
+Setting Up a Virtual Machine for Altus Director Server
+Installing Altus Director Server and Client on Azure
+Configuring a SOCKS Proxy for Microsoft Azure
+Allowing Access to VM Images
+Adding an Altus Director Environment on Azure
+Simple Setup: Creating an Azure Cluster with Default Settings
+Advanced Setup: Installing Cloudera Manager and CDH on Azure
+Terminating an Azure Deployment
+Adding New VM Images, Custom VM Images, Regions, and Instances
+Important Notes About Altus Director and Azure
+
+
+
+
+Usage-Based Billing
+
+Usage Bundles
+
+
+Using Cloud Provider Regions
+
+Running Altus Director and Cloudera Manager in Different Regions or Clouds
+Using a New AWS Region in Altus Director
+
+
+Configuring Storage for Altus Director
+
+Using MySQL for Altus Director Server
+Using MariaDB for Altus Director Server
+Altus Director Database Encryption
+Migrating the Altus Director Database
+
+
+Configuring Storage for Cloudera Manager and CDH
+
+Using an External Database for Cloudera Manager and CDH
+
+Defining External Database Servers
+Defining External Databases
+Using the External Databases for Cloudera SDX
+
+
+Using Amazon S3 Object Storage
+
+
+Using EBS Volumes for Cloudera Manager and CDH
+Security, Encryption, and High Availability
+
+Enabling TLS with Altus Director
+SSH Host Key Retrieval and Verification
+Creating Kerberized Clusters With Altus Director
+Enabling Sentry Service Authorization
+Creating Highly Available Clusters With Altus Director
+Encrypted Configuration Properties
+
+
+Configuring and Running Altus Director
+
+Auto-Repair for Failed or Terminated Instances
+Deploying Java on Cluster Instances
+Setting Altus Director Properties
+Pausing Altus Director Instances
+Configuring Altus Director Server for LDAP and Active Directory
+Configuring Altus Director for a New AWS Instance Type
+Configuring Altus Director to Use Custom Tag Names on AWS
+
+
+Running Altus Director Behind a Proxy
+
+Configuring Cloudera Manager to Use a Proxy
+Configuring Other Software to Use a Proxy
+Configuring Altus Director to Use a Proxy
+Authenticating Proxies
+HTTPS Proxies
+
+
+Using Altus Director Server to Manage Cloudera Manager Instances
+
+Altus Director and Cloudera Manager Usage
+Setting Cloudera Manager Configurations
+Ports Used by Altus Director
+SSH Keys in Altus Director
+Creating AWS Identity and Access Management (IAM) Policies
+Using Custom Repositories with Cloudera Manager and CDH
+Cloudera Manager Health Information
+Opening Cloudera Manager
+Diagnostic Data Collection
+User Management
+
+
+Using Altus Director Server to Manage Cluster Instances
+
+The Altus Director Configuration File
+Submitting a Cluster Configuration File
+Exporting a Configuration File
+Deploying Clusters in an Existing Environment
+Using Spot Instances
+Using Automatic Instance Groups
+Using Products outside CDH with Altus Director
+
+Custom Service Descriptors
+Using Kudu with CDH 5.12 or Earlier
+Using Spark 2 with Altus Director
+Using Cloudera Data Science Workbench with Altus Director
+Using Third-Party Products with Altus Director
+
+
+Creating and Modifying Clusters with the Altus Director Web UI
+Altus Director Scripts
+Terminating a Cluster
+
+
+Using the Altus Director Client
+
+Installing Altus Director Client
+Provisioning a Cluster on AWS
+Running Altus Director Client
+
+
+Upgrading Altus Director
+Troubleshooting
+FAQ
+Altus Director Glossary
+
+
+
+
+
+To read this documentation, you must turn JavaScript on.
+
+
+
+
+Running Altus Director Behind a Proxy
+
+Altus Director expects access to a variety of resources that are normally accessible on the internet, such as operating system package repositories and Cloudera's own software
+repositories. For a stronger security posture, you might want to restrict outbound access from your cloud networks to the internet, but doing so can prevent Altus Director from doing its job. The
+instructions in this section describe how to use Altus Director version 6.1 or later when it is running in a network that requires use of a proxy to access the internet.
+There are three focus areas for proxy configuration when using Altus Director:
+
+
+Cloudera Manager (and by extension, clusters)
+Other software used by either Altus Director or Cloudera Manager
+Altus Director itself
+
+
+In the simplest scenarios, all of these components use the same proxy or load-balanced set of proxies. This section covers those scenarios. If necessary, it is possible to have different
+proxies set up for different components.
+In these instructions, it is assumed that:
+
+
+The proxy host has a resolvable hostname of proxyhost.example.com.
+The proxy port is 3128, the default for Squid. Any port is acceptable.
+The proxy does not require authorization. For more information, see Authenticating Proxies.
+The proxy listens over plain HTTP and not HTTPS. For more information, see HTTPS Proxies.
+
+
+The diagram below shows one possible architecture where proxy use is necessary for Altus Director, Cloudera Manager, and clusters to reach the internet. In this case, all of the
+components run in a private subnet without internet access, but with the ability to reach a single proxy running in a separate, accessible public subnet.
+
+
+
+The instructions provided cover use of Altus Director version 6.1 or later with Cloudera Enterprise 6.
+
+
+Configuring Cloudera Manager to Use a Proxy
+
+The following topic describes considerations for configuring Cloudera Manager to use a proxy.
+
+
+Parcel Proxy Configuration Settings
+
+Altus Director can configure Cloudera Manager to function properly behind a proxy, by setting the relevant configuration properties for the Cloudera Manager server
+component.
+
+
+parcel_proxy_server. Hostname or IP address of the proxy server.
+parcel_proxy_port. Port number for the proxy server.
+parcel_proxy_user. Username for authenticating to the proxy. Omit if the proxy does not authenticate.
+parcel_proxy_password. Password for authenticating to the proxy. Omit if the proxy does not authenticate.
+parcel_proxy_protocol. Network protocol used by the proxy. Set the value to HTTP (default) or HTTPS.
+
+
+The following text is an example of specifying some of these properties through an Altus Director client configuration file:
+
+cloudera-manager {
+    ...
+    configs {
+        CLOUDERA_MANAGER {
+            custom_banner_html: "My Cloudera Manager"
+            parcel_proxy_server: proxyhost.example.com
+            parcel_proxy_port: 3128
+        }
+    }
+    ...
+}
+
+
+
+Key Bundle File Access
+
+Cloudera Manager 6.0 introduced the concept of a "key bundle file" for the Cloudera Manager repository. A key bundle file is a concatenated list of signing keys for Cloudera software
+packages. It is used during the process of installing Cloudera Manager components, including the Cloudera Manager agent. Unfortunately, in Cloudera Manager 6.0.x, the scripts for installing the agent
+on cluster instances cannot download a key bundle file from the internet through a proxy.
+To accommodate this issue, it is necessary to include, in an Altus Director deployment template, a URL for the key bundle file that is accessible without use of a proxy. For this
+purpose, Altus Director 6.1 introduces a new field in the deployment template, called "repositoryKeyBundleUrl," along with the existing fields for the Cloudera Manager repository URL and repository
+key URL.
+The text below is an example of the use of these fields in a client configuration file to install Cloudera Manager 6.0.0. Normally, the file is retrieved from archive.cloudera.com, but
+since access to the internet must be through a proxy, a local copy is referenced instead.
+
+cloudera-manager {
+    ...
+    repository: "https://archive.cloudera.com/cm6/6.0.0/redhat7/yum/"
+    repositoryKeyUrl: "https://archive.cloudera.com/cm6/6.0.0/redhat7/yum/RPM-GPG-KEY-cloudera"
+    # retrieve original file at https://archive.cloudera.com/cm6/6.0.0/allkeys.asc
+    repositoryKeyBundleUrl: "http://private-ip:8080/allkeys.asc"
+    ...
+}
+
+Cloudera Manager version 6.1 or higher is able to download the key bundle file through the proxy configured for Cloudera Manager itself, as long as the proxy uses HTTP and does not
+authenticate. In this case, special handling and configuration of the key bundle URL is no longer required. To clarify:
+
+
+Does the proxy use HTTP? If no, specify a key bundle URL. Otherwise:
+Does the proxy require authentication? If yes, specify a key bundle URL. Otherwise:
+What version of Cloudera Manager is in use?
+
+6.0.x: Specify a key bundle URL.
+6.1.0 or higher: It is not necessary to specify a key bundle URL.
+
+
+
+
+Future releases of Cloudera Manager may improve support for access to the key bundle file through a proxy, altering the decision process above.
+
+
+
+Enabling URL Validation for Cloudera Manager Agent Installation
+
+Another part of the scripting for installing the Cloudera Manager agent on cluster instances checks whether software repository URLs are reachable. Unfortunately, in Cloudera Manager
+versions 6.0, 6.1, and 6.2, this check does not work out of the box when running behind a proxy.
+For the validation to succeed, set the standard "http_proxy" and "https_proxy" environment variables on cluster instances, as described in the topic "Configuring Other Software to Use a
+Proxy."
+
+
+
+
+
+Configuring Other Software to Use a Proxy
+
+Both Altus Director and Cloudera Manager make use of typical system utilities like curl to work with network resources on cloud instances. So, the instances themselves need to be
+configured to work properly when running behind a proxy. An Altus Director bootstrap script is capable of performing the necessary configurations.
+The following script is an example script that runs as root for a Red Hat Enterprise Linux / CentOS 7.x system:
+
+#!/bin/bash
+
+PROXY_HOST=${PROXY_HOST:-proxyhost.example.com}
+PROXY_PORT=${PROXY_PORT:-3128}
+INTERNAL_TIME_SERVER=169.254.169.123 # Amazon Time Sync Service
+
+# Set up proxy for yum
+echo "proxy=http://${PROXY_HOST}:${PROXY_PORT}" >> /etc/yum.conf
+
+# Set up proxy for rpm
+echo "%_httpproxy http://${PROXY_HOST}:${PROXY_PORT}" >> /etc/rpm/macros
+
+# Set up proxy for pip if used later (e.g., for C6 Hue workaround)
+mkdir -p ~/.config/pip
+cat >> ~/.config/pip/pip.conf <<EOF
+[global]
+proxy = ${PROXY_HOST}:${PROXY_PORT}
+EOF
+
+# Set up proxy for curl and other utilities that don't have dedicated
+# configuration files
+cat >> /etc/profile.d/proxy.sh <<EOF
+export http_proxy=http://${PROXY_HOST}:${PROXY_PORT}
+export https_proxy=http://${PROXY_HOST}:${PROXY_PORT}
+EOF
+
+# Set up chronyd with the internal time server
+if ! grep -q "${INTERNAL_TIME_SERVER}" /etc/chrony.conf; then
+  echo "server ${INTERNAL_TIME_SERVER} prefer iburst" >> /etc/chrony.conf
+  systemctl restart chronyd.service
+fi
+
+Use a similar script for instances hosting Cloudera Manager and cluster services. Add configuration for other utilities that are used in your own environment.
+
+
+Guidelines for Configuring Other Software to Use a Proxy
+
+Use the following guidelines when you configure other software to use a proxy:
+
+The yum and rpm utilities are configured to use a proxy to access yum repositories.
+The pip utility is likewise configured to access Python software repositories.
+The standard "http_proxy" and "https_proxy" environment variables are defined for all system users to point to a proxy. These variables cover a wide variety of system utilities.
+The chronyd time daemon is configured to use a time server that is available without needing internet access.
+
+In this case, since the instances run in EC2, the Amazon Time Sync Service IP address (169.254.169.123) is configured. This service is accessible even from private subnets in AWS.
+For instances running in Google Cloud, use the hostname metadata.google.internal.
+For VMs running in Microsoft Azure, a solution is to rely on the Azure VMICTimeSync provider exposed as a Precision Time Protocol (PTP) clock source on newer Linux distributions in
+Azure. See Time sync for Linux VMs in Azure for detailed instructions.
+
+
+
+
+
+
+
+
+Configuring Altus Director to Use a Proxy
+
+The following section describes considerations for configuring Altus Director to use a proxy.
+
+
+Screen Utility No Longer Required
+
+As of version 6.1, Altus Director has changed the mechanism that it uses to run background commands on cloud instances, such that the GNU screen utility is no longer required. The
+reliance on the screen utility was a significant problem to cope with when running behind a proxy, because the utility is usually not installed by default in stock operating system images. With Altus
+Director version 6.1 and later, the screen utility may be left out of the configuration.
+
+
+
+Setting Server Configuration Properties
+
+A family of Altus Director server configuration properties must be set so that Altus Director itself performs HTTP and HTTPS requests through a proxy. Set these properties in the
+server's application.properties file.
+
+
+
+
+Property name
+Description
+
+
+
+
+lp.proxy.http.host
+Hostname or IP address of the proxy server.
+
+
+lp.proxy.http.port
+Port number for the proxy server.
+
+
+lp.proxy.http.scheme
+Scheme for the proxy server. Default is "http".
+
+
+lp.proxy.http.username
+Username for authenticating to the proxy. Omit if the proxy does not authenticate.
+
+
+lp.proxy.http.password
+Password for authenticating to the proxy. Omit if the proxy does not authenticate.
+
+
+
+
+If the proxy uses NTLM authentication, then the following additional properties are also necessary.
+
+
+
+
+Property name
+Description
+
+
+
+
+lp.proxy.http.domain
+Domain of the proxy server.
+
+
+lp.proxy.http.workstation
+Workstation name to be passed to the proxy server in credentials.
+
+
+
+
+You can also fine-tune proxy interactions with additional properties.
+
+
+
+
+Property name
+Description
+
+
+
+
+lp.proxy.http.preemptiveBasicProxyAuth
+Set to true to preemptively send authentication information in each request sent through the proxy. Default is false.
+
+
+lp.proxy.http.proxyBypassHosts
+A comma-delimited list of hostnames and/or domain extensions whose accesses must bypass the proxy. Default is an empty list.
+
+
+
+
+
+
+
+Proxy Access for Remote Repository Queries
+
+Altus Director 6.0 introduced the internal use of the yum-related tool repoquery to interrogate remote package repositories. Unfortunately, the usage pattern that Altus Director employed
+with it does not work when behind a proxy. As of version 6.1, Altus Director has replaced this use of repoquery with an alternative Python script which heeds the standard "http_proxy" and
+"https_proxy" environment variables. Therefore, if those variables are set on the Directory instance in the manner described for other software in the section "Configuring Other Software to Use a
+Proxy," the package repository queries work properly.
+
+
+
+Passing archive.cloudera.com URLs for Host Install
+
+When bootstrapping a new cluster instance, Altus Director asks Cloudera Manager to perform "host install" for the new instance. This involves installing the Cloudera Manager agent on the
+instance and connecting it to the Cloudera Manager server. Under normal circumstances, when Altus Director arranges the arguments for the host install command, it does not specify the URLs for
+Cloudera Manager software components if the deployment template locates them on archive.cloudera.com. This is because Cloudera Manager already knows those URLs as defaults from when it itself was
+installed.
+However, this behavior can cause install failure when Cloudera Manager 6.0 is behind a proxy, because the scripting used by Cloudera Manager for agent installation, which runs on cloud
+instances, might not be able to download the key bundle file from archive.cloudera.com (see the topic "Key Bundle File Access"). The URL for the key bundle file is one of the URLs that Altus Director
+will not pass by default if it points to archive.cloudera.com. Therefore, to compel Altus Director to pass the repository URLs anyway, set the property lp.bootstrap.agents.passArchiveUrlsForHostInstall to true in the server's application.properties file.
+Cloudera Manager version 6.1 and later is capable of downloading the key bundle file from archive.cloudera.com when behind a non-authenticating HTTP proxy. In that case it is not
+necessary to configure Altus Director to pass archive.cloudera.com URLs.
+
+
+
+Disabling URL Validation (Optional)
+
+Sometimes Altus Director runs in a separate network or subnet from the instances where Cloudera Manager and clusters run, and has different access to network resources. This can cause
+Altus Director to fail to validate deployment templates which use URLs that are accessible from where Cloudera Manager and clusters reside, but that are not accessible from where Altus Director
+resides. For example, the key bundle file may be hosted on a web resource that is not visible from Altus Director.
+If necessary, it is possible to disable Altus Director's URL validation by setting the property lp.validation.validateUrls to false in the server's
+application.properties file. This does make validation less comprehensive, however, so only change this setting if validation will not work otherwise.
+
+
+
+
+Authenticating Proxies
+
+The instructions above do not cover working with a proxy that requires username / password authentication. To use such a proxy, modify the instructions as shown below.
+
+
+Pass the parcel_proxy_user and parcel_proxy_password configuration properties to Cloudera Manager.
+Set the lp.proxy.http.username and lp.proxy.http.password Altus Director configuration properties. Also set the
+`lp.proxy.http.domain` and `lp.proxy.http.workstation` configuration properties if required for authentication by the proxy.
+Even under Cloudera Manager 6.1, be sure to host the key bundle file in a manner that does not require use of the proxy. Cloudera Manager cannot authenticate to it for access to the
+file.
+Include the proxy username and password in the bootstrap script as needed. The configuration below shows a partial example:
+echo "proxy=http://${PROXY_HOST}:${PROXY_PORT}" >> /etc/yum.conf
+echo "proxy_username=${PROXY_USERNAME}" >> /etc/yum.conf
+echo "proxy_password=${PROXY_PASSWORD}" >> /etc/yum.conf
+
+echo "%_httpproxy http://${PROXY_USERNAME}:${PROXY_PASSWORD}@${PROXY_HOST}:${PROXY_PORT}" >> /etc/rpm/macros
+
+mkdir -p ~/.config/pip
+cat >> ~/.config/pip/pip.conf <<EOF
+[global]
+proxy = ${PROXY_USERNAME}:${PROXY_PASSWORD}@${PROXY_HOST}:${PROXY_PORT}
+EOF
+
+cat >> /etc/profile.d/proxy.sh <<EOF
+export http_proxy=http://${PROXY_USERNAME}:${PROXY_PASSWORD}@${PROXY_HOST}:${PROXY_PORT}
+export https_proxy=http://${PROXY_USERNAME}:${PROXY_PASSWORD}@${PROXY_HOST}:${PROXY_PORT}
+EOF
+
+
+
+
+
+
+HTTPS Proxies
+
+The instructions above do not cover working with a proxy that listens over HTTPS instead of HTTP. To use such a proxy, modify the instructions as shown below.
+
+
+Pass the parcel_proxy_protocol configuration property (set to "HTTPS") to Cloudera Manager.
+Even under Cloudera Manager 6.1, be sure to host the key bundle file in a manner that does not require use of the proxy. Cloudera Manager cannot use an HTTPS proxy for access to the
+file.
+Modify proxy URLs throughout the remainder of the instructions to use "https" instead of "http."
+If necessary, configure the proxy's server certificate, or that of one of its signers, so that proxy callers can trust the proxy and successfully connect to it.
+
+
+These modifications have not been thoroughly vetted by Cloudera and may be corrected or improved in the future.
+
+
+
+Categories: Altus | Director | cloud | All Categories
+
+
+
+Configuring Altus Director to Use Custom Tag Names on AWS
+
+
+Using Altus Director Server to Manage Cloudera Manager
+Instances
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+About Cloudera
+Resources
+Contact
+Careers
+Press
+Documentation
+
+United States: +1 888 789 1488
+Outside the US: +1 650 362 0488
+
+
+
+© 2019 Cloudera, Inc. All rights reserved. Apache Hadoop and associated open source project names are trademarks of the Apache Software Foundation. For a complete list of trademarks, click here.
+If this documentation includes code, including but not limited to, code examples, Cloudera makes this available to you under the terms of the Apache License, Version 2.0, including any required
+notices. A copy of the Apache License Version 2.0 can be found here.
+
+
+
+
+
+
+
+
+
+
+Terms & Conditions  |  Privacy Policy
+
+Page generated July 28, 2019.
+
+
+
+
+
+
+
+
+
+
+
+

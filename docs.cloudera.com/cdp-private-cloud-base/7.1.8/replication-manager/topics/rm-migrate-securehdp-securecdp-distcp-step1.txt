@@ -1,0 +1,108 @@
+Configuration changes on HDP cluster and CDP Private Cloud Base clusterCloudera Docs
+Configuration changes on HDP cluster and CDP Private Cloud Base
+        cluster
+You must make some configuration changes on the HDP cluster and CDP Private Cloud Base cluster before you migrate the data from the
+        HDP cluster to a CDP Private Cloud Base cluster.
+
+On the HDP cluster, open the core-site.xml file, enter the
+                    following properties, and save the file:
+
+<property>
+    <name>hadoop.security.auth_to_local</name>
+    <value><RM mapping rules for HDP></value>
+    <value><RM mapping rules for CDH></value>
+    <description>Maps kerberos principals to local user names</description>
+</property>
+
+
+
+On the HDP cluster, open the hdfs-site.xml file, enter the
+                    following property, and save the file:
+
+<property>
+  <name>dfs.namenode.kerberos.principal.pattern</name>
+  <value>*</value>
+</property>
+
+
+
+Perform the above steps on the CDP Private Cloud Base cluster.
+
+Create a common Kerberos principal name on both the clusters.
+
+Assign the created Kerberos principal name to all the applicable NameNodes in
+                    the source and destination clusters.
+
+To ensure that the same ResourceManager mapping rules are used in both the
+                    clusters, update the ResourceManager mapping rules as shown below on both the
+                    clusters:
+
+<property>
+    <name>hadoop.security.auth_to_local</name>
+    <value>
+      <HDP mapping rules>
+      <CDH mapping rules>
+      DEFAULT
+    </value>
+</property>
+
+
+
+Configure a one-way or two-way trust between the clusters.
+To set a two-way trust between the HDP cluster and CDP Private Cloud Base cluster, perform the following
+                    steps:
+
+
+Create clusters that belong to different Kerberos realms.
+For example, assume that you have Realm: “DRT”
+                            for the target cluster and Realm: “DRS” for the
+                            source cluster.
+
+
+Set up /etc/krb5.conf on all the hosts for both
+                            the source and target hosts:
+
+
+[realms] section - Add both the
+                                    DRS and DRT realms, DRS from the source cluster's Kerberos KDC,
+                                    admin_server, and default_domain settings.
+[domain_realm] section - Add
+                                    all the hosts of both source and target clusters.
+Add krbtgt/DRS@DRT principal on
+                                    both the source and target hosts that have HDFS NameNode role.
+                                    To accomplish this task, perform the following
+                                    steps:$ sudo kadmin.local
+kadmin.local: addprinc -pw cloudera krbtgt/DRS@DRT
+WARNING: no policy specified for krbtgt/DRS@DRT; defaulting to no policy
+Principal "krbtgt/DRS@DRT" created
+
+kadmin.local: listprincs
+
+
+
+
+
+In Cloudera Manager and Ambari, perform the following steps:
+
+
+Enable DRT as Trusted Kerberos Realm in source cluster
+                                    HDFS service's configuration.
+Enable DRS as Trusted Kerberos Realm (trusted_realm)
+                                    in target cluster's configuration along with the source host
+                                    name where HDFS NameNode role is present.
+Enable DRS as Trusted Kerberos Realm in target cluster
+                                    HDFS service's configuration.
+Access the remote HDFS endpoint to verify whether the
+                                    trust setup is successful. To access the remote HDFS endpoint,
+                                    run the following
+                                    commands:kinit krbtgt/DRS@DRT
+hadoop fs -ls hdfs://[***REMOTE HDFS ENDPOINT***]:8020/
+
+
+
+
+
+Configure the user to run YARN jobs on both the
+            clusters.
+
+Parent topic: Migrating data from secure HDP cluster to secure CDP Private Cloud Base cluster

@@ -1,0 +1,170 @@
+Using KLL Datasketch Algorithms in ImpalaCloudera Docs
+Using KLL Datasketch Algorithms in Impala
+You can use the stochastic streaming algorithm (KLL) that uses the percentile/quantile
+  functions to statistically analyze the approximate distribution of comparable data from a very
+  large stream.
+Use the ds_kll_quantiles() or its inverse functions the Probability Mass Function ds_kll_PMF()
+   and the Cumulative Distribution Function ds_kll_CDF() to obtain the analysis. Query results
+   produced by this KLL algorithm are approximate but within well defined error bounds.
+Data Types and File Formats
+KLL function currently supports only floats. If you sketch an int data the KLL function converts it into float.
+You can sketch data from any file formats. However it is recommended to save the sketches into
+    parquet tables. It is not recommended to save the sketches to text format.
+
+Using KLL Sketches
+This datasketch algorithm works in two phases.
+
+First it creates a sketch from the dataset provided for the algorithm.
+As the second step in the process you can read the estimate from the sketch.
+
+Using this approach you can create granular sketches for a specific dataset
+    (e.g. one sketch per partition) and later use them to provide answers for different quantile
+    queries without reading the actual data as they can also be merged together. Using KLL you can
+    create sketches by Hive and read it with Impala for getting the estimate and vice versa.
+Creating a sketch
+The following example shows how to create a sketch using the ds_kll_sketch function from a
+    column (float_col) containing the supported data type. This created sketch is a data structure
+    containing an approximate calculation of some facet of the data and which are compatible
+    regardless of which system reads or writes them.
+select ds_kll_sketch(float_col) from tableName;
+where ds_kll_sketch() is an aggregate function that receives a float
+    parameter (e.g. a float column of a table) and returns a serialized Apache DataSketches KLL
+    sketch of the input data set wrapped into STRING type. Since the serialized data might contain
+    unsupported characters this query may error out. So another approach to this method is to insert
+    the derived sketch into a table or a view and later use for quantile approximations.
+Inserting the derived sketch into a table
+If you save the sketches to a table or view with the same granularity (e.g. one sketch for
+    each partition in a table) then later you can simply read the sketch for quantile approximation.
+insert into table_name select ds_kll_sketch(float_col) from tableName;
+Debugging the created sketch
+To troubleshoot the sketch created by the ds_kll_sketch function, use ds_kll_stringify on the
+    sketch. ds_kll_stringify() receives a string that is a serialized Apache DataSketches sketch and
+    returns its stringified format by invoking the related function on the sketch's interface.
+select ds_kll_stringify(ds_kll_sketch(float_col)) from tableName;
+
+    +-------------------------------------------+
+    | ds_kll_stringify(ds_kll_sketch(float_col))|
+    +-------------------------------------------+
+    | ### KLL sketch summary:                   |
+    |    K                     : 200            |
+    |    min K                 : 200            |
+    |    M                     : 8              |
+    |    N                     : 100            |
+    |    Epsilon               : 1.33%          |
+    |    Epsilon PMF           : 1.65%          |
+    |    Empty                 : false          |
+    |    Estimation mode       : false          |
+    |    Levels                : 1              |
+    |    Sorted                : false          |
+    |    Capacity items        : 200            |
+    |    Retained items        : 100            |
+    |    Storage bytes         : 432            |
+    |    Min value             : 0              |
+    |    Max value             : 9              |
+    | ### End sketch summary                    |
+    +-------------------------------------------+
+   
+Determining the number of datasets sketched
+To determine the number of records sketched into this sketch, use ds_kll_n function.
+select ds_kll_n(ds_kll_sketch(float_col)) from tableName;
+
+    +------------------------------------+
+    | ds_kll_n(ds_kll_sketch(float_col)) |
+    +------------------------------------+
+    | 100                                |
+    +------------------------------------+  
+   
+
+Calculate Quantile
+This function ds_kll_quantile() function receives two parameters, a STRING parameter that
+    contains a serialized KLL sketch and a DOUBLE (0.5) that represents the rank of the quantile in
+    the range of [0,1]. E.g. rank=0.5 means the approximate median of all the sketched data.
+
+    +------------------------------------------------+
+    | ds_kll_quantile(ds_kll_sketch(float_col), 0.5) |
+    +------------------------------------------------+
+    | 4.0                                            |
+    +------------------------------------------------+
+   
+This query returns a data (4.0) that is bigger than the 50% of the data.
+Calculating quantiles
+To calculate the quantiles for multiple rank parameters, use the function
+    ds_kll_quantiles_as_string () that is very similar to ds_kll_quantile() but this function receives
+    any number of rank parameters and returns a comma separated string that holds the results for
+    all of the given ranks.
+
+    select ds_kll_quantiles_as_string(ds_kll_sketch(float_col), 0.5, 0.6, 1) from tableName;
+   
+
+    +-------------------------------------------------------------------+
+    | ds_kll_quantiles_as_string(ds_kll_sketch(float_col), 0.5, 0.6, 1) |
+    +-------------------------------------------------------------------+
+    | 4, 5, 9                                                           |
+    +-------------------------------------------------------------------+
+   
+
+Calculate Rank
+This rank function ds_kll_rank() receives two parameters, a STRING that represents a serialized
+    DataSketches KLL sketch and a float to provide a probing value in the sketch.
+
+    select ds_kll_rank(ds_kll_sketch(float_col), 4) from tableName;
+   
+
+    +------------------------------------------------+
+    | ds_kll_rank(ds_kll_sketch(float_col), 4)       |
+    +------------------------------------------------+
+    | 0.48                                           |
+    +------------------------------------------------+
+   
+This query returns a DOUBLE that is the rank of the given probing value in the range of [0,1].
+    E.g. a return value of 0.48 means that the probing value given as parameter is greater than
+    48% of all the values in the sketch. 
+noteThis is only an approximate calculation.
+
+Calculate Probability Mass Function (PMF)
+This Probabilistic Mass Function (PMF) ds_kll_pmf_as_string()receives a
+    serialized KLL sketch and one or more float values to represent ranges in the sketched values.
+    In the following example, the float values [1, 3, 4, 8] represent the following ranges: (-inf, 1),
+    [1, 3), [3, 4), [4, 8) [8, +inf)
+noteThe input values for the ranges have to be unique and monotonically increasing.
+select ds_kll_pmf_as_string(ds_kll_sketch(float_col), 1, 3, 4, 8) from tableName
+
+    +------------------------------------------------------------+
+    | ds_kll_pmf_as_string(ds_kll_sketch(float_col), 1, 3, 4, 8) |
+    +------------------------------------------------------------+
+    | 0.12, 0.24, 0.12, 0.36, 0.16                               |
+    +------------------------------------------------------------+
+   
+This query returns a comma separated string where each value in the string is a number in the
+    range of [0,1] and shows what percentage of the data is in the particular ranges.
+
+Calculate Cumulative Distribution Function (CDF)
+This Cumulative Distribution Function (CDF) ds_kll_cmf_as_string()receives a
+    serialized KLL sketch and one or more float values to represent ranges in the sketched values.
+    In the following example, the float values [1, 3, 4, 8] represents the following ranges: (-inf,
+    1), (-inf, 3), (-inf, 4), (-inf, 8), (-inf, +inf)
+noteThe input values for the ranges have to be unique and monotonically increasing.
+select ds_kll_cdf_as_string(ds_kll_sketch(float_col), 1, 3, 4, 8) from tableName;
+
+    +------------------------------------------------------------+
+    | ds_kll_cdf_as_string(ds_kll_sketch(float_col), 1, 3, 4, 8) |
+    +------------------------------------------------------------+
+    | 0.12, 0.36, 0.48, 0.84, 1                                  |
+    +------------------------------------------------------------+
+   
+This query returns a comma separated string where each value in the string is a
+    number in the range of [0,1] and shows what percentage of the data is in the particular ranges.
+   
+
+Calculate the Union
+To take advantage of the UNION function, create granular sketches for a specific dataset (one
+    sketch per partition), write these sketches to a separate table and based on the partition you
+    are interested in, you can UNION the relevant sketches together to get an estimate.
+insert into sketch_tbl select ds_kll_sketch(float_col) from tableName;
+select ds_kll_quantile(ds_kll_union(sketch_col), 0.5) from sketch_tbl
+    where partition_col=1 OR partition_col=5;
+   
+This function ds_kll_union() receives a set of serialized Apache DataSketches KLL sketches
+    produced by ds_kll_sketch() and merges them into a single sketch.
+
+

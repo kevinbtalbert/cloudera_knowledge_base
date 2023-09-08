@@ -1,0 +1,654 @@
+DECIMAL data typeCloudera Docs
+DECIMAL data type
+The DECIMAL data type is a numeric data type with fixed scale and
+    precision. The data type is useful for storing and doing operations on precise decimal
+    values.
+Syntax:DECIMAL[(precision[, scale])]
+Precision:
+
+precision represents the total number of digits that can be represented
+      regardless of the location of the decimal point.
+    
+      This value must be between 1 and 38, specified as an integer literal.
+    
+      The default precision is 9.
+    
+Scale:
+
+scale represents the number of fractional digits.
+    
+      This value must be less than or equal to the precision, specified as an integer literal.
+    
+      The default scale is 0.
+    
+      When the precision and the scale are omitted, a DECIMAL is treated as
+      DECIMAL(9, 0).
+    
+Range:
+
+      The range of DECIMAL type is -10^38 +1 through 10^38 –1.
+    
+      The largest value is represented by DECIMAL(38, 0).
+    
+      The most precise fractional value (between 0 and 1, or 0 and -1) is represented by
+      DECIMAL(38, 38), with 38 digits to the right of the decimal point. The
+      value closest to 0 would be .0000...1 (37 zeros and the final 1). The value closest to 1
+      would be .999... (9 repeated 38 times).
+    
+Memory and disk storage:
+
+      Only the precision determines the storage size for DECIMAL values, and
+      the scale setting has no effect on the storage size. The following table describes the
+      in-memory storage once the values are loaded into memory.
+    
+
+
+Precision
+In-memory storage
+
+
+
+1 - 9
+4 bytes
+
+
+10 - 18
+8 bytes
+
+
+19 - 38
+10 bytes
+
+
+      The on-disk representation varies depending on the file format of the table.
+    
+      Text, RCFile, and SequenceFile tables use ASCII-based formats as below:
+    
+
+
+          Leading zeros are not stored.
+        
+
+          Trailing zeros are stored.
+        
+
+
+            Each DECIMAL value takes up as many bytes as the precision of the
+            value, plus:
+          
+
+
+              One extra byte if the decimal point is present.
+            
+
+              One extra byte for negative values.
+            
+
+
+
+
+      Parquet and Avro tables use binary formats and offer more compact storage for
+      DECIMAL values. In these tables, Impala stores each value in fewer bytes
+      where possible depending on the precision specified for the DECIMAL
+      column. To conserve space in large tables, use the smallest-precision
+      DECIMAL type.
+    
+Precision and scale in arithmetic operations:
+
+      For all arithmetic operations, the resulting precision is at most 38.
+    
+      If the resulting precision would be greater than 38, Impala truncates the result from the
+      back, but keeps at least 6 fractional digits in scale and rounds.
+    
+      For example, DECIMAL(38, 20) * DECIMAL(38, 20) returns
+      DECIMAL(38, 6). According to the table below, the resulting precision and
+      scale would be (77, 40), but they are higher than the maximum precision
+      and scale for DECIMAL. So, Impala sets the precision to the maximum
+      allowed 38, and truncates the scale to 6.
+    
+      When you use DECIMAL values in arithmetic operations, the precision and
+      scale of the result value are determined as follows. For better readability, the following
+      terms are used in the table below:
+      
+
+
+            P1, P2: Input precisions
+          
+
+
+
+            S1, S2: Input scales
+          
+
+
+
+            L1, L2: Leading digits in input DECIMALs, i.e., L1 = P1 - S1 and L2
+            = P2 - S2
+          
+
+
+
+
+
+ Operation 
+ Resulting precision 
+ Resulting scale 
+
+
+
+
+                Addition and Subtraction
+              
+
+
+                  max (L1, L2) + max (S1, S2) + 1
+                
+
+                  1 is for carry-over.
+                
+
+
+                max (S1, S2)
+              
+
+
+
+                Multiplication
+              
+
+                P1 + P2 + 1
+              
+
+                S1 + S2
+              
+
+
+
+                Division
+              
+
+                L1 + S2 + max (S1 + P2 + 1, 6)
+              
+
+                max (S1 + P2 + 1, 6)
+              
+
+
+ Modulo
+
+                min (L1, L2) + max (S1, S2)
+              
+
+                max (S1, S2)
+              
+
+
+
+Precision and scale in functions:
+
+      When you use DECIMAL values in built-in functions, the precision and
+      scale of the result value are determined as follows:
+      
+
+          The result of the SUM aggregate function on a
+          DECIMAL value is:
+          
+
+
+                Precision: 38
+              
+
+
+
+                Scale: The same scale as the input column
+              
+
+
+
+
+
+            The result of AVG aggregate function on a DECIMAL
+            value is:
+          
+
+
+
+                Precision: 38
+              
+
+
+
+                Scale: max(Scale of input column, 6)
+              
+
+
+
+
+
+Implicit conversions in DECIMAL assignments:
+
+      Impala enforces strict conversion rules in decimal assignments like in
+      INSERT and UNION statements, or in functions like
+      COALESCE.
+    
+      If there is not enough precision and scale in the destination, Impala fails with an error.
+    
+      Impala performs implicit conversions between DECIMAL and other numeric
+      types as below:
+      
+
+DECIMAL is implicitly converted to DOUBLE or
+          FLOAT when necessary even with a loss of precision. It can be
+          necessary, for example when inserting a DECIMAL value into a
+          DOUBLE column. For example:
+CREATE TABLE flt(c FLOAT);
+INSERT INTO flt SELECT CAST(1e37 AS DECIMAL(38, 0));
+SELECT CAST(c AS DECIMAL(38, 0)) FROM flt;
+
+Result: 9999999933815812510711506376257961984
+
+            The result has a loss of information due to implicit casting. This is why we
+            discourage using the DOUBLE and FLOAT types in
+            general.
+          
+
+
+DOUBLE and FLOAT cannot be implicitly converted to
+          DECIMAL. An error is returned.
+        
+
+DECIMAL is implicitly converted to DECIMAL if all
+          digits fit in the resulting DECIMAL.
+          
+            For example, the following query returns an error because the resulting type that
+            guarantees that all digits fit cannot be determined .
+SELECT GREATEST (CAST(1 AS DECIMAL(38, 0)), CAST(2 AS DECIMAL(38, 37)));
+
+
+ Integer values can be implicitly converted to DECIMAL when there is
+            enough room in the DECIMAL to guarantee that all digits fit. The
+            integer types require the following numbers of digits to the left of the decimal point
+            when converted to DECIMAL: 
+
+
+BIGINT: 19 digits 
+
+
+
+INT: 10 digits 
+
+
+
+SMALLINT: 5 digits 
+
+
+
+TINYINT: 3 digits 
+
+ For example:
+CREATE TABLE decimals_10_8 (x DECIMAL(10, 8));
+INSERT INTO decimals_10_8 VALUES (CAST(1 AS TINYINT));
+
+ The above INSERT statement fails because TINYINT
+              requires room for 3 digits to the left of the decimal point in the
+                DECIMAL. 
+
+CREATE TABLE decimals_11_8(x DECIMAL(11, 8));
+INSERT INTO decimals_11_8 VALUES (CAST(1 AS TINYINT));
+
+ The above INSERT statement succeeds because there is enough room
+              for 3 digits to the left of the decimal point that TINYINT requires.
+            
+
+
+
+      In UNION, the resulting precision and scales are determined as follows.
+      
+
+          Precision: max (L1, L2) + max (S1, S2)
+          
+            If the resulting type does not fit in the DECIMAL type, an error is
+            returned. See the first example below.
+          
+
+
+          Scale: max (S1, S2)
+        
+
+
+      Examples for UNION:
+      
+
+DECIMAL(20, 0) UNION DECIMAL(20, 20) would require a
+          DECIMAL(40, 20) to fit all the digits. Since this is larger than the
+          max precision for DECIMAL, Impala returns an error. One way to fix
+          the error is to cast both operands to the desired type, for example
+          DECIMAL(38, 18).
+        
+
+
+DECIMAL(20, 2) UNION DECIMAL(8, 6) returns DECIMAL(24,
+            6).
+          
+
+
+
+INT UNION DECIMAL(9, 4) returns DECIMAL(14, 4).
+          
+
+INT has the precision 10 and the scale 0, so it is treated as
+            DECIMAL(10, 0) UNION DECIMAL(9. 4).
+          
+
+
+
+Casting between DECIMAL and other data types:
+
+      To avoid potential conversion errors, use CAST to explicitly convert
+      between DECIMAL and other types in decimal assignments like in
+      INSERT and UNION statements, or in functions like
+      COALESCE:
+      
+
+
+            You can cast the following types to DECIMAL:
+            FLOAT, TINYINT, SMALLINT,
+            INT, BIGINT, STRING
+
+
+
+
+            You can cast DECIMAL to the following types:
+            FLOAT, TINYINT, SMALLINT,
+            INT, BIGINT, STRING,
+            BOOLEAN, TIMESTAMP
+
+
+
+
+      Impala performs CAST between DECIMAL and other numeric
+      types as below:
+      
+
+
+            Precision: If you cast a value with bigger precision than the precision of the
+            destination type, Impala returns an error. For example, CAST(123456 AS
+            DECIMAL(3,0)) returns an error because all digits do not fit into
+            DECIMAL(3, 0)
+
+
+
+
+            Scale: If you cast a value with more fractional digits than the scale of the
+            destination type, the fractional digits are rounded. For example, CAST(1.239
+            AS DECIMAL(3, 2)) returns 1.24.
+          
+
+
+
+Casting STRING to DECIMAL:
+
+      You can cast STRING of numeric characters in columns, literals, or
+      expressions to DECIMAL as long as number fits within the specified target
+      DECIMAL type without overflow.
+      
+
+
+            If scale in STRING > scale in DECIMAL, the
+            fractional digits are rounded to the DECIMAL scale.
+          
+
+            For example, CAST('98.678912' AS DECIMAL(15, 1)) returns
+            98.7.
+          
+
+
+
+            If # leading digits in STRING > # leading digits in
+            DECIMAL, an error is returned.
+          
+
+            For example, CAST('123.45' AS DECIMAL(2, 2)) returns an error.
+          
+
+
+
+      Exponential notation is supported when casting from STRING.
+    
+      For example, CAST('1.0e6' AS DECIMAL(32, 0)) returns
+      1000000.
+    
+      Casting any non-numeric value, such as 'ABC' to the
+      DECIMAL type returns an error.
+    
+Casting DECIMAL to TIMESTAMP:
+
+      Casting a DECIMAL value N to TIMESTAMP produces a value
+      that is N seconds past the start of the epoch date (January 1, 1970).
+    
+DECIMAL vs FLOAT consideration:
+
+      The FLOAT and DOUBLE types can cause problems or
+      unexpected behavior due to inability to precisely represent certain fractional values, for
+      example dollar and cents values for currency. You might find output values slightly
+      different than you inserted, equality tests that do not match precisely, or unexpected
+      values for GROUP BY columns. The DECIMAL type can help
+      reduce unexpected behavior and rounding errors, but at the expense of some performance
+      overhead for assignments and comparisons.
+    
+Literals and expressions:
+
+
+
+
+            Numeric literals without a decimal point
+          
+
+
+              The literals are treated as the smallest integer that would fit the literal. For
+              example, 111 is a TINYINT, and
+              1111 is a SMALLINT.
+            
+
+              Large literals that do not fit into any integer type are treated as
+              DECIMAL.
+            
+
+              The literals too large to fit into a DECIMAL(38, 0) are treated
+              as DOUBLE.
+            
+
+
+
+
+            Numeric literals with a decimal point
+          
+
+
+              The literal with less than 38 digits are treated as DECIMAL.
+            
+
+              The literals with 38 or more digits are treated as a DOUBLE.
+            
+
+
+
+          Exponential notation is supported in DECIMAL literals.
+        
+
+
+            To represent a very large or precise DECIMAL value as a literal,
+            for example one that contains more digits than can be represented by a
+            BIGINT literal, use a quoted string or a floating-point value for
+            the number and CAST the string to the desired
+            DECIMAL type.
+          
+
+            For example: CAST('999999999999999999999999999999' AS DECIMAL(38,
+            5)))
+
+
+
+
+File format considerations:
+
+      The DECIMAL data type can be stored in any of the file formats supported
+      by Impala:
+      
+
+
+            Impala can query Avro, RCFile, or SequenceFile tables that contain
+            DECIMAL columns, created by other Hadoop components.
+          
+
+
+ Impala can query and insert into Kudu tables that contain
+                DECIMAL columns. Kudu supports the DECIMAL type. 
+
+
+
+            The DECIMAL data type is fully compatible with HBase tables.
+          
+
+
+
+            The DECIMAL data type is fully compatible with Parquet tables.
+          
+
+
+
+            Values of the DECIMAL data type are potentially larger in text
+            tables than in tables using Parquet or other binary formats.
+          
+
+
+
+UDF consideration:
+
+      When writing a C++ UDF, use the DecimalVal data type defined in
+      /usr/include/impala_udf/udf.h.
+    
+Changing precision and scale:
+
+      You can issue an ALTER TABLE ... REPLACE COLUMNS statement to change the
+      precision and scale of an existing DECIMAL column.
+      
+
+
+            For text-based formats (text, RCFile, and SequenceFile tables)
+          
+
+
+
+                If the values in the column fit within the new precision and scale, they are
+                returned correctly by a query.
+              
+
+
+
+                If any values that do not fit within the new precision and scale:
+                
+
+                    Impala returns an error if the query option ABORT_ON_ERROR
+                    is set to true.
+                  
+
+                    Impala returns a NULL and warning that conversion failed if
+                    the query option ABORT_ON_ERROR is set to
+                    false.
+                  
+
+
+
+
+
+                Leading zeros do not count against the precision value, but trailing zeros after
+                the decimal point do.
+              
+
+
+
+
+
+            For binary formats (Parquet and Avro tables)
+          
+
+
+
+                Although an ALTER TABLE ... REPLACE COLUMNS statement that
+                changes the precision or scale of a DECIMAL column succeeds,
+                any subsequent attempt to query the changed column results in a fatal error.
+                This is because the metadata about the columns is stored in the data files
+                themselves, and ALTER TABLE does not actually make any updates
+                to the data files. The other unaltered columns can still be queried
+                successfully.
+              
+
+
+
+                If the metadata in the data files disagrees with the metadata in the metastore
+                database, Impala cancels the query.
+              
+
+
+
+
+
+Partitioning:Using a DECIMAL column as a partition key provides you a better match between
+        the partition key values and the HDFS directory names than using a DOUBLE
+        or FLOAT partitioning column. 
+Column statistics considerations:
+
+      Because the DECIMAL type has a fixed size, the maximum and average size
+      fields are always filled in for column statistics, even before you run the COMPUTE
+      STATS statement.
+    
+Compatibility with older version of DECIMAL:
+ This version of DECIMAL type is the default in Impala 3.0 and higher. In
+      Impala 2.12 and lower, decimal_v2=false. And in Impala 3.0 or higher, decimal_v2=true. The
+      key differences between this version of DECIMAL and the previous
+      DECIMAL V1 in Impala 2.x include the following:
+
+
+Property
+Impala 3.0 or higher
+Impala 2.12 or lower
+
+
+
+Overall behavior
+Returns either the result or an error.
+Returns either the result or NULL with a warning.
+
+
+Overflow behavior
+Aborts with an error.
+Issues a warning and returns NULL.
+
+
+Truncation / rounding behavior in arithmetic
+Truncates and rounds digits from the back.
+Truncates digits from the front.
+
+
+String cast
+Truncates from the back and rounds.
+Truncates from the back.
+
+
+      If you need to continue using the first version of the DECIMAL type for
+      the backward compatibility of your queries, set the DECIMAL_V2 query
+      option to FALSE:
+SET DECIMAL_V2=FALSE;
+
+Compatibility with other databases:
+
+      Use the DECIMAL data type in Impala for applications where you used the
+      NUMBER data type in Oracle.
+    
+      The Impala DECIMAL type does not support the Oracle idioms of
+      * for scale.
+    
+      The Impala DECIMAL type does not support negative values for precision.
+    
+Parent topic: Impala SQL data types

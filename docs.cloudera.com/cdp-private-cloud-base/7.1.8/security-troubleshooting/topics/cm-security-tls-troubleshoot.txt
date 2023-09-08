@@ -1,0 +1,97 @@
+Troubleshooting TLS/SSL Issues in Cloudera ManagerCloudera Docs
+Troubleshooting TLS/SSL Issues in Cloudera Manager
+To diagnose and resolve issues related to TLS/SSL configuration, verify configuration tasks
+      appropriate for the cluster by verifying the steps in "Manually Configuring TLS Encryption for
+      Cloudera Manager".After checking your settings and finding no obvious misconfiguration, try
+      some of the troubleshooting steps below.Test Connectivity with OpenSSL
+From the host that has connectivity issues, run openssl as shown below.
+        You can also check that the certificate used by the host is recognized by a trusted CA
+        during the TLS/SSL negotiation.
+To check the connection:
+openssl s_client -connect [host.fqdn.name]:[port]
+For example:
+openssl s_client -connect test1.sec.cloudera.com:7183
+A return code 0 means openssl was able to follow trust
+        server chain of trust through its library of trusted public CAs. 
+For certificates signed by your organization's internal CA or self-signed certificates, you
+        may need to add the certificate to the truststore using the openssl
+        command. Use the -CAfile option to specify the path to the root CA so
+          openssl can verify the self-signed or internal-CA-signed certificate as
+        follows:
+$ openssl s_client -connect test1.sec.cloudera.com:7183 -CAfile \
+/opt/cloudera/security/CAcerts/RootCA.pem
+Only the Root CA certificate is needed to establish trust for this test. The result from
+        the command is successful when you see the return code 0 as
+        follows:...
+ Verify return code: 0 (ok)
+---
+By default, Cloudera Manager Server writes logs to the
+          /etc/cloudera-scm-server/cloudera-scm-server.log file on startup.
+        Successful server start-up using the certificate looks similar to the following log
+        example:
+2014-10-06 21:33:47,515 INFO WebServerImpl:org.mortbay.log: jetty-6.1.26.cloudera.2
+2014-10-06 21:33:47,572 INFO WebServerImpl:org.mortbay.log: Started SslSelectChannelConnector@0.0.0.0:7183
+2014-10-06 21:33:47,573 INFO WebServerImpl:org.mortbay.log: Started SelectChannelConnector@0.0.0.0:7180
+2014-10-06 21:33:47,573 INFO WebServerImpl:com.cloudera.server.cmf.WebServerImpl: Started Jetty server.
+Upload Diagnostic Bundles to Cloudera Support
+By default, Cloudera Manager uploads diagnostic bundles over HTTPS to the Cloudera Support
+        server at cops.cloudera.com. However, the upload can fail if the Cloudera
+        Manager truststore cannot verify the authenticity of the Cloudera Support server
+        certificate, and that verification process can fail due to Cloudera Manager truststore
+        configuration issues.
+To ensure the Cloudera Manager Server truststore contains the public CAs needed to verify
+        Cloudera Support's certificate, you can explicitly establish trust by importing Cloudera Support's
+        certificate into Cloudera Manager's truststore (see "Importing Cloudera Support's Certificate into the Cloudera Manager Server Truststore". 
+noteCloudera Support servers use certificates signed by a commercial CA, so this
+        step is typically not needed, unless the default truststore has been altered. Before
+        downloading or adding any certificates, test the connection (see "Test Connectivity with OpenSSL") and verify that the certificate is the source of the connection
+        issue.
+
+Importing Cloudera Support's Certificate into the Cloudera Manager Server
+        Truststore
+To obtain Cloudera's public key certificate from the Cloudera Support server:
+openssl s_client -connect cops.cloudera.com:443 | openssl x509 -text -out /path/to/cloudera-cert.pem
+To import this certificate into the Cloudera Manager truststore (use paths for your own
+        system):
+keytool -import -keystore /path/to/cm/truststore.jks -file /path/to/cloudera-cert.pem
+After importing the certificate, confirm that Cloudera Manager is configured for this
+        truststore file, as detailed in "Configuring Cloudera Manager Truststore Properties".
+noteAlternatively, you can use the default Java truststore for your Cloudera
+        Manager cluster deployment, as described in "Manually Configuring TLS Encryption for
+        Cloudera Manager". 
+
+Configuring Cloudera Manager Truststore Properties
+After installing the Cloudera Support server certificate into the Cloudera Manager
+        truststore, you must configure Cloudera Manager to use the truststore, as follows:
+
+Log into the Cloudera Manager Admin Console.
+Select Administration > Settings.
+Click the Security category.
+Enter the path to the truststore and the password (if necessary):
+
+Setting
+Description
+
+
+
+Cloudera Manager TLS/SSL Certificate Trust Store File
+Enter the complete Cloudera Manager Server host filesystem path to the
+                    truststore (the trust .jks). Cloudera Manager Server invokes
+                    JVM with -Djavax.net.ssl.trustStore to access the specified
+                    truststore.
+
+
+Cloudera Manager TLS/SSL Certificate Trust Store Password
+Specify the password (if there is one) for the truststore file. Password is
+                    not required to access the truststore, so you can typically leave this field
+                    blank. Cloudera Manager Server invokes JVM with
+                      -Djavax.net.ssl.trustStore.password if this field has an
+                    entry.
+
+
+Click Save Changes to save the settings.
+
+noteSee Oracle's "JSSE Reference Guide" for more information about the JSSE trust
+        mechanism.
+Related informationConfiguring TLS Encryption for Cloudera Manager Using
+                            Auto-TLSJSSE Reference Guide

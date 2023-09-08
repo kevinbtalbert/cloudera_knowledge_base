@@ -1,0 +1,264 @@
+TLS Connections in CDP Private CloudCloudera Docs
+TLS Connections in CDP Private Cloud
+TLS is used to secure data in-flight in CDP Private Cloud.
+Network connections made in CDP Private Cloud fall into the following categories:
+   
+Traffic between the Control Plane or Data Services and end users: All endpoints exposed by CDP Private Cloud take the form of Kubernetes ingresses and must go through the Ingress Controller and Gateway. The Ingress Controller is configured with a TLS certificate and guarantees that the traffic must use HTTPS, while the Gateway guarantees that the traffic must be authenticated.
+    
+Traffic between the Control Plane and Data Services: These two reside in separate Kubernetes namespaces and are treated as external to each other. As such, connections from Data Services to the Control Plane go through the Ingress Controller, guaranteeing the use of HTTPS.
+    
+Traffic between the Control Plane or Data Services and the Kubernetes API server: API calls to the Kubernetes API server always use HTTPS and are authenticated using the pod’s service account tokens, thus being subject to RBAC.
+    
+Traffic between the Control Plane or Data Services and the Base Cluster: The Base Cluster must have TLS enabled, meaning that all connections will be encrypted.
+
+
+The Control Plane has a network policy which prevents traffic from the outside from reaching inside it unless it goes through the Ingress Controller and Gateway. This effectively ensures that all traffic going into the Control Plane must be encrypted with TLS and authenticated.
+There is no analogous network policy for egress traffic, but all connections from the Control Plane and Data Services to the outside (such as pulling images from an external Docker registry) use TLS. CDP Private Cloud supports running in an air gap environment where connections to external networks are forbidden.
+Traffic within the same cluster and namespace is trusted, and is not currently encrypted.
+Base Cluster TLS Requirements
+The Base cluster must have TLS enabled, either using manual TLS configuration or Auto-TLS.
+The truststore configured in Cloudera Manager will be automatically imported into CDP Private Cloud during installation of the Control Plane, but afterwards can be managed separately from the Base Cluster’s truststore. This truststore is imported so that the Control Plane and workloads can trust TLS connections to the Base cluster.
+For the most seamless experience, ensure that this truststore trusts:
+    
+The Cloudera Manager server certificate
+The LDAP server certificate
+The Postgres database server certificate of all Hive Metastores that expect to be used with
+      Private Cloud
+
+
+Instead of specifying individual certificates, it is recommended to import a root CA
+    certificate that signed all of the above. CA certificates can be updated or rotated after
+    Control Plane installation.
+
+Unified Truststore
+After Control Plane installation, management of trusted CA certificates can be done from the Administration page of the Control Plane. The set of trusted CA certificates forms a “unified truststore” which is then propagated to workload clusters.
+The unified truststore contains certificates for:
+   
+Cloudera Manager and base cluster services
+Control Plane
+LDAP
+Control Plane Database
+Docker Registry (if external)
+Vault (if external)
+
+Again, it is not likely that separate certificates are required for each entry above. In most cases, an organization will only have one CA certificate signing the certificates for the above entities.
+   
+
+External Endpoints
+At the time of ECS installation, an ingress certificate and private key must be provided.
+    OpenShift-based Private Cloud installations use the OpenShift ingress certificate instead. This
+    ingress certificate is used as the TLS server certificate for the ingress controller that serves
+    the Control Plane and Data Services workload endpoints. It is recommended that the ingress
+    certificate be signed by the organization’s trusted Certificate Authority. The ingress
+    certificate must be a wildcard certificate of the format *.apps.<domain.com>
+    where “domain.com” is the domain of the ECS cluster.
+If an ingress certificate is not provided during ECS installation, a self-signed certificate will be generated. This is recommended only for Proof-of-Concept (PoC) installations.
+CDW and CDE workload clusters will also use the ingress certificate for their exposed endpoints.
+CML workload clusters do not use the ingress certificate for their exposed endpoints. This is because CML requires multiple levels of subdomains underneath *.apps.<domain.com>, while the TLS standard prescribes that only a single level of subdomain be represented by a wildcard certificate. CML uses multiple levels of subdomains for isolation and web security.
+The following sections describe in detail the TLS endpoints of different Data Services.
+
+
+
+CDW
+
+Connections to Control Plane
+CDW workload clusters run in the same Kubernetes/Openshift cluster as the Control Plane, but in different namespaces. CDW workload clusters connect to Control Plane services (thunderhead-environment, thunderhead-usermanagement, thunderhead-kerberosmgmt-api, thunderhead-servicediscoverysimple, cluster-proxy) through the ingress controller, and are encrypted and authenticated.
+   
+Ingress Connections
+Openshift route / Kubernetes ingress names are given below. The example hostnames are given in
+    parentheses as if the cluster hostname was cluster.example.com. 
+
+Hive VW (example hostnames are given as if the Hive VW name was hive1)
+    
+hiveserver2-route / hiveserver2-ingress (hs2-hive1.apps.cluster.example.com)
+     
+hue-route / hue-ingress (hue-hive1.apps.cluster.example.com)
+das-route / das-ingress (hive1.apps.cluster.example.com; deprecated – disabled by
+       default in PvC 1.4.1)
+
+
+Impala VW (example hostnames are given as if the Impala VW name was impala1)
+    
+coordinator-debug-route / coordinator-debug-ingress (coordinator-web-impala1.apps.cluster.example.com)
+     
+hue-route / hue-ingress (hue-impala1.apps.cluster.example.com)
+impala-catalogd-route / catalogd-ingress
+        (catalogd-web-impala1.apps.cluster.example.com)
+impala-coordinator-route / coordinator-ingress
+        (coordinator-impala1.apps.cluster.example.com)
+statestored-route / statestored-ingress
+        (statestored-web-impala1.apps.cluster.example.com)
+
+
+DataViz (example hostname is given as if the DataViz instance name was dataviz1)
+     viz-webapp-route / viz-webapp-ingress (viz-dataviz1.apps.cluster.example.com)
+     
+
+
+All Openshift route definitions have the setting spec.tls.insecureEdgeTerminationPolicy: Redirect so that Openshift automatically redirects HTTP requests to HTTPS.
+    
+    ECS ingress definitions are set up to handle HTTPS traffic, but they handle HTTP traffic as well and there is no automatic redirection (unlike to Openshift).
+   
+
+Egress Connections
+
+Base cluster: Connection settings inherit the SSL configuration settings from the base cluster and will use CM’s truststore. You can specify additional certificates in the installation wizard and on the Management Console.
+     
+HDFS
+Zookeeper
+Ranger
+Atlas
+Kafka(in the Atlas hooks)
+
+
+LDAP : When specifying the settings on the Management Console / Authorization page, you have
+     to specify an ldaps URL and upload the CA certificate of the LDAP server to make the connection
+     secure. 
+KDC : Encrypted by default, can be customized in the config file krb5.conf as it is
+     inherited from the base cluster.
+Relational Databases
+     For DWX, Hue and HMS in a custom DBC : This is either the embedded Postgres DB instance that
+       runs in the Control Plane in the Kubernetes/Openshift cluster or the external DB provided by
+       the customer during the PvC installation. In either case it must be Postgres , and SSL is
+       mandatory. 
+For HMS in the default DBC : This is the same relational DB instance that is used by HMS
+       on the base cluster. Postgres, Mysql, MariaDB and Oracle are supported, SSL is mandatory. 
+
+
+
+
+
+CML
+
+
+
+Connection
+TLS (Yes/ No/ Optional)
+Certificate
+Comments
+
+End user to Control Plane
+Yes
+Ingress Controller Certificate
+Cistomizable by user
+
+Control Plane to Vault
+Yes
+Autogenerated Certificate
+
+
+End user to CML workspace
+Yes (CML supports workspace creation without TLS. But for production, TLS is strongly
+      recommended)
+User-generated certificate
+It is used to access the CML workspace. This is a user-generated certificate and can
+      be loaded to CML via the procedure mentioned here:  See 'Deploy an ML Workspace with Support
+      for TLS ' 
+
+CML workspace to git repository
+Yes
+User-generated certificate
+User generated certificate added to the Control Plane in Administration > CA certificates.
+
+
+CML workspace to AMP repository / AMP catalog
+Yes
+User-generated certificate
+User generated certificate added to the Control Plane in Administration > CA certificates.
+
+
+CML workspace to external docker registry
+Yes
+User-generated certificate
+User generated certificate added to the Control Plane in Administration > CA certificates.
+
+
+
+
+Related informationDeploy an ML Workspace with Support for TLS
+CDE
+
+
+Connection
+TLS ( Yes/ No/ Optional)
+Certificate
+Comments
+
+
+End user to control plane
+
+Yes
+Ingress Controller Certificate
+Customizable by user
+
+
+Control plane to Vault
+
+Yes
+Autogenerated certificate
+
+
+
+End user to CDE Jobs UI
+
+Yes
+User generated certificate
+
+Used to access CDE jobs UI. Customer uploads certificate using cde-utils.sh.
+
+
+
+End user through CDE CLI to Jobs API endpoint
+
+Yes
+User generated certificate
+
+Used to access CDE jobs UI. Customer uploads certificate using cde-utils.sh.
+
+
+
+End user to CDE Service
+
+Yes
+User uploaded certificate
+
+Used to access CDE jobs UI. Customer uploads certificate using cde-utils.sh.
+
+
+noteThere are two levels of chaining of ingress objects in CDE. This means that when a user sends a request to the <jobs-url>/dex/*, it first is caught by the cluster ingress controller  and redirected to the respective CDE nginx controller present in the CDE Service. The primary ingress here is TLS enabled whereas the secondary ingress (within the CDE namespace) is not TLS enabled. There is no way to directly access the secondary ingress controller as every request is first caught by the cluster ingress controller due to its ingress rule <jobs-urls>/* 
+
+
+Compute Service
+
+
+
+Connection
+TLS ( Yes/ No/ Optional)
+Certificate
+Comments
+
+End user to Liftie
+Yes
+Ingress controller Certificate
+Customizable by user
+
+Liftie to Vault
+Yes
+Auto generated certifcate
+
+
+Liftie to Postgres Database
+Yes
+Auto generated certifcate
+
+
+
+End user to resource-management
+End point
+
+Yes
+Ingress controller Certificate
+Customizable by user
+
+
+

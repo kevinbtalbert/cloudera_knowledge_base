@@ -1,0 +1,305 @@
+Replicating data between Data Hub clusters with SRM deployed in a Data Hub cluster.Cloudera Docs
+Replicating data between Data Hub clusters with SRM deployed in a Data Hub
+    cluster.
+You can set up and configure an instance of SRM in a Data Hub cluster to replicate
+    data between Data Hub clusters. In addition, you can use SMM to monitor the replication process.
+    Review the following example to learn how this can be set up.
+
+Consider the following replication scenario:
+
+In this scenario, data is replicated between two Data Hub clusters that are provisioned in
+        different CDP environments. More specifically, data in Data Hub East is replicated to Data
+        Hub West by an instance of SRM running in Data Hub West.
+Both Data Hub clusters are provisioned with the default Streams Messaging cluster
+        definitions.
+SRM and SMM are available in both clusters, but the instances in Data Hub East are not
+        utilized in this scenario.
+
+
+This example scenario does not go into detail on how to
+          set up the clusters and assumes the following:
+
+
+Two Data Hub clusters provisioned with the Streams Messaging Light Duty or Heavy Duty
+            cluster definition are available. 
+For more information, see
+              
+              Setting up your Streams Messaging cluster
+              in the CDF for Data Hub library. Alternatively, you can also review the cloud provider
+              specific cluster creation instructions available in the Cloudera Data Hub library.
+
+Network connectivity and DNS resolution are
+            established between the clusters.
+
+importantIn the following scenario, a new
+          CDP machine user is created and set up specifically for SRM. Alternatively, it is also
+          possible to use an existing machine user and skip steps 1 through 3, but this can only be
+          done if the following requirements are met:
+The existing machine user has access to your CDP environment.
+The existing machine user has the correct Ranger permissions assigned to it.
+You have access to the existing machine user's credentials.
+
+
+Create a machine user for SRM in Management Console:A machine user is
+          required so that SRM has credentials that it can use to connect to the Kafka service in
+          the Data Hub cluster. This step is only required in the environment where SRM is not
+          running. In the case of this example, this is the CDP Public Cloud East
+          environment.
+
+Navigate to Management Console  >  User Management.
+
+
+Click Actions  >  Create Machine User.
+
+
+Enter a unique name for the user and click Create.
+For example: srm
+After the user is created, you are presented with a page that displays the
+                user details. note
+The Workload User Name (srv_srm), is
+                    different from the actual machine user name (srm). The
+                      Workload User Name is the identifier you use to
+                    configure SRM.
+
+
+
+Click Set Workload Password.
+
+
+Type a password in the Password and Confirm
+                  Password fields. Leave the Environment field
+                blank.
+
+
+Click Set Workload Password.
+A message appears on successful password creation.
+
+Grant the machine user access to your environment:You must to grant the
+          machine user access in your environments, otherwise SRM will not be able to connect to the
+          Kafka service with this user. This step is only required in the environments where SRM is
+          not running. In the case of this example this is the CDP Public Cloud East
+          environment.
+
+Navigate to Management Console  >  Environments, and select the environment where your Kafka cluster is
+                located.
+
+
+Click Actions  >  Manage Access.
+Use the search box to find and select the machine user you want to use.
+A list of Resource Roles appears.
+
+
+Select the EnvironmentUser role and click
+                  Update Roles.
+
+
+Go back to the Environment Details page and click Actions  >  Synchronize Users to FreeIPA.
+
+
+On the Synchronize Users page, click  Synchronize
+                  Users.
+Synchronizing users ensures that the role assignment is in effect for the
+                environment. importantWait until this process is completed. Otherwise,
+                  you will not be able to continue with the next step.
+
+
+Add Ranger permissions for the user you created for SRM.
+
+This step is only required in the environment where SRM is not running. In the case of
+            this example the environment is the CDP Public Cloud East .
+
+
+
+Navigate to Management Console  >  Environments, and select the environment where your Kafka cluster is
+                located.
+
+
+Click the Ranger link on the Environment Details page.
+
+
+Select the resource-based service corresponding to the Kafka resource in the Data
+                Hub cluster.
+
+
+Add the Workload User Name of the user you created for SRM
+                to the following Ranger policies:
+
+
+All - consumergroup
+All - topic
+All - transactionalid
+All - cluster
+All - delegationtoken
+
+
+
+
+Establish trust between the clusters:A truststore is needed so that the
+          SRM instance running in Data Hub West can trust Data Hub East. To do this, you extract the
+          FreeIPA certificate from Environment East, create a truststore that includes the
+          certificate, and copy the truststore to all hosts on Data Hub West. 
+Navigate to Management Console
+                   >  Environments, and select
+              Environment East. 
+
+Go to the FreeIPA tab.
+
+
+Click Get FreeIPA Certificate.
+The FreeIPA certificate file, [***ENVIRONMENT
+                    NAME***].crt, is downloaded to your computer.
+
+Run the following command to create the truststore:
+keytool \
+  -importcert \
+  -storetype JKS \
+  -noprompt \
+  -keystore truststore-east.jks \
+  -storepass [***PASSWORD***] \
+  -alias freeipa-east-ca \
+  -file [***PATH TO FREEIPA CERTIFICATE***]
+
+Copy the truststore-east.jks file to a common location on
+              all the hosts in your Data Hub West cluster.Cloudera recommends that you
+              use the following location:
+                /opt/cloudera/security/truststore-east.jks.
+Set the correct file permissions.Use 751 for the directory and
+              444 for the truststore file.
+Access the Cloudera Manager instance of the Data Hub West cluster. Define the external Kafka cluster (Data Hub East): 
+Go to Administration > External
+                  Accounts.
+Go to the Kafka Credentials tab.On this
+              tab you will create a credential for each external cluster taking part in the
+              replication process. 
+Click Add Kafka credentials
+Configure the Kafka credentials:In the case of this example, you
+              must create a single credential representing the Data Hub East cluster. For
+              example:Name=dheast
+Bootstrap servers=[***MY-DATAHUB-EAST-CLUSTER-HOST-1.COM:9093***],[***MY-DATAHUB-EAST-CLUSTER-HOST-2:9093***]
+Security Protocol=SASL_SSL
+JAAS Secret 1=[***WORKLOAD USER NAME***]
+JAAS Secret 2=[***MACHINE USER PASSWORD***]
+JAAS Template=org.apache.kafka.common.security.plain.PlainLoginModule required username="##JAAS_SECRET_1##" password="##JAAS_SECRET_2##"; 
+SASL Mechanism=PLAIN
+Truststore Password=[***PASSWORD***] 
+Truststore Path=/opt/cloudera/security/truststore-east.jks
+Truststore type=JKS
+
+
+Click Add.If credential creation is
+              successful, a new entry corresponding to the Kafka credential you specified appears on
+              the page.
+Define the co-located Kafka cluster (Data Hub West):
+noteSome of the following properties might already be
+          configured by automation.
+
+In Cloudera Manager, go to Clusters and select the
+              Streams Replication Manager service.
+Go to Configuration.
+Find and enable the Kafka Service
+            property.
+Find and configure the Streams Replication Manager Co-located
+                Kafka Cluster Alias property.The alias you configure
+              represents the co-located cluster. Enter an alias that is unique and easily
+              identifiable. For example:dhwest
+Enable relevant security feature toggles.Because the Data Hub
+              cluster is both TLS/SSL and Kerberos enabled, you must enable all feature toggles for
+              both the Driver and Service roles. The feature toggles are the following:
+Enable TLS/SSL for SRM Driver
+Enable TLS/SSL for SRM Service
+Enable Kerberos Authentication
+
+Add both clusters to SRM's configuration:
+Find and configure the External Kafka Accounts
+              property.Add the name of all Kafka credentials you created to
+              this property. This can be done by clicking the add button to add a new line to the
+              property and then entering the name of the Kafka credential. For
+              example:dheast
+Find and configure the Streams Replication Manager Cluster
+                alias property.Add all cluster aliases to this property.
+              This includes the aliases present in both the External Kafka
+                Accounts and Streams Replication Manager Co-located Kafka
+                Cluster Alias properties. Delimit the aliases with commas. For
+              example:dheast,dhwest
+Configure replications:
+In this example data is replicated unidirectionally. As a result, only a single
+            replication must be configured.
+
+Find the Streams Replication
+                Manager's Replication Configs property.
+Click the add button and add new lines
+              for each unique replication you want to add and enable.
+Add and enable your replications. For example:
+dheast->dhwest.enabled=true
+
+Configure Driver and Service role targets:
+Find and configure the Streams Replication Manager Service Target
+                Cluster property. Add the co-located cluster's alias to the
+              property. For example:dhwest
+Find and configure the Streams Replication Manager Driver Target
+                Cluster property. For
+                example:dheast,dhwestimportantIf you have
+                another SRM instance configured with the same clusters and is targeting Data Hub
+                East, the dheast alias should not be configured as a target for
+                this instance of SRM.noteThis property must either contain all aliases or
+          left blank. Leaving the property blank has the same effect as adding all aliases.
+Configure the srm-control tool:
+Click Gateway in the Filters
+              pane.
+Find and configure the following properties:noteSome of the following properties might already be
+                configured by automation.
+SRM Client's Secure Storage Password:
+                    [***PASSWORD***]
+Environment Variable Holding SRM Client's Secure Storage
+                    Password: SECURESTOREPASS
+Gateway TLS/SSL Trust Store File:
+                    /opt/cloudera/security/truststore-west.jks
+Gateway TLS/SSL Truststore Password:
+                    [***PASSWORD***]
+SRM Client's Kerberos Principal Name: [***MY
+                    KERBEROS PRINCIPAL****]
+SRM Client's Kerberos Keytab Location: [***PATH
+                    TO KEYTAB FILE***]
+Take note of the password you configure in SRM Client's Secure Storage
+                Password and the name you configure in Environment Variable
+                Holding SRM Client's Secure Storage Password. You will need to provide
+              both of these in your CLI session before running the tool.
+Click Save Changes.
+Restart the SRM service.
+Deploy client configuration for SRM.
+Start the replication process using the srm-control tool:
+SSH as an administrator to any of the SRM hosts in the Data Hub West
+              cluster.
+ssh [***USER***]@[***DATA-HUB-WEST-CLUSTER-HOST-1.COM***]
+
+Set the secure storage password as an environment variable.
+export [***SECURE STORAGE ENV VAR***]=”[***SECURE STORAGE PASSWORD***]”
+Replace [***SECURE STORAGE ENV VAR***] with the name of the
+                environment variable you specified in Environment Variable Holding SRM
+                  Client's Secure Storage Password. Replace [***SRM SECURE
+                  STORAGE PASSWORD***] with the password you specified in SRM
+                  Client's Secure Storage Password. For example:
+                export SECURESTOREPASS=”mypassword"
+
+Use the srm-control tool with the topics subcommand to add
+              topics to the allow list.
+srm-control topics --source dheast --target dhwest --add [***TOPIC NAME***]
+
+Use the srm-control tool with the groups subcommand to add
+              groups to the allow list.
+srm-control groups --source dheast --target dhwest --add ".*"
+
+
+
+Monitor the replication process.
+Access the SMM UI in the Data Hub West cluster and go to the Cluster
+            Replications page. The replications you set up will be visible on this
+            page.noteIf the topics or groups you added for replication
+          are newly created, they might not be immediately visible. This is due to how frequently
+          SRM checks for newly created topics and consumer groups. By default, this is set to 10
+          minutes, but can be configured with the Refresh Topics Interval
+            Seconds and Refresh Groups Interval Seconds SRM
+          properties. If at first your topics do not appear, wait a few minutes and refresh the
+          page.
+
+

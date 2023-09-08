@@ -1,0 +1,407 @@
+Upgrading the JDKCloudera Docs
+Upgrading the JDK
+
+
+
+
+Cloudera Manager, Cloudera Runtime, and CDH require a supported version
+      of the Java Development Kit (JDK) to be installed on all hosts. For
+      details, see CDP Java Requirements.
+
+
+Loading
+        Filters ...
+
+
+warning
+
+If you are upgrading from a lower major version of
+          the JDK to JDK 1.8 or from JDK 1.6 to JDK 1.7, and you are using
+          AES-256 bit encryption, you must install new encryption policy files.
+          (In a Cloudera Manager deployment, you automatically install the
+          policy files; for unmanaged deployments, install them manually.) See
+            Using AES-256 Encryption. This step
+            is not required when using JDK 1.8.0_162 or greater. JDK 1.8.0_162
+            enables unlimited strength encryption by default.You must
+            also ensure that the Java Truststores are retained during the
+            upgrade. (Cloudera recommends the following for keystores and
+            truststores for Cloudera Manager clusters: 
+
+Create a separate keystore for each host. Each keystore should
+                have a name that helps identify it as to the type of host—server
+                or agent, for example. The keystore contains the private key and
+                should be password protected. 
+Create a single truststore that can be used by the entire
+                cluster. This truststore contains the root CA and intermediate
+                CAs used to authenticate certificates presented during TLS/SSL
+                handshake. The truststore does not need to be password
+                protected. (See Understanding Keystores and
+                  Truststores  to Truststore for more information about
+                the truststore for TLS/SSL and Cloudera clusters.)
+
+
+
+
+There are several procedures you can use to upgrade the JDK:
+Installing Java
+            During an UpgradeIf you are upgrading to
+            Cloudera Manager 6.0.0 or higher, you can manually install JDK 1.8
+            on the Cloudera Manager server host, and then, as part of the
+            Cloudera Manager upgrade process, you can specify that Cloudera
+            Manager upgrade the JDK on the remaining hosts. noteCloudera
+            Manager only installs Oracle JDK. You can upgrade to OpenJDK using
+            these steps. 
+Manually Installing Oracle JDK 1.8
+You can manually install JDK 1.8 on all managed
+            hosts. If you are upgrading to any version of Cloudera Manager 5.x,
+            you must use this procedure. Continue with the steps in the next
+            section. 
+Manually Migrating to OpenJDK
+
+
+
+Using AES-256 EncryptionConfiguring a Custom Java Home LocationTuning JVM Garbage Collection
+Manually Installing Oracle JDK 1.8
+
+importantManual upgrade of Oracle JDK 1.8 requires down time
+        to stop and restart your cluster.
+You can manually install Oracle JDK 1.8 on all managed hosts. If you
+        are upgrading to any version of Cloudera Manager 5.x, you must use the
+        following procedure:
+
+
+Download the .tar.gz file for one of the 64-bit
+            versions of Oracle JDK 1.8 from Java SE 8 Downloads. (This
+            link is correct at the time of writing, but can change.)
+Perform the following steps on all hosts that you are upgrading: 
+Log in to the host as root using
+                  ssh. 
+Copy the downloaded .tar.gz file to the
+                host.
+Extract the JDK to the folder /usr/java/jdk-version. For
+                example:tar xvfz /path/to/jdk-8u<update_version>-linux-x64.tar.gz -C /usr/java/
+
+If you have configured TLS for Cloudera Manager (see Encrypting Data in Transit),
+            copy the jssecacerts file from the previous JDK
+            installation to the new JDK installation. This step is not
+              required when using JDK 1.8.0_162 or greater. JDK 1.8.0_162
+              enables unlimited strength encryption by default.
+For
+              example:cp previous_java_home/jre/lib/security/jssecacerts new_java_home/jre/lib/security(Substitute
+                previous_java_home and
+                new_java_home with the paths to the JDK
+              installations.)
+Configure the location of the JDK on cluster hosts. 
+Open the Cloudera Manager Admin Console.
+In the main navigation bar, click the Hosts tab. If you
+                are configuring the JDK location on a specific host only, click
+                the link for that host.
+Click the Configuration tab.
+Select
+                    Category > Advanced. 
+Set the Java Home Directory property to the custom
+                location.
+Click Save Changes.
+
+On the Cloudera Manager Server host only (not required for other hosts):
+Open the file
+                  /etc/default/cloudera-scm-server in a text
+                editor.
+Edit the line that begins with export
+                  JAVA_HOME (if this line does not exist, add it) and
+                change the path to the path of the new JDK (you can find the
+                path under /usr/java). For example: (RHEL and SLES)
+                  export JAVA_HOME="/usr/java/jdk1.8.0_141-cloudera"
+For example: (Ubuntu)
+                  export JAVA_HOME="/usr/lib/jvm/java-8-oracle-cloudera"
+Save the file.
+Restart the Cloudera Manager
+        Server.sudo systemctl restart cloudera-scm-server
+
+
+ Restart the Cloudera Management
+          Service. 
+Log in to the Cloudera Manager Admin Console.
+Select
+                Clusters > Cloudera
+                Management Service.
+Select
+                Actions > Restart.
+
+
+Restart all clusters:
+On the
+                    Home > Status
+                tab, click the Options menu to the right of the cluster name and
+                select Restart.
+Click Restart that appears in the next screen to
+                confirm. If you have enabled high availability for
+                  HDFS, you can choose Rolling
+                    Restart instead to minimize cluster
+                downtime. The Command Details window shows the progress
+                of stopping services. When All services successfully
+                    started appears, the task is complete and you can close
+                  the Command Details window.
+
+Delete the files from your previous Java installation. If you do not delete these files, Cloudera Manager
+              and other components may continue to use the old version of the
+              JDK.
+
+
+
+
+
+OpenJDK
+
+You must install a supported version of OpenJDK. If your deployment uses a version of
+        OpenJDK lower than 1.8.0_232, see TLS Protocol Error with OpenJDK.importantFor OpenJDK 8u241 and higher versions running on Kerberized clusters, you
+          must disable referrals: 
+Cloudera Manager 7.1.1 or higher:
+Log in to the Cloudera Manager Admin Console.
+Go to Administration > Settings.
+Select the Advanced category.
+Locate the JVM Arguments for Java-based services
+                  parameter and enter the
+                  following:-Dsun.security.krb5.disableReferrals=true
+Restart any stale services.
+
+Cloudera Manager 7.0.3 or lower:
+Edit the Java Security file on all hosts by adding or changing the following
+                  configuration :
+sun.security.krb5.disableReferrals=trueIf
+                  the configuration already exists and is set to false, change it
+                  to true.
+Restart the cluster.
+
+For more information, see the KB article.
+
+
+Manually Installing OpenJDK
+
+Before installing or upgrading Cloudera Manager and zCDH/Cloudera Runtime, perform the steps in this
+          section to install OpenJDK on all hosts in your cluster(s).
+When you install Cloudera Enterprise, Cloudera Manager includes an
+          option to install Oracle JDK. De-select this option. 
+noteIf you intend to enable Auto TLS, note the following:
+            You can specify a PEM file containing trusted CA certificates to
+            be imported into the Auto-TLS truststore. If you want to use the
+            certificates in the cacerts truststore that comes with OpenJDK, you
+            must convert the truststore to PEM format first. However, OpenJDK
+            ships with some intermediate certificates that cannot be imported
+            into the Auto-TLS truststore. You must remove these certificates
+            from the PEM file before importing the PEM file into the Auto-TLS
+            truststore. This is not required when upgrading to OpenJDK from a
+            cluster where Auto-TLS has already been enabled.
+
+Log in to each host and run the following command:
+RHEL
+OpenJDK
+                8sudo yum install java-1.8.0-openjdk-develOpenJDK
+              11sudo yum install java-11-openjdk
+Ubuntu
+OpenJDK
+                8sudo apt-get install openjdk-8-jdkOpenJDK
+              11sudo apt install openjdk-11-jdk
+SLES
+OpenJDK
+                8sudo zypper install java-1_8_0-openjdk-develOpenJDK
+              11zypper install java-11-openjdk
+
+If you are using the SLES operating system, Cloudera Manager needs
+            an additional configuration so that the JDK can be located: 
+Log in to the Cloudera Manager server host.
+Open the following file in a text editor:
+                /etc/default/cloudera-scm-server
+Add the following line:
+                export JAVA_HOME=path to the Java installation directory For
+                example:export JAVA_HOME=/usr/lib64/jvm/java-1.8.0-openjdk-1.8.0
+Save the file.
+Restart the Cloudera Manager
+        Server.sudo systemctl restart cloudera-scm-server
+
+
+
+
+
+
+Manually Migrating to OpenJDK
+
+If you have Oracle JDK 1.7, Oracle JDK 1.8, or OpenJDK 8 installed on the hosts managed
+          by Cloudera Manager, use the steps in this section to transition your deployment to use
+            OpenJDK. The
+          steps below require you to restart all clusters, which will cause downtime as the hosts
+          restart. If your clusters have enabled high availability for HDFS, you can use a Rolling Restart to restart
+          the clusters without downtime. Note that until the rolling restart completes, some of the
+          hosts in your cluster will still be using the Oracle JDK. If you do not want a temporarily
+          mixed environment, you can stop the cluster before performing the steps in this section to
+          transition the JDK.
+OpenJDK 11 is supported as of Cloudera
+          Manager and CDH 6.3. Note the following:
+You must upgrade to Cloudera Manager 6.3 or higher,
+                before upgrading to OpenJDK 11.
+The package names used when installing the OpenJDK 11 are
+              different and are noted in the steps below.
+The path for the default truststore has changed from (OpenJDK 8)
+                jre/lib/security/cacerts to (OpenJDK 11)
+                lib/security/cacerts
+
+See the following blog post for general information about
+              migrating to Java 11: All You Need to Know For
+                Migrating To Java 11.
+
+
+
+Find out the package name of your currently installed JDK by
+              running the following commands. The grep commands attempt to
+              locate the installed JDK. If the JDK package is not returned, try
+              looking for the string sdk. 
+RHEL
+Oracle JDK
+                    8yum list installed |grep oracle
+OpenJDK
+                    8yum list installed |grep openjdk
+Ubuntu
+Oracle JDK
+                    8apt list --installed | grep oracle
+OpenJDK
+                    8apt list --installed | grep openjdk
+SLES
+Oracle JDK
+                    8zypper search --installed-only |grep oracle
+OpenJDK
+                    8zypper search --installed-only |grep openjdk
+ The command will return values similar to the following
+              example::
+              oracle-j2sdk1.7.x86_64              1.7.0+update67-1           java-1.8.0-openjdk-develThe
+              Oracle JDK package name in the above example is:
+                oracle-j2sdk1.7.x86_64. The OpenJDK package is
+                java-1.8.0-openjdk-devel.
+Log in to each host managed by Cloudera Manager (including the
+              Cloudera Manager server host) and run the following command to
+              install OpenJDK:
+RHEL
+OpenJDK
+                8sudo yum install java-1.8.0-openjdk-develOpenJDK
+              11sudo yum install java-11-openjdk
+Ubuntu
+OpenJDK
+                8sudo apt-get install openjdk-8-jdkOpenJDK
+              11sudo apt install openjdk-11-jdk
+SLES
+OpenJDK
+                8sudo zypper install java-1_8_0-openjdk-develOpenJDK
+              11zypper install java-11-openjdk
+
+(This step is required for Oracle JDK 8 or Open JDK 8 only) On
+              the Cloudera Manager Server host only (not required for other hosts):
+Open the file
+                    /etc/default/cloudera-scm-server in a text
+                  editor.
+Edit the line that begins with export
+                    JAVA_HOME (if this line does not exist, add it) and
+                  change the path to the path of the new JDK (the JDK is usually
+                  installed in /usr/lib/jvm)(or
+                      /usr/lib64/jvm on SLES 12), but the
+                  path may differ depending on how the JDK was installed).
+                    For example:
+
+RHEL 7, 8
+
+export JAVA_HOME="/usr/lib/jvm/java-1.8.0-openjdk"
+
+Ubuntu
+
+export JAVA_HOME="/usr/lib/jvm/openjdk-8-jdk"
+
+SLES
+
+export JAVA_HOME="/usr/lib64/jvm/java-1.8.0-openjdk"
+
+
+
+Save the file.
+Restart the Cloudera Manager
+        Server.sudo systemctl restart cloudera-scm-server
+
+
+Tune the JDK (OpenJDK 11 only.)OpenJDK 11 uses new defaults for garbage
+                collection and other Java options specified when launching Java
+                processes. Due to these changes you may need to tune the garbage
+                collection by adjusting the Java options used to run cluster
+                services, which are configured separately for each service using
+                the service's configuration parameters. To locate the correct
+                parameter, log in to the Cloudera Manager Admin Console, go to
+                the cluster and service you want to configure and search for
+                "Java Configuration Options". When using OpenJDK 11, Cloudera Manager and most services use
+                G1GC as the default method of garbage collection. Java 8 used
+                "ConcurrentMarkSweep" (CMS) for garbage collection. When using
+                G1GC, the pauses for garbage collection are shorter, so
+                components will usually be more responsive, but they are more
+                sensitive to JVMs with overcommitted memory usage. See Tuning JVM Garbage Collection.
+              
+ Restart the Cloudera Management
+          Service. 
+Log in to the Cloudera Manager Admin Console.
+Select
+                Clusters > Cloudera
+                Management Service.
+Select
+                Actions > Restart.
+
+
+Restart all clusters:
+On the
+                      Home > Status
+                  tab, click  to
+                  the right of the cluster name and select either
+                    Restart or Rolling
+                    Restart. Selecting Rolling
+                      Restart minimizes cluster downtime and
+                  is available only If you have enabled Auto TLS. 
+Click Restart or Rolling
+                    Restart that appears in the next screen to
+                  confirm. The Command Details window shows the progress
+                  of stopping services. When All services successfully
+                      started appears, the task is complete and you can
+                    close the Command Details window.
+
+Remove the JDK:
+Perform the following steps on all hosts managed by Cloudera Manager:
+Run the following command to remove the JDK, using the
+                      package names from Step 1: (If you do not delete these files, Cloudera Manager
+              and other components may continue to use the old version of the
+              JDK.)
+RHEL
+
+yum remove <JDK package name>
+
+Ubuntu
+
+apt-get remove <JDK package name>
+
+SLES
+
+zypper rm <JDK package name>
+
+
+Confirm that the package has been removed: 
+RHEL
+
+yum list installed |grep -i oracle
+
+Ubuntu
+
+apt list --installed | grep -i oracle
+
+SLES
+
+zypper search --installed-only |grep -i oracle
+
+
+
+
+
+
+
+
+

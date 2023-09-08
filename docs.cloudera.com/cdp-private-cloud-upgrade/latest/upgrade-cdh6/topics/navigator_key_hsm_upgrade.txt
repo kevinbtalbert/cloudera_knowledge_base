@@ -1,0 +1,135 @@
+Upgrading Cloudera Navigator Key HSMCloudera Docs
+Upgrading Cloudera Navigator Key HSM
+Parent topic: Step 5: After You Upgrade Cloudera Manager
+Setting Up an Internal Repository
+
+Although it is possible to upgrade Cloudera Navigator KeyHSM by using the KeyHSM RPM
+        package directly, Cloudera recommends setting up a YUM package repository to perform the
+        upgrade. The steps given below assume that a repository containing the KeyHSM RPM package
+        downloaded from the paywall has been created. For more information on creating such a
+        repository, see https://wiki.centos.org/HowTos/CreateLocalRepos.
+
+
+
+Upgrading Key HSM (Minor and Patch Version Upgrades)
+
+If you are upgrading from Key HSM 1.x (shipped with CDH 5.x and earlier) to Key HSM 7.x,
+        use the instructions in Upgrading Key HSM (Major Version Upgrades); do not use
+        the procedure documented in this section.
+importantIf you have implemented Key Trustee Server high availability, upgrade
+        Key HSM on each Key Trustee Server.
+
+Install the KeyHSM RepositoryAdd the internal repository that you
+          created.
+Stop the Key HSM ServiceStop the Key HSM service before
+            upgrading:sudo service keyhsm shutdown
+Upgrade Navigator Key HSMUpgrade the Navigator Key HSM package using
+              yum:sudo yum update keytrustee-keyhsmCloudera
+            Navigator Key HSM is installed to the
+              /usr/share/keytrustee-server-keyhsm directory by default.
+Start the Key HSM ServiceStart the Key HSM
+            service:sudo service keyhsm start
+
+
+
+
+Upgrading Key HSM (Major Version Upgrades)
+
+importantOnly use this procedure if you are upgrading from Key HSM 1.x
+          (shipped with CDH 5.x and earlier) to Key HSM 7.x. There is a unique configuration
+        issue that impacts this upgrade scenario, and the steps here are different from those
+        required for all minor Key HSM upgrades. This procedure is not applicable to minor
+        version or patch release upgrades.
+
+Install the KeyHSM RepositoryAdd the internal repository that you
+          created.
+Stop the Key HSM ServiceStop the Key HSM service before
+            upgrading:sudo service keyhsm shutdown
+Upgrade Navigator Key HSMUpgrade the Navigator Key HSM package using
+              yum:sudo yum update keytrustee-keyhsmCloudera
+            Navigator Key HSM is installed to the
+              /usr/share/keytrustee-server-keyhsm directory by default.
+Rename Configuration Files that were created earlierFor Key HSM major version
+            upgrades, previously-created configuration files do not authenticate with the HSM and
+            Key Trustee Server, so you must recreate these files by re-executing the
+              setup and trust commands. First, navigate to the Key
+            HSM installation directory and rename the applications.properties,
+              keystore, and truststore
+          files:cd /usr/share/keytrustee-server-keyhsm/
+mv application.properties application.properties.bak
+mv keystore keystore.bak
+mv truststore truststore.bak
+Initialize Key HSMRun the service keyhsm setup command in
+            conjunction with the name of the target HSM distribution:
+            sudo service keyhsm setup [keysecure|thales|luna]For
+            more details, see Initializing Navigator Key HSM. 
+Establish Trust Between Key HSM and the Key Trustee ServerThe Key HSM service
+            must explicitly trust the Key Trustee Server certificate (presented during TLS
+            handshake). To establish this trust, run the following
+            command:sudo keyhsm trust /path/to/key_trustee_server/certFor
+            more details, see Integrating Key HSM with Key Trustee
+          Server.
+Start the Key HSM ServiceStart the Key HSM
+            service:sudo service keyhsm start
+Establish Trust Between Key Trustee Server and Key HSM
+Establish trust between the Key Trustee Server and the Key HSM by specifying the path
+            to the private key and
+            certificate:sudo ktadmin keyhsm --server https://keyhsm01.example.com:9090 \
+--client-certfile /etc/pki/cloudera/certs/mycert.crt \
+--client-keyfile /etc/pki/cloudera/certs/mykey.key --trustFor a
+            password-protected Key Trustee Server private key, add the --passphrase
+            argument to the command (enter the password when
+            prompted):sudo ktadmin keyhsm --passphrase \
+--server https://keyhsm01.example.com:9090 \
+--client-certfile /etc/pki/cloudera/certs/mycert.crt \
+--client-keyfile /etc/pki/cloudera/certs/mykey.key --trustFor
+            additional details, see Integrating Key HSM with Key Trustee
+          Server.
+Remove Configuration Files From Previous InstallationAfter completing the
+            upgrade, remove the saved configuration files from the previous
+            installation:cd /usr/share/keytrustee-server-keyhsm/
+rm application.properties.bak
+rm keystore.bak
+rm truststore.bak
+
+
+
+
+Key Trustee Server SSL Certificate Regeneration
+
+When Key HSM is upgraded to CDP version 7.1.4 or above, the SSL certificates of the Key
+        Trustee Server (KTS) might need to be regenerated if the self-signed certificates that are
+        created by the ktadmin command are being used.
+Perform the following steps to regenerate the KTS SSL certificate:
+
+Stop the KTS service from Cloudera Manager.
+
+Navigate to the location /var/lib/keytrustee/.keytrustee/.ssl/
+            to take a backup of the certificate files
+              ssl-cert-keytrustee-pk.pem and
+              ssl-cert-keytrustee.pem:
+
+cd /var/lib/keytrustee/.keytrustee/.ssl/
+
+
+
+Backup the certificate
+            files:mv ssl-cert-keytrustee-pk.pem ssl-cert-keytrustee-pk_backup.pem
+mv ssl-cert-keytrustee.pem ssl-cert-keytrustee_backup.pem
+
+
+
+Regenerate the certificate
+            file:ktadmin init
+
+
+Configure the Key HSM to trust the new certificate
+            file:keyhsm trust /var/lib/keytrustee/.keytrustee/.ssl/ssl-cert-keytrustee.pem
+
+Restart the Key HSM service.
+Start the KTS service from Cloudera Manager.
+Run the following command to test and validate certificate
+          regeneration:curl -vk https://$(hostname -f):11371/test_hsm
+
+
+

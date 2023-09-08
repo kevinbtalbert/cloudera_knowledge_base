@@ -1,0 +1,101 @@
+Services backed by PostgreSQL fail or stop respondingCloudera Docs
+Services backed by PostgreSQL fail or stop responding
+When the number of connections between the CDP services and the PostgreSQL database
+        exceeds the preset connection limit, it is possible that a new connection fails, Cloudera
+        Manager stops responding, and you cannot log into Hue. The logs show a “FATAL:
+            remaining connection slots are reserved for non-replication superuser
+            connections”
+        error.
+
+The number of connections between the CDP services and the PostgreSQL database is
+                governed by the max_connections setting. By default, the maximum
+                number of available connections to your PostgreSQL database is 115. 15 connections
+                are reserved for the superuser to maintain the state and integrity of your database,
+                and 100 connections are available for CDP and other
+                services.
+noteThere is a higher probability for this issue to occur in Hue because Cloudera
+                Manager starts the Hue service after starting other CDP services. Therefore, the Hue
+                service gets relatively fewer connections to PostgreSQL as compared to other
+                services sharing the same database.
+
+
+Check the number of available and idle connections:
+
+
+SSH into the PostgreSQL database from the command-line client
+                                psql as an admin user.
+
+
+Run the following query to check the number of idle connections:
+
+SELECT datname, count(datname) FROM pg_stat_activity WHERE state = 'idle' GROUP BY datname;
+
+
+
+Run the following query to check the number of connections currently in
+                            use:
+
+SELECT datname, count(datname) FROM pg_stat_activity GROUP BY datname;
+
+
+
+Run the following command to view the maximum number of
+                            connections:
+
+show max_connections;
+
+
+
+Run the following query to know where the connections are going:
+
+SELECT datname, numbackends FROM pg_stat_database;
+
+
+
+
+If most connections are idle and the max_connections value is
+                    less than 100, then increase the max_connections value in
+                        the postgresql.conf file:
+
+
+Log into Cloudera Manager and stop all services that use the PostgreSQL
+                            database.
+
+
+SSH into the host on which the PostgreSQL server is running.
+
+
+Open the postgresql.conf file for editing.
+The postgresql.conf file is typically present in the
+                                /var/lib/pgsql/data directory. But this may
+                            vary depending on where you have installed the database. 
+
+
+Increase the value of max_connections as per the
+                            following recommendation:
+Allow a maximum of 100 connections for each database and add 50 extra
+                            connections. For example, for two databases, set the maximum connections
+                            to 250.
+If you store five databases on one host (the databases for Cloudera
+                            Manager Server, Activity Monitor, Reports Manager, Apache Atlas, and
+                            Hive Metastore), set the maximum connections to 550.
+
+
+Save the changes and exit.
+
+
+Restart the PostgreSQL database by running the following command:
+
+pg_ctl restart
+
+
+
+Restart all the affected services from Cloudera Manager.
+
+
+
+If increasing the connection limit does not solve your
+            problem and you see a need to scale up, then add new PostgreSQL instances on other hosts
+            and migrate the services to those hosts with the help of your Database Administrator
+            (DBA).
+

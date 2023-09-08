@@ -1,0 +1,82 @@
+ZooKeeper ACLs best practices: SearchCloudera Docs
+ZooKeeper ACLs best practices: Search
+You must follow certain best practices for effective control of client access to ZNodes
+    using the ZooKeeper access-control lists (ACLs) or permissions for Search when provisioning a
+    secure cluster.
+
+ZooKeeper Usage
+Solr uses ZooKeeper to store cluster configuration (document collections, shard and replica
+            configuration / location), cluster status (live servers, overseer metadata), collection
+            configuration (schemas, settings, etc.), and security-related information (delegation
+            tokens). The root ZNode is configurable in Cloudera Manager for each Solr
+              service.noteFor infrastructure services such as Ranger audits, a dedicated Solr
+              service called Infra Solr is used, where the default ZNode is called
+                /solr-infra.
+
+Default ACLs/solr
+In a non-kerberized cluster: world:anyone:cdrwa
+With Kerberos enabled: sasl:solr:cdrwa,
+              world:anyone:r
+
+Security Best Practice ACLs/Permissions and Required Steps
+ACLs are initialized during deployment, depending on whether Kerberos for Solr is
+      enabled or not. Operators do not need to modify them by default.
+When creating a new Solr collection, a set of configuration files need to be
+            uploaded to ZooKeeper. Although it is possible to directly upload files (solrctl
+              instancedir commands), because of ACL settings only the solr
+            user is allowed to do this. Cloudera recommends using the Config and ConfigSets APIs
+              (solrctl config commands) instead, which do not require direct
+            ZooKeeper communication. As solrctl config commands communicate
+            directly with Solr where you can configure role-based authorization using Ranger, this
+            method is considered more secure.
+If you disable or enable Kerberos authentication for an existing Solr service in
+            Cloudera Manager, the ACLs in ZooKeeper are not adjusted automatically. In case of
+            disabling Kerberos this can prevent the recently unkerberized Solr service from writing
+            data to ZooKeeper. To update ZooKeeper ACLs, you need to perform the following
+              steps:
+
+ Shut down Solr.If you want to disable Kerberos, shut down Solr while Kerberos is still
+              enabled. This allows you to use a valid Solr keytab.
+Navigate to the /var/run/cloudera-scm-agent/process
+            directory:cd /var/run/cloudera-scm-agent/process
+Locate the current or most recent
+              [***PROCESS_DIR_ID***]-solr-SOLR_SERVER directory, with the
+              solr.keytab and jaas.conf files. The
+              [***PROCESS_DIR_ID***] part changes every time the Solr server is
+            restarted. To identify the current or most recent directory, list the
+                /var/run/cloudera-scm-agent/process/*solr* directories sorted by
+              time in reverse as
+              follows:ls -ltrd /var/run/cloudera-scm-agent/process/*solr*The
+              entry at the bottom is the current or most recent process directory.
+Go to the Solr
+            directory:cd [***PROCESS_DIR_ID***]-solr-SOLR_SERVER
+Copy log4j2.properties temporarily to
+              /opt/cloudera/parcels/CDH/lib/solr/bin, to get proper logging for the
+              zkcli.sh
+            script.cp log4j2.properties /opt/cloudera/parcels/CDH/lib/solr/bin/
+Export the JVM flags for ZooKeeper client to configure ACLs.
+To enable Kerberos-specific
+                ACLs:export ZKCLI_JVM_FLAGS="-Djava.security.auth.login.config=jaas.conf -DzkACLProvider=org.apache.solr.common.cloud.SaslZkACLProvider -Droot.logger=INFO,console"
+To enable unkerberized
+                ACLs:export ZKCLI_JVM_FLAGS="-Djava.security.auth.login.config=jaas.conf -DzkACLProvider=org.apache.solr.common.cloud.DefaultZkACLProvider -Droot.logger=INFO,console"
+
+Run the following command to update
+              ACLs:/opt/cloudera/parcels/CDH/lib/solr/bin/zkcli.sh -zkhost [***ZOOKEEPER SERVER HOST***]:[***ZOOKEEPER CLIENT PORT***] -cmd updateacls /solrThe
+              default  [***ZOOKEEPER CLIENT PORT***] is 2181.
+To verify that the ZooKeeper client uses jaas.conf and ACLs were updated,
+            check the output of the following
+              command:zookeeper-client -server [***ZOOKEEPER SERVER HOST***]:[***ZOOKEEPER CLIENT PORT***] getAcl /solrThe
+              default  [***ZOOKEEPER CLIENT PORT***] is 2181.For a non-kerberized ACL setup, the
+            command output looks like this:'world,'anyone
+: cdrwaFor a
+            kerberized ACL setup, the command output looks like
+            this:'sasl,'solr
+: cdrwa
+'world,'anyone
+: r
+Remove log4j2.properties from
+              /opt/cloudera/parcels/CDH/lib/solr/bin:rm /opt/cloudera/parcels/CDH/lib/solr/bin/log4j2.properties
+
+
+
+Parent topic: ZooKeeper ACLs Best Practices

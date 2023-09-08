@@ -1,0 +1,55 @@
+YARN ResourceManager high availability architectureCloudera Docs
+YARN ResourceManager high availability architecture
+Learn about the architecture of YARN ResourceManager High Availability to use it efficiently.
+ResourceManager HA is implemented by means of an active-standby pair of
+   ResourceManagers. On start-up, each ResourceManager is in the standby state; the process is
+   started, but the state is not loaded. When one of the ResourceManagers is transitioning to the
+   active state, the ResourceManager loads the internal state from the designated state store and
+   starts all the internal services. The stimulus to transition to active comes from either the
+   administrator (through the CLI) or through the integrated failover controller when automatic
+   failover is enabled. 
+ResourceManager Restart
+Restarting the ResourceManager allows for the recovery of in-flight
+    applications if recovery is enabled. To achieve this, the ResourceManager stores its internal
+    state, primarily application-related data and tokens, to the RMStateStore; the cluster resources are re-constructed
+    when the NodeManagers connect. The available alternatives for the state store are MemoryRMStateStore (a memory-based implementation) and
+     ZKRMStateStore (ZooKeeper-based
+    implementation). Note that MemoryRMStateStore
+    will not work for HA.
+
+Fencing
+When running two ResourceManagers, a split-brain situation can arise where
+    both ResourceManagers assume they are active. To avoid this, only a single ResourceManager
+    should be able to perform active operations and the other ResourceManager should be "fenced".
+    The ZooKeeper-based state store (ZKRMStateStore) allows only a single ResourceManager to make changes to the stored
+    state, implicitly fencing the other ResourceManager. This is accomplished by the ResourceManager
+    claiming exclusive create-delete permissions on the root znode. The ACLs on the root znode are automatically created based on the ACLs
+    configured for the store; in case of secure clusters, Cloudera recommends that you set ACLs for
+    the root host such that both ResourceManagers share read-write-admin access, but have exclusive
+    create-delete access. The fencing is implicit and does not require explicit configuration (as
+    fencing in HDFS does). You can plug in a custom "Fencer" if you choose to – for example, to use
+    a different implementation of the state store.
+
+Configuration and FailoverProxy
+In an HA setting, you should configure two ResourceManagers to use
+    different ports (for example, ports on different hosts). To facilitate this, YARN uses the
+    notion of an ResourceManager Identifier (rm-id). Each ResourceManager has a unique rm-id, and all the RPC configurations (<rpc-address>; for example yarn.resourcemanager.address) for that ResourceManager can be configured via <rpc-address>.<rm-id>. Clients,
+    ApplicationMasters, and NodeManagers use these RPC addresses to talk to the active
+    ResourceManager automatically, even after a failover. To achieve this, they cycle through the
+    list of ResourceManagers in the configuration. This is done automatically and does not require
+    any configuration (as it does in HDFS).
+
+Automatic Failover
+By default, ResourceManager HA uses ZKFC (ZooKeeper-based failover
+    controller) for automatic failover in case the active ResourceManager is unreachable or goes
+    down. Internally, the StandbyElector is used to elect the
+    active ResourceManager. The failover controller runs as part of the ResourceManager.
+You can plug in a custom failover controller if you prefer.
+
+Manual Transitions and Failover
+You can use the command-line tool yarn rmadmin to transition a particular ResourceManager to active or standby state,
+    to fail over from one ResourceManager to the other, to get the HA state of an ResourceManager,
+    and to monitor an ResourceManager's health.
+
+
+Parent topic: YARN ResourceManager high availability

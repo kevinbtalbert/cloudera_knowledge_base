@@ -1,0 +1,106 @@
+Setting up a past release for a CDW-Kudu connectionCloudera Docs
+Setting up a past release for a CDW-Kudu connection
+To connect CDW to Kudu using a past release 1.5.1-b110 (released Nov 22, 2022) or
+        earlier, you need to configure Kubernetes DNS resolution unless you create a new
+        environment. Configuring the Kubernetes DNS resolution is required only in AWS environments. 
+If you create a new environment, you do not need to configure Kubernetes DNS
+            resolution. After completing the steps in this task, you need to meet additional
+            prerequisites and configure a CDW-Kudu connection as described in the previous topic,
+            “Configuring a CDW-Kudu connection” .
+
+If you have an AWS environment, perform all the steps in this procedure. If you
+                    have an Azure environment, go to step 6 (upgrading).
+
+Grant remote access to Kubernetes clusters on
+                        Amazon EKS. 
+
+On the command line of your cluster, open the CDP CoreDNS Updater file for
+                    configuration in a text editor.
+
+ kubectl edit configmap cdp-coredns-updater-63cc3d36-283cd77b-template -n cluster
+
+The data section looks something like this: 
+data:
+Corefile.template: |-
+.:53 {
+errors
+health
+kubernetes cluster.local in-addr.arpa ip6.arpa {
+pods insecure
+fallthrough in-addr.arpa ip6.arpa
+ttl 30
+}
+prometheus :9153
+forward . /etc/resolv.conf
+cache 30
+loop
+reload
+loadbalance
+}
+{{applications.FREEIPA.services.dns.config.domain}}:53 {
+errors
+cache 30
+reload
+forward . {{#applications.FREEIPA.services.dns.endpoints}}{{host}} {{/applications.FREEIPA.services.dns.endpoints}}
+}
+                   
+
+
+Append a section to the data section above to enable reverse lookup for data
+                    lake IPs.
+cluster.local in-addr.arpa ip6.arpa {
+kubernetes {
+pods insecure
+fallthrough in-addr.arpa ip6.arpa
+ttl 30
+}
+forward . {{#applications.FREEIPA.services.dns.endpoints}}{{host}} {{/applications.FREEIPA.services.dns.endpoints}}
+}Your data section should now look like this:data:
+Corefile.template: |-
+.:53 {
+errors
+health
+kubernetes cluster.local in-addr.arpa ip6.arpa {
+pods insecure
+fallthrough in-addr.arpa ip6.arpa
+ttl 30
+}
+prometheus :9153
+forward . /etc/resolv.conf
+cache 30
+loop
+reload
+loadbalance
+}
+{{applications.FREEIPA.services.dns.config.domain}}:53 {
+errors
+cache 30
+reload
+forward . {{#applications.FREEIPA.services.dns.endpoints}}{{host}} {{/applications.FREEIPA.services.dns.endpoints}}
+}
+cluster.local in-addr.arpa ip6.arpa {
+kubernetes {
+pods insecure
+fallthrough in-addr.arpa ip6.arpa
+ttl 30
+}
+forward . {{#applications.FREEIPA.services.dns.endpoints}}{{host}} {{/applications.FREEIPA.services.dns.endpoints}}
+}
+
+Restart the coredns updater pod to pick up the new configurations.
+kubectl --kubeconfig ~/kubeconfig_int get pods -n cluster | grep -i 'coredns-updater'
+cdp-coredns-updater-63cc3d36-283cd77b-67b8c9479d-bjtlh 3/3 Running 1 (2d20h ago) 2d20h
+
+kubectl --kubeconfig ~/kubeconfig_int delete pod cdp-coredns-updater-63cc3d36-283cd77b-67b8c9479d-bjtlh -n cluster
+
+
+
+If the Impala Virtual Warehouse runtime version is 2022.0.12.0-90 released
+                    December 13, 2022 or earlier, upgrade the Virtual Warehouse version to
+                    2023.0.13.20 or later.
+
+Proceed to configure a CDW-Kudu connection as described in the previous topic,
+                    "Configuring a CDW-Kudu connection".
+
+
+Parent topic: Configuring a Virtual Warehouse

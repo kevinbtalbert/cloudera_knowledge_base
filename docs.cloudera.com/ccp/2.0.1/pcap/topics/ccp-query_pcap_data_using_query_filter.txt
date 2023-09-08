@@ -1,0 +1,81 @@
+Query PCAP Data Using the Query Filter OptionCloudera Docs
+Query PCAP Data Using the
+      Query Filter Option
+You can search or filter the PCAP data using a binary regular expression which can be
+      run on the packet payload itself. This query filter option can produce a very large output and
+      create multiple files populating them with the specified number of records and titling them
+      with timestamps.The query filter option is specified via the BYTEARRAY_MATCHER(pattern, data)
+            Stellar function. The first argument is the regex pattern and the second argument is the
+            data. The packet data will be exposed via the packet variable in
+            Stellar.The query filter option tool is executed by ${metron_home}/bin/pcap_query.sh [fixed|query].You can filter or query for the following fields in the PCAP data:
+
+ip_scr_addr
+ip_dst_addr
+ip_src_port
+ip_dst_port
+protocol
+timestamp
+
+Query filter options:
+ -bop,--base_output_path <arg>   Query result output path. Default is
+                                 '/tmp'.
+ -bp,--base_path <arg>           Base PCAP data path. Default is
+                                 '/apps/metron/pcap'.
+ -df,--date_format <arg>         Date format to use for parsing start_time
+                                 and end_time. Default is to use time in
+                                 millis since the epoch.
+ -et,--end_time <arg>            Packet end time range. Default is current
+                                 system time.
+ -nr,--num_reducers <arg>        The number of reducers to use.  Default
+                                 is 10.
+ -h,--help                       Display help.
+ -q,--query <arg>                Query string to use as a filter.
+ -rpf                            Maximum number of records per file. 
+ -st,--start_time <arg>          (required) Packet start time range.The Query filter's --query argument specifies the Stellar expression to
+        execute on each packet. To interact with the packet, a few variables are exposed:
+packet : The packet data (a byte[])
+ip_src_addr : The source address for the packet (a
+                  String)
+ip_src_port : The source port for the packet (an
+                  Integer)
+ip_dst_addr : The destination address for the packet (a
+                  String)
+ip_dst_port : The destination port for the packet (an
+                  Integer)
+BYTEARRAY_MATCHER : The first argument is the regex pattern and the
+               second argument is the data. The packet data will be exposed via
+                  thepacket variable in Stellar.
+
+Query filter examples:
+$METRON_HOME/bin/pcap_query.sh query \
+                                      -st "20160617" \
+                                      -df "yyyyMMdd" \
+                                      --query "ip_src_addr == '192.168.138.158' and ip_src_port == '49197' \
+                                               and ip_dst_addr == '123.456.789.012' and ip_dst_port == '80' \
+                                               and protocol == '6'"
+                                       -rpf 500To search for every packet that has an ip_dst_port of 8080 and contains the text
+        "persist", run:$METRON_HOME/bin/pcap_query.sh query \
+          --query "ip_dst_port == 8080 && 
+            BYTEARRAY_MATCHER('\`persist\`', packet)" \
+            -st "20170425" \
+            -df "yyyyMMdd"You can also do proper binary regexes that look for packets containing the text
+        "persist" and the 2 byte sequence 0x1F909 (in hex):$METRON_HOME/bin/pcap_query.sh query \ 
+          --query "BYTEARRAY_MATCHER('1F90', packet) && 
+          BYTEARRAY_MATCHER('\`persist\`', packet)" \ 
+          -st "20170425" \
+          -df "yyyyMMdd"Other examples:$METRON_HOME/bin/pcap_query.sh query \
+                                      -st "1466136000000" \
+                                      --query "IN_SUBNET(ip_src_addr, '192.168.0.0/24') and ip_src_port == '49197' \
+                                               and ip_dst_addr == '123.456.789.012' and ip_dst_port == '80' \
+                                               and protocol == '6'"
+                                      -rpf 500# subnet function checks IP is in specified subnet
+      --query "IN_SUBNET(ip_src_addr, '192.168.0.0/24') \
+               and ip_src_port == '49197' \
+               and ip_dst_addr == '123.456.789.012' \
+               and ip_dst_port == '80' \
+               and protocol == '6'"# range queries on ports
+      --query "ip_src_port <= 50000 and ip_dst_port >= 30000"# range queries with conditionals and parens
+      --query "(ip_src_port < 50000 and ip_src_port > 40000) \
+            or (ip_src_port < 20000 and ip_src_port > 10000)"# in/not in list of values
+      --query "ip_src_port < 10000 and ip_dst_port in ['54056', '54057', '8080']"
+Parent topic: Filtering PCAP Data

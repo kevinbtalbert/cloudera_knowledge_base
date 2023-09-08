@@ -1,0 +1,598 @@
+Table and Column StatisticsCloudera Docs
+Table and Column Statistics
+Impala can do better optimization for complex or multi-table
+    queries when it has access to statistics about the volume of data and how
+    the values are distributed. Impala uses this information to help parallelize
+    and distribute the work for a query. For example, optimizing join queries
+    requires a way of determining if one table is bigger than another,
+    which is a function of the number of rows and the average row size for each
+    table. This topic described the categories of statistics Impala can work
+    with, and how to produce them and keep them up to date. 
+Overview of table statistics
+ The Impala query planner can make use of statistics about entire
+        tables and partitions. This information includes physical
+        characteristics such as the number of rows, number of data files, the
+        total size of the data files, and the file format. For partitioned
+        tables, the numbers are calculated per partition, and as totals for the
+        whole table. This metadata is stored in the Metastore database, and can
+        be updated by either Impala or Hive. 
+If a number is not available, the value -1 is used as a placeholder.
+        Some numbers, such as number and total sizes of data files, are always
+        kept up to date because they can be calculated cheaply, as part of
+        gathering HDFS block metadata. 
+ The following example shows table stats for an unpartitioned Parquet
+        table. The values for the number and sizes of files are always
+        available. Initially, the number of rows is not known, because it
+        requires a potentially expensive scan through the entire table, and so
+        that value is displayed as -1. The COMPUTE STATS
+        statement fills in any unknown table stats values. 
+
+show table stats parquet_snappy;
++-------+--------+---------+--------------+-------------------+---------+-------------------+...
+| #Rows | #Files | Size    | Bytes Cached | Cache Replication | Format  | Incremental stats |...
++-------+--------+---------+--------------+-------------------+---------+-------------------+...
+| -1    | 96     | 23.35GB | NOT CACHED   | NOT CACHED        | PARQUET | false             |...
++-------+--------+---------+--------------+-------------------+---------+-------------------+...
+
+compute stats parquet_snappy;
++-----------------------------------------+
+| summary                                 |
++-----------------------------------------+
+| Updated 1 partition(s) and 6 column(s). |
++-----------------------------------------+
+
+
+show table stats parquet_snappy;
++------------+--------+---------+--------------+-------------------+---------+-------------------+...
+| #Rows      | #Files | Size    | Bytes Cached | Cache Replication | Format  | Incremental stats |...
++------------+--------+---------+--------------+-------------------+---------+-------------------+...
+| 1000000000 | 96     | 23.35GB | NOT CACHED   | NOT CACHED        | PARQUET | false             |...
++------------+--------+---------+--------------+-------------------+---------+-------------------+...
+
+ To check that table statistics are available for a table, and see the
+        details of those statistics, use the statement SHOW TABLE STATS
+            table_name. 
+
+Overview of Column Statistics
+ The Impala query planner can make use of statistics about individual
+        columns when that metadata is available in the metastore database. This
+        technique is most valuable for columns compared across tables in join
+        queries, to help estimate how many rows the query will retrieve from
+        each table.  These statistics are also important for
+          correlated subqueries using the EXISTS or
+            IN operators, which are processed internally the
+          same way as join queries.
+
+ The following example shows column stats for an unpartitioned Parquet
+        table. The values for the maximum and average sizes of some types are
+        always available, because those figures are constant for numeric and
+        other fixed-size types. Initially, the number of distinct values is not
+        known, because it requires a potentially expensive scan through the
+        entire table, and so that value is displayed as -1. The same applies to
+        maximum and average sizes of variable-sized types, such as
+          STRING. The COMPUTE STATS statement
+        fills in most unknown column stats values. (It does not record the
+        number of NULL values, because currently Impala does
+        not use that figure for query optimization.) 
+
+show column stats parquet_snappy;
++-------------+----------+------------------+--------+----------+----------+
+| Column      | Type     | #Distinct Values | #Nulls | Max Size | Avg Size |
++-------------+----------+------------------+--------+----------+----------+
+| id          | BIGINT   | -1               | -1     | 8        | 8        |
+| val         | INT      | -1               | -1     | 4        | 4        |
+| zerofill    | STRING   | -1               | -1     | -1       | -1       |
+| name        | STRING   | -1               | -1     | -1       | -1       |
+| assertion   | BOOLEAN  | -1               | -1     | 1        | 1        |
+| location_id | SMALLINT | -1               | -1     | 2        | 2        |
++-------------+----------+------------------+--------+----------+----------+
+
+compute stats parquet_snappy;
++-----------------------------------------+
+| summary                                 |
++-----------------------------------------+
+| Updated 1 partition(s) and 6 column(s). |
++-----------------------------------------+
+
+show column stats parquet_snappy;
++-------------+----------+------------------+--------+----------+-------------------+
+| Column      | Type     | #Distinct Values | #Nulls | Max Size | Avg Size          |
++-------------+----------+------------------+--------+----------+-------------------+
+| id          | BIGINT   | 183861280        | -1     | 8        | 8                 |
+| val         | INT      | 139017           | -1     | 4        | 4                 |
+| zerofill    | STRING   | 101761           | -1     | 6        | 6                 |
+| name        | STRING   | 145636240        | -1     | 22       | 13.00020027160645 |
+| assertion   | BOOLEAN  | 2                | -1     | 1        | 1                 |
+| location_id | SMALLINT | 339              | -1     | 2        | 2                 |
++-------------+----------+------------------+--------+----------+-------------------+
+
+note
+ For column statistics to be effective in Impala, you also need to
+          have table statistics for the applicable tables. When you use the
+          Impala COMPUTE STATS statement, both table and column
+          statistics are automatically gathered at the same time, for all
+          columns in the table. 
+
+note Because Impala does not currently use the
+          NULL count during query planning, Impala speeds up
+        the COMPUTE STATS statement by skipping this
+          NULL counting. 
+ To check whether column statistics are available for a
+        particular set of columns, use the SHOW COLUMN STATS
+            table_name statement, or check the
+        extended EXPLAIN output for a query against that table
+        that refers to those columns.
+
+How Table and Column Statistics Work for Partitioned Tables
+ When you use Impala for big data, you are highly likely to use
+        partitioning for your biggest tables, the ones representing data that
+        can be logically divided based on dates, geographic regions, or similar
+        criteria. The table and column statistics are especially useful for
+        optimizing queries on such tables. For example, a query involving one
+        year might involve substantially more or less data than a query
+        involving a different year, or a range of several years. Each query
+        might be optimized differently as a result. 
+ The following examples show how table and column stats work with a
+        partitioned table. The table for this example is partitioned by year,
+        month, and day. For simplicity, the sample data consists of 5
+        partitions, all from the same year and month. Table stats are collected
+        independently for each partition. (In fact, the SHOW
+          PARTITIONS statement displays exactly the same information as
+          SHOW TABLE STATS for a partitioned table.) Column
+        stats apply to the entire table, not to individual partitions. Because
+        the partition key column values are represented as HDFS directories,
+        their characteristics are typically known in advance, even when the
+        values for non-key columns are shown as -1. 
+
+show partitions year_month_day;
++-------+-------+-----+-------+--------+---------+--------------+-------------------+---------+...
+| year  | month | day | #Rows | #Files | Size    | Bytes Cached | Cache Replication | Format  |...
++-------+-------+-----+-------+--------+---------+--------------+-------------------+---------+...
+| 2013  | 12    | 1   | -1    | 1      | 2.51MB  | NOT CACHED   | NOT CACHED        | PARQUET |...
+| 2013  | 12    | 2   | -1    | 1      | 2.53MB  | NOT CACHED   | NOT CACHED        | PARQUET |...
+| 2013  | 12    | 3   | -1    | 1      | 2.52MB  | NOT CACHED   | NOT CACHED        | PARQUET |...
+| 2013  | 12    | 4   | -1    | 1      | 2.51MB  | NOT CACHED   | NOT CACHED        | PARQUET |...
+| 2013  | 12    | 5   | -1    | 1      | 2.52MB  | NOT CACHED   | NOT CACHED        | PARQUET |...
+| Total |       |     | -1    | 5      | 12.58MB | 0B           |                   |         |...
++-------+-------+-----+-------+--------+---------+--------------+-------------------+---------+...
+
+show table stats year_month_day;
++-------+-------+-----+-------+--------+---------+--------------+-------------------+---------+...
+| year  | month | day | #Rows | #Files | Size    | Bytes Cached | Cache Replication | Format  |...
++-------+-------+-----+-------+--------+---------+--------------+-------------------+---------+...
+| 2013  | 12    | 1   | -1    | 1      | 2.51MB  | NOT CACHED   | NOT CACHED        | PARQUET |...
+| 2013  | 12    | 2   | -1    | 1      | 2.53MB  | NOT CACHED   | NOT CACHED        | PARQUET |...
+| 2013  | 12    | 3   | -1    | 1      | 2.52MB  | NOT CACHED   | NOT CACHED        | PARQUET |...
+| 2013  | 12    | 4   | -1    | 1      | 2.51MB  | NOT CACHED   | NOT CACHED        | PARQUET |...
+| 2013  | 12    | 5   | -1    | 1      | 2.52MB  | NOT CACHED   | NOT CACHED        | PARQUET |...
+| Total |       |     | -1    | 5      | 12.58MB | 0B           |                   |         |...
++-------+-------+-----+-------+--------+---------+--------------+-------------------+---------+...
+
+show column stats year_month_day;
++-----------+---------+------------------+--------+----------+----------+
+| Column    | Type    | #Distinct Values | #Nulls | Max Size | Avg Size |
++-----------+---------+------------------+--------+----------+----------+
+| id        | INT     | -1               | -1     | 4        | 4        |
+| val       | INT     | -1               | -1     | 4        | 4        |
+| zfill     | STRING  | -1               | -1     | -1       | -1       |
+| name      | STRING  | -1               | -1     | -1       | -1       |
+| assertion | BOOLEAN | -1               | -1     | 1        | 1        |
+| year      | INT     | 1                | 0      | 4        | 4        |
+| month     | INT     | 1                | 0      | 4        | 4        |
+| day       | INT     | 5                | 0      | 4        | 4        |
++-----------+---------+------------------+--------+----------+----------+
+
+compute stats year_month_day;
++-----------------------------------------+
+| summary                                 |
++-----------------------------------------+
+| Updated 5 partition(s) and 5 column(s). |
++-----------------------------------------+
+
+show table stats year_month_day;
++-------+-------+-----+--------+--------+---------+--------------+-------------------+---------+...
+| year  | month | day | #Rows  | #Files | Size    | Bytes Cached | Cache Replication | Format  |...
++-------+-------+-----+--------+--------+---------+--------------+-------------------+---------+...
+| 2013  | 12    | 1   | 93606  | 1      | 2.51MB  | NOT CACHED   | NOT CACHED        | PARQUET |...
+| 2013  | 12    | 2   | 94158  | 1      | 2.53MB  | NOT CACHED   | NOT CACHED        | PARQUET |...
+| 2013  | 12    | 3   | 94122  | 1      | 2.52MB  | NOT CACHED   | NOT CACHED        | PARQUET |...
+| 2013  | 12    | 4   | 93559  | 1      | 2.51MB  | NOT CACHED   | NOT CACHED        | PARQUET |...
+| 2013  | 12    | 5   | 93845  | 1      | 2.52MB  | NOT CACHED   | NOT CACHED        | PARQUET |...
+| Total |       |     | 469290 | 5      | 12.58MB | 0B           |                   |         |...
++-------+-------+-----+--------+--------+---------+--------------+-------------------+---------+...
+
+show column stats year_month_day;
++-----------+---------+------------------+--------+----------+-------------------+
+| Column    | Type    | #Distinct Values | #Nulls | Max Size | Avg Size          |
++-----------+---------+------------------+--------+----------+-------------------+
+| id        | INT     | 511129           | -1     | 4        | 4                 |
+| val       | INT     | 364853           | -1     | 4        | 4                 |
+| zfill     | STRING  | 311430           | -1     | 6        | 6                 |
+| name      | STRING  | 471975           | -1     | 22       | 13.00160026550293 |
+| assertion | BOOLEAN | 2                | -1     | 1        | 1                 |
+| year      | INT     | 1                | 0      | 4        | 4                 |
+| month     | INT     | 1                | 0      | 4        | 4                 |
+| day       | INT     | 5                | 0      | 4        | 4                 |
++-----------+---------+------------------+--------+----------+-------------------+
+
+ If you run the Hive statement
+          ANALYZE TABLE COMPUTE STATISTICS FOR COLUMNS, Impala
+        can only use the resulting column statistics if the table is
+        unpartitioned. Impala cannot use Hive-generated column statistics for a
+        partitioned table. 
+
+Detecting Missing Statistics
+ You can check whether a specific table has statistics using the
+          SHOW TABLE STATS statement (for any table) or the
+          SHOW PARTITIONS statement (for a partitioned table).
+        Both statements display the same information. If a table or a partition
+        does not have any statistics, the #Rows field contains
+          -1. Once you compute statistics for the table or
+        partition, the #Rows field changes to an accurate
+        value. 
+ The following example shows a table that initially does not have any
+        statistics. The SHOW TABLE STATS statement displays
+        different values for #Rows before and after the
+          COMPUTE STATS operation. 
+[localhost:21000] > create table no_stats (x int);
+[localhost:21000] > show table stats no_stats;
++-------+--------+------+--------------+--------+-------------------+
+| #Rows | #Files | Size | Bytes Cached | Format | Incremental stats |
++-------+--------+------+--------------+--------+-------------------+
+| -1    | 0      | 0B   | NOT CACHED   | TEXT   | false             |
++-------+--------+------+--------------+--------+-------------------+
+[localhost:21000] > compute stats no_stats;
++-----------------------------------------+
+| summary                                 |
++-----------------------------------------+
+| Updated 1 partition(s) and 1 column(s). |
++-----------------------------------------+
+[localhost:21000] > show table stats no_stats;
++-------+--------+------+--------------+--------+-------------------+
+| #Rows | #Files | Size | Bytes Cached | Format | Incremental stats |
++-------+--------+------+--------------+--------+-------------------+
+| 0     | 0      | 0B   | NOT CACHED   | TEXT   | false             |
++-------+--------+------+--------------+--------+-------------------+
+
+ The following example shows a similar progression with a partitioned
+        table. Initially, #Rows is -1. After a
+          COMPUTE STATS operation, #Rows
+        changes to an accurate value. Any newly added partition starts with no
+        statistics, meaning that you must collect statistics after adding a new
+        partition. 
+[localhost:21000] > create table no_stats_partitioned (x int) partitioned by (year smallint);
+[localhost:21000] > show table stats no_stats_partitioned;
++-------+-------+--------+------+--------------+--------+-------------------+
+| year  | #Rows | #Files | Size | Bytes Cached | Format | Incremental stats |
++-------+-------+--------+------+--------------+--------+-------------------+
+| Total | -1    | 0      | 0B   | 0B           |        |                   |
++-------+-------+--------+------+--------------+--------+-------------------+
+[localhost:21000] > show partitions no_stats_partitioned;
++-------+-------+--------+------+--------------+--------+-------------------+
+| year  | #Rows | #Files | Size | Bytes Cached | Format | Incremental stats |
++-------+-------+--------+------+--------------+--------+-------------------+
+| Total | -1    | 0      | 0B   | 0B           |        |                   |
++-------+-------+--------+------+--------------+--------+-------------------+
+[localhost:21000] > alter table no_stats_partitioned add partition (year=2013);
+[localhost:21000] > compute stats no_stats_partitioned;
++-----------------------------------------+
+| summary                                 |
++-----------------------------------------+
+| Updated 1 partition(s) and 1 column(s). |
++-----------------------------------------+
+[localhost:21000] > alter table no_stats_partitioned add partition (year=2014);
+[localhost:21000] > show partitions no_stats_partitioned;
++-------+-------+--------+------+--------------+--------+-------------------+
+| year  | #Rows | #Files | Size | Bytes Cached | Format | Incremental stats |
++-------+-------+--------+------+--------------+--------+-------------------+
+| 2013  | 0     | 0      | 0B   | NOT CACHED   | TEXT   | false             |
+| 2014  | -1    | 0      | 0B   | NOT CACHED   | TEXT   | false             |
+| Total | 0     | 0      | 0B   | 0B           |        |                   |
++-------+-------+--------+------+--------------+--------+-------------------+
+
+note Because the default COMPUTE STATS statement
+        creates and updates statistics for all partitions in a table, if you
+        expect to frequently add new partitions, use the COMPUTE
+          INCREMENTAL STATS syntax instead, which lets you compute
+        stats for a single specified partition, or only for those partitions
+        that do not already have incremental stats. 
+ If checking each individual table is impractical, due to a large
+        number of tables or views that hide the underlying base tables, you can
+        also check for missing statistics for a particular query. Use the
+          EXPLAIN statement to preview query efficiency before
+        actually running the query. Use the query profile output available
+        through the PROFILE command in
+          impala-shell or the web UI to verify query
+        execution and timing after running the query. Both the
+          EXPLAIN plan and the PROFILE output
+        display a warning if any tables or partitions involved in the query do
+        not have statistics. 
+[localhost:21000] > create table no_stats (x int);
+[localhost:21000] > explain select count(*) from no_stats;
++------------------------------------------------------------------------------------+
+| Explain String                                                                     |
++------------------------------------------------------------------------------------+
+| Estimated Per-Host Requirements: Memory=10.00MB VCores=1                           |
+| WARNING: The following tables are missing relevant table and/or column statistics. |
+| incremental_stats.no_stats                                                         |
+|                                                                                    |
+| 03:AGGREGATE [FINALIZE]                                                            |
+| |  output: count:merge(*)                                                          |
+| |                                                                                  |
+| 02:EXCHANGE [UNPARTITIONED]                                                        |
+| |                                                                                  |
+| 01:AGGREGATE                                                                       |
+| |  output: count(*)                                                                |
+| |                                                                                  |
+| 00:SCAN HDFS [incremental_stats.no_stats]                                          |
+|    partitions=1/1 files=0 size=0B                                                  |
++------------------------------------------------------------------------------------+
+
+ Because Impala uses the partition pruning technique when
+        possible to only evaluate certain partitions, if you have a partitioned
+        table with statistics for some partitions and not others, whether or not
+        the EXPLAIN statement shows the warning depends on the
+        actual partitions used by the query. For example, you might see warnings
+        or not for different queries against the same table: 
+-- No warning because all the partitions for the year 2012 have stats.
+EXPLAIN SELECT ... FROM t1 WHERE year = 2012;
+
+-- Missing stats warning because one or more partitions in this range
+-- do not have stats.
+EXPLAIN SELECT ... FROM t1 WHERE year BETWEEN 2006 AND 2009;
+
+ To confirm if any partitions at all in the table are missing
+        statistics, you might explain a query that scans the entire table, such
+        as SELECT COUNT(*) FROM table_name.
+      
+
+Manually Setting Table Statistics with ALTER TABLE
+ The most crucial piece of data in all the statistics is the number of
+        rows in the table (for an unpartitioned or partitioned table) and for
+        each partition (for a partitioned table). The COMPUTE
+          STATS statement always gathers statistics about all columns,
+        as well as overall table statistics. If it is not practical to do a full
+          COMPUTE STATS or COMPUTE INCREMENTAL
+          STATS operation after adding a partition or inserting data,
+        or if you can see that Impala would produce a more efficient plan if the
+        number of rows was different, you can manually set the number of rows
+        through an ALTER TABLE statement: 
+
+-- Set total number of rows. Applies to both unpartitioned and partitioned tables.
+alter table table_name set tblproperties('numRows'='new_value', 'STATS_GENERATED_VIA_STATS_TASK'='true');
+
+-- Set total number of rows for a specific partition. Applies to partitioned tables only.
+-- You must specify all the partition key columns in the PARTITION clause.
+alter table table_name partition (keycol1=val1,keycol2=val2...) set tblproperties('numRows'='new_value', 'STATS_GENERATED_VIA_STATS_TASK'='true');
+
+ This statement avoids re-scanning any data files. For example:
+
+alter table analysis_data set tblproperties('numRows'='1001000000', 'STATS_GENERATED_VIA_STATS_TASK'='true');
+ For a partitioned table, update both the per-partition number of rows
+        and the number of rows for the whole table. For example:
+alter table partitioned_data partition(year=2009, month=4) set tblproperties ('numRows'='30000', 'STATS_GENERATED_VIA_STATS_TASK'='true');
+alter table partitioned_data set tblproperties ('numRows'='1030000', 'STATS_GENERATED_VIA_STATS_TASK'='true');
+ In practice, the COMPUTE STATS statement, or
+          COMPUTE INCREMENTAL STATS for a partitioned table,
+        should be fast and convenient enough that this technique is only useful
+        for the very largest partitioned tables. Because the column statistics
+        might be left in a stale state, do not use this technique as a
+        replacement for COMPUTE STATS. Only use this technique
+        if all other means of collecting statistics are impractical, or as a
+        low-overhead operation that you run in between periodic COMPUTE
+          STATS or COMPUTE INCREMENTAL STATS
+        operations. 
+
+Manually Setting Column Statistics with ALTER TABLE
+ You can use the SET COLUMN STATS clause of
+          ALTER TABLE to manually set or change column
+        statistics. Only use this technique in cases where it is impractical to
+        run COMPUTE STATS or COMPUTE INCREMENTAL
+          STATS frequently enough to keep up with data changes for a
+        huge table. 
+You specify a case-insensitive symbolic name for the kind of
+        statistics: numDVs, numNulls,
+          avgSize, maxSize. The key names and
+        values are both quoted. This operation applies to an entire table, not a
+        specific partition. 
+For example:
+        
+alter table t1 set column stats x ('numDVs'='2','numNulls'='0');
+
+
+Examples of Using Table and Column Statistics with Impala
+ The following examples walk through a sequence of SHOW TABLE
+          STATS, SHOW COLUMN STATS, ALTER
+          TABLE, and SELECT and
+          INSERT statements to illustrate various aspects of
+        how Impala uses statistics to help optimize queries. 
+ This example shows table and column statistics for the
+          STORE column used in the TPC-DS
+          benchmarks for decision support systems. It is a tiny table
+        holding data for 12 stores. Initially, before any statistics are
+        gathered by a COMPUTE STATS statement, most of the
+        numeric fields show placeholder values of -1, indicating that the
+        figures are unknown. The figures that are filled in are values that are
+        easily countable or deducible at the physical level, such as the number
+        of files, total data size of the files, and the maximum and average
+        sizes for data types that have a constant size such as
+          INT, FLOAT, and
+          TIMESTAMP. 
+[localhost:21000] > show table stats store;
++-------+--------+--------+--------+
+| #Rows | #Files | Size   | Format |
++-------+--------+--------+--------+
+| -1    | 1      | 3.08KB | TEXT   |
++-------+--------+--------+--------+
+Returned 1 row(s) in 0.03s
+[localhost:21000] > show column stats store;
++--------------------+-----------+------------------+--------+----------+----------+
+| Column             | Type      | #Distinct Values | #Nulls | Max Size | Avg Size |
++--------------------+-----------+------------------+--------+----------+----------+
+| s_store_sk         | INT       | -1               | -1     | 4        | 4        |
+| s_store_id         | STRING    | -1               | -1     | -1       | -1       |
+| s_rec_start_date   | TIMESTAMP | -1               | -1     | 16       | 16       |
+| s_rec_end_date     | TIMESTAMP | -1               | -1     | 16       | 16       |
+| s_closed_date_sk   | INT       | -1               | -1     | 4        | 4        |
+| s_store_name       | STRING    | -1               | -1     | -1       | -1       |
+| s_number_employees | INT       | -1               | -1     | 4        | 4        |
+| s_floor_space      | INT       | -1               | -1     | 4        | 4        |
+| s_hours            | STRING    | -1               | -1     | -1       | -1       |
+| s_manager          | STRING    | -1               | -1     | -1       | -1       |
+| s_market_id        | INT       | -1               | -1     | 4        | 4        |
+| s_geography_class  | STRING    | -1               | -1     | -1       | -1       |
+| s_market_desc      | STRING    | -1               | -1     | -1       | -1       |
+| s_market_manager   | STRING    | -1               | -1     | -1       | -1       |
+| s_division_id      | INT       | -1               | -1     | 4        | 4        |
+| s_division_name    | STRING    | -1               | -1     | -1       | -1       |
+| s_company_id       | INT       | -1               | -1     | 4        | 4        |
+| s_company_name     | STRING    | -1               | -1     | -1       | -1       |
+| s_street_number    | STRING    | -1               | -1     | -1       | -1       |
+| s_street_name      | STRING    | -1               | -1     | -1       | -1       |
+| s_street_type      | STRING    | -1               | -1     | -1       | -1       |
+| s_suite_number     | STRING    | -1               | -1     | -1       | -1       |
+| s_city             | STRING    | -1               | -1     | -1       | -1       |
+| s_county           | STRING    | -1               | -1     | -1       | -1       |
+| s_state            | STRING    | -1               | -1     | -1       | -1       |
+| s_zip              | STRING    | -1               | -1     | -1       | -1       |
+| s_country          | STRING    | -1               | -1     | -1       | -1       |
+| s_gmt_offset       | FLOAT     | -1               | -1     | 4        | 4        |
+| s_tax_percentage   | FLOAT     | -1               | -1     | 4        | 4        |
++--------------------+-----------+------------------+--------+----------+----------+
+Returned 29 row(s) in 0.04s
+ With the Hive ANALYZE TABLE statement for column
+        statistics, you had to specify each column for which to gather
+        statistics. The Impala COMPUTE STATS statement
+        automatically gathers statistics for all columns, because it reads
+        through the entire table relatively quickly and can efficiently compute
+        the values for all the columns. This example shows how after running the
+          COMPUTE STATS statement, statistics are filled in for
+        both the table and all its columns: 
+[localhost:21000] > compute stats store;
++------------------------------------------+
+| summary                                  |
++------------------------------------------+
+| Updated 1 partition(s) and 29 column(s). |
++------------------------------------------+
+Returned 1 row(s) in 1.88s
+[localhost:21000] > show table stats store;
++-------+--------+--------+--------+
+| #Rows | #Files | Size   | Format |
++-------+--------+--------+--------+
+| 12    | 1      | 3.08KB | TEXT   |
++-------+--------+--------+--------+
+Returned 1 row(s) in 0.02s
+[localhost:21000] > show column stats store;
++--------------------+-----------+------------------+--------+----------+-------------------+
+| Column             | Type      | #Distinct Values | #Nulls | Max Size | Avg Size          |
++--------------------+-----------+------------------+--------+----------+-------------------+
+| s_store_sk         | INT       | 12               | -1     | 4        | 4                 |
+| s_store_id         | STRING    | 6                | -1     | 16       | 16                |
+| s_rec_start_date   | TIMESTAMP | 4                | -1     | 16       | 16                |
+| s_rec_end_date     | TIMESTAMP | 3                | -1     | 16       | 16                |
+| s_closed_date_sk   | INT       | 3                | -1     | 4        | 4                 |
+| s_store_name       | STRING    | 8                | -1     | 5        | 4.25              |
+| s_number_employees | INT       | 9                | -1     | 4        | 4                 |
+| s_floor_space      | INT       | 10               | -1     | 4        | 4                 |
+| s_hours            | STRING    | 2                | -1     | 8        | 7.083300113677979 |
+| s_manager          | STRING    | 7                | -1     | 15       | 12                |
+| s_market_id        | INT       | 7                | -1     | 4        | 4                 |
+| s_geography_class  | STRING    | 1                | -1     | 7        | 7                 |
+| s_market_desc      | STRING    | 10               | -1     | 94       | 55.5              |
+| s_market_manager   | STRING    | 7                | -1     | 16       | 14                |
+| s_division_id      | INT       | 1                | -1     | 4        | 4                 |
+| s_division_name    | STRING    | 1                | -1     | 7        | 7                 |
+| s_company_id       | INT       | 1                | -1     | 4        | 4                 |
+| s_company_name     | STRING    | 1                | -1     | 7        | 7                 |
+| s_street_number    | STRING    | 9                | -1     | 3        | 2.833300113677979 |
+| s_street_name      | STRING    | 12               | -1     | 11       | 6.583300113677979 |
+| s_street_type      | STRING    | 8                | -1     | 9        | 4.833300113677979 |
+| s_suite_number     | STRING    | 11               | -1     | 9        | 8.25              |
+| s_city             | STRING    | 2                | -1     | 8        | 6.5               |
+| s_county           | STRING    | 1                | -1     | 17       | 17                |
+| s_state            | STRING    | 1                | -1     | 2        | 2                 |
+| s_zip              | STRING    | 2                | -1     | 5        | 5                 |
+| s_country          | STRING    | 1                | -1     | 13       | 13                |
+| s_gmt_offset       | FLOAT     | 1                | -1     | 4        | 4                 |
+| s_tax_percentage   | FLOAT     | 5                | -1     | 4        | 4                 |
++--------------------+-----------+------------------+--------+----------+-------------------+
+Returned 29 row(s) in 0.04s
+ The following example shows how statistics are represented for a
+        partitioned table. In this case, we have set up a table to hold the
+        world's most trivial census data, a single STRING
+        field, partitioned by a YEAR column. The table
+        statistics include a separate entry for each partition, plus final
+        totals for the numeric fields. The column statistics include some easily
+        deducible facts for the partitioning column, such as the number of
+        distinct values (the number of partition subdirectories).
+        
+      
+localhost:21000] > describe census;
++------+----------+---------+
+| name | type     | comment |
++------+----------+---------+
+| name | string   |         |
+| year | smallint |         |
++------+----------+---------+
+Returned 2 row(s) in 0.02s
+[localhost:21000] > show table stats census;
++-------+-------+--------+------+---------+
+| year  | #Rows | #Files | Size | Format  |
++-------+-------+--------+------+---------+
+| 2000  | -1    | 0      | 0B   | TEXT    |
+| 2004  | -1    | 0      | 0B   | TEXT    |
+| 2008  | -1    | 0      | 0B   | TEXT    |
+| 2010  | -1    | 0      | 0B   | TEXT    |
+| 2011  | 0     | 1      | 22B  | TEXT    |
+| 2012  | -1    | 1      | 22B  | TEXT    |
+| 2013  | -1    | 1      | 231B | PARQUET |
+| Total | 0     | 3      | 275B |         |
++-------+-------+--------+------+---------+
+Returned 8 row(s) in 0.02s
+[localhost:21000] > show column stats census;
++--------+----------+------------------+--------+----------+----------+
+| Column | Type     | #Distinct Values | #Nulls | Max Size | Avg Size |
++--------+----------+------------------+--------+----------+----------+
+| name   | STRING   | -1               | -1     | -1       | -1       |
+| year   | SMALLINT | 7                | -1     | 2        | 2        |
++--------+----------+------------------+--------+----------+----------+
+Returned 2 row(s) in 0.02s
+ The following example shows how the statistics are filled in by a
+          COMPUTE STATS statement in Impala. 
+[localhost:21000] > compute stats census;
++-----------------------------------------+
+| summary                                 |
++-----------------------------------------+
+| Updated 3 partition(s) and 1 column(s). |
++-----------------------------------------+
+Returned 1 row(s) in 2.16s
+[localhost:21000] > show table stats census;
++-------+-------+--------+------+---------+
+| year  | #Rows | #Files | Size | Format  |
++-------+-------+--------+------+---------+
+| 2000  | -1    | 0      | 0B   | TEXT    |
+| 2004  | -1    | 0      | 0B   | TEXT    |
+| 2008  | -1    | 0      | 0B   | TEXT    |
+| 2010  | -1    | 0      | 0B   | TEXT    |
+| 2011  | 4     | 1      | 22B  | TEXT    |
+| 2012  | 4     | 1      | 22B  | TEXT    |
+| 2013  | 1     | 1      | 231B | PARQUET |
+| Total | 9     | 3      | 275B |         |
++-------+-------+--------+------+---------+
+Returned 8 row(s) in 0.02s
+[localhost:21000] > show column stats census;
++--------+----------+------------------+--------+----------+----------+
+| Column | Type     | #Distinct Values | #Nulls | Max Size | Avg Size |
++--------+----------+------------------+--------+----------+----------+
+| name   | STRING   | 4                | -1     | 5        | 4.5      |
+| year   | SMALLINT | 7                | -1     | 2        | 2        |
++--------+----------+------------------+--------+----------+----------+
+Returned 2 row(s) in 0.02s
+ You can see how Impala executes a query differently in
+        each case by observing the EXPLAIN output before and
+        after collecting statistics. Measure the before and after query times,
+        and examine the throughput numbers in before and after
+          SUMMARY or PROFILE output, to verify
+        how much the improved plan speeds up performance. 
+
+

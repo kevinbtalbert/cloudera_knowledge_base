@@ -1,0 +1,25 @@
+S3A and Checksums (Advanced Feature)Cloudera Docs
+S3A and Checksums (Advanced Feature)
+The S3A connector can be configured to export the HTTP etag of an object as a
+    checksum, by setting the option fs.s3a.etag.checksum.enabled to
+      true. When unset (the defaut), S3A objects have no checksum.
+$ hadoop fs -touchz s3a://hwdev-bucket/src/something.txt
+$ hadoop fs -checksum s3a://hwdev-bucket/src/something.txt
+s3a://hwdev-bucket/src/something.txt NONE
+Once set, S3A objects have a checksum which is created on upload.
+$ hadoop fs -Dfs.s3a.etag.checksum.enabled=true -checksum s3a://hwdev-bucket/src/something.txt
+s3a://hwdev-bucket/src/something.txt etag 6434316438636439386630306232303465393830303939386563663834323765
+This checksum is not compatible with that or HDFS, so cannot be used to compare file
+        versions when using the -update option on DistCp between S3 and HDFS. More
+        specifically, unless -skipcrccheck is set, the DistCP operation will fail with
+        a checksum mismatch. However, it can be used for incremental updates within and across S3A
+        buckets.
+$ hadoop distcp -Dfs.s3a.etag.checksum.enabled=true --update s3a://hwdev-bucket/src s3a://hwdev-bucket/dest
+
+$ hadoop fs -Dfs.s3a.etag.checksum.enabled=true -checksum s3a://hwdev-bucket/dest/something.txt
+s3a://hwdev-bucket/src/something.txt etag 6434316438636439386630306232303465393830303939386563663834323765
+      
+As the checksums match small files created as a single block, incremental updates will
+        not copy unchanged files. For large files uploaded using multiple blocks, the checksum
+        values may differ in which case the source file will be copied again.
+Parent topic: Working with Amazon S3

@@ -1,0 +1,116 @@
+Support reading and writing Parquet bloom filtersCloudera Docs
+Support reading and writing Parquet bloom filters
+Bloom filter is a performance optimization feature now available in Impala. This filter
+  tells you, rapidly and memory-efficiently, whether the data you are looking for is present in a
+  file. 
+Impala determines the appropriate conditions while the query is running. Impala can now read
+   and write Parquet bloom filters. However, bloom filters can also provide false positives. If a
+   bloom filter evaluates to: 
+
+true: data might be present in the data file or might not be present.
+false: data is not present.
+
+ Currently, bloom filters are per column chunk entries which implies that you can skip entire
+   row groups based on the filter. Writing a bloom filter is not useful for dictionary encoded
+   columns, as all distinct values are included in the dictionary and the dictionary can give exact
+   results in filtering with the predicate. If no value passes the predicate the whole row group can
+   be skipped.
+For example, if there is a predicate 'WHERE col = some_value' and some_value is not
+   in the bloom filter the row group will be discarded.
+Bloom filters support reading and writing columns with the following data types: integers,
+   float, double, and Impala strings. Reading does not need any intervention from Impala, however,
+   writing can be controlled by a new query option parquet_bloom_filter_write and
+   the table property parquet.bloom.filter.columns.
+The following table contains the list of the supported data types.
+
+Parquet type
+Impala type
+
+
+INT32
+TINYINT, SMALLINT, INT
+
+
+INT64
+BIGINT
+
+
+FLOAT
+FLOAT
+
+
+DOUBLE
+DOUBLE
+
+
+BYTE_ARRAY
+STRING
+
+
+Query option
+The query option for writing Parquet bloom filters (parquet_bloom_filter_write) accepts any of
+    the following values:
+
+
+
+NEVER - never write Parquet bloom filters.
+
+
+IF_NO_DICT - write Parquet bloom filters if specified in the table
+       properties AND if the row group is not fully dictionary encoded (the number of distinct
+       values exceeds the maximum dictionary size); the row group may still be partially dictionary
+       encoded, in which case the bloom filter contains all values from the whole row group,
+       including those that are present in the dictionary.
+
+
+ALWAYS - always write Parquet bloom filters if specified in the table
+       properties, even if the row group is fully dictionary encoded.
+
+
+
+
+Table setting
+The parquet.bloom.filter.columns table property is a comma separated list of
+    'col_name:bytes' pairs.
+Where:
+col_name is the name of the column for which a bloom filter should
+    be written;
+bytes represents the size (in bytes) of the bitset of the bloom
+    filter, and is optional. If you do not provide the size, it will default to the maximal bloom
+    filter size (ParquetBloomFilter::MAX_BYTES).
+Example: “col1:1024,col2,col4:100"
+
+Limitations
+The following table contains the data types that are not supported currently. Support for
+    these data types may be added in a future release.
+
+
+
+Impala type
+Reason for not supporting
+
+
+VARCHAR(N)
+truncation can change hash
+
+
+CHAR(N)
+padding / truncation can change hash
+
+
+DECIMAL
+multiple encodings supported
+
+
+TIMESTAMP
+multiple encodings supported, timezone conversion
+
+
+DATE
+not considered yet
+
+
+
+
+
+Parent topic: Performance Considerations

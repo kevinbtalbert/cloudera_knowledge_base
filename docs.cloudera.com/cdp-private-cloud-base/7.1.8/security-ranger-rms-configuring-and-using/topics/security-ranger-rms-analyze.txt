@@ -1,0 +1,72 @@
+Analyzing Ranger RMS resourcesCloudera Docs
+Analyzing Ranger RMS resources
+You can use the tools described in this topic to analyze Ranger RMS
+        issues.
+
+In CDP 7.1.7 Ranger RMS installations, we have observed numerous identical
+                resource-signatures with different IDs for a single Hive resource due to which
+                evaluation of access policies can be slow. This topic provides a tool set you can
+                use to analyze the database as well as the resource-mapping cache (.json) file to
+                help identify resource data if such a problem exists. This tool set can also help
+                determine whether the source of such duplicate entries is:
+incorrect entries in the Ranger database tables,
+incorrect in-memory cache in Ranger RMS server, or
+incorrect processing of resource-mapping deltas on the plugin side.
+
+
+
+The resource_mapping.json file can be located in the active NameNode host at
+                        /var/lib/ranger/hdfs/policy-cache/hdfs_cm_hive_resource_mapping.json
+                    path. To find duplicate resource-signatures in
+                        resource-mapping.json file:
+
+
+Update the json file in readable format
+
+python -m json.tool hdfs_cm_hive_resource_mapping.json > pretty_resource_mapping.json
+
+
+
+To find duplicate entries, use the following grep command:
+
+grep -o -E 'resourceSignature.*,' pretty_resource_mapping.json | sort | uniq -c | grep -v '1 resourceSignature' > outputFile.txt 
+
+
+
+
+To find duplicate resource-signature entries in
+                        x_rms_service_resource table, 
+
+
+Connect to Ranger database. 
+To check configured database; go to Cloudera Manager > Ranger > Configuration > Database.
+use either of the following queries:
+
+select resource_signature, COUNT(resource_signature) from 
+x_rms_service_resource
+group by resource_signature HAVING COUNT(resource_signature) > 1;
+
+or
+SELECT a.id, a.service_resource_elements_text, 
+a.resource_signature from x_rms_service_resource a where 
+a.resource_signature in
+(select resource_signature from x_rms_service_resource
+group by resource_signature HAVING COUNT(resource_signature) > 
+1) ORDER BY a.resource_signature;
+
+
+
+To find total count of duplicate entries,
+
+
+use the following query:
+
+select sum(occurrences) as total_occurrences from (select 
+resource_signature, COUNT(resource_signature) as occurrences 
+from x_rms_service_resource
+group by resource_signature HAVING COUNT(resource_signature) > 1) tbl1;
+
+
+
+
+

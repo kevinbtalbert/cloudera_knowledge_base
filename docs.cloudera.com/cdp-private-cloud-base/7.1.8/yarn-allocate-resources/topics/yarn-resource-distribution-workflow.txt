@@ -1,0 +1,83 @@
+Resource distribution workflowCloudera Docs
+Resource distribution workflow
+During scheduling, queues at any level in the hierarchy are sorted in the order of their current used capacity, and the available resources are distributed among them starting with queues that are currently the most under-served.
+  
+With respect to capacities alone, the resource scheduling has the following workflow:
+
+The more under-served a queue is, the higher the priority it receives during resource
+        allocation. The most under-served queue is the queue with the least ratio of used capacity
+        as compared to the total cluster capacity. 
+          
+The used capacity of any parent queue is defined as the aggregate sum of used
+              capacity of all of its descendant queues, recursively.
+The used capacity of a leaf queue is the amount of resources used by the allocated
+              Containers of all of the applications running in that queue.
+
+
+Once it is decided to give a parent queue the currently available free resources, further scheduling is done recursively to determine which child queue gets to use the resources -- based on the previously described concept of used capacities.
+Further scheduling happens inside each leaf queue to allocate resources to applications in
+        a FIFO order. 
+          
+This is also dependent on locality, user level limits, and application limits.
+Once an application within a leaf queue is chosen, scheduling also happens within
+              the application. Applications may have different priorities of resource requests.
+            
+
+
+To ensure elasticity, capacity that is configured but not utilized by any queue due to lack of demand is automatically assigned to the queues that are in need of resources.
+
+Resource Distribution Process in Relative Mode - Example
+To understand the resource distribution workflow, consider the example of a 100-node cluster, each with 10 GB of memory allocated for YARN containers, for a total cluster capacity of 1000 GB (1 TB).
+For example, in the Relative allocation mode, the "engineering" organization is assigned
+        60% of the cluster capacity, that is, an absolute capacity of 600 GB. Similarly, the
+        "support" organization is assigned 100 GB, and the "marketing" organization gets 300 GB.
+Under the "engineering" organization, capacity is distributed between the "development"
+        team and the "qa" team in a 1:4 ratio. So "development" gets 120 GB, and 480 GB is assigned
+        to "qa".
+Now consider the following timeline of events:
+
+Initially, the entire "engineering" queue is free with no applications running, while the "support" and "marketing" queues are utilizing their full capacities.
+Users Sid and Hitesh first submit applications to the "development" leaf queue. Their
+          applications are elastic and can run with either all of the resources available in the
+          cluster, or with a subset of cluster resources (depending upon the state of the
+          resource-usage). 
+            
+Even though the "development" queue is allocated 120 GB, Sid and Hitesh are each
+                allowed to occupy 120 GB, for a total of 240 GB.
+This can happen despite the fact that the "development" queue is configured to be
+                run with a capacity of 120 GB. Capacity Scheduler allows elastic sharing of cluster
+                resources for better utilization of available cluster resources. Since there are no
+                other users in the "engineering" queue, Sid and Hitesh are allowed to use the
+                available free resources.
+
+
+Next, users Jian, Zhijie and Xuan submit more applications to the "development" leaf
+            queue. Even though each is restricted to 120 GB, the overall used capacity in the queue
+            becomes 600 GB -- essentially taking over all of the resources allocated to the "qa" leaf
+            queue.
+User Gupta now submits an application to the "qa" queue. With no free resources available in
+            the cluster, the user's application must wait.
+Given that the "development" queue is utilizing all of the available cluster resources,
+                Gupta may or may not be able to immediately get back the guaranteed capacity of his "qa"
+                queue -- depending upon whether or not preemption is enabled.
+
+As the applications of Sid, Hitesh, Jian, Zhijie, and Xuan finish running and resources become available, the newly available Containers will be allocated to Gupta’s application.
+
+This will continue until the cluster stabilizes at the intended 1:4 resource usage ratio for the "development" and "qa" queues.
+From this example, you can see that it is possible for abusive users to submit applications continuously, and thereby lock out other queues from resource allocation until Containers finish running or get preempted. To avoid this scenario, Capacity Scheduler supports limits on the elastic growth of any queue. For example, you can restrict the "development" queue from monopolizing the "engineering" queue capacity by setting the maximum capacity property.
+To set the maximum capacity property based on this example, perform the following:
+
+In Cloudera Manager, select Clusters > YARN Queue Manager UI
+          service. A graphical queue hierarchy is displayed in the Overview tab. 
+Click on the three vertical dots on the development queue and
+            select Edit Child Queues option.
+Enter 40 in the Configured Value field. 
+Click Save.
+
+Once this is set, users of the "development" queue can still go beyond their capacity of
+        120 GB, but they will not be allocated any more than 40% of the "engineering" parent queue's
+        capacity (that is, 40% of 600 GB = 240 GB).
+The capacity and maximum-capacity properties can be used to control sharing and elasticity across the organizations and sub-organizations utilizing a YARN cluster. Administrators should balance these properties to avoid strict limits that result in a loss of utilization, and to avoid excessive cross-organization sharing.
+
+
+Parent topic: Resource scheduling and management

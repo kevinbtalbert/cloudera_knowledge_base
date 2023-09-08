@@ -1,0 +1,145 @@
+Installing Python 3.8 on RHEL 7 or 8 for Cloudera Manager 7.7.3Cloudera Docs
+Installing Python 3.8 on RHEL 7 or 8 for Cloudera Manager 7.7.3
+You must install Python 3.8 on all cluster hosts before installing Cloudera Manager and
+    adding services to your cluster. 
+
+You can either install the standard Python 3.8 package prepackaged with the
+      RHEL 8 operating system or a custom Python 3.8 package in the default
+      operating system location or in a custom location based on your
+      organization's requirements. If you install Python 3.8 in a custom
+      location, then you must point Cloudera Manager to that location either by
+      creating a symbolic link or by adding an environment variable to the
+      Cloudera Manager Agent systemd service definition file. 
+If you are using RHEL 8, Cloudera recommends that you uninstall Python
+      2.7, if it is present on your hosts. If you are using RHEL 7, do not
+      uninstall Python 2.7.
+noteThe standard Python 3.8 package is available only for customers with a
+      RedHat subscription. It is not available when using CentOS. If the
+      standard package is not available, you must follow the steps below to
+      install a custom Python 3.8 package. 
+notePython 3.8 is also required for using the Hue service on CDP 7.1.8
+        and higher. You do not need to install Python 3.8 separately on Hue hosts on RHEL 8
+        operating systems. If you choose a custom installation location in the steps below and do
+        not configure alternatives, then prepend the path to the custom bin directory in Cloudera Manager > Clusters > Hue > Configuration > Hue Service Environment Advanced Configuration Snippet (Safety
+            Valve) separated by colon (:) as follows:Key:
+            PATHValue:
+              [***CUSTOM-INSTALL-PATH***]/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/bin
+
+
+Installing the standard Python 3.8 packageInstalling a custom Python 3.8 package
+Perform the following steps on all cluster hosts: 
+SSH into the host system as a root user.
+Run the following command to install Python
+                3.8:yum install python3.8
+Verify the Python version as
+                follows:python3.8 -–version
+importantDepending on your package, Python 3.8
+              is installed at one of the following locations:
+/usr/bin
+/usr/local/python38/bin
+/usr/local/bin
+/opt/rh/rh-python38/root/usr/bin
+You have completed the Python installation. Skip the remaining steps on
+            this page. 
+
+Before installing Python 3.8, you must install the necessary developer tools and
+            packages such as gcc, make, Openssl-devel, Bzip2-devel, Libffi-devel, and Zlib-devel.
+            Run the following command on all cluster hosts to install the necessary
+              dependencies:yum install gcc openssl-devel bzip2-devel libffi-devel zlib-devel -ynoteYou cannot install the openssl-devel package on
+              a FIPS cluster.
+You may install the custom Python 3.8 package in the standard location, or if required
+            by your organization, in a custom location. Note that some commands are different
+            depending on this choice. If using a custom location, substitute the custom location
+            wherever you see [***CUSTOM-INSTALL-PATH**] in the
+            instructions. 
+Perform the following steps on all cluster hosts: 
+
+SSH into the host system as a root user.
+Download Python 3.8 and decompress the package by running the following
+              commands:cd /opt
+curl -O https://www.python.org/ftp/python/3.8.12/Python-3.8.12.tgztar -zxvf Python-3.8.12.tgz
+Change directory to where you decompressed the Python 3.8
+              package:cd /opt/Python-3.8.12
+Add Python bz2 module by running the following
+              command:sudo yum install bzip2-devel
+Run one of the following command to start installing Python 3.8:
+If you are installing to the standard location, run the following command
+                  ./configure --enable-shared
+If you are installing to a custom location, run the following
+                  command:./configure --enable-shared --prefix=[***CUSTOM-INSTALL-PATH***]
+importantBy default, Python can be installed
+                in any one of the following locations:
+/usr/bin
+/usr/local/python38/bin
+/usr/local/bin
+/opt/rh/rh-python38/root/usr/bin
+If you are installing Python 3.8 in any other location, then you must
+                  specify the path using the --prefix option.The
+                    --enabled-shared option is used to build a shared library
+                  instead of a static library.
+Build Python 3.8 as follows:
+Run the make command to compile the
+                  files:make
+Run the following command to place the compiled files in the default location or
+                  in the custom location that you specified using the --prefix
+                  option:make altinstall
+Copy the shared compiled library files (libpython3.8.so) to the
+                    /lib64/
+                  directory:cp --no-clobber ./libpython3.8.so* /lib64/
+                  The --no-clobber option is used to prevent overwriting of
+                  files.
+Change the permissions of the libpython3.8.so files as
+                  follows:chmod 755 /lib64/libpython3.8.so*
+
+If you see the error while loading shared libraries:
+                libpython3.8.so.1.0: cannot open shared object file: No such file or
+                directory error, then run the following command:
+              export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib/
+
+If you installed Python 3.8 in a standard location, you can stop here. If you installed
+            Python 3.8 in a custom location using the --prefix option, follow the steps in the next
+            section for providing the custom location to Cloudera Manager. 
+
+Enabling Cloudera Manager to use Python 3.8 from the custom location
+If you have installed Python 3.8 at a custom location, then you must point Cloudera
+            Manager to that location either by creating a symbolic link using the “alternatives”
+            command or by adding an environment variable to the Cloudera Manager Agent in the
+            systemd service definition files with the full path to the Python 3.8 custom-built
+            binary.
+To use the alternatives command, get help by running the command "alternatives --help",
+            or see the Redhat documentation. You should create symbolic
+            links from either /usr/bin/python3.8 or
+              /usr/local/bin/python3.8 to
+                [***CUSTOM-INSTALL-PATH***]/bin/python3.8 where
+            you installed the Python 3.8 package. 
+
+importantUsing the alternatives command to set up
+              symbolic links does not support setting up of the PYTHONHOME or
+                PYTHONPATH variables if that is necessary for your custom version
+              of Python 3.8 installation.
+
+To add an environment variable to the Cloudera Manager Agent in the systemd service
+            definition files perform the following steps:
+SSH into the host system on which you installed Python 3.8 as a root user.
+Open the
+                  /usr/lib/systemd/system/cloudera-scm-supervisord.service file
+                for editing.
+Add the following line in the
+                  cloudera-scm-supervisord.service file under the
+                  [Service]
+                section:Environment=”PYTHONBIN=[***CUSTOM-INSTAL-PATH***]/bin/python3.8”
+
+Open the /usr/lib/systemd/system/cloudera-scm-agent.service
+                file for editing.
+Add the following line in the cloudera-scm-agent.service file
+                under the [Service]
+                  section:Environment=”PYTHONBIN=[***CUSTOM-INSTAL-PATH***]/bin/python3.8”
+importantIf your custom version of
+                  Python 3.8 installation requires setting up the PYTHONHOME or
+                    PYTHONPATH variables, then add them with additional Environment
+                  lines.
+
+
+
+
+Parent topic: Installing Python 3.8 for Cloudera Manager 7.7.3

@@ -1,0 +1,113 @@
+Options to monitor compactionsCloudera Docs
+Options to monitor compactions
+You can view the progress of compactions using the SHOW COMPACTIONS
+  statement or by querying the COMPACTIONS view within the SYS
+  database.
+The query statement displays the following details about compactions:
+
+C_ID: Unique internal compaction ID
+C_DATABASE: Hive database name
+C_TABLE: Table name
+C_PARTITION: Partition name (if the table is partitioned)
+C_TYPE: Major or minor compaction
+C_STATE: Compaction state
+initiated: waiting in queue to be compacted
+working: currently being compacted
+ready for cleaning: compaction completed and old files scheduled for removal 
+failed: compaction job failed. Details are printed to the metastore log.
+succeeded: compaction job completed successfully
+attempted: initiator attempted to schedule a compaction but failed or
+       hive.compactor.initiator.failed.compacts.threshold is breached and
+      compaction is skipped . Details are printed to the metastore log.
+
+C_WORKER_HOST: Thread ID of the worker thread performing the
+    compaction
+C_WORKER_ID: Unique internal worker ID
+C_WORKER_VERSION: Version of distribution with running worker
+C_ENQUEUE_TIME: Time when compaction request was placed 
+C_START: Start time of the compaction job
+C_DURATION: Duration (in ms) of the compaction job
+C_HADOOP_JOB_ID: ID of the submitted MapReduce job for MR
+    compaction. 'None' for query-based compaction.
+C_INITIATOR_HOST: Host where initiator is configured
+C_INITIATOR_ID: Unique internal initiator ID
+C_INITIATOR_VERSION: Version of distribution with active initiator
+
+noteDetails about "initiators" and "workers" are new additions that you
+   can use to investigate the compaction setup in an environment. If you are unable to retrieve
+   these details using the options listed here, you can run the following query on the backend
+   database:SELECT activity.pid, 
+       activity.usename, 
+       activity.client_addr, 
+       activity.client_hostname, 
+       activity.query, 
+       blocking.pid AS blocking_pid, 
+       blocking.query AS blocking_query, 
+       blocking.client_addr AS blocking_client_addr, 
+       blocking.client_hostname AS blocking_client_hostname 
+FROM pg_stat_activity AS activity
+JOIN pg_stat_activity AS blocking
+    ON blocking.pid = ANY(pg_blocking_pids(activity.pid))
+WHERE blocking.query like '%AUX_TABLE%';
+
+The following sections describe the various options that you can use to monitor
+   compactions.
+SHOW COMPACTIONS
+You can run the SHOW COMPACTIONS statement to view details about all the
+    compaction jobs.
+SHOW COMPACTIONS;
+Authorization is not required to use the SHOW COMPACTIONS statement.
+    Therefore, every user can view compactions and their current state.
+Since the statement lists all the compaction jobs, you cannot filter or limit the results as
+    required. Alternatively, you can use the SYS database to query and filter
+    specific compactions.
+
+Querying the SYS database
+The SYS database in the Hive metastore contains the following sources that
+    you can use to monitor compactions:
+
+COMPACTION_QUEUE: Stores information about compaction requests - both
+     explicit user submitted and compactions discovered by the initiator and enqueued.
+COMPLETED_COMPACTIONS: Stores the same information present in
+      COMPACTION_QUEUE along with the compaction’s end time. Records are moved to
+     the completed table when the cleaner finishes the job on the compaction request.
+COMPACTIONS: A view over the COMPACTION_QUEUE and
+      COMPLETED_COMPACTIONS tables that resolves the column values to human
+     readable format.
+
+The SYS database tables and views are treated as normal Hive external tables
+    or views, and therefore, standard access policies can be configured against these sources.
+The following examples illustrate how you can run queries on the
+     SYS.COMPACTIONS view to monitor compactions:
+
+Query to display the last 10 failed compactions
+
+SELECT * 
+FROM SYS.COMPACTIONS
+WHERE C_STATE='failed'
+ORDERBY C_ID DESC
+LIMIT 10;
+
+
+Query to check the status of a specific compaction using the compaction ID
+
+SELECT *
+	FROM SYS.COMPACTIONS
+	WHERE C_ID='1234';
+
+
+Query to view the total number of compactions in a particular state
+
+SELECT COUNT(*)
+	FROM SYS.COMPACTIONS
+	WHERE C_STATE='ready for cleaning';
+
+
+
+noteSimilarly, you can also query the
+          INFORMATION_SCHEMA database for details about compactions. You must use
+        the Ranger service and set up access policies for Hive users on this database to make it
+        accessible.
+
+
+Parent topic: Data compaction

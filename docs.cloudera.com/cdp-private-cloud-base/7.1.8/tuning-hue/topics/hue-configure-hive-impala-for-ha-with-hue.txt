@@ -1,0 +1,142 @@
+Configuring Hive and Impala for high availability with HueCloudera Docs
+Configuring Hive and Impala for high availability with Hue
+To configure Hive for high availability with Hue, you must have two or more
+      HiveServer2 roles. For Impala, you must have two or more Impala daemon
+      (impalad) roles.
+
+
+SSH network access to host machines with a HiveServer2 or Impala Daemon role.
+External database configured for each H2S and Impala Daemon.
+Hue Load Balancer Hive/Impala Load Balancer configured with Source IP Persistence.
+
+Source IP Persistence
+Without IP Persistence, you may encounter the error, “Results have expired,
+          rerun the query if needed.
+Hue supports High Availability through a "load balancer" to HiveServer2 and Impala. Because
+        the underlying Hue thrift libraries reuse TCP connections in a pool, a single user session
+        may not have the same TCP connection. If a TCP connection is balanced away from a
+        HiveServer2 or Impalad instance, the user session and its queries (running or returned) can
+        be lost and trigger the “Results have expired" error.
+To prevent sessions from being lost, configure the Hive/Impala Load Balancer with Source IP
+        Persistence so that each Hue instance sends all traffic to a single HiveServer2/Impala
+        instance. Of course, this is not true load balancing, but a configuration for failover High
+        Availability.
+To prevent sessions from timing out while in use, add more Hue Server instances, so that
+        each can be pinned to another HiveServer2/Impala instance. And for both HiveServer2/Impala,
+        set the affinity timeout (that is, the timeout to close persisted sessions) to be longer
+        than the Impala query and session timeouts. 
+For the best load distribution, create multiple profiles in your load balancer, per port,
+        for both non-Hue clients and Hue clients. Have non-Hue clients distribute loads in a round
+        robin and configure Hue clients with source IP Persistence on dedicated ports, for example,
+        21000 for impala-shell, 21050 for impala-jdbc, and 21051 for Hue.
+
+
+In Cloudera Manager, add roles for HiveServer2 and for Impala daemon:
+
+
+Configure the cluster with at least two roles for
+                    HiveServer2:
+Go to the Hive service and select
+                        Actions > Add
+                          Role Instances.
+Click HiveServer2, assign one or more
+                        hosts, and click
+                        OK > Continue.
+Check each role and select Actions
+                        for
+                        Selected > Start
+                        and click Start.
+
+Configure the cluster with at least two roles for Impala
+                    Daemon:
+Go to the Impala service and select
+                        Actions > Add
+                          Role Instances.
+Click Impala Daemon, assign one or
+                        more hosts, and click
+                        OK > Continue.
+Check each role and select Actions
+                        for
+                        Selected > Start
+                        and click Start.
+
+
+
+
+Install a proxy service:
+
+This is an example of how to add a proxy server for each HiveServer2
+                and Impala Daemon with multiple profiles using the open source TCP/HTTP load
+                balancer, HAProxy.
+
+Install HAProxy for your operating system:yum install haproxyapt-get install haproxyzypper addrepo http://download.opensuse.org/repositories/server:http/SLE_12/server:http.repo
+zypper refresh
+zypper install haproxy
+Configure HAProxy for each role, for
+                example:vi /etc/haproxy/haproxy.cfglisten impala-shell
+    bind :21001
+    mode tcp
+    option tcplog
+    balance roundrobin
+    stick-table type ip size 20k expire 5m
+server impala_0 shortname-2.domain:21000 check
+server impala_1 shortname-3.domain:21000 check
+
+listen impala-jdbc
+    bind :21051
+    mode tcp
+    option tcplog
+    balance roundrobin
+    stick-table type ip size 20k expire 5m
+server impala_0 shortname-2.domain:21050 check
+server impala_1 shortname-3.domain:21050 check
+
+listen impala-hue
+    bind :21052
+    mode tcp
+    option tcplog
+    balance source
+server impala_0 shortname-2.domain:21050 check
+server impala_1 shortname-3.domain:21050 check
+
+listen hiveserver2-jdbc
+    bind :10001
+    mode http
+    option tcplog
+    balance roundrobin
+    stick-table type ip size 20k expire 5m
+server hiveserver2_0 shortname-1.domain:10000 check
+server hiveserver2_1 shortname-2.domain:10000 check
+
+listen hiveserver2-hue
+    bind :10002
+    mode tcp
+    option tcplog
+    balance source
+    stick-table type ip size 20k expire 5m
+server hiveserver2_0 host shortname-1.domain:10000 check
+server hiveserver2_1 host shortname-2.domain:10000 checkReplace
+                  shortname-#.domain with those in your
+                environment:sed -i "s/host shortname/your host shortname/g" /etc/haproxy/haproxy.cfg
+sed -i "s/domain/your domain/g" /etc/haproxy/haproxy.cfgHue
+                does not maintain any state for the connection to HS2. If Hue connects to one HS2
+                instance and the query is being executed on another HS2 instance in an HA setup,
+                then commands including listing tables or databased could fail. Enabling a sticky
+                session using stick table is used to avoid this issue.When you specify
+                    stick-table type ip size 20k expire 5m, the stick table
+                tracks the HTTP request rate of each client that passes through the load
+                  balancer.
+The table's primary key is of the type ip, which implies that the keys are IP
+                    addresses
+The table holds a maximum of 20 thousand records
+A record expires after 5 minutes unless it is accessed during that time
+
+Restart
+                  haproxy:service haproxy restart
+Run netstat to ensure your proxies are
+              running:netstat | grep LISTEN
+
+
+
+
+Parent topic: Configuring high availability for Hue

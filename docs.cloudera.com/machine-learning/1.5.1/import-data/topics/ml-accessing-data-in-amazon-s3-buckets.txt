@@ -1,0 +1,57 @@
+Connect to external Amazon S3 bucketsCloudera Docs
+Connect to external Amazon S3 buckets
+Every language in Cloudera Machine Learning has libraries available for uploading to and downloading from
+      Amazon S3.
+To work with external S3
+         buckets in Python, do the following:
+
+Add your Amazon Web Services access keys to your project's environment variables as
+                  AWS_ACCESS_KEY_ID and
+               AWS_SECRET_ACCESS_KEY.
+Add your Ozone S3 gateway to the environment variables as OZONE_S3_GATEWAY.
+
+
+Python
+
+# Install Boto to the project
+!pip3 install boto3
+
+# Make sure below environment variables are set
+# ozone s3 gateway : os.environ['OZONE_S3_GATEWAY']
+# s3 keys from os.environ['AWS_ACCESS_KEY_ID'] and os.environ['AWS_SECRET_ACCESS_KEY']
+
+import os
+import boto3
+
+# Use Boto to connect to S3 and get a list of objects from a bucket
+conn = boto3.session.Session()
+
+s3g = os.environ['OZONE_S3_GATEWAY']
+access_key = os.environ['AWS_ACCESS_KEY_ID']
+secret_key = os.environ['AWS_SECRET_ACCESS_KEY']
+
+s3_client = conn.client(
+    service_name='s3',
+    endpoint_url=s3g
+)
+
+
+test_bucket = 'testozones3'
+s3_client.create_bucket(Bucket=test_bucket)
+all_buckets = s3_client.list_buckets()
+print(f"All S3 Buckets are {[i['Name'] for i in all_buckets['Buckets']]}")
+
+s3_client.put_object(Bucket=test_bucket, Key='README.md')
+
+all_objs = s3_client.list_objects(Bucket=test_bucket)
+print(f"All keys in {bucket_name} are {[i['Key']for i in all_objs['Contents']]}")
+
+s3_client.get_object(Bucket=test_bucket, Key='README.md')
+
+ssl = "true" if s3g.startswith("https") else "false"
+s3a_path = f"s3a://{test_bucket}/"
+
+hadoop_opts = f"-Dfs.s3a.access.key='{access_key}' -Dfs.s3a.secret.key='{secret_key}' -Dfs.s3a.endpoint='{s3g}' -Dfs.s3a.connection.ssl.enabled={ssl}  -Dfs.s3a.path.style.access=true"
+
+!hdfs dfs {hadoop_opts} -ls "s3a://{test_bucket}/"
+

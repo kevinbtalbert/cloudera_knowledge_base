@@ -1,0 +1,113 @@
+Writing recipesCloudera Docs
+Writing recipes
+Refer to these guidelines when creating your recipes.
+When using recipes, consider the following guidelines:
+
+Running bash and python scripts as recipes is supported. We recommend
+            using scripts with Shebang character sequence, for
+            example:#!/bin/sh
+#!/bin/bash
+#!/usr/bin/sh
+#!/usr/bin/bash
+#!/usr/bin/env sh
+#!/usr/bin/env bash
+#!/bin/sh -x
+#!/usr/bin/python
+#!/usr/bin/env python
+The scripts are executed as root. The recipe output is written to
+               /var/log/recipes on each node on which it was executed.
+
+Supported parameters can be specified as variables by using mustache kind of
+               templating with "{{{ }}}" syntax. Once specified in a recipe, these variables are
+               dynamically replaced when the recipe is executed, generating the actual values that
+               you provided as part of cluster creation process. For the list of parameters, refer
+               to Recipe and cluster template parameters. For an
+               example, see Example: Recipe using parameters.
+noteUsing variable parameters is not supported for FreeIPA recipes.
+For example, if your cluster includes an external LDAP and your recipe includes
+                  {{{ldap.connectionURL}}}, as demonstrated in the following
+               example
+
+#!/bin/bash -e
+
+main() {
+ ping {{{ ldap.connectionURL }}}
+}
+
+[[ "$0" == "$BASH_SOURCE" ]] && main "$@"
+
+then, when this recipe runs, the {{{ldap.connectionURL}}} is
+               replaced with the actual connection URL specified as part of cluster creation
+               process, as demonstrated in the following example:
+
+#!/bin/bash -e
+
+main() {
+ ping 192.168.59.103
+}
+
+[[ "$0" == "$BASH_SOURCE" ]] && main "$@"
+
+
+Recipe logs can be found at
+               /var/log/recipes/${RECIPE_TYPE}/${RECIPE_NAME}.log
+The scripts are executed on all nodes of the host groups that you select (such as
+            “master”, “worker”, “compute”). 
+In order to be executed, your script must be in a network location which is accessible
+            from the Management Console and the virtual network in which your cluster is
+            located.
+Make sure to follow Linux best practices when creating your
+scripts. For example, don’t forget to script
+“Yes” auto-answers where needed.
+Do not execute yum update –y as it may update other components on the
+            instances (such as salt) – which can create unintended or unstable behavior.
+
+Example Python script 
+
+#!/usr/bin/python
+print("An example of a python script")
+import sys
+print(sys.version_info)
+
+
+Example bash script for yum proxy settings
+
+#!/bin/bash
+cat >> /etc/yum.conf 
+<<ENDOF
+proxy=http://10.0.0.133:3128
+ENDOF      
+
+
+Example recipe including variables
+Original recipe:
+
+#!/bin/bash -e
+
+function setupAtlasServer() {
+    curl -iv -u {{{ general.userName }}}:{{{ general.password }}} -H "X-Requested-By: ambari" -X POST -d '{"RequestInfo":{"command":"RESTART","context":"Restart all components required ATLAS","operation_level":{"level":"SERVICE","cluster_name":"{{{ general.clusterName }}}","service_name":"ATLAS"}},"Requests/resource_filters":[{"hosts_predicate":"HostRoles/stale_configs=false&HostRoles/cluster_name={{{ general.clusterName }}}"}]}' http://$(hostname -f):8080/api/v1/clusters/{{{ general.clusterName }}}/requests
+}
+
+main() {
+    setupAtlasServer
+}
+
+[[ "$0" == "$BASH_SOURCE" ]] && main "$@"
+
+Generated recipe (to illustrate how the variables from the original recipe were replaced
+            during cluster creation):
+
+#!/bin/bash -e
+
+function setupAtlasServer() {
+    curl -iv -u admin:admin123 -H "X-Requested-By: ambari" -X POST -d '{"RequestInfo":{"command":"RESTART","context":"Restart all components required ATLAS","operation_level":{"level":"SERVICE","cluster_name":"super-cluster","service_name":"ATLAS"}},"Requests/resource_filters":[{"hosts_predicate":"HostRoles/stale_configs=false&HostRoles/cluster_name=super-cluster"}]}' http://$(hostname -f):8080/api/v1/clusters/super-cluster/requests
+}
+
+main() {
+    setupAtlasServer
+}
+
+[[ "$0" == "$BASH_SOURCE" ]] && main "$@"
+
+
+

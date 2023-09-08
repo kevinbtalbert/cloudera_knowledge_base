@@ -1,0 +1,213 @@
+ADLS Sink connectorCloudera Docs
+ADLS Sink connector
+The ADLS Sink connector is a Stateless NiFi dataflow developed by Cloudera that is
+    running in the Kafka connect framework. Learn about the connector, its properties, and
+    configuration.
+The ADLS Sink connector fetches messages from Kafka and uploads them to ADLS. The topic this
+      connector receives messages from is determined by the value of the topics
+      property in the configuration. The messages can contain unstructured (character or binary)
+      data or they can be in Avro or JSON format.
+If the input is unstructured data, record processing is disabled. In a case like this,
+      multiple messages can be concatenated into a single output file on ADLS using a demarcator
+      (for example, newline for text messages). Merging is optional, large binary data can be
+      forwarded to Azure at a 1:1 ratio, one Kafka message equals a single ADLS file.
+If the input is either Avro or JSON, record processing is enabled. In a case like this, the
+      schema of the records can be a predefined schema retrieved from Schema Registry (for both Avro
+      and JSON data), it can be embedded in the Avro data, or inferred from the JSON data. The
+      output can be Avro, JSON or CSV. Multiple records are typically merged into a single output
+      file before uploading to ADLS.
+The connector can authenticate to Azure using an Account Key, SAS Token, Service Principal,
+      or a Managed Identity. 
+Properties and configuration
+Configuration is passed to the connector in a JSON
+      file during creation. The properties of the connector can be categorized into three groups.
+      These are as follows:
+
+Common connector properties
+These are the properties of the Kafka Connect framework that are accepted by all
+          connectors. For a comprehensive list of these properties, see the Apache Kafka
+            documentation.
+Stateless NiFi Sink properties
+These are the properties that are specific to the Stateless NiFi Sink connector. All
+          Stateless NiFi Sink connectors share and accept these properties. For a comprehensive list
+          of these properties, see the Stateless NiFi Sink property reference.
+Connector/dataflow-specific properties
+These properties are unique to this specific connector. Or to be more precise, unique
+            to the dataflow running within the connector. These properties use the following
+            prefix:parameter.[***CONNECTOR NAME***] Parameters:For
+            a comprehensive list of these properties, see the ADLS Sink properties
+              reference.
+
+tipWhen creating a new connector
+        using the SMM UI, all valid properties for this connector are presented in the default
+        configuration template. You can use the template in the UI as a quick reference to view all
+        accepted properties. 
+
+Notes and limitations
+
+Required properties must be assigned a valid value even if they
+            are not used in the particular configuration. If a required property is not used, either
+            leave its default value, or completely remove the property from the configuration
+            JSON.
+If a property that has a default value is completely removed from
+            the configuration JSON, the system uses the default value.
+Properties not marked as required must be completely removed from
+            the configuration JSON if not set.
+Schema Branch and Schema Version
+            can not be specified at the same time.
+
+
+Configuration example for fetching unstructured data
+In this example, the connector fetches unstructured messages containing single line
+        character data from Kafka. The connector concatenates the messages using newline characters
+        as the demarcator. The files that the connector creates and uploads to ADLS are maximum 10
+        MB in size. The files are named according to the following pattern:
+            messages_[***UUID***]. The connector authenticates
+        to Azure using an Account Key.
+noteAll properties that are not present in
+        this example have suitable default values or are unnecessary for this specific use
+        case.
+{
+ "connector.class": "org.apache.nifi.kafka.connect.StatelessNiFiSinkConnector",
+ "meta.smm.predefined.flow.name": "ADLS Sink",
+ "meta.smm.predefined.flow.version": "1.0.0",
+ "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+ "value.converter": "org.apache.kafka.connect.converters.ByteArrayConverter",
+ "tasks.max": "1",
+ "nexus.url": "https://repository.cloudera.com/artifactory/repo",
+ "extensions.directory": "/tmp/nifi-stateless-extensions",
+ "working.directory": "/tmp/nifi-stateless-working",
+ "failure.ports": "PutAzureDataLakeStorage Failure",
+ "topics": "[***KAFKA TOPIC NAME***]",
+ "parameter.ADLS Sink Parameters:ADLS Account Name": "[***ACCOUNT NAME***]",
+ "parameter.ADLS Sink Parameters:ADLS Account Key": "[***ACCOUNT KEY***]",
+ "parameter.ADLS Sink Parameters:ADLS Filesystem Name": "[***FILESYSTEM NAME***]",
+ "parameter.ADLS Sink Parameters:ADLS Directory Name": "[***DIRECTORY NAME***]",
+ "parameter.ADLS Sink Parameters:Maximum File Size": "10 MB",
+ "parameter.ADLS Sink Parameters:Kafka Message Data Format": "Raw",
+ "parameter.ADLS Sink Parameters:Output File Demarcator": "\n",
+ "parameter.ADLS Sink Parameters:Output Filename Pattern": "messages_${filename.uuid}"
+}
+
+The following list collects the properties from the configuration example that must be
+        customized for this use case.
+topics
+The name of the Kafka topic the connector fetches messages from.
+ADLS Account Name
+The Storage Account Name to use for authentication to Azure. This is also the target
+              account where the output file is uploaded.
+ADLS Account Key
+The Storage Account Key to use for authentication to Azure.
+ADLS Filesystem Name
+The filesystem (or container) in the Storage Account to upload data to.
+ADLS Directory Name
+The target directory in the filesystem.
+Maximum File Size
+The maximum size of the output data file. In this example, the maximum size is 10
+              MB.
+Kafka Message Data Format
+The format of the messages the connector receives from Kafka. In this example, this
+              property is set to Raw. This means that the connector expects
+              unstructured text or binary data.
+Output File Demarcator
+Specifies the character sequence for demarcating (delimiting) message boundaries
+              when multiple Kafka messages are ingested into an output file as raw messages. In this
+              example, the property is set to \n (newline). This means that the
+              newline character is used to separate the single line character data of the Kafka
+              messages.
+Output Filename Pattern
+Specifies the structure of the name of the output file. This property accepts string
+              literals (fixed text) as well as various expressions. In this example, the property is
+              set to messages_${filename.uuid}.messages_ is a
+                string literal. ${filename.uuid} is an expression that inserts a
+                generated UUID in the filename. As a result, the files are named according to the
+                following pattern:
+              messages_[***UUID***].
+
+
+Configuration example for fetching JSON data
+In this example, the connector fetches messages in JSON format from Kafka. The connector
+        parses the JSON records and converts them to Avro format using the schema inferred from the
+        JSON data. The schema is also embedded in the output file. The connector merges multiple
+        records (all messages that are available for a single execution of the connector) into an
+        Avro file, generates a name for the file using the following pattern
+            data_[***TIMESTAMP***]_[***SEQUENCE***].avro,
+        and uploads the file to ADLS. The connector authenticates to Azure using a Service
+        Principal.
+noteAll properties that are not present in
+        this example have suitable default values or are unnecessary for this specific use
+        case.
+{
+ "connector.class": "org.apache.nifi.kafka.connect.StatelessNiFiSinkConnector",
+ "meta.smm.predefined.flow.name": "ADLS Sink",
+ "meta.smm.predefined.flow.version": "1.0.0",
+ "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+ "value.converter": "org.apache.kafka.connect.converters.ByteArrayConverter",
+ "nexus.url": "https://repository.cloudera.com/artifactory/repo",
+ "extensions.directory": "/tmp/nifi-stateless-extensions",
+ "working.directory": "/tmp/nifi-stateless-working",
+ "failure.ports": "PutAzureDataLakeStorage Failure",
+ "topics": "[***KAFKA TOPIC NAME***]",
+ "parameter.ADLS Sink Parameters:ADLS Account Name": "[***ACCOUNT NAME***]",
+ "parameter.ADLS Sink Parameters:Azure Service Principal Tenant ID": "[***SERVICE PRINCIPAL TENANT ID***]",
+ "parameter.ADLS Sink Parameters:Azure Service Principal Client ID": "[***SERVICE PRINCIPAL CLIENT ID***]",
+ "parameter.ADLS Sink Parameters:Azure Service Principal Client Secret": "[***SERVICE PRINCIPAL CLIENT SECRET***]",
+ "parameter.ADLS Sink Parameters:ADLS Filesystem Name": "[***FILESYSTEM NAME***]",
+ "parameter.ADLS Sink Parameters:ADLS Directory Name": "[***DIRECTORY NAME***]",
+ "parameter.ADLS Sink Parameters:Kafka Message Data Format": "JSON",
+ "parameter.ADLS Sink Parameters:Schema Access Strategy": "Infer Schema",
+ "parameter.ADLS Sink Parameters:Schema Write Strategy": "Embed Avro Schema",
+ "parameter.ADLS Sink Parameters:Output File Data Format": "Avro",
+ "parameter.ADLS Sink Parameters:Output Filename Pattern": "data_${filename.timestamp}_${filename.sequence}.avro",
+ "parameter.ADLS Sink Parameters:Output Filename Timestamp Format": "yyyyMMdd_HHmmss_SSS"
+}
+
+The following list collects the properties from the configuration example that must be
+        customized for this use case.
+
+topics
+The name of the Kafka topic the connector fetches messages from.
+ADLS Account Name
+The Storage Account Name to use for authentication to Azure. This is also the target
+            account where the output file is uploaded.
+Service Principal *
+The properties of the Service Principal to use for authentication to Azure.
+ADLS Filesystem Name
+The filesystem (or container) in the Storage Account to upload data to.
+ADLS Directory Name
+The target directory in the filesystem.
+Kafka Message Data Format
+The format of the messages the connector receives from Kafka. In this example, this
+            property is set to JSON. This means that the connector expects JSON
+            data.
+Schema Access Strategy
+Specifies the strategy used for determining the schema of the Kafka record. In this
+            example, this property is set to Infer Schema, meaning that the schema
+            is determined (inferred) from the JSON data. 
+Schema Write Strategy
+Specifies whether the record schema is written to the output data file. In this
+            example, this property is set to Embed Avro Schema, meaning that the
+            schema is embedded in the output Avro file.
+Output File Data Format
+Specifies the format of the records written to the output file. In this example, this
+            property is set to Avro, meaning that the output file format is
+            Avro.
+Output Filename Pattern
+Specifies the structure of the name of the output file. This property accepts string
+            literals (fixed text) as well as various expressions. In this example, the property is
+            set to
+                data_${filename.timestamp}_${filename.sequence}.avro.data_,
+              the underscore ( _ ), and .avro are string literals.
+                ${filename.timestamp} and ${filename.sequence} are
+              expressions. ${filename.timestamp} inserts the current timestamp in
+              the filename. ${filename.sequence} inserts an incrementing sequence
+              value in the filename. As a result, the files are named according to the following
+              pattern:
+                  data_[***TIMESTAMP***]_[***SEQUENCE***].avro.
+Output Filename Timestamp Format
+Specifies the timestamp format used in the ${filename.timestamp}
+            expression. The expression is used when generating the output filename.
+
+
+
+Related informationApache Kafka documentationStateless NiFi Sink properties referenceADLS Sink properties referenceParent topic: Connectors

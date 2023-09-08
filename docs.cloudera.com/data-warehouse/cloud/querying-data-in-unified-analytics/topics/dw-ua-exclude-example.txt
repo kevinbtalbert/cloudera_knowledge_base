@@ -1,0 +1,39 @@
+Running the exclude aggregations exampleCloudera Docs
+Running the exclude aggregations example
+If you are knowledgeable about your workload and want to exclude views with
+        aggregations for maintenance reasons, you need to know about the SPJ (select-project-join)
+        recommendation mode. 
+
+In the input directory workload-insights/demo/queries, a file named queryA.sql
+                contains queryA. QueryA contains the GROUP BY aggregation clause, which you want the
+                recommender to exclude from the view.. 
+
+
+Go to the workload-insights directory.
+The Workload Insights (wi) script is located in this directory.
+
+Run the script using the -r SPJ option to exclude aggregations from recommended views.
+./wi -i queries/queryA.sql -u jdbc:hive2://localhost:10000 -r SPJ
+Output looks something like this:
+                        ...
+Recommended views:
+-- materialized_view_0:
+CREATE MATERIALIZED VIEW `materialized_view_0` AS
+SELECT `store_returns`.`sr_item_sk`, `store_returns`.`sr_reason_sk`, `store_returns`.`sr_net_loss`, `store_returns`.`sr_reason_sk` AS `sr_reason_sk0`
+FROM `default`.`reason`,`default`.`store_returns`
+WHERE `store_returns`.`sr_reason_sk` = `reason`.`r_reason_sk` AND 'Found a better price in a store' = `reason`.`r_reason_desc`;
+-----------------------------------------------------
+Query details:
+-- queryA:SELECT `t0`.`sr_item_sk`, SUM(`t0`.`sr_net_loss`) AS `$f1` FROM (SELECT `sr_item_sk`, `sr_reason_sk`, `sr_net_loss` FROM `default`.`store_returns` WHERE `sr_reason_sk` IS NOT NULL) AS `t0` INNER JOIN (SELECT `r_reason_sk` FROM `default`.`reason` WHERE `r_reason_desc` = 'Found a better price in a store' AND `r_reason_sk` IS NOT NULL) AS `t2` ON `t0`.`sr_reason_sk` = `t2`.`r_reason_sk` GROUP BY `t0`.`sr_item_sk`
+-- RECOMMENDATION : materialized_view_0
+-----------------------------------------------------                The
+                        recommender runs faster by excluding aggregations because the recommender
+                        explores a smaller search space. Similarly, the user can request to obtain
+                        only recommendations with aggregations using the SPJA mode. Using the
+                        default ALL option, you would get the same result as above. ALL includes SPJ
+                        for SELECT-PROJECT-JOIN recommendations and SPJA for
+                        SELECT-PROJECT-JOIN-AGGREGATE.
+
+
+
+Parent topic: Running Recommender examples

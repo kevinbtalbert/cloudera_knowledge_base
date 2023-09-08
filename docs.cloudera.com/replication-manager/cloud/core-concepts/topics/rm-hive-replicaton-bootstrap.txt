@@ -1,0 +1,66 @@
+Hive replicationCloudera Docs
+Hive replication
+Replication Manager allows you to replicate Hive databases from a source cluster to a
+  target location on a destination cluster. The first time you run a job with data that has not been
+  previously replicated, the Replication Manager creates a new folder or database and bootstraps the
+  data. To replicate Hive metadata, Replication Manager performs a full replication. To replicate
+  the data stored in Hive tables, Replication Manager uses snapshot diff-based replication to
+  perform incremental replication. 
+During bootstrap operation, all of the data from the source location is copied to the
+   destination. This bootstrapping of data can take hours to days, depending on factors such as the
+   amount of data being copied and available network bandwidth. 
+After the bootstrap operation succeeds, an incremental replication is automatically
+   performed for data replication using snapshot diff-based replication. The job synchronizes,
+   between the source and destination clusters, any events that occurred during the bootstrap
+   process. After the data is synchronized, the replicated data is ready for use on the destination.
+   Data is in a consistent state only after incremental replication has captured any new changes
+   that occurred during bootstrap.
+Subsequent replication jobs from the same source location to the same target on the
+   destination are incremental, so only the changed data is copied. 
+If a bootstrap operation is interrupted, such as due to a network failure or an
+   unrecoverable error, the Replication Manager automatically retries the job. If a retry succeeds,
+   the replication job continues from the point at which it was interrupted. If the automatic
+   retries are not successful, you must manually correct the issue before running the policy again.
+   When you activate the policy again, the replication job resumes from the point at which it was
+   suspended.
+Functions such as User Defined Functions (UDF) in Hive can be replicated. To enable this, you
+   can create UDFs  using a syntax. For example, the following sample code shows an UDF creation
+   syntax:CREATE FUNCTION [db_name.]function_name AS class_name  USING JAR|FILE|ARCHIVE 'file_uri' [, JAR|FILE|ARCHIVE 'file_uri'] ;
+
+Snapshot diff-based replication
+By default, Replication Manager uses snapshot differences ("diff") to improve
+    performance by comparing HDFS snapshots and only replicating the files that are changed in the
+    source directory.
+While Hive metadata requires a full replication, the data stored in Hive tables
+    takes advantage of snapshot diff-based replication. To replicate a database using a Hive
+    replication policy, ensure that all the HDFS paths for the tables in that database are either
+    snapshottable or under a snapshottable root. For example, if the database that is being
+    replicated has external tables, all the external table HDFS data locations should be
+    snapshottable too. Failing to do so can cause the Replication Manager to fail to generate a diff
+    report. Without a diff report, Replication Manager will not use snapshot diff.
+An HDFS directory is referred to as snapshottable if an administrator - having superuser
+    privilege or having owner access to the directory - has enabled snapshots for the directory in
+    Cloudera Manager. 
+You must ensure that the following guidelines are met for efficient incremental
+     replication:
+HDFS snapshots are immutable.tipIn the source
+       Cloudera Manager, go to Clusters > HDFS service > Configuration section, and search for Enable Immutable
+       Snapshots.
+Snapshot root directory is set to as low in the hierarchy as possible.
+Replication Manager user is a super user or the owner of the snapshottable root.
+      This is because the user specified in the Run-as-username field in the
+      replication policy must have the permission to list the snapshots.
+
+Paths from both source and destination clusters in the replication policy
+       are under a snapshottable root or are snapshottable for the replication policy to run using
+       snapshot diff.
+
+
+Replication Manager performs a complete replication when one or more of the following change:
+    Delete Policy, Preserve Policy, Target Path, or Exclusion Path.
+noteEnsure the source data does not contain an encrypted subdirectory.
+    This is because snapshot diff-based replication might fail if an encrypted subdirectory exists
+    in the source data.
+
+
+Parent topic: Hive replication policy

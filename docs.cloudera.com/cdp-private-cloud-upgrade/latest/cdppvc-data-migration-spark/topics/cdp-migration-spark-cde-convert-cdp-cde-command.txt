@@ -1,0 +1,113 @@
+Convert Spark Submit commands to CDE CLI Spark Submit commandsCloudera Docs
+Convert Spark Submit commands to CDE CLI Spark Submit commands 
+The CDE CLI cde spark submit command is intended to closely match
+    with Apache Spark's spark-submit command.
+Usage
+
+cde spark submit [flags]
+
+Examples:Local job file 'my-spark-app-0.1.0.jar' and Spark arguments '100' and '1000':
+> cde spark submit my-spark-app-0.1.0.jar 100 1000 --class com.company.app.spark.Main
+ 
+Remote job file:
+ 
+> cde spark submit s3a://my-bucket/my-spark-app-0.1.0.jar 100 1000 --class com.company.app.spark.Main
+ 
+ 
+Flags:
+      --class string                         job main class
+      --conf stringArray                     Spark configuration (format key=value) (can be repeated)
+      --driver-cores int                     number of driver cores
+      --driver-memory string                 driver memory
+      --executor-cores int                   number of cores per executor
+      --executor-memory string               memory per executor
+      --file stringArray                     additional file (can be repeated)
+  -h, --help                                 help for submit
+      --hide-logs                            whether to hide the job run logs from the output
+      --initial-executors string             initial number of executors
+      --jar stringArray                      additional jar (can be repeated)
+      --job-name string                      name of the generated job
+      --log-level string                     Spark log level (TRACE, DEBUG, INFO, WARN, ERROR, FATAL, OFF)
+      --max-executors string                 maximum number of executors
+      --min-executors string                 minimum number of executors
+      --packages string                      additional dependencies as list of Maven coordinates
+      --py-file stringArray                  additional Python file (can be repeated)
+      --pypi-mirror string                   PyPi mirror for --python-requirements
+      --python-env-resource-name string      Python environment resource name
+      --python-requirements string           local path to Python requirements.txt
+      --python-version string                Python version ("python3" or "python2")
+      --repositories string                  additional repositories/resolvers for --packages dependencies
+      --runtime-image-resource-name string   custom runtime image resource name
+      --spark-name string                    Spark name
+There are a few differences in terms of command syntax and functionality between
+          CDE/Spark-on-k8s and Spark-on-YARN that you should
+        be aware of. While not an exhaustive guide to converting your Spark-on-YARN
+        (CDH/HDP/Datahub) application to CDE/Spark-on-k8s, the sections below cover some of the
+        common configuration changes that is required. 
+
+Remove
+The following options that you may have used with spark-submit should be
+        removed when using CDE (for example, cde spark submit):
+
+drop --master: this is set internally by CDE. 
+drop --deploy-mode: this is always cluster mode and internally set by
+          CDE. 
+drop --spark.keytab, --spark.yarn.principal, and
+          so on: Kerberos authentication details handled internally by CDE, based on your CDP
+          workload user's authentication. 
+drop shuffle.service.enabled=true: external shuffle service is
+          actively being developed by Cloudera for Spark-on-k8s (available in an upcoming
+          release).
+
+
+Update
+spark-submit--files, --py-files,
+          –jars comma-separated syntax can be used:
+--files f1.txt,f2.txtnote By default, files included with job
+          configuration, for example: --file some_file.txt, are available in the
+            /app/mount/some_file.txt file and not in the Spark process working
+          directory. Therefore, the application must refer to this full path to access the file
+          instead of ./some_file.txt.If the application or entrypoint
+            needs to be passed with additional arguments, these should be separated from the
+              cde spark submit arguments using -- in front of
+            them. This instructs the parser to treat the rest of the string literally, for example,
+            :my_entrypoint.py -- -a 1 -b "twenty
+        two"
+
+Rename --app.name to --job-name
+
+CDE defaults to Python3. If you intend to use legacy Python2, add
+            --python-version python2. The Python version should always be set through CDE,
+          for example, using the --python-version flag. Any previous references
+          that is used to set the Python version, such as
+            spark.yarn.appMasterEnv.PYSPARK_PYTHON=python3.6, should be removed. 
+If you are migrating an application from an on-premise environment that uses HDFS for
+          storage, you need to update hdfs://... paths in your configuration to
+          the equivalent cloud storage URI of that data. For example,
+          s3a://.... 
+
+
+Review
+
+There are a number of YARN-specific Spark configurations that you must
+          review and either remove or convert it to Spark on Kubernetes specific
+            configuration. The links referred here are are specific to Spark 3.1.1. In some
+          cases, such as spark.yarn.executor.memoryOverhead, Spark now provides
+          more agnostic configuration like spark.executor.memoryOverhead that can
+          be used. 
+In other cases, you can use an equivalent kubernetes configuration. For example, setting
+          environment variables for the Spark process
+            spark.yarn.appMasterEnv.TZ=America/Los_Angeles  becomes
+            spark.kubernetes.driverEnv.TZ=America/Los_Angeles.
+Certain Spark-on-k8s configurations listed in the reference links above like
+          configuration related to k8s namespaces, authentication, or volume mounts, may not apply
+          or be compatible with CDE. Often CDE manages those, or their equivalents internally. Reach
+          out to Cloudera support or your Cloudera account team if you have questions on this part
+          of your migration. 
+Configuration related to external or third-party vendor products should be reviewed and
+          possibly removed. For example, Unravel Data configuration such as
+            spark.unravel.* has to be reviewed and removed. 
+
+
+
+Related informationYARN specific Spark configurationsSpark on Kubernetes specific configurationParent topic: Migrating Spark CDP to Cloudera Data Engineering

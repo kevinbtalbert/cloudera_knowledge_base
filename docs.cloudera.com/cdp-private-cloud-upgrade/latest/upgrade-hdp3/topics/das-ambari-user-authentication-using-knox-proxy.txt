@@ -1,0 +1,166 @@
+Configuring user authentication using Knox proxyCloudera Docs
+Configuring user authentication using Knox proxy
+In the CDP Private Cloud Base 7.1.x release, Knox Proxy is configured via the Knox Admin UI.
+        To set up proxy, you first define the provider configurations and descriptors, and the
+        topologies are automatically generated based on those settings.
+
+SSH in to the machine on which you have installed the Knox gateway.
+
+Change directory to the following:
+/usr/hdp/current/knox-server/data/services/das/1.4.5/
+
+Create the following two configuration files with the given content:
+
+rewrite.xml
+
+<!--
+   Licensed to the Apache Software Foundation (ASF) under one or more
+   contributor license agreements.  See the NOTICE file distributed with
+   this work for additional information regarding copyright ownership.
+   The ASF licenses this file to You under the Apache License, Version 2.0
+   (the "License"); you may not use this file except in compliance with
+   the License.  You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+<rules>
+  <rule dir="IN" name="DAS/das/inbound/root" pattern="*://*:*/**/das/">
+    <rewrite template="{$serviceUrl[DAS]}/"/>
+  </rule>
+  <rule dir="IN" name="DAS/das/inbound/path" pattern="*://*:*/**/das/{**}">
+    <rewrite template="{$serviceUrl[DAS]}/{**}"/>
+  </rule>
+  <rule dir="IN" name="DAS/das/inbound/pathqp" pattern="*://*:*/**/das/{**}?{**}">
+    <rewrite template="{$serviceUrl[DAS]}/{**}?{**}"/>
+  </rule>
+  <rule dir="OUT" name="DAS/das/outbound/assets" pattern="assets/{**}">
+    <rewrite template="{$frontend[path]}/das/assets/{**}"/>
+  </rule>
+  <rule dir="OUT" name="DAS/das/outbound/rooturl">
+    <rewrite template="{$frontend[path]}/das/"/>
+  </rule>
+  <filter name="DAS/das/outbound/dasrooturl">
+    <content type="application/javascript">
+      <apply path="/dasroot/.." rule="DAS/das/outbound/rooturl"/>
+    </content>
+  </filter>
+</rules>
+
+
+
+service.xml
+
+<!--
+   Licensed to the Apache Software Foundation (ASF) under one or more
+   contributor license agreements.  See the NOTICE file distributed with
+   this work for additional information regarding copyright ownership.
+   The ASF licenses this file to You under the Apache License, Version 2.0
+   (the "License"); you may not use this file except in compliance with
+   the License.  You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+-->
+<service role="DAS" name="das" version="1.4.5">
+  <routes>
+    <route path="/das" />
+    <route path="/das/**" />
+    <route path="/das/**/hivestudio*.js">
+      <rewrite apply="DAS/das/outbound/dasrooturl" to="response.body"/>
+    </route>
+  </routes>
+</service>
+
+
+If you have more than one Knox servers in a high availability configuration,
+                    then you need to create these files on every machine.
+
+Restart the Knox server.
+
+Sign in to the Knox Admin UI. From Ambari, go to Knox > Quick Links and click Knox Admin UI.
+
+Create or use an existing Provider Configuration with the following
+                    configuration:
+
+
+(Required) Authentication provider: It provides authentication
+                            mechanism for Knox. For example, ShiroProvider. ShiroProvider integrates
+                            with LDAP.
+
+
+(Required) Identity Assertion provider: It authenticates the
+                            user name requesting access to DAS through SPNEGO.
+
+
+(Optional) Add any other provider as per your organization’s
+                            requirements, such as Acls or WebAppSec.
+
+
+
+Create a new descriptor for the DAS service with the Provider Configuration
+                    that you created earlier. If a descriptor is already present with the required
+                    Provider Configuration, then you can edit it.
+
+
+Add a new service named DAS.
+
+
+Under Descriptor Detail > Services > DAS, add the DAS Webapp URL in the
+                                URLs field and save the changes.
+
+
+
+If not done already, specify KNOX_PROXY in the
+                        user_authentication field under Ambari > Data Analytics Studio > Config.
+
+Next, go to Ambari > Data Analytics Studio >  CONFIGS > Advanced data_analytics_studio-security-site and configure the following fields:
+
+
+das_knox_user: It specifies the Knox service user, and is picked
+                            up automatically.
+
+
+das_knox_doas_param_name: Specify the parameter name that you
+                            specified under the Params field in the Knox
+                            Admin UI. However, if you have selected the default Identity Assertion
+                            provider, then the das_knox_doas_param_name name
+                            is doAs, and is configured automatically.
+
+
+knox_ssout_url: Specify the KnoxSSOUT URL in the following
+                            format:
+https://{host}:{port}/{cluster-name}/{knox-sso-out-topo}/api/v1/webssout
+This step requires you to have a KnoxSSO out topology present in your
+                            Knox server. To create the Knox SSO out topology, see Enabling logout option for secure
+                                clusters.
+
+
+Add the list of users in the admin_users field
+                            who need admin access to DAS.
+You can specify * (asterisk) in the
+                                admin_users field to make all users the admin
+                            users.
+You can also specify an admin group in the
+                                admin_groups field.
+
+note Only admin users have access to all the queries. Non-admin users
+                                can access only their queries.
+
+
+
+
+Restart the DAS service.
+
+
+Parent topic: Configuring user authentication in Ambari

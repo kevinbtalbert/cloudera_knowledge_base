@@ -1,0 +1,126 @@
+ACID ingest patternsCloudera Docs
+ACID ingest patterns
+Understanding Hive ACID ingest patterns helps you adopt one that fits best. You gain an
+  understanding of how to build a pipeline that keeps the original data and builds or updates a more
+  efficient table for recurring READ operations.
+Although Hive handles compactions, micro-batching appends, and Hive streaming writes, you still
+   have to avoid inserting small records into ACID tables. Using ACID does not correct a bad ingest
+   design. If you perform micro-inserts and create many delta directories, at some point the
+   compaction system, and other components, such as NameNodes, have to reconcile the delta files.
+   Eventually, compaction consolidates files, but if you have hundreds of these delta files before
+   compaction even starts, Hive needs to work hard in the background. Heavy compute resources and
+   metastore resources are needed. 
+The data you ingest into ACID tables using the following pattern must be of a reasonable
+   size.
+ACID pattern 1
+ACID pattern 1 characteristics are:
+
+
+
+Handles compactions in the background, but you still have to understand the impact of
+      deltas
+
+
+Performs well for micro batch appends and Hive streaming
+
+
+Works best when you partition on business need, not ingestion
+
+
+Frequently partitioned to optimize file size and access (pruning)
+
+
+Supports adding a batch-id field to record ingest events
+
+
+Not designed for online transaction processing (OLTP)
+
+
+
+
+
+
+Consider how quickly you need to access the data. If you need immediate access to data, look at
+   how many queries your organization actually issues to access data received within the last 5
+   minutes, for example. You might realize that rarely do you need access your data so quickly, but
+   if not, consider other technologies, such as Impala with Kudu or HBase. 
+If you need to track batch operations, for example by associating a batch ID with every record,
+   add a second-level partition element. Add a batch field to the table with the batch ID. You can
+   perform delete operations against ACID tables to remove a batch and replay it. ORC and CRUD
+   functionality repair that table based on a replay or removal of an insert.
+Hive does not satisfy OLTP requirements.
+ACID pattern 2
+ACID pattern 2 has the following characteristics:
+
+
+Designed to be business-, not ingest-centric.
+Supports highly granular partitions, for example YY-MM-DD-HH vs YY-MM.
+Achieves efficient content size per partition to reduce file counts.
+
+
+
+ 
+Beware of dynamic partitions and avoid cross partition distribution
+   of data. If your design requires Hive to cross partitions unnecessarily when you insert data into
+   a table, collapse year-month-day-hour partitions down to year-month if possible. 
+ACID pattern 3
+To build a pipeline that keeps the original data and builds or updates a more efficient table
+   for recurring READ operations, use the ACID pattern 3.
+ACID pattern 3 represents the sweep process. This pattern keeps track of historical changes.
+   You can lose information that has business value if you do not keep track the original
+   transactional elements. Consider having an ingest table with original values and also a change
+   data capture (CDC) table. For example, if you have 2 million customers making thousands of
+   changes a day to an ACID table target, you lose all the thrashing that might have happened if you
+   do not capture changes. 
+Using a sweep process not only consolidates files to eleviate ACID performance problems, but
+   also supports data change analytics. If a consumer changes their address frequently, say 50 times
+   a day, perhaps fraud is indicated. The cost of space you need for historical data if often worth
+   the expense. 
+A portion of the sweep pattern, shown below, looks similar to the classic ingest pattern. You
+   use a non-acid table with partitions. Instead of inserting data into a non-ACID table every 15
+   minutes, for example, you instead sweep data from the ingest table into the ACID table every hour
+   or two. You use the ACID table as your consumer table, which has collapsed partitions. Hive
+   performs compaction on the ACID table.
+
+ 
+Another approach is to use an ACID table as the staging place for ingesting data or other data
+   pipelines for writing and aggregating data. Turn off auto-compaction, or raise thresholds, to
+   enjoy tranaction isolation of your streaming with no overhead. 
+In summary, use ACID pattern 3 as follows:
+
+
+Use a non-ACID table to stage micro batches to a final ACID table.
+Use more aggregate partition strategy (if required) on the final table (YYMM vs.
+     YYMMDD_HH).
+Allow ACID to undergo compaction.
+Direct consumers to the final ACID table for better performance and less system resource
+     overhead.
+ Include a batch ID in the schema to support rollback.
+
+
+ACID CDC pattern
+The ACID CDC pattern has the following characteristics:
+
+Used for the initial seed of new records.
+Used for follow-up updates and inserts.
+Used for follow-up deletes.
+ACID deltas track updates and deletes, rolled up in SELECT.
+Relys on major compaction to reconcile updates and deletes.
+
+
+ 
+For changing dimension tables, the ACID CDC pattern supports a large partition, late arriving
+   data, or perhaps no partition at all. Using the ACID CDC pattern, you might have just a consumer
+   table. Inserts occur, and then updates to the inserts. All changes are captured as delta records.
+   A major compaction reconciles inserts and updates to give you a new base. The next update creates
+   another delta in this case. 
+When you insert into an ACID table, you must deduplicate the records before making insertions,
+   or deduplicate the records before updates. You cannot skip the deduplication process because
+   there is no enforceable constraint primary key that takes care of eliminating duplicate copies of
+   data. If you put a record in a transactional table three times before it is pushed into an ACID
+   table, the record comes into Hive three times: first as an insert, next as an update, and finally
+   as another update before you push your changes into the ACID table through the merge process. You
+   must reconcile inserts and updates before the merge to make sure you get only one operation;
+   otherwise, you get duplicate records. 
+
+Parent topic: Migrating Hive workloads to ACID

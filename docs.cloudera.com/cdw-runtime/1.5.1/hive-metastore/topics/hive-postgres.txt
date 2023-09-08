@@ -1,0 +1,76 @@
+Set up a PostgreSQL databaseCloudera Docs
+Set up a PostgreSQL database
+You install a Postgres database to serve as the backend database for the Hive
+        metastore. You also install the Postgres driver on your cluster, and then configure the
+        database.
+
+Install the database from the command line of a node in your cluster.
+
+RHEL: sudo yum install postgresql-server
+ SLES:
+                        sudo zypper install postgresql-server
+ Ubuntu:sudo apt-get install postgresql
+
+
+If your system is RHEL, initialize database files; otherwise, skip this
+                    step.
+sudo service postgresql initdb
+
+Set the listen_addresses property to * and set the standard_conforming_strings property off.
+
+RHEL and SLES:
+                        sudo cat /var/lib/pgsql/data/postgresql.conf  | grep -e listen -e standard_conforming_strings
+listen_addresses = '*'
+standard_conforming_strings = off
+Ubuntu:cat /etc/postgresql/9.1/main/postgresql.conf | grep -e listen -e standard_conforming_strings
+listen_addresses = '*'
+standard_conforming_strings = off
+
+
+Add a new line into pg_hba.con to ensure that the Postgres
+                    user can access the server remotely.
+For example, to allow all users to connect from all hosts to all your
+                    databases:
+                    host  <database>  <user>  <network address>  <mask>   md5
+This configuration is applicable only for a network listener. Using this
+                    configuration does not open all your databases to the entire world; you must
+                    provide a password to authenticate yourself, and privilege restrictions
+                    configured in PostgreSQL are effective.
+
+Start the Postgres server.
+sudo service postgresql start
+
+
+Set Postgres to start when the cluster comes up, and check the
+                    configuration.
+
+chkconfig postgresql on
+chkconfig --list postgresql
+
+
+On the Hive metastore server node in your cluster, install the latest Postgres JDBC driver (the postgresql-jdbc package), and create symbolic link to the /usr/lib/hive/lib/ directory.
+
+RHELsudo yum install postgresql-jdbc
+ln -s /usr/share/java/postgresql-jdbc.jar /usr/lib/hive/lib/postgresql-jdbc.jar
+SLESsudo zypper install postgresql-jdbc
+ln -s /usr/share/java/postgresql-jdbc.jar /usr/lib/hive/lib/postgresql-jdbc.jar
+Ubuntusudo apt-get install libpostgresql-jdbc-java
+ln -s /usr/share/java/postgresql-jdbc4.jar /usr/lib/hive/lib/postgresql-jdbc4.jar
+
+
+Create a metastore database and user account to access the metastore, using the
+                    script for your Hive version represented by n.n.n.
+
+sudo -u postgres psql
+postgres=# CREATE USER hiveuser WITH PASSWORD 'mypassword';
+postgres=# CREATE DATABASE metastore;
+postgres=# \c metastore;
+You are now connected to database 'metastore'.
+postgres=# \i /usr/lib/hive/scripts/metastore/upgrade/postgres/hive-schema-n.n.n.postgres.sql
+SET
+SET
+...                            
+
+
+
+Parent topic: Setting up the backend Hive metastore database

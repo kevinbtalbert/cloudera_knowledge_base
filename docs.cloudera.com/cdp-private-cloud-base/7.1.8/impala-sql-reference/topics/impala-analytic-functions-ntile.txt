@@ -1,0 +1,114 @@
+NTILECloudera Docs
+NTILE
+Returns the bucket number associated with each row,
+              between 1 and the value of an expression. For example, creating
+              100 buckets puts the lowest 1% of values in the first bucket,
+              while creating 10 buckets puts the lowest 10% of values in the
+              first bucket. Each partition can have a different number of
+              buckets.
+
+
+Syntax:
+
+NTILE (expr [, offset ...]
+  OVER ([partition_by_clause] order_by_clause)
+ The ORDER BY clause is required. The
+                PARTITION BY clause is optional. The window
+              clause is not allowed. 
+
+Usage notes:
+
+ The ntile name is derived from the practice of dividing
+              result sets into fourths (quartile), tenths (decile), and so on.
+              The NTILE() function divides the result set based
+              on an arbitrary percentile value. 
+ The number of buckets must be a positive integer. 
+ The number of items in each bucket is identical or almost so,
+              varying by at most 1. If the number of items does not divide
+              evenly between the buckets, the remaining N items are divided
+              evenly among the first N buckets. 
+ If the number of buckets N is greater than the number of input
+              rows in the partition, then the first N buckets each contain one
+              item, and the remaining buckets are empty. 
+
+Examples:
+
+ The following example shows divides groups of animals into 4
+              buckets based on their weight. The ORDER BY ...
+                DESC clause in the OVER() clause means
+              that the heaviest 25% are in the first group, and the lightest 25%
+              are in the fourth group. (The ORDER BY in the
+              outermost part of the query shows how you can order the final
+              result set independently from the order in which the rows are
+              evaluated by the OVER() clause.) Because there
+              are 9 rows in the group, divided into 4 buckets, the first bucket
+              receives the extra item. 
+create table animals (name string, kind string, kilos decimal(9,3));
+
+insert into animals values
+  ('Elephant', 'Mammal', 4000), ('Giraffe', 'Mammal', 1200), ('Mouse', 'Mammal', 0.020),
+  ('Condor', 'Bird', 15), ('Horse', 'Mammal', 500), ('Owl', 'Bird', 2.5),
+  ('Ostrich', 'Bird', 145), ('Polar bear', 'Mammal', 700), ('Housecat', 'Mammal', 5);
+
+select name, ntile(4) over (order by kilos desc) as quarter
+  from animals
+order by quarter desc;
++------------+---------+
+| name       | quarter |
++------------+---------+
+| Owl        | 4       |
+| Mouse      | 4       |
+| Condor     | 3       |
+| Housecat   | 3       |
+| Horse      | 2       |
+| Ostrich    | 2       |
+| Elephant   | 1       |
+| Giraffe    | 1       |
+| Polar bear | 1       |
++------------+---------+
+
+ The following examples show how the PARTITION
+              clause works for the NTILE() function. Here, we
+              divide each kind of animal (mammal or bird) into 2 buckets, the
+              heavier half and the lighter half. 
+select name, kind, ntile(2) over (partition by kind order by kilos desc) as half
+  from animals
+order by kind;
++------------+--------+------+
+| name       | kind   | half |
++------------+--------+------+
+| Ostrich    | Bird   | 1    |
+| Condor     | Bird   | 1    |
+| Owl        | Bird   | 2    |
+| Elephant   | Mammal | 1    |
+| Giraffe    | Mammal | 1    |
+| Polar bear | Mammal | 1    |
+| Horse      | Mammal | 2    |
+| Housecat   | Mammal | 2    |
+| Mouse      | Mammal | 2    |
++------------+--------+------+
+
+ Again, the result set can be ordered independently from the
+              analytic evaluation. This next example lists all the animals
+              heaviest to lightest, showing that elephant and giraffe are in the
+                top half of mammals by weight, while housecat and mouse
+              are in the bottom half. 
+select name, kind, ntile(2) over (partition by kind order by kilos desc) as half
+  from animals
+order by kilos desc;
++------------+--------+------+
+| name       | kind   | half |
++------------+--------+------+
+| Elephant   | Mammal | 1    |
+| Giraffe    | Mammal | 1    |
+| Polar bear | Mammal | 1    |
+| Horse      | Mammal | 2    |
+| Ostrich    | Bird   | 1    |
+| Condor     | Bird   | 1    |
+| Housecat   | Mammal | 2    |
+| Owl        | Bird   | 2    |
+| Mouse      | Mammal | 2    |
++------------+--------+------+
+
+
+

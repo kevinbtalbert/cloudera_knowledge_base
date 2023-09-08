@@ -1,0 +1,157 @@
+Installing Cloudera Manager with High AvailabilityCloudera Docs
+Installing Cloudera Manager with High Availability
+Steps to install Cloudera Manager with high
+    availability.
+
+Provision an external database for use by Cloudera Manager. 
+Provision two hosts for Cloudera Manager. 
+
+Repeat the steps to install Cloudera Manager on each of the
+          hosts to be used for Cloudera Manager high availability. Skip these auto-TLS steps on the
+          passive host. Do not start Cloudera Manager on any hosts until you
+          complete the following: 
+
+
+Configure both the active and passive Cloudera Manager
+              instances to connect to the same database. You configure this by
+              running the scm_prepare_database.sh script on
+              each Cloudera Manager host. Specify the database host with the
+                --host option. 
+
+
+
+
+On each Cloudera Manager host, edit the following
+                  file: /etc/default/cloudera-scm-server
+
+Find the line that begins with export
+                  CMF_JAVA_OPTS and add the following
+                parameter:-Dcom.cloudera.cmf.haMode=true
+Find the line that begins with export
+                  CMF_SERVER_ARGS and insert the following inside the
+                quotes: --ha-priority <number>
+
+The --ha-priority sets the priority of
+              the server. The number has to be a non zero positive
+                integer. The lower the number is, the higher priority the
+              server has. Thus, the active server should have a smaller
+              “ha-priority” number than the passive server. When the hardware of
+              the previous running host gets replaced, make sure the new active
+              server always has a higher priority (smaller ha-priority number)
+              than the passive server. To start with, the suggested values are
+              ‘10’ for the active server, and ‘20’ for the passive server.
+              Increment by 10 for each additional passive server.
+For example:
+              export CMF_SERVER_ARGS=”--ha-priority 10”
+export CMF_JAVA_OPTS="-Xmx2G -XX:MaxPermSize=256m -XX:+HeapDumpOnOutOfMemoryError  -XX:HeapDumpPath=/tmp -Dcom.cloudera.cmf.haMode=true
+
+
+Save the file
+
+
+
+
+Start one instance of Cloudera Manager and wait for the
+          Cloudera Manager server to come online.
+
+
+Start the Load Balancer. 
+
+
+Configure the Cloudera Manager Hostname
+          Override:
+
+
+Log in to the Cloudera Manager Admin Console, and go to
+                Administration > Settings. 
+
+
+Select Ports and Addresses.
+
+
+Set the Cloudera Manager Hostname Override
+              parameter to contain the fully qualified domain name of the load
+              balancer. 
+
+
+
+
+If you have enabled TLS for Cloudera Manager, do the
+          following:
+
+Locate the Verify Agent Hostname Against Certificate
+            configuration parameter, and uncheck it. (Go to
+              Administration > Settings and search for this parameter.)
+Ensure that the CA certificate signing the load
+            balancer’s TLS certificate is trusted by Cloudera Manager server. 
+The CA certificate signing the load balancer’s TLS
+            certificate must be specified in the file referenced by the
+              Cloudera Manager TLS/SSL Client Trust Store File
+            configuration parameter (Go to Administration > Settings and
+            search for this parameter.)
+
+
+Restart the active instance of Cloudera Manager Server.
+CM agents on all hosts must point to load balancer for
+        communicating with CM servers.If you are adding high availability to
+          an existing set of hosts managed by Cloudera Manager, configure the
+          Cloudera Manager agents on all managed hosts with the
+          fully-qualified domain name of the load balancer. noteIf you are
+            setting up a new cluster with new hosts, skip this step. On all
+              existing Cloudera Manager-managed hosts, change the following
+            in the /etc/cloudera-scm-agent/config.ini
+            file:server_host=fully qualified domain name of the load balancerIf your host provisioning system automatically adds new
+          hosts to Cloudera Manager without using the Cloudera Manager
+          Add Host wizard, ensure the above server_host line in
+          the /etc/cloudera-scm-agent/config.ini is configured
+          with the fully-qualified domain name of the load balancer. This may be
+          needed in systems using pre-created host images.
+
+If you have enabled TLS for Cloudera Manager, the CA certificate
+          signing the load balancer’s TLS certificate must be specified. On
+            all Cloudera Manager-managed hosts, add the following to the
+            /etc/cloudera-scm-agent/config.ini
+          file:verify_cert_file=load_balancer_ca_cert.pem
+(Replace load_balancer_ca_cert.pem with the file containing
+          the certificate.)
+
+Perform rotation of Auto-TLS certificates (See Rotate Auto-TLS Certificate Authority
+          and Host Certificates) with location parameter set to
+        blank to store the certificates in DB instead of file system. This is
+        important to ensure that both the hosts are able to use the auto TLS
+        certificates after rotation. 
+
+Restart the Cloudera Manager agents by running the following command
+          on all managed hosts:
+          sudo service cloudera-scm-agent restart
+
+Start the passive instance of the Cloudera Manager server.
+Continue with cluster installation and wait for the new
+        cluster to start up.
+Verify that both Cloudera Manager hosts are showing good health in the
+        Cloudera Manager Admin Console. (Go to Hosts
+             > All Hosts to check
+        the status of the hosts of the Cloudera Manager Servers.)
+
+Replacing Cloudera Manager Hosts
+Primary/secondary node fails:
+Set up a new Cloudera Manager server node as per above steps
+Update the load balancer configuration to update the host name of
+            replaced host.
+Ensure that the priority of active host remains higher (smaller
+            value of the --ha-priority property) than the
+            passive host.
+Ensure the Cloudera Manager server is running on the host before
+            restarting load balancer.
+Restart load balancer server.
+
+Load Balancer fails
+Set up a new load balancer using the existing configuration.
+
+Ensure that the load balancer endpoint remains the same as it is
+              configured in the Cloudera Manager server and agents.
+
+
+
+
+Parent topic: Configuring Cloudera Manager for High Availability

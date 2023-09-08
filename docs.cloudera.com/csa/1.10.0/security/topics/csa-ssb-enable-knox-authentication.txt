@@ -1,0 +1,462 @@
+Enabling Knox authenticationCloudera Docs
+Enabling Knox authentication
+You can use Knox authentication for SQL Stream Builder (SSB) to provide integration with
+    customer Single Sign-On (SSO) solutions. Knox uses Kerberos (SPNEGO) to strongly authenticate
+    itself towards the services.
+Apache Knox Gateway is used to help ensure perimeter security for SSB. With Knox, enterprises
+      can confidently extend the SSB UI and API endpoints to new users without Kerberos
+      complexities. Knox provides a central gateway and has varying degrees of authorization,
+      authentication, SSL, and SSO capabilities to enable a single access point for SSB.
+Before you begin
+Install and configure Knox on your cluster. For more information, see the Installing Apache Knox
+                    documentation.
+Enable Kerberos authentication for SSB. For more information, see Enabling Kerberos authentication
+                    section.
+When using SSB on CDP Private Cloud Base, the Auto Discovery feature of Knox is not
+            supported. This means you must manually configure Knox by adding SSB as a custom service
+            to the cdp-proxy configuration. When using CDP Private Cloud Base 7.1.7 an additional
+            configuration step is required to add the service definitions to Knox.
+
+Parent topic: Authentication in SSB
+Enabling Knox Auto Discovery for MVE without Load Balancer
+When using SQL Stream Builder (SSB), the Auto Discovery feature of Knox is supported
+        for the Materialized View Engine (MVE). This means that you need to enable the Knox Auto
+        Discovery feature for the MVE if you plan to use SSB without Load Balancer, and Cloudera
+        Manager provides and manages all the required service definition files. In case the Load
+        Balancer is enabled, you need to manually add the service definition to Knox.
+
+Go to your cluster in Cloudera Manager.
+
+Select Knox from the list of services.
+
+Select Configuration.
+
+Search for mve in the Search field.
+
+Check the Enable Auto Discovery (cdp-proxy-api) - SQL Streaming
+                        Builder - Materialized View Engine API property.
+
+Click Save Changes.
+The Refresh needed indicator appears beside the Knox service name.
+
+Refresh Knox.
+
+If you use SSB on CDP Private Cloud Base 7.1.7, add the
+            SSB service definitions to Knox, and then configure the default topologies in Cloudera
+            Manager. If you use SSB on CDP Private Cloud Base 7.1.8, you do not need to add the
+            service definitions, which means you can continue with configuring the default
+            topologies of Knox in Cloudera Manager.
+
+
+Extending Knox with the SSB service definitions in CDP Private Cloud Base 7.1.7
+When using CDP Private Cloud Base 7.1.7, you must create service definitions for the
+        SSB engines and APIs in the Knox Admin UI.
+
+Go to your cluster in Cloudera Manager.
+
+Select Knox from the list of services.
+
+Select Knox Gateway Home.
+
+Open the General Proxy Information.
+
+Click Admin UI URL.
+You are redirected to the Knox Manager page.
+
+Click Service Definitions under Resource Types.
+
+Click on the plus icon to add the SSB service
+                    definitions.
+The Create a New Service Definition window appears.
+
+
+
+Delete the default text from the window.
+
+Create the service definitions for SSB.
+Without Load BalancerWith Load BalancerCopy the following XML entry for the SSB-SSE-UI service
+                                definition:<?xml version="1.0" encoding="UTF-8"?>
+<serviceDefinitions>
+   <serviceDefinition>
+   <service name="ssb-sse-ui" role="SSB-SSE-UI" version="1.7.0">
+   <metadata>
+      <context>/ssb-sse-ui</context>
+      <description>SSB-SSE-UI</description>
+      <shortDesc>SSB-SSE-UI</shortDesc>
+      <type>UI</type>
+   </metadata>
+   <dispatch classname="org.apache.knox.gateway.dispatch.ConfigurableDispatch" use-two-way-ssl="false">
+      <param>
+         <name>responseExcludeHeaders</name>
+         <value>CONTENT-LENGTH,WWW-AUTHENTICATE</value>
+      </param>
+   </dispatch>
+   <routes>
+      <route path="/ssb-sse-ui/"/>
+      <route path="/ssb-sse-ui/**"/>
+      <route path="/ssb-sse-ui/**?**"/>
+      <route path="/ssb-sse-ui/swagger/**">
+         <rewrite apply="SSB-SSE-UI/filter/outbound/swagger/body" to="response.body"/>
+      </route>
+   </routes>
+</service>
+<rules>
+   <rule name="SSB-SSE-UI/ssb-sse-ui/inbound/root" pattern="*://*:*/**/ssb-sse-ui/">
+      <rewrite template="{$serviceUrl[SSB-SSE-UI]}/"/>
+   </rule>
+   <rule name="SSB-SSE-UI/ssb-sse-ui/inbound/path" pattern="*://*:*/**/ssb-sse-ui/{**}">
+      <rewrite template="{$serviceUrl[SSB-SSE-UI]}/{**}"/>
+   </rule>
+   <rule name="SSB-SSE-UI/ssb-sse-ui/inbound/query" pattern="*://*:*/**/ssb-sse-ui/{**}?{**}">
+      <rewrite template="{$serviceUrl[SSB-SSE-UI]}/{**}?{**}"/>
+   </rule>
+   <rule dir="OUT" name="SSB-SSE-UI/rule/outbound/html/api" pattern="/api/{**}/">
+      <rewrite template="{$frontend[url]}/ssb-sse-ui/api/{**}/"/>
+   </rule>
+   <rule dir="OUT" name="SSB-SSE-UI/rule/outbound/html/ui" pattern="*://*:*/ui/{**}">
+      <rewrite template="{$frontend[url]}/ssb-sse-ui/ui/{**}"/>
+   </rule>
+   <rule dir="OUT" name="SSB-SSE-UI/rule/outbound/html/frontend-ui" pattern="/ui/">
+      <rewrite template="{$frontend[url]}/ssb-sse-ui/ui/"/>
+   </rule>
+   <rule dir="OUT" name="SSB-SSE-UI/rule/outbound/html/internal" pattern="/internal/">
+      <rewrite template="{$frontend[url]}/ssb-sse-ui/internal/"/>
+   </rule>
+   <rule dir="OUT" name="SSB-SSE-UI/rule/outbound/html/swagger-url" pattern="/swagger/{**}">
+      <rewrite template="{$frontend[path]}/ssb-sse-ui/swagger/{**}"/>
+   </rule>
+   <rule dir="OUT" name="SSB-SSE-UI/rule/outbound/html/swagger-config-url" pattern="/swagger-ui/{**}">
+      <rewrite template="{$frontend[url]}/ssb-sse-ui/swagger-ui/{**}"/>
+   </rule>
+   <rule dir="OUT" name="SSB-SSE-UI/rule/outbound/html/websocket" pattern="/websocket/">
+      <rewrite template="{$frontend[url]}/ssb-sse-ws/websocket/"/>
+   </rule>
+   <rule dir="OUT" name="SSB-SSE-UI/rule/outbound/json/root">
+      <rewrite template="{$frontend[url]}/ssb-sse-ui/"/>
+   </rule>
+   <rule dir="OUT" name="SSB-SSE-UI/rule/outbound/json/path">
+      <rewrite template="{$frontend[url]}/ssb-sse-ui/{**}"/>
+   </rule>
+   <filter name="SSB-SSE-UI/filter/outbound/swagger/body">
+      <content type="*/json">
+         <apply path="$.servers[0].url" rule="SSB-SSE-UI/rule/outbound/json/root"/>
+         <apply path="$.oauth2RedirectUrl" rule="SSB-SSE-UI/rule/outbound/json/path"/>
+      </content>
+   </filter>
+</rules>
+</serviceDefinition>
+</serviceDefinitions>Paste it to the New Service Definition window.Click Ok.Click on the plus icon to create a new service definition.Copy the following XML entry for the SSB-SSE-WS service
+                                definition:<?xml version="1.0" encoding="UTF-8"?>
+<serviceDefinitions>
+   <serviceDefinition>
+    <service name="ssb-sse-ws" role="SSB-SSE-WS" version="1.7.0">
+   <metadata>
+      <context>/ssb-sse-ws</context>
+      <description>SSB-SSE-WS</description>
+      <shortDesc>SSB-SSE-WS</shortDesc>
+      <type>API</type>
+   </metadata>
+   <dispatch classname="org.apache.knox.gateway.dispatch.ConfigurableDispatch" use-two-way-ssl="false">
+      <param>
+         <name>responseExcludeHeaders</name>
+         <value>CONTENT-LENGTH,WWW-AUTHENTICATE</value>
+      </param>
+      <param>
+         <name>requestExcludeHeaders</name>
+         <value>Cookie,Origin</value>
+      </param>
+   </dispatch>
+   <routes>
+      <route path="/ssb-sse-ws/**">
+         <rewrite apply="SSB-SSE-WS/rule/inbound1" to="request.url"/>
+      </route>
+   </routes>
+</service>
+<rules>
+   <rule dir="IN" name="SSB-SSE-WS/rule/inbound1" pattern="*://*:*/**/ssb-sse-ws/{path=**}">
+      <rewrite template="{$serviceUrl[SSB-SSE-WS]}/{path=**}/"/>
+   </rule>
+</rules>
+</serviceDefinition>
+</serviceDefinitions>Paste it to the New Service Definition window.Click Ok.
+Click on the plus icon to create a new service
+                                definition.
+Copy the following XML entry for the SSB-SSE-API service
+                                definition:<?xml version="1.0" encoding="UTF-8"?>
+<serviceDefinitions>
+   <serviceDefinition>
+      <service name="ssb-sse-api" role="SSB-SSE-API" version="1.5.0.0">
+         <metadata>
+            <context>/ssb-sse-api</context>
+            <description>Streaming SQL Builder - Streaming SQL Engine API</description>
+            <shortDesc>SSB - SSE API</shortDesc>
+            <type>API</type>
+         </metadata>
+         <routes>
+            <route path="/ssb-sse-api/api/**?**">
+               <rewrite apply="SSB-SSE-API/ssb-sse-api/api/path" to="request.url"/>
+            </route>
+         </routes>
+      </service>
+      <rules>
+         <rule dir="IN" name="SSB-SSE-API/ssb-sse-api/api/path" pattern="*://*:*/**/ssb-sse-api/api/{path=**}?{**}">
+            <rewrite template="{$serviceUrl[SSB-SSE-API]}/api/{path=**}?{**}"/>
+         </rule>
+      </rules>
+   </serviceDefinition>
+</serviceDefinitions>
+Paste it to the New Service Definition window.
+Click Ok.Copy the following XML entry for the SSB-SSE-UI-LB service
+                                definition:<?xml version="1.0" encoding="UTF-8"?>
+<serviceDefinitions>
+   <serviceDefinition>
+    <service name="ssb-sse-ui-lb" role="SSB-SSE-UI-LB" version="1.7.0">
+    <dispatch classname="org.apache.knox.gateway.dispatch.ConfigurableDispatch" use-two-way-ssl="false">
+        <param>
+            <name>responseExcludeHeaders</name>
+            <value>CONTENT-LENGTH,WWW-AUTHENTICATE</value>
+        </param>
+    </dispatch>
+    <metadata>
+        <context>/ssb-sse-ui-lb</context>
+        <description>SSB-SSE-UI-LB</description>
+        <shortDesc>SSB-SSE-UI-LB</shortDesc>
+        <type>UI</type>
+    </metadata>
+    <routes>
+        <route path="/ssb-sse-ui-lb/"/>
+        <route path="/ssb-sse-ui-lb/**"/>
+        <route path="/ssb-sse-ui-lb/**?**"/>
+        <route path="/ssb-sse-ui-lb/swagger/**">
+            <rewrite apply="SSB-SSE-UI-LB/filter/outbound/swagger/body" to="response.body"/>
+        </route>
+    </routes>
+</service><rules>
+    <rule name="SSB-SSE-UI-LB/ssb-sse-ui-lb/inbound/root" pattern="*://*:*/**/ssb-sse-ui-lb/">
+        <rewrite template="{$serviceUrl[SSB-SSE-UI-LB]}/"/>
+    </rule>
+    <rule name="SSB-SSE-UI-LB/ssb-sse-ui-lb/inbound/path" pattern="*://*:*/**/ssb-sse-ui-lb/{**}">
+        <rewrite template="{$serviceUrl[SSB-SSE-UI-LB]}/{**}"/>
+    </rule>
+    <rule name="SSB-SSE-UI-LB/ssb-sse-ui-lb/inbound/query" pattern="*://*:*/**/ssb-sse-ui-lb/{**}?{**}">
+        <rewrite template="{$serviceUrl[SSB-SSE-UI-LB]}/{**}?{**}"/>
+    </rule>
+    <rule dir="OUT" name="SSB-SSE-UI-LB/rule/outbound/html/api" pattern="/api/{**}/">
+        <rewrite template="{$frontend[url]}/ssb-sse-ui-lb/api/{**}/"/>
+    </rule>
+    <rule dir="OUT" name="SSB-SSE-UI-LB/rule/outbound/html/ui" pattern="*://*:*/ui/{**}">
+        <rewrite template="{$frontend[url]}/ssb-sse-ui-lb/ui/{**}"/>
+    </rule>
+    <rule dir="OUT" name="SSB-SSE-UI-LB/rule/outbound/html/frontend-ui" pattern="/ui/">
+        <rewrite template="{$frontend[url]}/ssb-sse-ui-lb/ui/"/>
+    </rule>
+    <rule dir="OUT" name="SSB-SSE-UI-LB/rule/outbound/html/internal" pattern="/internal/">
+        <rewrite template="{$frontend[url]}/ssb-sse-ui-lb/internal/"/>
+    </rule>
+    <rule dir="OUT" name="SSB-SSE-UI-LB/rule/outbound/html/swagger-url" pattern="/swagger/{**}">
+        <rewrite template="{$frontend[path]}/ssb-sse-ui-lb/swagger/{**}"/>
+    </rule>
+    <rule dir="OUT" name="SSB-SSE-UI-LB/rule/outbound/html/swagger-config-url" pattern="/swagger-ui/{**}">
+        <rewrite template="{$frontend[url]}/ssb-sse-ui-lb/swagger-ui/{**}"/>
+    </rule>
+    <rule dir="OUT" name="SSB-SSE-UI-LB/rule/outbound/html/websocket" pattern="/websocket/">
+        <rewrite template="{$frontend[url]}/ssb-sse-ws-lb/websocket/"/>
+    </rule>
+    <rule dir="OUT" name="SSB-SSE-UI-LB/rule/outbound/json/root">
+        <rewrite template="{$frontend[url]}/ssb-sse-ui-lb/"/>
+    </rule>
+    <rule dir="OUT" name="SSB-SSE-UI-LB/rule/outbound/json/path">
+        <rewrite template="{$frontend[url]}/ssb-sse-ui-lb/{**}"/>
+    </rule>
+    <filter name="SSB-SSE-UI-LB/filter/outbound/swagger/body">
+        <content type="*/json">
+            <apply path="$.servers[0].url" rule="SSB-SSE-UI-LB/rule/outbound/json/root"/>
+            <apply path="$.oauth2RedirectUrl" rule="SSB-SSE-UI-LB/rule/outbound/json/path"/>
+        </content>
+    </filter>    
+    </rules>
+</serviceDefinition>
+</serviceDefinitions>Paste it to the New Service Definition window.Click Ok.Click on the plus icon to create a new service definition.Copy the following XML entry for the SSB-SSE-WS-LB service
+                                definition:<?xml version="1.0" encoding="UTF-8"?>
+<serviceDefinitions>
+   <serviceDefinition>
+    <service name="ssb-sse-ws-lb" role="SSB-SSE-WS-LB" version="1.7.0">
+    <dispatch classname="org.apache.knox.gateway.dispatch.ConfigurableDispatch" use-two-way-ssl="false">
+        <param>
+            <name>responseExcludeHeaders</name>
+            <value>CONTENT-LENGTH,WWW-AUTHENTICATE</value>
+        </param>
+        <param>
+            <name>requestExcludeHeaders</name>
+            <value>Cookie,Origin</value>
+        </param>
+    </dispatch>
+    <metadata>
+        <context>/ssb-sse-ws-lb</context>
+        <description>SSB-SSE-WS-LB</description>
+        <shortDesc>SSB-SSE-WS-LB</shortDesc>
+        <type>API</type>
+    </metadata>
+    <routes>
+        <route path="/ssb-sse-ws-lb/**">
+            <rewrite apply="SSB-SSE-WS-LB/rule/inbound1" to="request.url"/>
+        </route>
+    </routes>
+</service>
+<rules>
+    <rule dir="IN" name="SSB-SSE-WS-LB/rule/inbound1" pattern="*://*:*/**/ssb-sse-ws-lb/{path=**}">
+        <rewrite template="{$serviceUrl[SSB-SSE-WS-LB]}/{path=**}/"/>
+    </rule>
+</rules>
+</serviceDefinition>
+</serviceDefinitions>Paste it to the New Service Definition window.Click Ok.
+Click on the plus icon to create a new
+                                service definition.
+Copy the following XML entry for the SSB-MVE-API-LB service
+                                definition:
+<?xml version="1.0" encoding="UTF-8"?>
+<serviceDefinitions>
+   <serviceDefinition>
+    <service name="ssb-mve-api-lb" role="SSB-MVE-API-LB" version="1.7.0">
+    <metadata>
+        <context>/ssb-mve-api-lb</context>
+        <description>Streaming SQL Builder - Materialized View Engine API LB</description>
+        <shortDesc>SSB - MVE API LB</shortDesc>
+        <type>API</type>
+    </metadata>
+    <routes>
+        <route path="/ssb-mve-api-lb/**">
+            <rewrite apply="SSB-MVE-API-LB/ssb-mve-api-lb/path" to="request.url"/>
+        </route>
+    </routes>
+</service>
+<rules>
+    <rule dir="IN" name="SSB-MVE-API-LB/ssb-mve-api-lb/path" pattern="*://*:*/**/ssb-mve-api-lb/{path=**}?{**}">
+        <rewrite template="{$serviceUrl[SSB-MVE-API-LB]}/{path=**}?{**}"/>
+    </rule>
+</rules>
+</serviceDefinition>
+</serviceDefinitions>
+
+In the list of Service definitions, you should be able to see the SSB
+                    entries.
+
+After adding the SSB service definitions using the Knox
+            Admin page, you need to configure the default topologies in Cloudera Manager.
+
+
+Adding SSB services to the default topologies
+You must add the SSB services to the Knox default topologies in Cloudera
+        Manager.
+
+Go to your cluster in Cloudera Manager.
+
+Click on Knox from the list of Services.
+
+Select Configuration.
+
+Search for Knox Simplified Topology Management.
+
+Add the following entries to the Knox Simplified Topology Management -
+                        cdp-proxy:
+
+Without Load BalancerWith Load Balancer and without TLSWith Load Balancer and with TLSSSB-SSE-UI:url=https://<streaming_sql_engine_host>:18121
+SSB-SSE-UI:httpclient.connectionTimeout=5m
+SSB-SSE-UI:httpclient.socketTimeout=5m
+SSB-SSE-WS:url=wss://<streaming_sql_engine_host>:18121
+SSB-SSE-UI-LB:url=https://<streaming_sql_engine_host>:8080
+SSB-SSE-UI-LB:httpclient.connectionTimeout=5m
+SSB-SSE-UI-LB:httpclient.socketTimeout=5m
+SSB-SSE-WS-LB:url=wss://<streaming_sql_engine_host>:8080SSB-SSE-UI-LB:url=https://<streaming_sql_engine_host>:8445
+SSB-SSE-UI-LB:httpclient.connectionTimeout=5m
+SSB-SSE-UI-LB:httpclient.socketTimeout=5m
+SSB-SSE-WS-LB:url=wss://<streaming_sql_engine_host>:8445
+
+You need to add the hostname to the entries as shown in the following
+                        example:
+
+
+
+Add the following entries to the Knox Simplified Topology Management -
+                        cdp-proxy-api:
+
+SSB-SSE-API:url=https://<streaming_sql_engine_host>:18121
+The port for the SSB-SSE-API remains the same regardless of
+                        TLS configuration.
+
+
+Add the following entries to the Knox Simplified Topology Management -
+                        cdp-proxy-api if you are using a Load Balanced SSB:
+
+Without TLSWith TLSSSB-MVE-API-LB:url=https://<ssb_mv_host>:8081SSB-MVE-API-LB:url=https://<ssb_mv_host>:8444
+
+
+Click Save changes.
+The Refresh needed indicator appears beside the Knox service name.
+
+Refresh Knox.
+
+When the default topologies are configured, you need to
+            define the proxy paths for SSB in Cloudera Manager both for CDP Private Cloud Base 7.1.7
+            and 7.1.8.
+
+
+Defining Knox proxy paths for SSB
+You must provide the Knox proxy paths for YARN and the Materialized View API in
+        Cloudera Manager to authenticate the user when accessing the Materialized Views and the
+        Resource Manager through the Streaming SQL Console.
+
+Go to your cluster in Cloudera Manager.
+
+Click on SQL Stream Builder from the list of
+                    Services.
+
+Select Configuration.
+
+Search for Knox proxy path for YARN.
+
+Add the following URL path:
+
+/gateway/cdp-proxy/yarnuiv2/proxy
+
+
+Search for Knox proxy path for Materialized View Engine.
+
+Add the following URL path:
+
+/gateway/cdp-proxy-api/ssb-mve-api
+
+
+Restart the SQL Stream Builder service.
+
+After configuring the Knox service for SQL Stream Builder,
+            you can reach the Streaming SQL Console by completing the steps in Accessing the
+                Streaming SQL Builder through Knox section.
+
+
+Accessing the Streaming SQL Console through Knox
+After manually configuring Knox and SSB, you should check if the SSO authentication
+        works for the Streaming SQL Console.
+
+Go to your cluster in Cloudera Manager.
+
+Click on Knox from the list of Services.
+
+Select Knox Gateway Home.
+You will be prompted to provide your username and password.
+
+
+
+Click cdp-proxy under Topologies.
+SSB Console should be listed under the cdp-proxy.
+
+Click SSB Console.
+You are redirected to the Streaming SQL Console page.
+
+noteIn case SSB Console does not appear under the cdp-proxy topologies, try to
+                        clean up the deployments folder of Knox with the following
+                        command:rm -rf /var/lib/knox/gateway/data/deployments/*
+                        After running the command, restart the Knox service.
+
+
+

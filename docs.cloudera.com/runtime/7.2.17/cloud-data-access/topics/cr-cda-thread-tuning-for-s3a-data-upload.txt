@@ -1,0 +1,74 @@
+Thread Tuning for S3A Data UploadCloudera Docs
+Thread Tuning for S3A Data Upload
+Both the array and bytebuffer buffer mechanisms can consume very large amounts
+    of memory, on-heap or off-heap respectively. The disk buffer mechanism does not use much memory
+    up, but it consumes hard disk capacity.
+
+If there are many output streams being written to in a single process, the amount of memory
+        or disk used is the multiple of all streams' active memory and disk use.
+You may need to perform careful tuning to reduce the risk of running out memory, especially
+        if the data is buffered in memory. There are a number parameters which can be tuned:
+
+
+Parameter
+Default Value
+Description
+
+
+
+fs.s3a.fast.upload.active.blocks
+4
+Maximum number of blocks a single output stream can have active (uploading, or
+                queued to the central FileSystem instance's pool of queued operations). This stops a
+                single stream overloading the shared thread pool.
+
+
+fs.s3a.threads.max
+10
+The total number of threads available in the filesystem for data uploads or any
+                other queued filesystem operation.
+
+
+fs.s3a.max.total.tasks
+5
+The number of operations which can be queued for execution
+
+
+fs.s3a.threads.keepalivetime
+60
+The number of seconds a thread can be idle before being terminated.
+
+
+When the maximum allowed number of active blocks of a single stream is reached, no more
+        blocks can be uploaded from that stream until one or more of those active block uploads
+        completes. That is, a write() call which would trigger an upload of a now
+        full datablock will instead block until there is capacity in the queue.
+Consider the following:
+
+
+As the pool of threads set in fs.s3a.threads.max is shared (and
+            intended to be used across all threads), a larger number here can allow for more
+            parallel operations. However, as uploads require network bandwidth, adding more threads
+            does not guarantee speedup.
+
+
+The extra queue of tasks for the thread pool (fs.s3a.max.total.tasks)
+            covers all ongoing background S3A operations.
+
+
+When using memory buffering, a small value of
+              fs.s3a.fast.upload.active.blocks limits the amount of memory which
+            can be consumed per stream.
+
+
+When using disk buffering, a larger value of
+              fs.s3a.fast.upload.active.blocks does not consume much memory. But it
+            may result in a large number of blocks to compete with other filesystem operations.
+
+
+We recommend a low value of fs.s3a.fast.upload.active.blocks —
+        enough to start background upload without overloading other parts of the system. Then
+        experiment to see if higher values deliver more throughput — especially from VMs
+        running on EC2.
+
+Parent topic: Configuring and tuning S3A block upload

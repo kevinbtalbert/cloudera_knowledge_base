@@ -1,0 +1,106 @@
+Prometheus properties configurationCloudera Docs
+Prometheus properties configuration
+Learn the properties that you need to configure in the prometheus.yml
+  file before you start using the Prometheus metric store for Streams Messaging Manager
+  (SMM).
+Configure the following properties in the prometheus.yml file:
+
+
+Set the scrape_interval property value to 60 seconds in the
+      prometheus.yml file.
+scrape_interval: 60s
+
+Prometheus automatically assigns the instance label to metrics. However, in case partition
+          leader change reassignment happens, it means an excessive amount of metrics being created.
+          This property is recommended for large clusters.
+              metric_relabel_configs:
+    - source_labels: [__name__]
+      regex: ^(broker_producer_messagesinpersec_total|topic_partition_messagesinpersec_total|topic_partition_bytesinpersec_total|topic_partition_bytesoutpersec_total)$
+      target_label: instance
+      replacement: 'no-instance'
+Set Kafka hosts + metrics port (Kafka’s Cloudera Manager configuration
+            kafka.http.metrics.port) values.
+['luigi-1.luigi.root.hwx.site:24042','luigi-2.luigi.root.hwx.site:24042','luigi-3.luigi.root.hwx.site:24042']
+
+Set Kafka Connect hosts (deployed on same hosts as Kafka) + metrics port (Kafka Connect’s
+          Cloudera Manager configuration connect.prometheus.metrics.port)
+          values.['luigi-1.luigi.root.hwx.site:28086','luigi-1.luigi.root.hwx.site:28086','luigi-1.luigi.root.hwx.site:28086']
+Set Prometheus node exporter hosts (deployed on same hosts as Kafka) + Prometheus node
+          exporter metrics port
+          values.['luigi-1.luigi.root.hwx.site:9100','luigi-2.luigi.root.hwx.site:9100','luigi-3.luigi.root.hwx.site:9100']
+update=true parameter should be only used by Prometheus. Querying Kafka
+          Prometheus endpoint with this flag set to true updates the internal metrics cache for
+          stateful metrics.update: ['true']
+
+
+For example, configure Prometheus with the following YAML
+      file:# my global config
+global:
+  scrape_interval: 60s 
+  scrape_timeout: 55s
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+  - static_configs:
+    - targets:
+      # - alertmanager:9093
+
+# Load rules once and periodically evaluate them according to the global 'evaluation_interval'.
+rule_files:
+  # - "first_rules.yml"
+  # - "second_rules.yml"
+
+# A scrape configuration containing exactly one endpoint to scrape:
+# Here it's Prometheus itself.
+scrape_configs:
+  # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
+  - job_name: 'prometheus'
+
+    # metrics_path defaults to '/metrics'
+    # scheme defaults to 'http'.
+
+    static_configs:
+    - targets: ['localhost:9090']
+  - job_name: 'kafka'
+    
+    metrics_path: '/api/prometheus-metrics'
+    params:
+      update: ['true']
+    
+    static_configs:
+    - targets: ['luigi-1.luigi.root.hwx.site:24042','luigi-2.luigi.root.hwx.site:24042','luigi-3.luigi.root.hwx.site:24042']
+
+  - job_name: 'kafka_connect'
+
+    metrics_path: '/api/prometheus-metrics'
+    static_configs:
+    - targets: ['luigi-1.luigi.root.hwx.site:28086','luigi-1.luigi.root.hwx.site:28086','luigi-1.luigi.root.hwx.site:28086']
+
+  - job_name: 'system_metrics'
+
+    # metrics_path defaults to '/metrics'
+    # scheme defaults to 'http'.
+
+    static_configs:
+    - targets: ['luigi-1.luigi.root.hwx.site:9100','luigi-2.luigi.root.hwx.site:9100','luigi-3.luigi.root.hwx.site:9100']
+  - job_name: 'kafka'
+    metric_relabel_configs:
+    - source_labels: [__name__]
+      regex: ^(broker_producer_messagesinpersec_total|topic_partition_messagesinpersec_total|topic_partition_bytesinpersec_total|topic_partition_bytesoutpersec_total)$
+      target_label: instance
+      replacement: 'no-instance'
+Where,
+['luigi-1.luigi.root.hwx.site:9100','luigi-2.luigi.root.hwx.site:9100','luigi-3.luigi.root.hwx.site:9100']
+          = Kafka host + Node exporter metrics port
+['luigi-1.luigi.root.hwx.site:24042','luigi-2.luigi.root.hwx.site:24042','luigi-3.luigi.root.hwx.site:24042']
+          = Kafka host + Kafka metrics port
+['luigi-1.luigi.root.hwx.site:28086','luigi-1.luigi.root.hwx.site:28086','luigi-1.luigi.root.hwx.site:28086']
+          = Kafka Connect host name
+28086 = connect.prometheus.metrics.port
+
+You need to replace Kafka and Kafka Connect host names and set Kafka Connect’s Cloudera
+      Manager configuration property connect.prometheus.metrics.port in the
+        connect-distributed.properties file with values from your cluster.
+
+Parent topic: Prometheus configuration for SMM

@@ -1,0 +1,98 @@
+Running your Flink applicationCloudera Docs
+Running your Flink application
+After preparing your environment, you need to create a Kudu table, and also connect
+        Flink with Kudu by providing the Kudu master. You also need to choose a source to which you
+        connect Flink in Data Hub. After generating data to your source, Flink applies the
+        computations you have added in your application design. The results are redirected to your
+        Kudu sink.
+
+
+You have a CDP Public Cloud environment.
+You have a CDP username (it can be your own CDP user or a CDP machine user) and
+                    a password set to access Data Hub clusters.The predefined resource role of
+                        this user is at least EnvironmentUser. This resource role provides
+                        the ability to view Data Hub clusters and set the FreeIPA password for the
+                        environment.
+Your user is synchronized to the CDP Public Cloud environment.
+You have a Streaming Analytics cluster.
+You have a Real-time Data Mart cluster in the same Data Hub environment as the
+                    Streaming Analytics cluster.
+Your CDP user has the correct permissions set up in Ranger allowing access to
+                    Kudu.
+You obtained the Kudu Master hosts:
+Go to Management Console > Environments.
+Search for your environment from the list of available
+                            environments.
+Select the Data Hub cluster within your environment from the list of
+                            available clusters.
+Select Kudu Master from the list of
+                            Services.
+Click Masters.
+Copy the host information from the list of Live Masters.
+
+
+
+
+Create your Kudu tables:
+
+
+Use Impala from the Real-time Data Mart cluster to create a table in
+                                Kudu.For more information about how to create a Kudu table from
+                                Impala, see the official
+                                documentation.
+Use the KuduCatalog to create a table in
+                            Kudu.KuduTableInfo tableInfo = KuduTableInfo
+    .forTable("ExampleTable")
+    .createTableIfNotExists(
+        () ->
+            Lists.newArrayList(
+                new ColumnSchema
+                    .ColumnSchemaBuilder("first", Type.INT32)
+                    .key(true)
+                    .build(),
+                new ColumnSchema
+                    .ColumnSchemaBuilder("second", Type.STRING)
+                    .build()
+            ),
+        () -> new CreateTableOptions()
+            .setNumReplicas(1)
+            .addHashPartitions(Lists.newArrayList("first"), 2));
+
+catalog.createTable(tableInfo, false);
+
+
+
+Choose and add a source to your Flink application.
+
+noteYou can create your application choosing the Streams Messaging cluster
+                        that includes Kafka, Schema Registry and Streams Messaging Manager. For more
+                        information about Kafka as a source, see the Analyzing your data with Kafka use
+                        case.
+
+
+Add Kudu as sink to your Flink application.
+
+The following code example shows how to build your application logic with a
+                        Kudu
+                        sink:
+KuduWriterConfig writerConfig = KuduWriterConfig.Builder.setMasters(KUDU_MASTERS).build();
+
+KuduSink<Row> sink = new KuduSink<>(
+    writerConfig,
+    KuduTableInfo.forTable("AlreadyExistingTable"),
+    new RowOperationMapper<>(
+            new String[]{"col1", "col2", "col3"},
+            AbstractSingleOperationMapper.KuduOperation.UPSERT)
+)
+
+
+Start generating data to your source connector.
+
+Deploy your Flink streaming application.
+
+Open the Kudu UI to see the generated table.
+
+You have the following options to monitor and manage your Flink
+            applications:
+
+Job monitoring with Flink DashboardAfter submitting a Flink job, you can always use the Flink Dashboard to review if the   job submission was successful. Later you can use the Flink Dashboard to monitor the history of all   your submitted and completed jobs.Metadata governance with AtlasYou can use Atlas to find, organize and manage different assets of data about your         Flink applications and how they relate to each other. This enables a range of data         stewardship and regulatory compliance use cases.Parent topic: Analyzing your data with Kudu

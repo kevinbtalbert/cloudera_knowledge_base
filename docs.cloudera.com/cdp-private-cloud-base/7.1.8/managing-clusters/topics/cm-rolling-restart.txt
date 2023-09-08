@@ -1,0 +1,174 @@
+Rolling RestartCloudera Docs
+Rolling Restart
+
+Minimum Required Role:
+Operator
+        (also provided by Configurator,
+          Cluster Administrator, Limited
+          Cluster Administrator , Full
+          Administrator) 
+Rolling restart allows you to conditionally restart the role instances of
+      the following services to update software or use a new configuration:
+Atlas
+HBase
+HDFS
+Hive-on-Tezx
+Kafka
+Key Trustee Server
+Knox
+Kudu – see Orchestrating a rolling restart with
+            no downtime.
+MapReduce
+Oozie
+Ranger KMS
+Schema Registry
+Streams Replication Manager
+YARN
+ZooKeeper 
+
+If the service is not running, rolling restart is not available for that service. You can
+      specify a rolling restart of each service individually.
+If you have HDFS High Availability enabled,
+      you can also perform a cluster-level rolling restart. At the cluster
+      level, the rolling restart of worker hosts is performed on a host-by-host
+      basis, rather than per service, to avoid all roles for a service
+      potentially being unavailable at the same time. During a cluster restart,
+      to avoid having your NameNode (and thus the cluster) be unavailable during
+      the restart, Cloudera Manager forces a failover to the standby
+      NameNode.
+Job Tracker and Resource Manager High availability are not
+      required for a cluster-level rolling restart. However, if you have
+      JobTracker or ResourceManager high availability enabled, Cloudera Manager
+      will force a failover to the standby JobTracker or ResourceManager.
+importantIf you have changed a
+        configuration property that requires a redeployment of the client
+        configurations, note that refreshing or restarting a cluster does not
+        automatically re-deploy the client configurations. A service or cluster
+        displays a staleness icon () next to the cluster or service name that
+        indicates that you must redeploy the client configuration. Click the
+        icon to open the Stale
+            Configurations page and follow the prompts to
+        refresh the cluster and redeploy the client
+          configuration.Alternatively, after a restart is completed, you can
+          select Deploy Client Configuration from the
+            Actions menu for either a service or cluster.
+        
+
+Performing a Service or Role Rolling Restart
+You can initiate a rolling restart from either the Status page for one of the eligible
+        services, or from the service's Instances page, where you can select individual roles to be
+        restarted.
+
+Go to the service you want to restart.
+Do one of the following:
+service - Select
+                  Actions > Rolling
+                Restart.
+role - 
+Click the Instances tab.
+Select the roles to restart.
+Select Actions for
+                      Selected > Rolling Restart.
+
+
+In the pop-up dialog box, select the options you want:
+Restart only roles whose configurations are stale
+Restart only roles that are running outdated software versions
+Which role types to restart
+
+If you select an HDFS, HBase, MapReduce, or YARN service, you can have their worker
+          roles restarted in batches. You can configure:
+How many roles should be included in a batch - Cloudera Manager restarts the worker
+              roles rack-by-rack in alphabetical order, and within each rack, hosts are restarted in
+              alphabetical order. If you are using the default replication factor of 3, Hadoop tries
+              to keep the replicas on at least 2 different racks. So if you have multiple racks, you
+              can use a higher batch size than the default 1. But you should be aware that using too
+              high batch size also means that fewer worker roles are active at any time during the
+              upgrade, so it can cause temporary performance degradation. If you are using a single
+              rack only, you should only restart one worker node at a time to ensure data
+              availability during upgrade.
+How long should Cloudera Manager wait before starting the next batch.
+The number of batch failures that will cause the entire rolling restart to
+              fail (this is an advanced feature). For example if you have a very large cluster you
+              can use this option to allow failures because if you know that your cluster will be
+              functional even if some worker roles are down.
+note
+
+HDFS - If you do not have HDFS high availability configured, a warning
+                appears reminding you that the service will become unavailable during the restart
+                while the NameNode is restarted. Services that depend on that HDFS service will also
+                be disrupted. Cloudera recommends that you restart the DataNodes one at a time—one
+                host per batch, which is the default.
+HBase
+
+Administration operations such as any of the following should not be performed
+                    during the rolling restart, to avoid leaving the cluster in an inconsistent
+                      state:
+Split
+Create, disable, enable, or drop table
+Metadata changes
+Create, clone, or restore a snapshot. Snapshots rely on the RegionServers
+                        being up; otherwise the snapshot will fail.
+
+
+To increase the speed of a rolling restart of the HBase
+                      service, set the Region Mover Threads property to a
+                      higher value. This increases the number of regions that can be moved in
+                      parallel, but places additional strain on the HMaster. In most cases,
+                        Region Mover Threads should be set to 5 or lower.
+
+Another option to increase the speed of a rolling restart of the HBase service
+                    is to set the Skip Region Reload During Rolling Restart
+                    property to true. This setting can cause regions to be moved
+                    around multiple times, which can degrade HBase client performance.
+
+MapReduce - If you restart the JobTracker, all current jobs will fail.
+YARN - If you restart ResourceManager and ResourceManager HA is enabled,
+                current jobs continue running: they do not restart or fail. 
+ZooKeeper and Flume - For both ZooKeeper and Flume, the option to
+                restart roles in batches is not available. They are always restarted one by
+                one.
+
+
+Click Confirm to start the rolling restart.
+
+
+Performing a Cluster-Level Rolling Restart
+You can perform a cluster-level rolling restart on demand from the Cloudera Manager Admin
+        Console. A cluster-level rolling restart is also performed as the last step in a rolling
+        upgrade when the cluster is configured with HDFS high availability enabled.
+
+If you have not already done so, enable high availability. See HDFS High Availability for
+          instructions. You do not need to enable automatic failover for rolling
+          restart to work, though you can enable it if you want. Automatic
+          failover does not affect the rolling restart operation.
+For the cluster you want to restart select
+              Actions > Rolling
+            Restart.
+In the pop-up dialog box, select the services you want to restart. Please review the
+          caveats in the preceding section for the services you elect to have restarted. The
+          services that do not support rolling restart will simply be restarted, and will be
+          unavailable during their restart.
+If you select an HDFS, HBase, or MapReduce service, you can have their worker roles
+          restarted in batches. You can configure:
+How many roles should be included in a batch - Cloudera Manager restarts the worker
+              roles rack-by-rack in alphabetical order, and within each rack, hosts are restarted in
+              alphabetical order. If you are using the default replication factor of 3, Hadoop tries
+              to keep the replicas on at least 2 different racks. So if you have multiple racks, you
+              can use a higher batch size than the default 1. But you should be aware that using too
+              high batch size also means that fewer worker roles are active at any time during the
+              upgrade, so it can cause temporary performance degradation. If you are using a single
+              rack only, you should only restart one worker node at a time to ensure data
+              availability during upgrade.
+How long should Cloudera Manager wait before starting the next batch.
+The number of batch failures that will cause the entire rolling restart to
+              fail (this is an advanced feature). For example if you have a very large cluster you
+              can use this option to allow failures because if you know that your cluster will be
+              functional even if some worker roles are down.
+
+Click Restart to start the rolling restart. While the restart is in progress, the
+          Command Details page shows the steps for stopping and restarting the services.
+
+
+
+Parent topic: Managing Cloudera Runtime Services

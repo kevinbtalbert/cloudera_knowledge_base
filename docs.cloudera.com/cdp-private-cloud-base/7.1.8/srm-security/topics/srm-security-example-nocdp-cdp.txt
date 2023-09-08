@@ -1,0 +1,146 @@
+SRM security exampleCloudera Docs
+SRM security example 
+Streams Replication Manager (SRM) is capable of replicating data between CDP and
+    non-CDP clusters that are secured. A setup like this involves configuring security for the SRM
+    service (Driver and Service roles) and the srm-control command line tool.
+
+Consider the following replication environment.
+
+There are two clusters, US-West and US-East. US-West is a CDP cluster that has both Kafka
+        and SRM deployed on it. The Kafka service on this cluster is both Kerberos and TLS/SSL
+        enabled. That is, clients connecting to this cluster (including SRM) use the
+          SASL_SSL protocol. 
+US-East has Kafka deployed on it but not SRM. Kafka on this cluster has TLS/SSL encryption
+        enabled. More importantly, the platform that this cluster is running on is not defined. This
+        is because this example is meant to demonstrate that SRM can connect to and replicate data
+        to or from non-CDP clusters. As long as that cluster is running Kafka, SRM will be able to
+        connect to it. 
+Data replication is unidirectional. The SRM service deployed in US-West is replicating
+        Kafka data from US-East to US-West. From the perspective of the SRM service, US-West is its
+        co-located Kafka cluster, while US-East is an external Kafka cluster.
+The following example walks you through the steps required to set up both the SRM service
+        and the srm-control tool for this replication environment. 
+
+
+The following steps assume that the SRM service is already installed and available on
+        US-West. Additionally, it is also assumed that key and truststore files as well as other
+        credentials required to establish a connection with each cluster are known and are
+        available. The instructions do not go into detail on how you can generate or acquire these
+        credentials.
+
+Define the external Kafka cluster (US-East): 
+Log into the Cloudera Manager instance managing US-West.
+Go to Administration > External
+                  Accounts.
+Go to the Kafka Credentials tab.
+Click Add Kafka credentials.
+Create a Kafka credential for US-East:The security configuration
+              of the external cluster determines which of the available properties you must set.
+              Because in this example US-East has TLS/SSL encryption enabled, the following
+              properties must be set:
+Name
+Bootstrap servers
+Security protocol
+Truststore Password
+Truststore Path
+Truststore Type
+noteClick the i icon next to
+          each property in Cloudera Manager to reveal additional information about each
+          property.
+Click Add.If credential creation is
+              successful, a new entry corresponding to the Kafka credential you specified appears on
+              the page.
+Define the co-located Kafka cluster (US-West):Co-located Kafka clusters
+          can be defined in two separate ways. Either with a service dependency or with Kafka
+          credentials. Because in this example US-West is Kerberos and TLS/SSL enabled, the service
+          dependency method is used. This is in-line with Cloudera best practices.
+In Cloudera Manager, go to Clusters and select the
+              Streams Replication Manager service.
+Go to Configuration.
+Find and enable the Kafka Service
+            property.
+Find and configure the Streams Replication Manager Co-located
+                Kafka Cluster Alias property.The alias you configure
+              represents the co-located cluster. Enter an alias that is unique and easily
+              identifiable. For example:uswest
+Enable relevant security feature togglesBecause US-West is both
+              TLS/SSL and Kerberos enabled, you must enable all feature toggles for both the Driver
+              and Service roles. The feature toggles are the following:
+Enable TLS/SSL for SRM Driver
+Enable TLS/SSL for SRM Service
+Enable Kerberos Authentication
+
+Add both clusters to SRM’s configuration:
+Find and configure the External Kafka Accounts
+              property.Add the name of the Kafka credential you created for
+              US-East to this property. This can be done by clicking the add button to add a new
+              line to the property and then entering the name of the Kafka credential. For
+              example:useast
+Find and configure the Streams Replication Manager Cluster
+                alias property.Add all cluster aliases to this property.
+              This includes the aliases present in both the External Kafka Accounts and
+                Streams Replication Manager Co-located Kafka Cluster Alias properties.
+              Delimit the aliases with commas. For
+              example:useast, uswest
+Configure replications:In this example, data is replicated
+          unidirectionally from US-West to US-East. As a result, only a single replication must be
+          configured.
+Find the Streams Replication Manager's Replication Configs
+              property.
+Click the add button and add new lines for each unique replication you want
+              to add and enable.
+Add and enable your replications.For
+              example:useast->uswest.enabled=true
+Configure Driver and Service role targets:
+Find and configure the Streams Replication Manager Service Target
+                Cluster property.Add the co-located cluster’s alias to the
+              property.  In the case of this example:useast
+Find and configure the Streams Replication Manager Driver Target
+                Cluster property.This property should contain all cluster
+              aliases. In the case of this example, you can either add the aliases of both US-West
+              and US-East or leave the property empty. Leaving the property empty is the same as
+              adding all aliases. 
+Click Save Changes.Restart the SRM service.Configure and run the srm-control tool:
+Click Gateway in the Filters
+              pane.
+Find and configure the following properties:
+
+SRM Client's Secure Storage Password
+The password used to access the secure storage. Take note of the password you
+                    configure. You need to provide it in your CLI session before running the
+                    tool.
+Environment Variable Holding SRM Client's Secure Storage Password
+The name of the environment variable that stores the secure storage password.
+                    Take note of the name that you configure. You need to set it in your CLI session
+                    before running the tool.
+Gateway TLS/SSL Trust Store File
+The path to the TLS/SSL truststore file containing the server (co-located
+                    cluster’s) certificate and public key. Ensure that this file is available on all
+                    SRM hosts.
+Gateway TLS/SSL Truststore Password 
+The password used to access the truststore file specified in the
+                      Gateway TLS/SSL Trust Store File property. 
+SRM Client's Kerberos Principal Name
+The kerberos principal that the tool uses for authentication when connecting
+                    to the co-located Kafka cluster.
+SRM Client's Kerberos Keytab Location 
+The path to the Kerberos keytab file that the tool uses for authentication
+                    when connecting to the co-located Kafka cluster. 
+
+
+Click Save Changes.
+Re-deploy client configuration.
+SSH into one of the SRM hosts in your cluster.
+Set the secure storage password as an environment variable.
+export [***SECURE STORAGE ENV VAR***]=”[***SECURE STORAGE PASSWORD***]”
+Replace [***SECURE STORAGE ENV VAR***] with the name of the
+                environment variable you specified in Environment Variable Holding SRM
+                  Client's Secure Storage Password. Replace [***SRM SECURE
+                  STORAGE PASSWORD***] with the password you specified in SRM
+                  Client's Secure Storage Password. For example:
+                export SECURESTOREPASS=”mypassword
+
+Run the tool.For
+              example:srm-control topics --source useast --target uswest --add topic1,topic2
+
+

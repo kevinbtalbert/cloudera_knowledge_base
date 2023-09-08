@@ -1,0 +1,86 @@
+Running applications using CDS 3.3 with GPU SupportCloudera Docs
+Running applications using CDS 3.3 with GPU Support
+
+Running a Spark job using CDS 3.3 with GPU Support
+
+
+Log on to the node where you want to run the job.
+Run the following command to launch
+            spark3-shell:spark3-shell  --conf "spark.rapids.sql.enabled=true" \
+              --conf "spark.executor.memoryOverhead=5g"where
+--conf spark.rapids.sql.enabled=true
+
+enables the following environment variables for GPUs:
+"spark.task.resource.gpu.amount" - sets GPU resource amount per task
+
+"spark.rapids.sql.concurrentGpuTasks" - sets the number of concurrent tasks per GPU
+"spark.sql.files.maxPartitionBytes" - sets the input partition size for DataSource API, The recommended value is "256m".
+"spark.locality.wait" - controls how long Spark waits to obtain better locality for tasks. 
+"spark.sql.adaptive.enabled" - enables Adaptive Query Execution.
+"spark.rapids.memory.pinnedPool.size" - sets the amount of pinned memory allocated per host.
+"spark.sql.adaptive.advisoryPartitionSizeInBytes" - sets the advisory size in bytes of the shuffle partition during adaptive optimization.
+
+For
+                example,$SPARK_HOME/bin/spark3-shell \
+       --conf spark.task.resource.gpu.amount=2 \
+       --conf spark.rapids.sql.concurrentGpuTasks=2 \
+       --conf spark.sql.files.maxPartitionBytes=256m \
+       --conf spark.locality.wait=0s \
+       --conf spark.sql.adaptive.enabled=true \
+       --conf spark.rapids.memory.pinnedPool.size=2G \
+       --conf spark.sql.adaptive.advisoryPartitionSizeInBytes=1g
+--conf "spark.executor.memoryOverhead=5g"
+sets the amount of additional memory to be allocated per executor process
+notecuDF uses a Just-In-Time (JIT) compilation approach for
+            some kernels, and the JIT process can add a few seconds to query wall-clock time. You
+            are recommended to set a JIT cache path to speed up subsequent invocations with:
+              --conf spark.executorEnv.LIBCUDF_KERNEL_CACHE_PATH=[local path]. The
+            path should be local to the executor (not HDFS) and not shared between different cluster
+            users in a multi-tenant environment. For example, the path may be in
+              /tmp: (/tmp/cudf-[***USER***]). If
+              the/tmp directory is not writable, consult your system administrator
+            to find a path that is.You can override these configuration settings both from
+          the command line and from code. For more information on environment variables, see the
+          NVIDIA spark-rapids documentation and the Spark SQL Performance Tuning Guide.
+Run a job in spark3-shell.For example:
+            scala> val df = sc.makeRDD(1 to 100000000, 6).toDF
+df: org.apache.spark.sql.DataFrame = [value: int]
+
+scala>val df2 = sc.makeRDD(1 to 100000000, 6).toDF
+df2: org.apache.spark.sql.DataFrame = [value: int]
+
+scala> df.select($"value" as "a").join(df2select($"value" as "b"), $"a" === $"b").count
+res0: Long = 100000000
+You can verify that the job run used GPUs, by logging on to the Yarn UI v2 to review the
+          execution plan and the performance of your spark3-shell application: Select the
+              Applications tab then select your [spark3-shell
+              application]. Select ApplicationMaster > SQL > count at <console>:28 to see the execution plan.
+
+
+
+
+
+
+Running a Spark job using CDS 3.3 with GPU Support with UCX
+      enabled
+
+
+ Log on to the node where you want to run the job. 
+ Run the following command to launch spark3-shell:
+              spark3-shell  --conf "spark.rapids.sql.enabled=true" \
+              --conf "spark.executor.memoryOverhead=5g"
+              --rapids-shuffle=truewhere
+--rapids-shuffle=true
+
+makes the following configuration changes for
+                  UCX:
+spark.shuffle.manager=com.nvidia.spark.rapids.spark320cdh.RapidsShuffleManager
+spark.executor.extraClassPath=/opt/cloudera/parcels/SPARK3_RAPIDS/lib/spark3/rapids-plugin/*
+spark.executorEnv.UCX_ERROR_SIGNALS=
+spark.executorEnv.UCX_MEMTYPE_CACHE=n
+For more information on environment variables, see the NVIDIA spark-rapids documentation.
+        
+ Run a job in spark3-shell.
+
+
+

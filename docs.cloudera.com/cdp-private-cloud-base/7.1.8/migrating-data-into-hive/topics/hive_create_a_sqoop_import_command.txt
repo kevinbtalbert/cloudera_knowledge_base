@@ -1,0 +1,129 @@
+Creating a Sqoop import commandCloudera Docs
+Creating a Sqoop import
+      command
+You create a single
+      Sqoop import command that imports data from diverse data sources, such as a relational
+      database on a different network, into Apache Hive using Apache Sqoop.
+You enter the Sqoop import command on the command line of your Hive cluster to import
+         data from a data source into the cluster file system and Hive. The import can include the
+         following information, for example:
+Database connection information: database URI, database name, and connection
+               protocol, such as jdbc:mysql:
+
+The data to import 
+Parallel processing directives for fast data transfer
+Destination for imported data
+Sqoop is tested to work with Connector/J 5.1. If you have upgraded to Connector/J 8.0,
+         and want to use the zeroDateTimeBehavior property to handle values of
+         '0000-00-00\' in DATE columns, explicitly specify
+            zeroDateTimeBehavior=CONVERT_TO_NULL in the connection string. For
+         example, --connect jdbc:mysql://<MySQL
+            host>/<DB>?zeroDateTimeBehavior=CONVERT_TO_NULL.
+
+Create an import command that specifies the Sqoop connection to the RDBMS.
+
+To enter a password for the data source on the command line, use the
+                     -P option in the connection string.
+To specify a file where the password is stored, use the
+                     --password-file option.
+
+Password on command line:
+               sqoop import --connect jdbc:mysql://db.foo.com:3306/bar \
+<data to import> \
+--username <username> \
+-P
+Specify password file:
+               sqoop import --connect jdbc:mysql://db.foo.com:3306/bar \
+--table EMPLOYEES \
+--username <username> \
+--password-file ${user.home}/.password 
+
+Specify the data to import in the command.
+
+Import an entire table.
+Import a subset of the columns.
+Import data using a free-form query.
+
+Entire table:
+               sqoop import \
+--connect jdbc:mysql://db.foo.com:3306/bar \
+--table EMPLOYEES
+Subset of columns:
+               sqoop import 
+--connect jdbc:mysql://db.foo.com:3306/bar \
+--table EMPLOYEES \
+--columns "employee_id,first_name,last_name,job_title"
+Free-form query to import the latest data:
+               sqoop import \
+--connect jdbc:mysql://db.foo.com:3306/bar \
+--table EMPLOYEES \
+--where "start_date > '2018-01-01'"
+
+
+Optionally, specify write parallelism in the import statement to run a
+               number of map tasks in parallel:
+
+Set mappers: If the source table has a primary key, explicitly set the number
+                  of mappers using --num-mappers.
+Split by: If primary keys are not evenly distributed, provide a split key
+                  using --split-by
+Sequential: If you do not have a primary key or split key, import data
+                  sequentially using --num-mappers 1 or
+                  --autoreset-to-one-mapper in query.
+
+
+
+Set mappers:
+                     sqoop import --connect jdbc:mysql://db.foo.com:3306/bar \
+ --table EMPLOYEES \
+ --num-mappers 8 \
+Split by:
+                     sqoop import --connect jdbc:mysql://db.foo.com:3306/bar \
+ --table EMPLOYEES \
+ --split-by dept_id
+
+
+
+
+Setting mappers evenly splits the primary key range of the source table.
+Split by evenly splits the data using the split key instead of a primary
+                     key.
+
+
+
+Specify importing the data into Hive using Hive default delimiters
+                  --hive-import.
+
+Specify the Hive destination of the data.
+
+If you think the table does not already exist in Hive, name the database and
+                  table, and use the --create-hive-table option.
+If you want to insert the imported data into an existing Hive external table,
+                  name the database and table, but do not use the --create-hive-table
+                  option.
+
+This command imports the MySQL EMPLOYEES table to a new Hive table named in the
+               warehouse.sqoop import --connect jdbc:mysql://db.foo.com:3306/corp \
+--table EMPLOYEES \
+--hive-import \
+--create-hive-table \
+--hive-database 'mydb' \
+--hive-table 'newtable'
+This command imports the MySQL EMPLOYEES table to an external table in HDFS.
+               sqoop import --connect jdbc:mysql://db.foo.com:3306/corp \
+--table EMPLOYEES \
+--hive-import \
+--hive-database 'mydb' \
+--hive-table 'myexternaltable'
+Specify the database and table names, enclosed in single quotation marks, on
+               separate lines (recommended) as shown above. Alternatively specify the database and
+               table names on one line, and enclose the database and table names in
+               backticks.
+--hive-table `mydb`.`myexternaltable`
+Due to the Hive-16907 bug fix, Hive rejects `db.table` in SQL queries. A dot (.)
+               is no longer allowed in table names. You need to change queries that use such
+               references to prevent Hive from interpreting the entire db.table string as the table
+               name.
+
+
+Related informationApache Sqoop Documentation (v1.4.7.7.1.6)                     Parent topic: Imports into Hive

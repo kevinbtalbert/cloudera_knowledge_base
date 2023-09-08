@@ -1,0 +1,239 @@
+UDF conceptsCloudera Docs
+UDF concepts
+Depending on your use case, you might write all-new functions, reuse Java UDFs that you
+        have already written for Hive, or port Hive Java UDF code to higher-performance native
+        Impala UDFs in C++. You can code either scalar functions for producing results one row at a
+        time, or more complex aggregate functions for doing analysis across. The following sections
+        discuss these different aspects of working with UDFs.
+ 
+UDFs and UDAFs
+
+ Depending on your use case, the user-defined functions (UDFs) you write might accept
+              or produce different numbers of input and output values: 
+
+ The most general kind of user-defined function (the one typically referred to by
+                the abbreviation UDF) takes a single input value and produces a single output value.
+                When used in a query, it is called once for each row in the result set. For example:
+                select customer_name, is_frequent_customer(customer_id) from customers;
+select obfuscate(sensitive_column) from sensitive_data;
+
+ A user-defined aggregate function (UDAF) accepts a group of values and returns a
+                single value. You use UDAFs to summarize and condense sets of rows, in the same
+                style as the built-in COUNT, MAX(),
+                  SUM(), and AVG() functions. When called in a
+                query that uses the GROUP BY clause, the function is called once
+                for each combination of GROUP BY values. For example:
+                -- Evaluates multiple rows but returns a single value.
+select closest_restaurant(latitude, longitude) from places;
+
+-- Evaluates batches of rows and returns a separate value for each batch.
+select most_profitable_location(store_id, sales, expenses, tax_rate, depreciation) from franchise_data group by year;
+
+ Currently, Impala does not support other categories of user-defined functions,
+                such as user-defined table functions (UDTFs) or window functions. 
+
+
+
+
+Native Impala UDFs
+
+ Impala supports UDFs written in C++, in addition to supporting existing Hive UDFs
+              written in Java. Cloudera recommends using C++ UDFs because
+              the compiled native code can yield higher performance, with UDF execution time often
+              10x faster for a C++ UDF than the equivalent Java UDF. 
+
+
+
+Using Hive UDFs with Impala
+
+ Impala can run Java-based user-defined functions (UDFs), originally written for
+              Hive, with no changes, subject to the following conditions: 
+
+ The parameters and return value must all use scalar data types supported by
+                Impala. For example, complex or nested types are not supported. 
+ Hive/Java UDFs must extend org.apache.hadoop.hive.ql.exec.UDF
+                class. 
+ Currently, Hive UDFs that accept or return the TIMESTAMP type
+                are not supported. 
+ Prior to Impala 2.5 the return type must be a Writable type such as
+                  Text or IntWritable, rather than a Java
+                primitive type such as String or int. Otherwise,
+                the UDF returns NULL. In Impala 2.5 and higher,
+                  this restriction is lifted, and both UDF arguments and return values can be Java
+                  primitive types.
+
+ Hive UDAFs and UDTFs are not supported. 
+ Typically, a Java UDF will run several times slower in Impala than the
+                equivalent native UDF written in C++. 
+ In Impala 2.5 and higher, you can transparently
+                call Hive Java UDFs through Impala, or call Impala Java UDFs through Hive. This
+                feature does not apply to built-in Hive functions. Any Impala Java UDFs created with
+                older versions must be re-created using new CREATE FUNCTION syntax,
+                without any signature for arguments or the return value. 
+
+ To take full advantage of the Impala architecture and performance features, you can
+              also write Impala-specific UDFs in C++. 
+ For background about Java-based Hive UDFs, see the Hive documentation for UDF. For
+              examples or tutorials for writing such UDFs, search the web for related blog posts. 
+ The ideal way to understand how to reuse Java-based UDFs (originally written for
+              Hive) with Impala is to take some of the Hive built-in functions (implemented as Java
+              UDFs) and take the applicable JAR files through the UDF deployment process for Impala,
+              creating new UDFs with different names: 
+
+ Take a copy of the Hive JAR file containing the Hive built-in
+                functions. 
+ Use jar tf jar_file to see a list of the
+                classes inside the JAR. You will see names like
+                  org/apache/hadoop/hive/ql/udf/UDFLower.class and
+                  org/apache/hadoop/hive/ql/udf/UDFOPNegative.class. Make a note of
+                the names of the functions you want to experiment with. When you specify the entry
+                points for the Impala CREATE FUNCTION statement, change the slash
+                characters to dots and strip off the .class suffix, for example
+                  org.apache.hadoop.hive.ql.udf.UDFLower and
+                  org.apache.hadoop.hive.ql.udf.UDFOPNegative. 
+ Copy that file to an HDFS location that Impala can read. (In the examples here,
+                we renamed the file to hive-builtins.jar in HDFS for
+                simplicity.) 
+ For each Java-based UDF that you want to call through Impala, issue a
+                  CREATE FUNCTION statement, with a LOCATION
+                clause containing the full HDFS path of the JAR file, and a SYMBOL
+                clause with the fully qualified name of the class, using dots as separators and
+                without the .class extension. Remember that user-defined functions
+                are associated with a particular database, so issue a USE statement
+                for the appropriate database first, or specify the SQL function name as
+                    db_name.function_name.
+                Use completely new names for the SQL functions, because Impala UDFs cannot have the
+                same name as Impala built-in functions. 
+ Call the function from your queries, passing arguments of the correct type to
+                match the function signature. These arguments could be references to columns,
+                arithmetic or other kinds of expressions, the results of CAST
+                functions to ensure correct data types, and so on. 
+
+note
+ In Impala 2.9 and higher, you can
+        refresh the user-defined functions (UDFs) that Impala recognizes, at the database level, by
+        running the REFRESH FUNCTIONS statement with the database name as an
+        argument. Java-based UDFs can be added to the metastore database through Hive CREATE
+          FUNCTION statements, and made visible to Impala by subsequently running
+          REFRESH FUNCTIONS. For example:
+        CREATE DATABASE shared_udfs;
+USE shared_udfs;
+...use CREATE FUNCTION statements in Hive to create some Java-based UDFs
+   that Impala is not initially aware of...
+REFRESH FUNCTIONS shared_udfs;
+SELECT udf_created_by_hive(c1) FROM ...
+
+
+
+
+Java UDF example: Reusing lower() function
+
+ For example, the following impala-shell session creates an
+                    Impala UDF my_lower() that reuses the Java code for the Hive
+                      lower(): built-in function. We cannot call it
+                      lower() because Impala does not allow UDFs to have the same
+                    name as built-in functions. From SQL, we call the function in a basic way (in a
+                    query with no WHERE clause), directly on a column, and on the
+                    results of a string expression: 
+[localhost:21000] > create database udfs;
+[localhost:21000] > use udfs;
+localhost:21000] > create function lower(string) returns string location '/user/hive/udfs/hive.jar' symbol='org.apache.hadoop.hive.ql.udf.UDFLower';
+ERROR: AnalysisException: Function cannot have the same name as a builtin: lower
+[localhost:21000] > create function my_lower(string) returns string location '/user/hive/udfs/hive.jar' symbol='org.apache.hadoop.hive.ql.udf.UDFLower';
+[localhost:21000] > select my_lower('Some String NOT ALREADY LOWERCASE');
++----------------------------------------------------+
+| udfs.my_lower('some string not already lowercase') |
++----------------------------------------------------+
+| some string not already lowercase                  |
++----------------------------------------------------+
+Returned 1 row(s) in 0.11s
+[localhost:21000] > create table t2 (s string);
+[localhost:21000] > insert into t2 values ('lower'),('UPPER'),('Init cap'),('CamelCase');
+Inserted 4 rows in 2.28s
+[localhost:21000] > select * from t2;
++-----------+
+| s         |
++-----------+
+| lower     |
+| UPPER     |
+| Init cap  |
+| CamelCase |
++-----------+
+Returned 4 row(s) in 0.47s
+[localhost:21000] > select my_lower(s) from t2;
++------------------+
+| udfs.my_lower(s) |
++------------------+
+| lower            |
+| upper            |
+| init cap         |
+| camelcase        |
++------------------+
+Returned 4 row(s) in 0.54s
+[localhost:21000] > select my_lower(concat('ABC ',s,' XYZ')) from t2;
++------------------------------------------+
+| udfs.my_lower(concat('abc ', s, ' xyz')) |
++------------------------------------------+
+| abc lower xyz                            |
+| abc upper xyz                            |
+| abc init cap xyz                         |
+| abc camelcase xyz                        |
++------------------------------------------+
+Returned 4 row(s) in 0.22s
+
+
+
+Java UDF example: Reusing negative() function
+
+ Here is an example that reuses the Hive Java code for the
+                      negative() built-in function. This example demonstrates how
+                    the data types of the arguments must match precisely with the function
+                    signature. At first, we create an Impala SQL function that can only accept an
+                    integer argument. Impala cannot find a matching function when the query passes a
+                    floating-point argument, although we can call the integer version of the
+                    function by casting the argument. Then we overload the same function name to
+                    also accept a floating-point argument. 
+[localhost:21000] > create table t (x int);
+[localhost:21000] > insert into t values (1), (2), (4), (100);
+Inserted 4 rows in 1.43s
+[localhost:21000] > create function my_neg(bigint) returns bigint location '/user/hive/udfs/hive.jar' symbol='org.apache.hadoop.hive.ql.udf.UDFOPNegative';
+[localhost:21000] > select my_neg(4);
++----------------+
+| udfs.my_neg(4) |
++----------------+
+| -4             |
++----------------+
+[localhost:21000] > select my_neg(x) from t;
++----------------+
+| udfs.my_neg(x) |
++----------------+
+| -2             |
+| -4             |
+| -100           |
++----------------+
+Returned 3 row(s) in 0.60s
+[localhost:21000] > select my_neg(4.0);
+ERROR: AnalysisException: No matching function with signature: udfs.my_neg(FLOAT).
+[localhost:21000] > select my_neg(cast(4.0 as int));
++-------------------------------+
+| udfs.my_neg(cast(4.0 as int)) |
++-------------------------------+
+| -4                            |
++-------------------------------+
+Returned 1 row(s) in 0.11s
+[localhost:21000] > create function my_neg(double) returns double location '/user/hive/udfs/hive.jar' symbol='org.apache.hadoop.hive.ql.udf.UDFOPNegative';
+[localhost:21000] > select my_neg(4.0);
++------------------+
+| udfs.my_neg(4.0) |
++------------------+
+| -4               |
++------------------+
+Returned 1 row(s) in 0.11s
+ You can find the sample files mentioned here in the Impala github repo. 
+
+
+
+
+
+
+Parent topic: User-defined functions (UDFs)

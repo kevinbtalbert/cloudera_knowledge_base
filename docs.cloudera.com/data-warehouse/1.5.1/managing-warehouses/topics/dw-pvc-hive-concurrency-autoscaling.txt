@@ -1,0 +1,103 @@
+Concurrency autoscalingCloudera Docs
+Concurrency autoscaling
+Concurrency autoscaling is an option you can set while creating a Hive Virtual
+  Warehouse. Understand how concurrency autoscaling works and when to use it.
+What is concurrency autoscaling
+Concurrency Autoscaling is an option in CDW that autoscales the Virtual
+    Warehouse by adding additional executor groups when Hive receives concurrent queries. It is
+    managed by the following components:
+HiveServer
+Receives all incoming queries and generates a preliminary query plan that does not include
+       distributing the query across executor nodes. Then it looks for an available query
+       coordinator to send the plan to executor nodes for distribution.
+Query coordinators
+Receives the serialized plan from HiveServer and generates the final query plan that
+       distributes the query tasks across executor nodes for execution. There are as many query
+       coordinators as executor nodes, but there is no one-to-one mapping. Instead, each query
+       coordinator interacts only with the executor nodes in a group. For example, if you create a
+       Virtual Warehouse that has 10 nodes (SMALL-size) and you scale up to 30 nodes by 10-node
+       increments, a single query coordinator can only utilize the 10 executors from one group. They
+       can never interact with executors from other groups. This supports effective isolation. Also
+       it is important to note that one query coordinator can only orchestrate the execution of
+       tasks for one query at a time, so the number of query coordinators determines your query
+       parallelism limit.
+Query executor containers
+Can run multiple tasks of one or multiple different queries. Query executor nodes
+       determine the throughput of your system. They are the executors which are the unit of sizing
+       for Virtual Warehouses.
+Executor groups
+A group of executors that can run queries. The size of executor group is determined by the
+       size you choose when you first create the Virtual Warehouse (XSMALL, SMALL, MEDIUM, or
+       LARGE). The Virtual Warehouse size determines the maximum number of queries that each
+       executor group can run concurrently. For example, if you create a SMALL Virtual Warehouse,
+       each executor group can handle 10 parallel queries or tasks of up to 10 queries. A single
+       query is always contained within a single executor group and never spans multiple executor
+       groups. The throughput for an individual query is determined by the original size of the
+       warehouse.
+
+
+How concurrency autoscaling works
+When the query load increases, auto-scaling increases. The query load grows proportionally
+    with the number of concurrent queries and query complexity.
+HiveServer locates an available query coordinator in the Virtual Warehouse to handle the
+    query. The query coordinator generates the final query plan that distributes query tasks across
+    available executors for execution. Each query coordinator can send query tasks to all query
+    executors in the executor group of an XSmall Virtual Warehouse, as shown in the following
+     image:
+
+
+A single query on an idle Virtual Warehouse does not cause automatic scaling of resources. The
+    query uses the resources available at the time of the query submission. Only subsequent queries
+    can cause auto scaling. Additional query executor groups are added for scaling the
+    resources.
+Each executor group can run up to 10 queries. The size of executor groups is determined by the
+    size you choose when you create the Virtual Warehouse (XSMALL, SMALL, MEDIUM, or LARGE). A
+    single query is always contained within a single executor group and never spans multiple
+    executor groups. The throughput for an individual query is determined by the original size of
+    the warehouse.
+Hive Virtual Warehouse auto-scaling manages resources based on query load:
+
+
+
+When users connect to Hive Virtual Warehouses using SQL applications such as Hue or other
+     SQL clients that use JDBC or ODBC, the query is handled by HiveServer. First HiveServer
+     generates a logical plan that does not include distributing the query tasks across executor
+     nodes.
+Then HiveServer locates an available query coordinator in the Virtual Warehouse to handle
+     the query. The query coordinator generates the physical query plan that distributes the query
+     tasks across executor nodes for execution and locates available query executors to handle each
+     query task. Each query coordinator can send query tasks to all query executors in the executor
+     group and try to optimize for cache
+     locality.
+
+Depending on whether WaitTime Seconds has been set to manage
+      auto-scaling, additional query executor groups are added when the auto-scaling threshold is
+      exceeded.
+
+
+There are as many query coordinators as executors, but there is no one-to-one mapping.
+    Instead, each query coordinator can interact with all executors. However, one query coordinator
+    can only orchestrate the execution of tasks for one query at a time, so the number of query
+    coordinators determines the query parallelism limit.
+Executors: The number of executors you need for a workload is analogous
+    to the number of nodes needed for an on-premises workload.
+WaitTime Seconds: How long do queries wait in the queue to execute? A
+    query is queued if it arrives on HiveServer and no coordinator is available. For example, if
+     WaitTime Seconds is set to 10, queries waiti to execute in the queue for
+    10 seconds. The warehouse auto scales up and adds an additional executor group. This ensures
+    that your Virtual Warehouse does not take resources away from other workloads.
+noteScaling might react to non-scalable factors to spin up clusters. For
+    example, query wait times might increase because of inefficient queries and not because of query
+    volume.
+
+What concurrency autoscaling is best suited for
+Concurrency auto-scaling is designed for running BI queries. Consider the
+    following factors when configuring the minimum and maximum number of executors:
+Number of concurrent queries
+Complexity of queries
+Amount of data scanned by the queries
+Number of queries
+
+
+
+Parent topic: Hive warehouse configuration options

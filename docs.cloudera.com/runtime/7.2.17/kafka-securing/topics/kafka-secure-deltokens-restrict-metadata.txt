@@ -1,0 +1,71 @@
+Restricting access to Kafka metadata in ZookeeperCloudera Docs
+Restricting access to Kafka metadata in Zookeeper 
+Learn how to restrict access to Kafka metadata in Zookeeper.
+
+Locking down Kafka znodes (metadata) in Zookeeper can be used to protect Kafka metadata
+        against unauthorized access. Direct manipulation of metadata in Zookeeper is not only
+        dangerous for the health of the cluster, but can also serve as an entry point for malicious
+        users to gain elevated. Access to Kafka metadata in Zookeeper is restricted by default.
+        Follow these steps if you have previously unlocked access, but want to re-enable access
+        restrictions.
+
+
+ A secure Kafka cluster with Kerberos authentication enabled is required.
+
+Enable the use of secure ACLs:This can be achieved by setting the
+            zookeeper.set.acl configuration parameter to true.
+In Cloudera Manager select the Kafka service.
+Select Configuration.
+Find the Enable Zookeeper ACL
+            property.
+Set the property to true by selecting the checkbox next to the name of the
+              role group.
+Perform a Rolling Restart:
+Return to the Home page by clicking the Cloudera Manager
+            logo.
+Check the Restart roles with stale configurations
+                only checkbox and click Rolling
+            restart.
+Click Close when the restart has
+            finished.
+Pass the JAAS configuration file location as a JVM parameter through a command line
+          interface. You can do this by setting the value of the KAFKA_OPTS environment
+          variable to
+              -Djava.security.auth.login.config=[PATH_TO_JAAS.CONF].
+            export KAFKA_OPTS="-Djava.security.auth.login.config=[PATH_TO_JAAS.CONF]"Replace
+              [PATH_TO_JAAS.CONF] with the path to your JAAS configuration
+            file.Run the zookeeper-security-migration tool with the
+            zookeeper.acl option set to secure. 
+zookeeper-security-migration --zookeeper.connect [HOSTNAME]:[PORT]/[ZOOKEEPER_KAFKA_CHROOT] --zookeeper.acl secure
+Replace [ZOOKEEPER_KAFKA_CHROOT] with the value of the
+              zookeeper.chroot property. To view the value of the property, in
+            Cloudera Manager go to Kafka > Configuration and search for zookeeper.chroot.
+
+The tool traverses the corresponding sub-trees changing the ACLs of the znodes.
+Reset the ACLs on the root node to allow full access: 
+Resetting the ACLS on the root node is required because the
+              zookeeper-security-migration tool also changes the ACLs on the root
+            znode. This leads to the failure of the Zookeeper canary tests, which subsequently makes
+            the service display as unhealthy in Cloudera Manager.
+importantThis step is only necessary if the
+              zookeeper.chroot parameter of the broker is set to
+            /.
+noteBecause the Kafka metadata at this point is already restricted, only authorized
+            users or Zookeeper super users can complete this step.
+
+Change the JVMFLAGS environment variable to
+                  -Djava.security.auth.login.config=[PATH_TO_JAAS.CONF].
+export JVMFLAGS="-Djava.security.auth.login.config=[PATH_TO_JAAS.CONF]"
+
+Start the zookeeper client.
+zookeeper-client -server $(hostname -f):2181
+
+Enter the following to reset the ACLs of the root node.
+setAcl / world:anyone:crdwa
+
+
+Kafka metadata in Zookeeper is restricted via ACLS. Administrative operations, for
+      example topic creation, deletion, any configuration changes and so on, can only be performed
+      by authorized users.
+
+Related informationEnable Kerberos authentication for KafkaParent topic: Kafka security hardening with Zookeeper ACLs

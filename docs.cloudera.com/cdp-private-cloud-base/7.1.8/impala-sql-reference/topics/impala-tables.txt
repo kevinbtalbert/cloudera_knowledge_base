@@ -1,0 +1,206 @@
+Impala tablesCloudera Docs
+Impala tables
+Provides information about Tables that are the primary containers for data in
+    Impala.
+ Logically, each table has a structure based on the definition
+        of its columns, partitions, and other properties. Physically,
+        each table that uses HDFS storage is associated with a directory in
+        HDFS. The table data consists of all the data files underneath that
+        directory: 
+ Internal tables are managed by Impala, and use directories inside
+          the designated Impala work area. 
+ External tables use arbitrary HDFS directories, where the data
+          files are typically shared between different Hadoop components. 
+ Large-scale data is usually handled by partitioned tables, where
+          the data files are divided among different HDFS subdirectories. 
+Impala queries ignore files with extensions commonly used for
+      temporary work files by Hadoop tools. Any files with extensions
+        .tmp or .copying are not considered
+      part of the Impala table. The suffix matching is case-insensitive, so for
+      example Impala ignores both .copying and
+        .COPYING suffixes. When you create a table in
+        Impala, you can create an internal table or an external table.To
+        see whether a table is internal or external, and its associated HDFS
+        location, issue the statement DESCRIBE FORMATTED
+            table_name. The Table
+          Type field displays MANAGED_TABLE for
+        internal tables and EXTERNAL_TABLE for external tables.
+        The Location field displays the path of the table
+        directory as an HDFS URI.
+
+Internal Tables
+
+The default kind of table produced by the CREATE
+                  TABLE statement is known as an internal table. 
+
+
+ Impala creates a directory in HDFS to hold the data files.
+                  
+
+
+ You can create data in internal tables by issuing
+                      INSERT or LOAD DATA
+                    statements. 
+
+
+ If you add or replace data using HDFS operations, issue
+                    the REFRESH command in
+                      impala-shell so that Impala recognizes
+                    the changes in data files, block locations, and so on. 
+
+
+ When you issue a DROP TABLE statement,
+                    Impala physically removes all the data files from the
+                    directory. 
+
+
+
+        To see whether a table is internal or external, and its associated HDFS location, issue the statement
+        DESCRIBE FORMATTED table_name. The Table Type field
+        displays MANAGED_TABLE for internal tables and EXTERNAL_TABLE for
+        external tables. The Location field displays the path of the table directory as an HDFS
+        URI.
+      
+
+
+ When you issue an ALTER TABLE statement
+                    to rename an internal table, all data files are moved into
+                    the new HDFS directory for the table. The files are moved
+                    even if they were formerly in a directory outside the Impala
+                    data directory, for example in an internal table with a
+                      LOCATION attribute pointing to an outside
+                    HDFS directory. 
+
+
+
+External Tables
+
+The syntax CREATE EXTERNAL TABLE sets up an
+                Impala table that points at existing data files, potentially in
+                HDFS locations outside the normal Impala data directories.. This
+                operation saves the expense of importing the data into a new
+                table when you already have the data files in a known location
+                in HDFS, in the desired file format. 
+
+
+ You can use Impala to query the data in this table. 
+
+
+ You can create data in external tables by issuing
+                      INSERT or LOAD DATA
+                    statements. 
+
+
+ If you add or replace data using HDFS operations, issue
+                    the REFRESH command in
+                      impala-shell so that Impala recognizes
+                    the changes in data files, block locations, and so on. 
+
+
+ When you issue a DROP TABLE statement in
+                    Impala, that removes the connection that Impala has with the
+                    associated data files, but does not physically remove the
+                    underlying data. You can continue to use the data files with
+                    other Hadoop components and HDFS operations. 
+
+
+ When you issue an ALTER TABLE statement
+                    to rename an external table, all data files are left in
+                    their original locations. 
+
+
+ You can point multiple external tables at the same HDFS
+                    directory by using the same LOCATION
+                    attribute for each one. The tables could have different
+                    column definitions, as long as the number and types of
+                    columns are compatible with the schema evolution
+                    considerations for the underlying file type. For example,
+                    for text data files, one table might define a certain column
+                    as a STRING while another defines the same
+                    column as a BIGINT. 
+
+
+
+
+You can switch a table between internal to external by using the
+          ALTER TABLE statement with the SET
+          TBLPROPERTIES clause. For
+        example:ALTER TABLE table_name SET TBLPROPERTIES('EXTERNAL'='TRUE');
+If
+        the Kudu service is integrated with the Hive Metastore, the above
+        operations are not supported.
+File formats
+ Each table has an associated file format, which determines how Impala
+        interprets the associated data files.
+ You set the file format during the CREATE TABLE
+        statement, or change it later using the ALTER TABLE
+        statement. 
+Partitioned tables can have a different file format for individual
+        partitions, allowing you to change the file format used in your ETL
+        process for new data without going back and reconverting all the
+        existing data in the same table. 
+ Any INSERT statements produce new data files with the
+        current file format of the table. 
+For existing data files, changing the file format of the table does not
+        automatically do any data conversion. You must use TRUNCATE
+          TABLE or INSERT OVERWRITE to remove any
+        previous data files that use the old file format. Then you use the
+          LOAD DATA statement, INSERT ...
+          SELECT, or other mechanism to put data files of the correct
+        format into the table. 
+ The default file format, Parquet, offers the highest query performance
+        and uses compression to reduce storage requirements; therefore, where
+        practical, use Parquet for Impala tables with substantial amounts of
+        data. Also, the complex types (ARRAY,
+            STRUCT, and MAP) available in
+          Impala 2.3 and higher are currently only supported with the Parquet
+          file type.
+
+Kudu tables By default,
+        tables stored in Apache Kudu are treated specially, because Kudu manages
+        its data independently of HDFS files. All metadata that Impala
+        needs is stored in the HMS. When Kudu is not integrated with the
+        HMS, when you create a Kudu table through Impala, the table is assigned
+        an internal Kudu table name of the form
+            impala::db_name.table_name.
+        You can see the Kudu-assigned name in the output of DESCRIBE
+          FORMATTED, in the kudu.table_name field of
+        the table properties.  For Impala-Kudu managed tables,
+          ALTER TABLE ... RENAME renames both the Impala and
+        the Kudu table.  For Impala-Kudu external tables, ALTER
+          TABLE ... RENAME renames just the Impala table. To change the
+        Kudu table that an Impala external table points to, use ALTER
+          TABLE impala_name SET
+          TBLPROPERTIES('kudu.table_name' =
+            'different_kudu_table_name'). The
+        underlying Kudu table must already exist.  In practice, external
+        tables are typically used to access underlying Kudu tables that were
+        created outside of Impala, that is, through the Kudu API.  The
+          SHOW TABLE STATS output for a Kudu table shows
+        Kudu-specific details about the layout of the table. Instead of
+        information about the number and sizes of files, the information is
+        divided by the Kudu tablets. For each tablet, the output includes the
+        fields # Rows (although this number is not currently
+        computed), Start Key, Stop Key,
+          Leader Replica, and # Replicas. The
+        output of SHOW COLUMN STATS, illustrating the
+        distribution of values within each column, is the same for Kudu tables
+        as for HDFS-backed tables. If the Kudu service is not integrated
+      with the Hive Metastore, the distinction between internal and external
+      tables has some special details for Kudu tables. Tables created entirely
+      through Impala are internal tables. The table name as represented within
+      Kudu includes notation such as an impala:: prefix and the
+      Impala database name. External Kudu tables are those created by a
+      non-Impala mechanism, such as a user application calling the Kudu APIs.
+      For these tables, the CREATE EXTERNAL TABLE syntax lets
+      you establish a mapping from Impala to the existing Kudu table:
+      
+CREATE EXTERNAL TABLE impala_name STORED AS KUDU
+  TBLPROPERTIES('kudu.table_name' = 'original_kudu_name');
+
+      External Kudu tables differ in one important way from other external
+      tables: adding or dropping a column or range partition changes the data in
+      the underlying Kudu table, in contrast to an HDFS-backed external table
+      where existing data files are left untouched.
+
+Related informationHadoop file formats supportedStorage systems supportedParent topic: Impala schema objects

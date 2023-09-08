@@ -1,0 +1,123 @@
+ParametersCloudera Docs
+Parameters
+An important step in building a data flow that you can run outside of the NiFi instance
+    where it was built is the concept of parameterization. NiFi allows you to define Processor and
+    Controller Service properties at runtime instead of at build time by using Parameter Contexts.
+    The Lambda function handler allows you to specify the parameters in two ways: using environment
+    variables or using the AWS Secrets Manager.
+Environment variables
+Any parameter can be specified using the environment variables of the AWS Lambda
+        function. When configuring the Lambda function, simply add an environment variable whose
+        name matches the name of a parameter in your Parameter Context.
+noteAWS has reserved environment variables that you can't use for your
+        parameters (examples: AWS_ACCESS_KEY, AWS_SECRET_ACCESS_KEY, and so on). See the full list
+          here.
+
+AWS Secrets Manager
+A more secure mechanism for storing parameters is to use the AWS Secrets
+        Manager.
+
+
+Open the AWS Secrets Manager and click Store a new secret.
+
+For secret type, select Other type of secret.
+
+Provide your secret information, such as credentials and connection details, as
+          key/value pairs.
+Enter one or more key/value pairs to use as parameters. Each key provided to the
+          Secret Manager maps to a parameter in the data flow's Parameter Context with the same
+            name.If the name of the secret matches the name of the Parameter Context in
+            the data flow, there is no further configuration needed. The Lambda function will
+            automatically configure the data flow to pull the specified secret's values to represent
+            the Parameter Context.note
+Keep in mind that there are cases in which this does not work.
+
+
+When you are ready, click Next.
+
+Provide a name for your secret.
+
+You can configure other options like tags, resource permissions,
+            rotation schedule and others.
+
+On the Review page, review your secret details, and click
+            Store.
+
+Example:
+You developed a data flow with a Parameter Context named
+              AWS_CONTEXT, and you want to deploy this data flow three times. The
+            first time, it should use the values in the "Context_1" secret. For the
+            second deployment, it should use values for the "Context_2" secret. For
+            the third deployment, it should use values from the "Context_3"
+            secret.
+To accomplish this, you can specify an environment variable named
+              PARAM_CONTEXT_AWS_CONTEXT. In this case, the name of the environment
+            variable is PARAM_CONTEXT_ followed by the name of the Parameter
+            Context. The value of the environment variable will be the name of the secret in the AWS
+            Secrets Manager.
+For the first deployment you would use the environment variable
+              PARAM_CONTEXT_AWS_CONTEXT with a value of
+            "Context_1". For the second deployment, you would use an environment
+            variable named PARAM_CONTEXT_AWS_CONTEXT with a value of
+              "Context_2" and so on.
+If your data flow contains multiple Parameter Contexts, you can also map each
+            of them to different secrets. For example, if you have a Parameter Context named
+              AWS_CONTEXT and another one named CLOUDERA_CONTEXT,
+            and you wanted to map those to secrets named "Context_1" and
+              "Cldr_Context" respectively, you could do so by adding two
+            environment variables: PARAM_CONTEXT_AWS_CONTEXT =
+              "Context_1" and PARAM_CONTEXT_CLOUDERA_CONTEXT =
+              "Cldr_Context".
+Additionally, you can simply default all Parameter Contexts whose names do
+            not map any secrets in AWS Secrets Manager to use a default secret by setting an
+            environment variable named DEFAULT_PARAM_CONTEXT. The value of this
+            environment variable should be the name of the secret to use.
+importantTo use this capability, the Parameter
+            Contexts used in the flow must have names that are compatible with AWS Secrets Manager
+            names and Environment Variable names. To ensure that these naming conventions are
+            followed, Parameter Contexts and Parameters should use names that start with a letter
+            and only consist of letters, numbers, and the underscore (_) character. For example,
+            instead of naming a Parameter Context AWS Parameter Context, use a name of
+              AWS_PARAMETER_CONTEXT when building the data flow.
+noteThe role that is used to launch the Lambda function must be
+            assigned to the right policies to list secrets in the AWS Secrets Manager, as well as
+            read the secrets.
+
+
+
+Now you can update the permissions of your Lambda:
+
+Navigate to Configuration > Permissions.
+Click the arrow next to the role name.Identity and Access Management (IAM) opens on a
+            new browser tab.
+Click Add permissions to attach a new policy.You can
+            attach a policy to grant the right permissions to the specific secret(s) that should be
+            accessed by the Lambda.
+
+This is an example of a policy to grant your Lambda access to your secret.
+            Make sure to update the policy with the ARN of your
+          secret.{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "secretsmanager:GetResourcePolicy",
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret",
+        "secretsmanager:ListSecretVersionIds"
+      ],
+      "Resource": [
+        "ARN:TO:YOUR:SECRET"
+      ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": "secretsmanager:ListSecrets",
+      "Resource": "*"
+    }
+  ]
+}
+
+
+

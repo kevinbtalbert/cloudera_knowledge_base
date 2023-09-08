@@ -1,0 +1,88 @@
+Installing Cloudera Management ServiceCloudera Docs
+Installing Cloudera Management Service 
+ You can automate the installation of Cloudera Management Service through the command
+        line or using the following steps. Installing Cloudera Management Service is part of
+        step 2 in Cloudera Manager
+            Installation and Setup.
+Port Collisions
+Ports from the installed Cloudera Manager roles can conflict with your source cluster
+                service ports. You can change or stop the ports in conflict.
+For example, if there are default service ports for HDP Services configured in step 8
+                of Installing Cloudera Management Service,
+                then you must stop the following services: 
+SMARTSENSE
+Druid
+Zeppelin
+
+
+Stopping the services through Ambari REST API: 
+curl -X PUT -u admin:admin_pwd -H "X-Requested-By: ambari" -k
+                    "https://your-ambari-server.com:8443/api/v1/clusters/cl1/services/SMARTSENSE" -d
+                    "{\"RequestInfo\": {\"context\": \"Stopping Services that collide with Cloudera
+                    Management Service Roles\"},\"Body\": {\"ServiceInfo\": {\"state\":
+                    \"INSTALLED\"}}}"
+
+Getting CM API version
+If you want to use Cloudera Manager 7.7.1, you must use v49 in the
+                following commands and replace host, user, name, and password.
+curl http://admin:admin@your-cm-server.com:7180/api/[[**version**]
+                
+
+Creating the Cloudera Management Service (CMS)
+ curl -X PUT -u admin:admin_pwd
+                    "http://your-cm-server.com:7180/api/v49/cm/service" -H "Content-Type:
+                    application/json" -d "{\"displayName\": \"Cloudera Management Service\"}"
+                
+
+Auto-assigning the roles 
+curl -X PUT -u admin:admin_pwd
+                    "http://your-cm-server.com:7180/api/v49/cm/service/autoAssignRoles" -H "accept:
+                    application/json" 
+
+Auto-configuring the CMS roles 
+curl -X PUT -u admin:admin_pwd
+                    "http://your-cm-server.com:7180/api/v49/cm/service/autoConfigure" -H "accept:
+                    application/json"
+The Cloudera Manager versions 7.7.1 and higher have different default Reports Monitor
+                database configurations described in Install and Configure MySQL for Cloudera
+                        Software documentation (refer to rman).
+                This can make the rman user unable to connect to its
+                database.
+You must update the following parameters:
+headlamp_database_host = <your DB hostname> 
+headlamp_database_name = <your reports manager DB name, rman as default> 
+headlamp_database_user = <you reports manager user name, rman as default> 
+headlamp_database_password= <your reports manager pwd> 
+
+For updating the parameters, you must create a json file. For example,
+                    rman_db.json and update the values of parameters. 
+ { "items": [ { "name": "headlamp_database_host", "value":
+                    "your-DB-server.com" }, { "name": "headlamp_database_name", "value": "rman_db"
+                    }, { "name": "headlamp_database_user", "value": "rman_user" }, { "name":
+                    "headlamp_database_password", "value": "rman_pwd" } ] } 
+
+Updating curl to the Cloudera Manager server:
+curl -u admin:admin_pwd -X POST
+                    "http://your-cm-server.com:7180/api/v49/cm/service/roleConfigGroups/mgmt-REPORTSMANAGER-BASE/config"
+                    -d @rman_db.json
+Review if Cloudera Manager has the paywall credentials configured. In Cloudera
+                Manager, navigate to Parcel > Parcel Repository & Network Settings
+                and check:
+remote_repo_override_user
+remote_repo_override_password 
+
+You can also review the paywall credentials through Rest API call by posting the
+                payload (repo_access.json) to Cloudera Manager server:
+                     "items": [ { "name": "remote_repo_override_user", "value": "your
+                    cloudera repo user name" }, { "name": "headlamp_database_password", "value":
+                    "your cloudera repo password" } ] } 
+curl -u admin:admin_pwd -X POST
+                    "http://your-cm-server.com:7180/api/v49/cm/config" -d
+                    @repo_access.json
+
+Starting Cloudera Management service
+curl -u admin:admin_pwd -X POST
+                    "http://your-cm-server.com:7180/api/v49/cm/service/commands/restart" -H "accept:
+                    application/json"
+
+

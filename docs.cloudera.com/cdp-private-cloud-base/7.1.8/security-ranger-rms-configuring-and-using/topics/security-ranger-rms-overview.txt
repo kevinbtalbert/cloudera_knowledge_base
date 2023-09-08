@@ -1,0 +1,158 @@
+Ranger RMS - HIVE-HDFS ACL Sync OverviewCloudera Docs
+Ranger RMS - HIVE-HDFS ACL Sync Overview
+Ranger Resource Mapping Server (RMS) enables automatic translation of access policies
+      from HIVE to HDFS. About HIVE-HDFS ACL Sync
+It is common to have different workloads use the same data – some require authorizations at the table level (Apache Hive queries) and others at the underlying files (Apache Spark jobs). Unfortunately, in such instances you would have to create and maintain separate Ranger policies for both Hive and HDFS, that correspond to each other.
+As a result, whenever a change is made on a Hive table policy, the data admin should make a consistent change in the corresponding HDFS policy. Failure to do so could result in security and/or data exposure issues. Ideally the data admin would set a single table policy, and the corresponding file access policies would automatically be kept in sync along with access audits, referring to the table policy that enforced it.
+      
+Legacy CDH users had a feature called the Hive-HDFS ACL sync which had Hive policies in Apache Sentry that automatically linked Hive permissions with HDFS ACLs. This was especially convenient for external table data used by Spark or Hive.
+      
+Prior to CDP 7.1.6, Ranger only supported manually managing Hive and HDFS policies separately. Ranger RMS (Resource Mapping Server) allows you to authorize access to HDFS directories and files using policies defined for Hive tables. RMS is the service that enables Hive-HDFS Policy Sync.
+      
+RMS periodically connects to the Hive Metastore and pulls Hive metadata (database-name, table-name) to HDFS file-name mapping. The Ranger HDFS Plugin (running in the NameNode) has been extended with an additional HivePolicyEnforcer module. The HDFS plugin downloads Hive policies from Ranger Admin, along with the mappings from Ranger RMS. HDFS access is determined by both HDFS policies and Hive policies.
+      
+Figure 1. HIVE-HDFS ACL Sync using Ranger RMS
+
+
+Phase I (items 1-3 above)
+Ranger RMS periodically connects to the HIVE Metastore and pulls HIVE metadata
+            (database-name, table-name) to HDFS file-name mapping.
+Phase II  (items 4-9 above)
+The Ranger HDFS Plugin (running in the NameNode) periodically pulls HDFS policies from
+            Ranger Admin. With the introduction of Ranger RMS, the Ranger HDFS Plugin (running in
+            the NameNode) that has been extended with an additional HIVEPolicyEnforcer module. It
+            now pulls down the HIVE-HDFS mappings from RMS and HIVE Policies from Ranger Admin.
+After phase II completes, the requested HDFS access is determined in the NameNode by the
+            HDFS and HIVE policies defined by the Ranger Administrator.
+
+About database-level grants feature
+Legacy CDH users used HIVE policies in Apache Sentry that automatically linked HIVE
+         permissions with HDFS ACLs. This was especially convenient for external table data used
+         by Spark or HIVE. Specifically, using Sentry, you could make grants at the HIVE database
+         level and HDFS permissions would propagate to the database directory, and to all tables
+         and partitions under it.
+Previously, Ranger only supported managing HIVE and HDFS policies separately. Ranger
+         Resource Mapping Server (RMS) now allows you to create a database level policy in HIVE
+         and have these permissions propagate to the HDFS locations and all tables under it. RMS
+         is the service that enables HIVE-HDFS ACL Sync.
+RMS captures database metadata from the HIVE Meta Store (HMS). After the
+         first, full-synchronization run, RMS downloads mappings for tables and databases present
+         in the HMS.
+Whenever you create a new database, RMS synchronizes metadata information from
+         HMS and uses it to update the resource mapping file linking HIVE database resources to
+         their corresponding HDFS location. Any user with access permissions on a HIVE database
+         automatically receives similar HDFS file-level access permissions on the database’s data
+         files. Select/ Read access for any user in the database location is allowed through
+         default HIVE policy for all-databases. This behavior is treated as _any access, which is
+         similar to the HIVE command show tables. If a user has no HIVE policy
+         which allows access on the database, then the user is denied access to the corresponding
+         HDFS location of that database. Previously, users were not allowed to access the HDFS
+         location of a database even if the user had permission to access the database through a
+         HIVE policy. The HDFS to HIVE access type mappings follow:
+Access Type mapping for HDFS to HIVE for Database:
+
+
+_any=[_any]
+read=[_any]
+write=[create, drop, alter]
+execute=[_any]
+
+
+Access Type mapping for HDFS to HIVE for Table:
+
+_any=[_any]
+read=[select]
+write=[update, alter]
+execute=[_any]
+
+If you create tables under a database but the HDFS location of the corresponding table
+         does not reside under the HDFS location of that database (for example: table locations
+         are external locations), the HIVE policies (database- name, table = *, column= *)
+         translate into HDFS access rules and allow the HDFS NameNode to enforce them. If the
+         policy is created only for the database resource, the same access translates to the HDFS
+         location of that database only; not for the tables residing under that database.
+
+Ranger RMS Assumptions and Limitations
+
+
+
+All partitions of a table are assumed to be under the location
+                     specified for the table. Therefore, table permissions will not authorize access
+                     to partitions that store data outside the location specified for the table. For
+                     example, if a table is located in a /warehouse/foo HDFS
+                     directory, all partitions of the table must have locations that are under the
+                        /warehouse/foo directory. 
+
+
+The Ranger RMS service is not set up automatically when a CDP Private
+                     Cloud Base cluster is deployed. You must install and configure Ranger RMS
+                     separately. 
+
+
+Ranger policies should be configured (with rangerrms
+                     user access) before RMS is started and runs the first sync from the HIVE
+                     Metastore (HMS). 
+
+
+The Ranger RMS ACL-sync feature supports a single logical HMS, to
+                     evaluate HDFS access via HIVE permissions. This is aligned with the Sentry
+                     implementation in CDH.
+
+
+Permissions granted on views (traditional and materialized) do not
+                     extend to HDFS access. This is aligned with the Sentry implementation in
+                     CDH.
+
+
+If a Private Cloud Base deployment supports multiple logical HMS with
+                     a single Ranger, Ranger ACL-sync works with only one logical HMS. Permissions
+                     granted on databases/tables in other logical HMS instances will not be
+                     considered to authorize HDFS access.
+
+Namenode memory requirements must be increased, based on the number of HIVE table
+                  mappings downloaded to HDFS Ranger plugin. Additionally, maintaining HIVE policies
+                  in memory cache will also require additional memory.
+Expect Namenode CPU load to increase, due to additional access evaluation
+                  performed to enforce HIVE policies and periodic downloading and processing of the
+                  HIVE table mappings. The latter increase is proportional to the number of table
+                  mappings downloaded to HDFS Ranger plugin.
+When multiple databases are mapped to single HDFS location, and if a HIVE policy allows a user to
+                     access one database. Then, users will be able to access its HDFS location and
+                     all other files & directories under it. This may include table or database
+                     directories of other databases and tables. However, users will not be able to
+                     access other databases or tables under it through Hive queries.
+For example,
+music_a, music_b, music_c are created at HDFS path'/data'.
+Policy-A to allow 'sam' user 'all' access on resource =
+                  {database=music_a; table= * ; column= * ; }
+Now, 'sam' user will get all access on hdfs path /data and files, directories under it. Therefore, 'sam' user will
+                     be able to access hdfs location of tables under music_b and music_c databases
+                     as long as those locations reside under /data directory.
+However, 'sam' user will not be able to access music_b and music_c databases or
+                     any tables under these databases through Hive queries.note This is the expected behaviour when the hdfs location
+                        for different database/tables are designed in such a way that these entities
+                        share the same hdfs path or HIVE database/table locations fall under another
+                        database hdfs location.
+
+
+
+
+Comparison with Sentry HDFS ACL sync
+The RMS ACL Sync feature resembles the Sentry HDFS ACL Sync feature in the way it
+            downloads and keeps track of the HIVE table to HDFS location mapping. 
+It differs from Sentry in the way it completely and transparently supports all features
+            that Ranger policies express. Therefore, support for tag-based policies, security-zones,
+            masking and row-filtering and audit logging is included with this implementation. 
+Also, the feature is enabled or disabled by a simple configuration on the HDFS side,
+            allowing each installation the option of turning this feature on or off.
+
+Considerations when upgrading Ranger RMS 
+Prior to CDP-7.1.7, Ranger RMS synchronizes only table metadata. Database metadata
+            mappings were not downloaded from HMS. After migrating from CDP versions <7.1.7 to
+            CDP 7.1.8+, only pre-existing table mappings will be available. Any newly created tables
+            or database mappings will be synchronized in RMS. Any pre-existing database mappings
+            will not be present. To ensure the pre-existing databases are mapped correctly, you must
+            perform a full-sync after completing the upgrade.
+
+
+Related informationInstalling Ranger RMS

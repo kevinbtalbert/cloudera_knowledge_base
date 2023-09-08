@@ -1,0 +1,86 @@
+Impala with Amazon S3Cloudera Docs
+Impala with Amazon S3
+You can use Impala to query data residing on the Amazon S3 object
+    store. This capability allows convenient access to a storage system that is
+    remotely managed, accessible from anywhere, and integrated with various
+    cloud-based services.  
+ Impala can query files in any supported file format from S3. The S3
+      storage location can be for an entire table, or individual partitions in a
+      partitioned table. 
+Best Practices for Using Impala with S3
+ The following guidelines summarize the best practices described in the
+        rest of this topic: 
+
+Any reference to an S3 location must be fully qualified when S3 is
+          not designated as the default storage, for example,
+            s3a:://[s3-bucket-name].
+DROP TABLE .. PURGE is much faster than the default DROP
+            TABLE. The same applies to ALTER TABLE ... DROP PARTITION
+            PURGE versus the default DROP PARTITION operation. However,
+          due to the eventually consistent nature of S3, the files for that table or partition could
+          remain for some unbounded time when using PURGE. The default DROP
+            TABLE/PARTITION is slow because Impala copies the files to the S3A trashcan,
+          and Impala waits until all the data is moved. DROP TABLE/PARTITION ..
+            PURGE is a fast delete operation, and the Impala statement finishes quickly
+          even though the change might not have propagated fully throughout S3. 
+INSERT statements are faster than INSERT
+            OVERWRITE for S3. The
+            S3_SKIP_INSERT_STAGING query option, which is set
+          to true by default, skips the staging step for
+          regular INSERT (but not INSERT
+            OVERWRITE). This makes the operation much faster, but
+          consistency is not guaranteed: if a node fails during execution, the
+          table could end up with inconsistent data. Set this option to
+            false if stronger consistency is required, but this
+          setting will make the INSERT operations slower. 
+
+ For Impala-ACID tables, both INSERT and
+                  INSERT OVERWRITE tables for S3 are fast,
+                regardless of the setting of
+                  S3_SKIP_INSERT_STAGING. Plus, consistency is
+                guaranteed with ACID tables.
+
+
+Too many files in a table can make metadata loading and updating
+          slow in S3. If too many requests are made to S3, S3 has a back-off
+          mechanism and responds slower than usual. 
+If you have many small files due to over-granular partitioning,
+              configure partitions with many megabytes of data so that even a
+              query against a single partition can be parallelized effectively. 
+If you have many small files because of many small
+                INSERT queries, use bulk
+                INSERTs so that more data is written to fewer
+              files. 
+
+
+
+Loading Data into S3 for Impala Queries
+ If your ETL pipeline involves moving data into S3 and then querying
+        through Impala, you can either use Impala DML statements to create,
+        move, or copy the data, or use the same data loading techniques as you
+        would for non-Impala data. 
+Using Impala DML Statements for S3 Data:
+Impala DML statements (INSERT, LOAD
+          DATA, and CREATE TABLE AS SELECT) can write
+        data into a table or partition that resides in S3.
+ Because of differences between S3 and
+        traditional filesystems, DML operations for S3 tables can take longer
+        than for tables on HDFS. For example, both the LOAD
+          DATA statement and the final stage of the
+          INSERT and CREATE TABLE AS SELECT
+        statements involve moving files from one directory to another. (In the
+        case of INSERT and CREATE TABLE AS
+          SELECT, the files are moved from a temporary staging
+        directory to the final destination directory.) Because S3 does not
+        support a rename operation for existing objects, in these cases,
+        Impala copies the data files from one location to another and then
+        removes the original files. 
+Manually Loading Data into Impala Tables in S3:
+You can use the Amazon-provided methods to bring data files into S3 for
+        querying through Impala.
+ After you upload data files to a location already mapped to an Impala
+        table or partition, or if you delete files in S3 from such a location
+        outside of Impala, issue the REFRESH statement to make
+        Impala aware of the new set of data files. 
+
+

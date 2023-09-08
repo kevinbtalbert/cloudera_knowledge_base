@@ -1,0 +1,274 @@
+Automating data pipelines using Apache Airflow in Cloudera Data EngineeringCloudera Docs
+Automating data pipelines using Apache Airflow in Cloudera Data
+    Engineering
+Cloudera Data Engineering (CDE) enables you to automate a workflow or data pipeline
+    using Apache Airflow Python DAG files. Each CDE virtual cluster includes an embedded instance of
+    Apache Airflow. You can also use CDE with your own Airflow deployment. CDE currently supports two Airflow operators; one to run a CDE job
+      and one to access Cloudera Data Warehouse (CDW).
+
+important
+
+Cloudera supports certain Airflow core operators and hooks but does not provide
+            support for any custom extension through provider packages. See Supporting Airflow
+            operators and hooks linked below. Cloudera Support may require you to remove any
+            installed provider packages during troubleshooting. See Provider packages linked below
+            for more information.
+Direct access to the native Airflow API is unsupported because bypassing the CDE API prevents job tracking, centralized monitoring, and metadata tracking.
+To complete these steps, you must have a running CDE virtual cluster and have access
+            to a CDW virtual warehouse. CDE currently supports CDW operations for ETL workloads in
+            Apache Hive virtual warehouses.
+
+
+To determine the CDW hostname to use for the connection:
+
+Navigate to the Cloudera Data Warehouse
+            Overview page by clicking the Data
+            Warehouse tile in the Cloudera Data Platform (CDP)
+          management console.
+In the Virtual Warehouses column, find the
+          warehouse you want to connect to.
+Click the three-dot menu for the selected warehouse, and then click
+            Copy JDBC URL.
+Paste the URL into a text editor, and make note of the hostname. For
+          example, the hostname portion of the following JDBC URL is emphasized
+          in
+          italics:jdbc:hive2://hs2-aws-2-hive.env-k5ip0r.dw.ylcu-atmi.cloudera.site/default;transportMode=http;httpPath=cliservice;ssl=true;retries=3;
+
+
+
+The following instructions are for using the Airflow service provided with each CDE virtual
+        cluster. For instructions on using your own Airflow deployment, see Using the Cloudera provider for
+          Apache Airflow. 
+
+
+Create a connection to an existing CDW virtual warehouse using the
+          embedded Airflow UI:
+
+noteThe CDW Airflow operator does not currently work with SSO-enabled Hive virtual
+            warehouses. If you have enabled SSO on your virtual warehouse, disable it before
+            continuing. For more information, see Enabling SSO to a Virtual Warehouse linked
+            below.
+
+
+Navigate to the Cloudera Data Engineering
+                Overview page by clicking the
+                Data Engineering tile in the Cloudera
+              Data Platform (CDP) management console.
+
+
+In the CDE Services column, select the
+              service containing the virtual cluster you are using, and then in
+              the Virtual Clusters column, click
+                  
+                Cluster Details for the virtual cluster.
+
+
+Click AIRFLOW UI.
+
+
+From the Airflow UI, click the
+                Connection link from the Admin
+              menu.
+
+
+warningThe connection credentials you specify here can
+              be used by any DAG created by any user in the same Virtual
+              Cluster. Cloudera recommends using a CDP machine user for the
+              connection to CDW and limiting access to the CDE virtual cluster
+              to trusted users using virtual cluster ACLs.
+Click the plus sign to add a new record, and then fill in the
+              fields:
+To create a connection to an existing CDW virtual warehouse:
+Conn Id
+Create a unique connection identifier, such as
+                      cdw-hive-demo.
+Conn Type
+Select Hive Client Wrapper.
+Host
+Enter the hostname from the JDBC connection URL. Do not
+                    enter the full JDBC URL.
+Schema
+default
+Login
+Enter your workload username
+                    and password.
+
+To create a connection to an existing virtual cluster in a
+              different environment:
+Conn Id
+Create a unique connection identifier.
+Conn Type
+The type of the connection. From the drop-down, select
+                      Cloudera Data engineering
+Host/Virtual API Endpoint
+The JOBS API URL of the host where
+                    you want the job to run. 
+Login/CDP Access Key
+
+Provide the CDP access key of the account for running
+                      jobs on the CDE virtual cluster.
+
+Password/CDP Private Key
+
+Provide the CDP private key of the account for running
+                      jobs on the CDE virtual cluster.
+
+
+
+
+Click Save.
+
+
+Create an Airflow DAG file in Python. Import the CDE and CDW operators and define the
+          tasks and dependencies.For example, here is a complete DAG
+            file:from dateutil import parser
+from datetime import datetime, timedelta
+from datetime import timezone
+from airflow import DAG
+from cloudera.cdp.airflow.operators.cde_operator import CDEJobRunOperator
+from cloudera.cdp.airflow.operators.cdw_operator import CDWOperator
+
+
+default_args = {
+    'owner': 'psherman',
+    'retry_delay': timedelta(seconds=5),
+    'depends_on_past': False,
+    'start_date': parser.isoparse('2021-05-25T07:33:37.393Z').replace(tzinfo=timezone.utc)
+}
+
+example_dag = DAG(
+    'airflow-pipeline-demo',
+    default_args=default_args, 
+    schedule_interval='@daily', 
+    catchup=False, 
+    is_paused_upon_creation=False
+)
+
+ingest_step1 = CDEJobRunOperator(
+    connection_id='cde-vc01-dev',
+    task_id='ingest',
+    retries=3,
+    dag=example_dag,
+    job_name='etl-ingest-job'
+)
+
+prep_step2 = CDEJobRunOperator(
+    task_id='data_prep',
+    dag=example_dag,
+    job_name='insurance-claims-job'
+)
+
+cdw_query = """
+show databases;
+"""
+
+dw_step3 = CDWOperator(
+    task_id='dataset-etl-cdw',
+    dag=example_dag,
+    cli_conn_id='cdw-hive-demo',
+    hql=cdw_query,
+    schema='default',
+    ### CDW related args ###
+    use_proxy_user=False,
+    query_isolation=True
+)
+
+ingest_step1 >> prep_step2 >> dw_step3
+Here
+            are some examples of things you can define in the DAG file:
+CDE job run operator
+Use CDEJobRunOperator to specify a CDE job
+                to run. This job must already exist in the virtual cluster
+                specified by the connection_id. If no
+                  connection_id is specified, CDE looks for the
+                job in the virtual cluster where the Airflow job
+                runs.from cloudera.cdp.airflow.operators.cde_operator import CDEJobRunOperator
+...
+ingest_step1 = CDEJobRunOperator(
+    connection_id='cde-vc01-dev',
+    task_id='ingest',
+    retries=3,
+    dag=example_dag,
+    job_name='etl-ingest-job'
+)
+
+Query definition
+You can define a query string or template within the DAG file
+                for later reference as
+                follows:cdw_query = """
+show databases;
+"""
+CDW operator
+Use CDWOperator to execute a query against
+                the CDW virtual warehouse. Specify the connection ID you
+                configured in Airflow, and the query you want to
+                  run.from cloudera.cdp.airflow.operators.cdw_operator import CDWOperator
+...
+dw_step3 = CDWOperator(
+    task_id='dataset-etl-cdw',
+    dag=example_dag,
+    cli_conn_id='cdw-hive-demo',
+    hql=cdw_query,
+    schema='default',
+    ### CDW related args ###
+    use_proxy_user=False,
+    query_isolation=True
+)
+For
+                  more information on query isolation, see the Cloudera Data Warehouse
+                    documentation.
+
+Task dependencies
+After you have defined the tasks, specify the dependencies as
+                  follows:ingest_step1 >> prep_step2 >> dw_step3For
+                  more information on task dependencies, see Task Dependencies in
+                  the Apache Airflow documentation.
+For a tutorial on creating Apache Airflow DAG
+          files, see the Apache Airflow
+          documentation.
+Create a CDE job. 
+
+
+In the Cloudera Data Platform (CDP)  console, click the Data
+                Engineering tile and click Overview.
+
+
+In the CDE Services column, select the service that contains
+              the virtual cluster that you want to create a job for.
+
+
+In the Virtual Clusters column on the right, locate the
+              virtual cluster that you want to use and click the View Jobs
+              icon.
+
+
+
+
+Select the Airflow job type.
+
+
+Name: Provide a name for the job. 
+
+
+DAG File: Use an existing file or add a DAG file to an
+              existing resource or create a resource and upload it. 
+
+
+Select from Resource: Click Select from
+                    Resource to select a DAG file from an existing resource.
+Upload: Click Upload to upload a
+                  DAG file to an existing resource or to a new resource that you can create by
+                  selecting Create a resource from the Select a
+                    Resource dropdown list. Specify the resource name and upload the DAG
+                  file to it. 
+
+
+
+
+
+Click Create and Run to create the job and run it immediately,
+          or click the dropdown button and select Create to create the
+          job.
+
+
+Related referenceSupporting Airflow operators and hooksRelated informationProvider packagesEnabling SSO to a Virtual WarehouseCreating jobs in Cloudera Data EngineeringManaging Cloudera Data Engineering job resources using the CLI

@@ -1,0 +1,73 @@
+Impala with KuduCloudera Docs
+Impala with Kudu
+You can use Impala to query tables stored by Apache Kudu. This
+    capability allows convenient access to a storage system that is tuned for
+    different kinds of workloads than the default with Impala.
+ By default, Impala tables are stored on HDFS. HDFS files are ideal for
+      bulk loads (append operations) and queries using full-table scans, but do
+      not support in-place updates or deletes. Kudu is an alternative storage
+      engine used by Impala which can do both in-place updates (for mixed
+      read/write workloads) and fast scans (for data-warehouse/analytic
+      operations). Using Kudu tables with Impala can simplify the ETL pipeline
+      by avoiding extra steps to segregate and reorganize newly arrived data. 
+The underlying storage is managed and organized by Kudu, not represented
+      as HDFS data files. 
+ The combination of Kudu and Impala works best for tables where scan
+      performance is important, but data arrives continuously, in small batches,
+      or needs to be updated without being completely replaced. HDFS-backed
+      tables can require substantial overhead to replace or reorganize data
+      files as new data arrives. Impala can perform efficient lookups and scans
+      within Kudu tables, and Impala can also perform update or delete
+      operations efficiently. You can also use the Kudu Java, C++, and Python
+      APIs to do ingestion or transformation operations outside of Impala, and
+      Impala can query the current data at any time. 
+ With HDFS-backed tables, you are typically concerned with the number of
+      DataNodes in the cluster, how many and how large HDFS data files are read
+      during a query, and therefore the amount of work performed by each
+      DataNode and the network communication to combine intermediate results and
+      produce the final result set. 
+ Certain Impala SQL statements and clauses, such as
+        DELETE, UPDATE,
+        UPSERT, and PRIMARY KEY work only with
+      Kudu tables. 
+Other statements and clauses, such as LOAD DATA,
+        TRUNCATE TABLE, and INSERT OVERWRITE,
+      are not applicable to Kudu tables. 
+Query performance for Kudu tables
+ For queries involving Kudu tables, Impala can delegate much of the
+        work of filtering the result set to Kudu, avoiding some of the I/O
+        involved in full table scans of tables containing HDFS data files. This
+        type of optimization is especially effective for partitioned Kudu
+        tables, where the Impala query WHERE clause refers to
+        one or more primary key columns that are also used as partition key
+        columns. For example, if a partitioned Kudu table uses a
+          HASH clause for col1 and a
+          RANGE clause for col2, a query using
+        a clause such as WHERE col1 IN (1,2,3) AND col2 >
+          100 can determine exactly which tablet servers contain
+        relevant data, and therefore parallelize the query efficiently. 
+Impala can push down additional information to
+        optimize join queries involving Kudu tables. If the join clause contains
+        predicates of the form column =
+            expression, after Impala constructs a
+        hash table of possible matching values for the join columns from the
+        bigger table (either an HDFS table or a Kudu table), Impala can push
+          down the minimum and maximum matching column values to Kudu, so
+        that Kudu can more efficiently locate matching rows in the second
+        (smaller) table. These min/max filters are affected by the
+          RUNTIME_FILTER_MODE,
+          RUNTIME_FILTER_WAIT_TIME_MS, and
+          DISABLE_ROW_RUNTIME_FILTERING query options; the
+        min/max filters are not affected by the
+          RUNTIME_BLOOM_FILTER_SIZE,
+          RUNTIME_FILTER_MIN_SIZE,
+          RUNTIME_FILTER_MAX_SIZE, and
+          MAX_NUM_RUNTIME_FILTERS query options. 
+ The
+          TABLESAMPLE clause of the SELECT
+        statement does not apply to a table reference derived from a view, a
+        subquery, or anything other than a real base table. This clause only
+        works for tables backed by HDFS or HDFS-like data files, therefore it
+        does not apply to Kudu tables. 
+
+

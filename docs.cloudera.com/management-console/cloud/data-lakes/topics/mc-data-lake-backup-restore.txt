@@ -1,0 +1,212 @@
+Backup and restore for the Data LakeCloudera Docs
+Backup and restore for the Data Lake 
+You can backup and restore the metadata maintained in the Data Lake services. Use this
+    comprehensive backup to restore your Data Lake’s metadata to the state it was at when the backup
+    was taken. 
+The backup and restore operation creates a comprehensive backup that improves the likelihood
+      of data in the backup to be synchronized across all the services running in the Data Lake.
+Required role:
+EnvironmentAdmin
+noteData Lake backup and restore is supported from Cloudera Runtime 7.2.1+ on AWS and Cloudera
+      Runtime 7.2.2+ on Azure, Cloudera Runtime 7.2.15+ on GCP, and Cloudera Runtime 7.1.0/7.2.0 on
+      HDFS.
+Use the Data Lake backup and restore:
+in preparation for a Data Lake upgrade.
+for archiving Data Lake content for later reference.
+to promote Data Lake content from test to production.
+
+There will be a downtime when a Data Lake backup is performed, as some Data Lake
+      services will be stopped. Additionally, access to the HMS database will be blocked by default
+      for the duration of the backup, but you can optionally bypass this using the CLI option
+        no-close-db-connnections when you run the backup. This option allows Data
+      Hub workloads to continue running during the Data Lake backup process. See Configuring
+        and running Data Lake backups for more information.
+Important: Data lake backup/restore operations should be performed when the Data Lake
+      is quiescent. In order to have a consistent backup Cloudera recommends that no workloads are
+      running when the backup is performed. In order to make sure there are no updates to HMS, the
+      backup and restore process closes all the connections to the HMS backend database. This is
+      important for migration use cases where you would like to move metadata from one environment
+      to another. However, you are not required to stop the Data Hub workloads before performing
+      backup. If you want to keep Data Hubs running during a backup, you must keep the HMS database
+      connections open to the Data Lake using the no-close-db-connnections CLI
+      option. If the database connections are closed, Data Hub workloads will fail. 
+ Note that a Data Lake Backup includes metadata about your cluster workloads and does not
+      include the data itself. 
+At this time, you can trigger a Data Lake backup through a CDP command-line
+      operation from any host with connectivity to the Data Lake. The system checks to make sure
+      there isn't another backup or restore in progress.
+What's backed up?
+The backup operation saves a full snapshot of data from all SDX services:
+
+Atlas: 
+Audit events, saved in HBase tables
+Lineage data, saved as Janus graph data in HBase tables
+Edge, vertex, and full text indexes, saved in Solr collections
+
+Ranger:
+Audit logs, saved as a Solr collection
+Permissions and tags, saved in RDBMS tables
+
+
+HMS Metadata, saved in RDBMS tables
+
+
+
+How do I keep the backup secure?
+The backup files are stored on AWS S3, ADLS, or Google Cloud Storage with
+        encryption enabled.
+
+How often should backups run?
+
+
+You can run backups as part of these events:
+
+Upgrades: a backup can be performed before performing an upgrade. This backup
+          can be used to restore the existing environment or create a new environment in case the
+          upgrade fails in a manner that requires you to re-build the original environment. 
+Moving the Data Lake metadata (Atlas lineages, Ranger policies and audit
+          information, and HMS metadata) from one environment to another.
+
+When backups are taken, there is downtime for principal services (see "Principal services"
+        below) due to the requirement to shut down HMS service on any attached Data Hubs. 
+
+Is there any validation that occurs before the backup/restore operations? 
+Yes. Before a backup or restore operation begins, a validation process checks for the most
+        common causes of a backup or restore failure. These validations include verifying that the
+        required permissions are granted on the backup location with the cloud provider (AWS and
+        Azure) and that the required Ranger RAZ permissions are granted on the backup location. For
+        the backup operation only, the validation process also checks if there are any stale Ranger
+        Audit permissions that are over 90 days old.
+You can use CLI commands when you run the backup/restore operations to skip the validation
+        process, or run the validation process without proceeding to the backup/restore operations.
+        See Configuring and running Data Lake backups and Configuring and running
+          Data Lake restore for more information. 
+
+Data Lake Restore vs Repair
+Data Lake repair replaces the compute resources and reconnects them to the
+        persistent Data Lake storage. Data Lake restore replaces the existing Data Lake content with
+        content from a Data Lake backup.
+
+Principal services
+The following principal services affect backup and restore operations:
+On the Data Lake: 
+Atlas
+HMS
+
+HMS Services on any attached Data Hub.
+
+When a backup is performed, the Atlas service is stopped. The HMS service will be impacted
+        if the "--no-close-db-connections" option is not provided.
+
+Dependent services
+Backup and restore operations are dependent on the following services:
+HBase
+Solr
+ZooKeeper
+Databases services (e.g. Postgres)
+They must be running during a backup or restore operation. 
+
+Other considerations
+Do not stop or restart Data Lake services in Cloudera Manager if you are planning on
+        running backup or restore operations. If you stop or restart Data Lake services from
+        Cloudera Manager, such as restarting all services, or restarting the HBase or Solr services,
+        Data Lake backup and restore operations from the CLI will be allowed to go forward, but may
+        fail.
+In order to have a consistent backup Cloudera recommends that no workloads are running when
+        the backup is performed. In order to make sure there are no updates to HMS, the backup and
+        restore process closes all the connections to the HMS backend database. This is important
+        for migration use cases where you would like to move metadata from one environment to
+        another. However, you are not required to stop the Data Hubs attached to a Data Lake before
+        performing backup. If you want to keep Data Hubs running during a backup and restore
+        operation, you must keep the HMS database connections open to the Data Lake using the
+          no-close-db-connnections CLI option. If the database connections are
+        closed, Data Hub workloads will fail. 
+You should stop all Data Hubs before performing a restore operation; a running Data Hub
+        will prevent restore from functioning, and may result in inconsistent data in the
+        backup.
+
+What's supported?
+
+
+
+Support for AWS 
+Runtime 7.2.1 and above
+
+
+Support for Azure 
+Runtimes 7.2.2 and above
+
+
+Support for GCP
+Runtimes 7.2.15 and above
+
+
+
+Support for Backup and restore across Data Lakes with different
+                    shapes
+For example, a backup taken on a light duty Data Lake can be used to
+                    restore a medium duty Data Lake.
+
+Runtimes 7.2.8 and above
+
+
+
+Support for Runtimes 7.1.0 and 7.2.0 
+
+
+Data Lake backup only writes to HDFS on the Data Lake. The backup
+                    should be moved to and from cloud storage using the provided procedures. Contact
+                    Cloudera Support for more information.
+
+
+
+Cross-version support (Restoring a backup taken from a different version of
+                  Cloudera Runtime)
+You can take a backup of a Data Lake that runs one version of Cloudera
+                  Runtime and restore the backup to a Data Lake that runs a different version of
+                  Runtime. The backup version must be an earlier/lower version Runtime than the Data
+                  Lake that you are restoring to. Version limitations apply and a Ranger/HMS schema
+                  upgrade may be required. See Cross-version support for Data Lake backup and
+                    restore for more details. 
+
+
+
+
+What's not supported?
+
+
+
+Backup and restore across different cloud providers is not
+                  supported
+
+Example: Restoring a backup of an AWS Data Lake to an Azure Data
+                    Lake, or an Azure Data Lake to an AWS Data Lake is not supported.
+
+
+
+Recovery for individual settings or pieces of metadata. 
+Example: Recovering just the Hive SQL Ranger policies from a given
+                  backup, or recovering just the HMS metadata of a particular database. 
+
+
+Point in Time Recovery of data synced with metadata
+A restore will only recover HMS metadata and will apply that to the
+                  existing data used by the Data Hubs of the environment. This means that HMS
+                  metadata may not be in sync with the data. 
+
+
+
+
+Limitations in the backup and restore system
+
+
+With Cloudera Runtime 7.2.1, the initial backup on AWS may be written to an
+            S3 bucket. All subsequent backups must be written to the same bucket as the initial
+            backup. This limitation does not exist for later runtime versions.
+
+
+
+
+
+
+Related informationCross-version support for Data Lake backup and restoreCross-version support for Data Lake backup and restoreYou can take a backup of a Data Lake that runs one version of Cloudera Runtime and     restore the backup to a Data Lake running a different version of Runtime. Configuring and running Data Lake backupsThe Data Lake provides a command line interface for managing Data Lake backup and     restore operations. The system checks to make sure there isn't another backup or restore in     progress.Checking the status of a Data Lake backupAfter configuring and running a backup of your Data Lake, you can check the status of         the backup operation.Troubleshooting Data Lake backup operationsPossible issues with Data Lake backups and suggested resolutions.Configuring and running Data Lake restoreData Lake restore replaces the Data Lake data content: the metadata managed by each of     the Data Lake services.Showing Data Lake restore statusHow to check the status of a Data Lake restore operation.Restoring to a RAZ Data LakeYou can restore a Data Lake backup from a non-RAZ Data Lake to a RAZ Data Lake, or from     a RAZ Data Lake to a different RAZ Data Lake.Troubleshooting Data Lake restore operationsPossible issues with Data Lake restore and suggested resolutions.

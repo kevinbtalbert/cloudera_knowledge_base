@@ -1,0 +1,66 @@
+Running the multiple query input exampleCloudera Docs
+Running the multiple query input example
+Typically, you want the recommender to base recommendations on multiple queries. You see how to run the wi script on a directory containing multiple queries and how to interact with the recommender.
+ Upon completing the procedure below, you see the recommendation you get for queryA
+            is identical to the query itself. The recommendation you get for queryB closely
+            resembles queryA. The recommender does not find any way to consolidate queries into a
+            meaningful recommendation because queries are not similar in any significant way.
+                Notice that the recommendation for queryB does not contain the ORDER BY and LIMIT
+                clauses. Recommendations cannot contain an ORDER BY and LIMIT. Doing so could
+                significantly reduce the applicability of the view in many queries. In the
+                input directory demo/queries, one file named queryA.sql contains queryA, and another
+                file named queryB.sql contains queryB.
+
+
+Go to the workload-insights directory.
+The Workload Insights (wi) script is located in this directory.
+
+Run the script on the directory containing multiple .sql files.
+./wi -i "queries/queryA.sql, queries/queryB.sql" -u jdbc:hive2://localhost:10000         
+Recommended views are:
+                        ...
+Recommended views:
+-- materialized_view_1:
+CREATE MATERIALIZED VIEW `materialized_view_1` AS
+SELECT `store_sales`.`ss_item_sk`, SUM(`store_returns`.`sr_net_loss`) AS `$f1`, SUM(`store_sales`.`ss_sales_price`) AS `$f2`, COUNT(`store_sales`.`ss_sales_price`) AS `$f3`
+FROM `default`.`reason`,
+	`default`.`store_returns`,
+	`default`.`store_sales`
+WHERE `store_sales`.`ss_ticket_number` = `store_returns`.`sr_ticket_number` AND `store_returns`.`sr_reason_sk` = `reason`.`r_reason_sk` AND `store_sales`.`ss_item_sk` = `store_returns`.`sr_item_sk` AND 'Found a better price in a store' = `reason`.`r_reason_desc`
+GROUP BY `store_sales`.`ss_item_sk`;
+-- materialized_view_4:
+CREATE MATERIALIZED VIEW `materialized_view_4` AS
+SELECT `store_returns`.`sr_item_sk`, SUM(`store_returns`.`sr_net_loss`) AS `$f1`
+FROM `default`.`reason`,`default`.`store_returns`
+WHERE `store_returns`.`sr_reason_sk` = `reason`.`r_reason_sk` AND 'Found a better price in a store' = `reason`.`r_reason_desc`
+GROUP BY `store_returns`.`sr_item_sk`;
+-----------------------------------------------------           Details
+                        in the output
+                    are:Query details:
+-- queryA:SELECT `t0`.`sr_item_sk`, SUM(`t0`.`sr_net_loss`) AS `$f1` FROM (SELECT `sr_item_sk`, `sr_reason_sk`, `sr_net_loss` FROM `default`.`store_returns` WHERE `sr_reason_sk` IS NOT NULL) AS `t0` INNER JOIN (SELECT `r_reason_sk` FROM `default`.`reason` WHERE `r_reason_desc` = 'Found a better price in a store' AND `r_reason_sk` IS NOT NULL) AS `t2` ON `t0`.`sr_reason_sk` = `t2`.`r_reason_sk` GROUP BY `t0`.`sr_item_sk`
+-- RECOMMENDATION : materialized_view_4
+-- queryB:SELECT `t0`.`sr_item_sk` AS `$f0`, SUM(`t0`.`sr_net_loss`) AS `$f1`, SUM(`t4`.`ss_sales_price`) / COUNT(`t4`.`ss_sales_price`) AS `$f2` FROM (SELECT `sr_item_sk`, `sr_reason_sk`, `sr_ticket_number`, `sr_net_loss` FROM `default`.`store_returns` WHERE `sr_item_sk` IS NOT NULL AND `sr_ticket_number` IS NOT NULL AND `sr_reason_sk` IS NOT NULL) AS `t0` INNER JOIN (SELECT `r_reason_sk` FROM `default`.`reason` WHERE `r_reason_desc` = 'Found a better price in a store' AND `r_reason_sk` IS NOT NULL) AS `t2` ON `t0`.`sr_reason_sk` = `t2`.`r_reason_sk` INNER JOIN (SELECT `ss_item_sk`, `ss_ticket_number`, `ss_sales_price` FROM `default`.`store_sales` WHERE `ss_item_sk` IS NOT NULL AND `ss_ticket_number` IS NOT NULL) AS `t4` ON `t0`.`sr_item_sk` = `t4`.`ss_item_sk` AND `t0`.`sr_ticket_number` = `t4`.`ss_ticket_number` GROUP BY `t0`.`sr_item_sk` ORDER BY SUM(`t0`.`sr_net_loss`) DESC, SUM(`t4`.`ss_sales_price`) / COUNT(`t4`.`ss_sales_price`) DESC LIMIT 10
+-- RECOMMENDATION : materialized_view_1
+-----------------------------------------------------                                 
+
+
+In Hive, run SHOW MATERIALIZED VIEWS to list the recommended materialized views.
+
+Run EXPLAIN CBO.
+               
+beeline -u jdbc:hive2//localhost:10000 -n admin -p mypassword -e "EXPLAIN CBO `cat <path>/queryB.sql`"
+
+Take a look at the explain plan for one of the queries.
+The output contains the name of the materialized view used in the plan.
+
+Run the queryB.sql again and look at the execution time.
+Using the materialized view, execution time is likely much shorter.
+
+Disable a materialized view n, for example, from being used in rewrites.
+beeline -u jdbc:hive2://localhost:10000 -n admin -p mypassword -e "ALTER MATERIALIZED VIEW materialized_view_n DISABLE REWRITE"
+
+Run EXPLAIN CBO again.
+The materialized view does not appear because it has been disabled.
+
+
+Parent topic: Running Recommender examples

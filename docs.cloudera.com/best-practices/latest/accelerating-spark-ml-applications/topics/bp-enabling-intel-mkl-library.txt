@@ -1,0 +1,99 @@
+Enabling the Intel MKL libraryCloudera Docs
+Enabling the Intel MKL library
+This procedure shows how to use Cloudera Manager to enable the
+    Intel MKL math library to accelerate Spark ML applications.
+By: Zuling Kang, Senior Solutions Architect at Cloudera, Inc.
+importantThe following instructions work for Spark 1.6x in CDH 5.x and for
+     Spark 2.x in CDH 6.x. In those versions, GPLEXTRAS automatically adds
+     the classpath of JAR files needed to use the native libraries to
+     /etc/spark/conf/classpath.txt. Then the
+     spark-env.sh loads the extra Java libraries
+     during bootstrap. However, GPLEXTRAS cannot do this for Spark 2.x
+     in CDH 5.x. If you want to use Spark 2.x, you must upgrade to CDH
+     6.x, which automatically performs this configuration for Spark 2.x. CDH
+     5.15 on RHEL 7.4 was used in the following example.
+
+
+Intel provides the MKL native library as a Cloudera Manager
+        parcel on its website. You can add it as a remote parcel
+        repository in Cloudera Manager. Then you can download the
+        library and activate it:
+
+In Cloudera Manager, navigate to Hosts > Parcels.
+Select Configuration.
+
+In the section, Remote Parcel Repository
+            URLs, click the plus sign and add the following URL:
+http://parcels.repos.intel.com/mkl/latest
+
+
+          Click Save Changes, and then you are
+          returned to the page that lists available parcels.
+        
+
+Click Download for the
+            mkl parcel:
+
+
+Click Distribute, and when it finishes
+          distributing to the hosts on your cluster, click
+          Activate.
+
+
+
+The MKL parcel is only composed of Linux shared library files
+        (.so files), so to make it accessible to the JVM,
+        a JNI wrapper has to be made. To make the wrapper, use the
+        following MKL wrapper parcel. Use the same procedure described in
+        Step 1 to add the following link to the Cloudera Manager parcel
+        configuration page, download the parcel, distribute it among the
+        hosts and then activate it:
+https://raw.githubusercontent.com/Intel-bigdata/mkl-wrappers-parcel-repo/master/
+
+Restart the corresponding CDH services as guided by Cloudera
+      Manager, and redeploy the client configuration if needed.
+
+In Cloudera Manager, add the following configuration information
+        into the Spark Client Advanced Configuration Snippet (Safety Valve) for spark-conf/spark-defaults.conf:
+spark.driver.extraJavaOptions=-Dcom.github.fommil.netlib.BLAS=com.intel.mkl.MKLBLAS -Dcom.github.fommil.netlib.LAPACK=com.intel.mkl.MKLLAPACK
+spark.driver.extraClassPath=/opt/cloudera/parcels/mkl_wrapper_parcel/lib/java/mkl_wrapper.jar
+spark.driverEnv.MKL_VERBOSE=1
+spark.executor.extraJavaOptions=-Dcom.github.fommil.netlib.BLAS=com.intel.mkl.MKLBLAS -Dcom.github.fommil.netlib.LAPACK=com.intel.mkl.MKLLAPACK
+spark.executor.extraClassPath=/opt/cloudera/parcels/mkl_wrapper_parcel/lib/java/mkl_wrapper.jar
+spark.executorEnv.MKL_VERBOSE=1
+This configuration information instructs the Spark application to
+        load the MKL wrapper and use MKL as the default native library for
+        Spark ML.
+important
+
+ By setting MKL_VERBOSE=1, MKL logs what
+            computational functions are called, what parameters are passed
+            to them, and how much time is spent to execute the functions.
+            This information can be useful for implementation, but it
+            consumes large amounts of space on HDFS in your cluster. In my
+            experimental cases that are discussed in the following
+            section, the logs for each job could consume hundreds of GBs
+            of space. 
+
+If the UnsatisfiedLinkError message is returned
+              when verifying the native library being used as shown below, add
+              the /opt/cloudera/parcels/mkl/linux/mkl/lib/intel64
+              directory to the LD_LIBRARY_PATH environment
+              variable for each cluster node.
+Native code library failed to load.
+java.lang.UnsatisfiedLinkError: /opt/cloudera/parcels/mkl_wrapper_parcel-1.0/lib/native/mkl_wrapper.so: libmkl_rt.so: cannot open shared object file: No such file or directory
+
+
+
+
+
+Open the Spark shell again to verify the native library, and you
+        should see the following output:
+scala> import com.github.fommil.netlib.BLAS
+import com.github.fommil.netlib.BLAS
+
+scala> println(BLAS.getInstance().getClass().getName())
+com.intel.mkl.MKLBLAS
+
+
+

@@ -1,0 +1,57 @@
+Storing medium objects (MOBs)Cloudera Docs
+Storing medium objects (MOBs)
+Medium Object Storage (MOB) is a feature in Apache HBase that helps you store
+        medium-size objects in the size of 100 KB to 10 MB. You can use this to feature to store
+        documents, images, and other moderately-sized objects.
+Data comes in many sizes. You can save different kinds of data in HBase,
+            including binary objects such as images and documents. HBase can technically handle
+            binary objects with cells that are up to 10 MB. However, HBase normal read and write
+            paths are optimized for values smaller than 100 KB. When HBase handles a large number of
+            objects up to 10 MB, the performance is degraded because of write amplification caused
+            by splits and compactions. MOB operates by storing a reference of the object data within
+            the main table. The reference in the table points to external HFiles that contain the
+            actual data, which can be on any storage.
+MOB support must be enabled on individual column families within a table. You
+            can do this either through the HBase shell or using the Java API. MOB settings can be
+            configured at table creation time or can be modified on an existing table’s column
+            family.
+Cloudera OpDB has a new feature called distributed MOB compaction. This feature
+            overcomes a drawback of the older implementations of MOB compaction by moving
+            maintenance of MOB data files from a centralized process handled by the HBase Master to
+            a parallel process that is distributed across the RegionServers.
+If you are currently using MOB compaction in an older version of CDP Runtime,
+            CDH, or HDP, you must be aware of the following changes when you use distributed MOB
+            compaction in CDP: 
+
+
+You can no longer set MOB compaction policies
+
+
+The storage of MOB values is no longer grouped by the date of the
+                    original cell’s timestamp according to said compaction policies, daily, or
+                    otherwise. Instead, they are grouped by the region that performed the most
+                    recent maintenance write of the backing MOB data file. 
+
+
+The MOB system no longer tracks the deletion of  individual cells
+                    through the use of special files in the MOB storage area with the
+                        suffix_del. After upgrading, you must manually move these
+                    files.
+
+
+Under the default configuration, the MOB system attempts to maximize
+                    the throughput for the compaction of MOB stored values. This means that it will
+                    take much less time to perform a given compaction of MOB stored values. However,
+                    this change places a much larger load on the underlying filesystem when compared
+                    to the HBase Master handled MOB compaction. 
+
+
+When the MOB system detects that a table has HFiles with references to
+                    the MOB data but the reference HFiles do not yet have the needed file-level
+                    metadata then it does not archive any MOB HFiles from that table. The reference
+                    files will be updated as a part of normal HBase maintenance operations over
+                    time.
+
+
+
+PrerequisitesYou must be aware of the following prerequisites before you configure HBase to store         MOBs. Configure columns to store MOBsYou can configure a column to store MOBs using the HBase Shell or the Java API. Configure the MOB cache using Cloudera ManagerTo configure the MOB cache within Cloudera Manager, edit the HBase Service advanced         configuration snippet for the cluster. Cloudera recommends testing your configuration with         the default settings first.Test MOB storage and retrieval performanceYou can test the MOB storage and retrieval performance by using the Apache HBase Load         Test Tool (ltt), and by configuring it to generate MOB values.MOB cache propertiesOpening a MOB file places the corresponding HFile-formatted data in active memory.         Too many open MOB files can cause a RegionServer to exceed the memory capacity and cause         performance degradation. To minimize the possibility of this issue arising on a         RegionServer, you must tune the MOB file reader cache to a size that HBase can scale. 

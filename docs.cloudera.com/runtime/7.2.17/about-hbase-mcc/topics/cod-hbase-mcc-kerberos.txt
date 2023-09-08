@@ -1,0 +1,138 @@
+HBase MCC Usage with KerberosCloudera Docs
+HBase MCC Usage with Kerberos
+You can configure HBase MCC with Kerberos authentication for enhanced security and
+  better performance.
+When you build a client application and want to add the configurations as resources, you must
+   configure the client resources as follows:
+
+
+
+
+
+Each cluster folder inside the client application (src/main/resources)
+     must be named with a lowercase "cluster" followed by a sequence starting with 1 and through the
+     “n” number of clusters.
+The first cluster directory is configured as primary, each additional as a failover.
+There must be at least one folder available in the classpath.
+
+
+Each folder must contain the following three files:
+hbase-site.xml
+core-site.xml
+kerberos.properties
+
+The kerberos.properties file must be configured as a key value property
+   using the folowing two configurations:
+principal
+keytab
+For
+   example,principal=youruser/yourhost@EXAMPLE.COM
+keytab=/path/to/youruser.keytab
+
+The following Java example of a multi-cluster client MultiClusterConf multiClusterConf
+    = new MultiClusterConf(true) shows that the default constructor is passed as true that
+   creates an instance of an HBase configuration for each cluster assuming default configurations
+   and no override.
+package org.your.domain.testpackage;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.client.*;
+import org.apache.hadoop.hbase.util.Bytes;
+
+public class AutoConfigClassPath {
+	static final Log log = LogFactory.getLog(AutoConfigClassPath.class);
+	public static void main(String[] args) throws Exception{
+		MultiClusterConf multiClusterConf = new MultiClusterConf(true);  //autoConfigure = true
+		Connection connection = ConnectionFactoryMultiClusterWrapper.createConnectionMultiUgi(multiClusterConf);
+		String tableName = "test_table";
+		String familyName = "cf1";
+		int numberOfPuts = 10;
+		int milliSecondsOfWait = 200;
+		Table table = connection.getTable(TableName.valueOf(tableName));
+		for (int i = 1; i <= numberOfPuts; i++) {
+			log.info("PUT");
+			Put put = new Put(Bytes.toBytes(i % 10 + ".key." + StringUtils.leftPad(String.valueOf(i), 12)));
+			put.addColumn(Bytes.toBytes(familyName), Bytes.toBytes("C"), Bytes.toBytes("Value:" + i));
+			table.put(put);
+			Thread.sleep(milliSecondsOfWait);
+		}
+		log.info("Closing Connection");
+		connection.close();
+		log.info(" - Connection Closed");
+		System.exit(0);
+	}
+}
+
+java -cp "hbase-mcc-0.2.0-SNAPSHOT.jar:/path/to/clusters/:/opt/cloudera/parcels/CDH/jars/*" org.your.domain.testpackage.AutoConfigClassPath
+
+
+noteYou can also build and execute with
+     src/main/resources configured with cluster directories.
+
+You can use autoConfigure to override any parameter in the configuration file,
+   and if the parameter impacts MCC, you must configure with "cluster1".
+You can use the multiClusterConf method to change the parameter in the Java
+      program directly. The following example shows setting the parameter and referencing the index
+      of "cluster1" to impact
+      MCC.MultiClusterConf multiClusterConf = new MultiClusterConf(true, false);  //autoConfigure = true, addResourceOnStart = false
+multiClusterConf.set("hbase.mcc.failover.mode", "false", 0);
+However, it is recommended not to use the previous method; instead update the Java
+            configuration files. Refer to the following code
+            snippet.package com.cloudera.hbase.mcc.examples;
+
+import com.cloudera.hbase.mcc.*;
+import org.apache.hadoop.hbase.client.*;
+import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.util.Bytes;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class BuilderPatternExample {
+    private static final Logger LOG = LoggerFactory.getLogger(BuilderPatternExample.class);
+
+    public static void main(String[] args) throws Exception {
+        MultiClusterConf multiClusterConf = new MultiClusterConf.MultiClusterConfBuilder()
+                .addClusterConfig(new ClusterConfig.ClusterConfigBuilder()
+                        .coreSite("/Users/admin/Documents/hbase/cluster1/core-site.xml")
+                        .hbaseSite("/Users/admin/Documents/hbase/cluster1/hbase-site.xml")
+                        .principal("cluster1tls/server1.example.site@TLS1.COM")
+                        .keytab("/Users/admin/Documents/hbase/cluster1/cluster1tls_host.keytab")
+                        .build()
+                        .set("hbase.client.retries.number", "1")
+                        .set("hbase.client.pause", "1"))
+                        .set("zookeeper.recovery.retry", "0"))
+                .addClusterConfig(new ClusterConfig.ClusterConfigBuilder()
+                        .coreSite("/Users/admin/Documents/hbase/cluster2/core-site.xml")
+                        .hbaseSite("/Users/admin/Documents/hbase/cluster2/hbase-site.xml")
+                        .principal("cluster2tls/server2.example.site@TLS2.COM")
+                        .keytab("/Users/admin/Documents/hbase/cluster2/cluster2tls_host.keytab")
+                        .build()
+                        .set("hbase.client.retries.number", "1")
+                        .set("hbase.client.pause", "1"))
+                .build();
+
+        Connection connection = ConnectionFactoryMultiClusterWrapper.createConnectionMultiUgi(multiClusterConf);
+        String tableName = "test_table";
+        String familyName = "cf1";
+        int numberOfPuts = 3000;
+        int milliSecondsOfWait = 200;
+        Table table = connection.getTable(TableName.valueOf(tableName));
+        for (int i = 1; i <= numberOfPuts; i++) {
+            LOG.info("PUT");
+            Put put = new Put(Bytes.toBytes("key" + i));
+            put.addColumn(Bytes.toBytes(familyName), Bytes.toBytes("C"), Bytes.toBytes("Value:" + i));
+            table.put(put);
+            Thread.sleep(milliSecondsOfWait);
+        }
+        LOG.info("Closing Connection");
+        connection.close();
+        LOG.info(" - Connection Closed");
+        System.exit(0);
+    }
+
+}
+
+Parent topic: Introduction to HBase Multi-cluster Client

@@ -1,0 +1,61 @@
+Create and modify tables with transaction supportCloudera Docs
+Create and modify tables with transaction support
+You can create new tables with transaction support enabled or alter an existing table
+        to enable transaction support on that table. 
+
+To enable transaction support, you must use the
+                    TRANSACTIONAL=true parameter when creating a table, followed by
+                the COMMIT command at the end of your transaction.
+
+
+Create a table with transaction support enabled.
+
+CREATE TABLE NEW_TABLE (ID INT) TRANSACTIONAL=true; TRANSACTION_PROVIDER='OMID';
+noteTRANSACTION_PROVIDER is an optional parameter. Omid is
+                        used as the default transaction provider if this parameter is not
+                        specified.
+
+
+Set autocommit to off before you start a transaction.
+The following example shows you how to turn off autocommit and then upsert a
+                    value into NEW_TABLE.
+                    jdbc:phoenix:> !autocommit off
+Autocommit status: false
+jdbc:phoenix:> upsert into NEW_TABLE values(1,'ph');
+1 row affected (0.015 seconds)
+jdbc:phoenix:> select * from NEW_TABLE;
++---+----+
+| A | B  |
++---+----+
+| 1 | ph |
++---+----+
+1 row selected (0.144 seconds)
+jdbc:phoenix:> upsert into NEW_TABLE values(2,'ph');
+1 row affected (0.001 seconds)
+jdbc:phoenix:> !commit
+
+Modify a table to enable transactions on the table.
+
+ALTER TABLE EXISTING_TABLE SET TRANSACTIONAL=true;
+
+
+The following example shows you how to do a transaction on a table when
+                transaction support is
+                enabled:!autocommit off -- Turn off autocommit
+SELECT * FROM example_table; -- Transaction starts here. Other transactions cannot see your updates yet
+UPSERT INTO example_table VALUES (1,'A');
+SELECT count(*) FROM example_table WHERE e=1; -- You can see an uncommited row
+DELETE FROM my_other_table WHERE e=2;
+!commit -- Other transactions can now see the updatesYou will see an exception if you try to commit a row that is conflicting
+                with another transaction. In the following example, you will see an exception when
+                you try and commit the first transaction after committing the second transaction
+                because the second transaction updates the same
+            row.UPSERT INTO NEW_TABLE VALUES (1,'a');
+Now,
+            when you do a commit on the same row. Row 1 in the following example, you will see an
+            error. UPSERT INTO NEW_TABLE VALUES (1,'b');
+!commitYou see an
+            exception similar to the following:
+            java.sql.SQLException: ERROR 523 (42900): Transaction aborted due to conflict with other mutations. Conflict detected for transaction 1556122566800000000.
+
+Parent topic: Using transactions in Apache Phoenix

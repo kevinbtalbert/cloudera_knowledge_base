@@ -1,0 +1,57 @@
+How to Use Self-Signed Certificates for TLSCloudera Docs
+How to Use Self-Signed Certificates for TLS
+
+Self-signed certificates should not be used for production deployments.
+      Self-signed certificates are created and stored in the keystore specified
+      during the key-generation process, and should be replaced by a signed
+      certificate. Using self-signed certificates requires generating and
+      distributing the certificates and establishing explicit trust for the
+      certificate. 
+However, using self-signed certificates lets you easily obtain certificates for TLS/SSL
+      configuration and may be appropriate for non-production or test setups. See Manually
+        Configuring TLS Encryption for Cloudera Manager for more information.
+Replace paths, file names, aliases, and other examples in the commands
+   below for your system.
+
+Create the directory for the
+        certificates:mkdir -p /opt/cloudera/security/x509/ /opt/cloudera/security/jks/Give
+        Cloudera Manager access to the directory, set the correct permissions,
+        and then change to the
+        directory:sudo chown -R cloudera-scm:cloudera-scm /opt/cloudera/security/jks
+sudo umask 0700
+cd /opt/cloudera/security/jks
+Generate the key pair and self-signed certificate, storing everything
+        in the keystore with the same password for keystore and storepass, as
+        shown below. Use the FQDN of the current host for the CN to avoid
+        raising a java.io.IOException: HTTPS hostname wrong
+        exception. Replace values for OU, O, L, ST, and C with entries
+        appropriate for your environment:
+        keytool -genkeypair -alias cmhost -keyalg RSA -keysize 2048 -dname "cn=cm01.example.com, ou=Department,
+o=Company, l=City, st=State, c=US" -keypass password -keystore example.jks -storepass password
+Copy the default Java truststore (cacerts) to the
+        alternate system truststore
+        (jssecacerts):
+     sudo cp $JAVA_HOME/jre/lib/security/cacerts $JAVA_HOME/jre/lib/security/jssecacerts
+Export the certificate from the keystore
+        (example.jks).keytool -export -alias cmhost -keystore example.jks -rfc -file selfsigned.cer
+Copy the self-signed certificate (selfsigned.cer) to
+    the /opt/cloudera/security/x509/
+    directory.cp selfsigned.cer /opt/cloudera/security/x509/cmhost.pem
+Import the public key into the alternate system truststore
+          (jssecacerts), so that any process that runs with
+        Java on this machine will trust the key. The default password for the
+        Java truststore is changeit. Do not use the password
+        created for the keystore in step 2.$ keytool -import -alias cmhost -file /opt/cloudera/security/jks/selfsigned.cer
+-keystore $JAVA_HOME/jre/lib/security/jssecacerts -storepass changeit
+importantRepeat this process on each host in the
+            cluster. 
+
+Rename the
+        keystore:mv /opt/cloudera/security/jks/example.jks /opt/cloudera/security/jks/cmhost-keystore.jksYou
+        can also delete the certificate because it was copied to the appropriate
+        path in step 5.
+        rm /opt/cloudera/security/jks/selfsigned.cer
+
+The self-signed certificate set up is complete. 
+
+Related informationManually Configuring TLS Encryption for Cloudera Manager

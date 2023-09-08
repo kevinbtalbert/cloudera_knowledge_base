@@ -1,0 +1,98 @@
+Creating a Hive external partitioned tableCloudera Docs
+Creating a Hive external partitioned table
+You can configure Hive to create partitions dynamically and then run a query that
+        creates the related directories on the object store. Hive also separates the data into the
+        directories. 
+
+This example assumes you have the following CSV file named
+                    employees.csv to use as the data
+                source:1,jane doe,engineer,service
+2,john smith,sales rep,sales
+3,naoko murai,service rep,service
+4,somporn thong,ceo,sales
+5,xi singh,cfo,finance            
+
+
+Create an andrena directory on S3. 
+
+Upload the CSV file to the andrena
+                    directory..
+
+In the Hive shell, create an unpartitioned table that holds all the data,
+                    substituting the S3 path displayed in the Hue Web Browser.
+
+CREATE EXTERNAL TABLE employees (eid int, name string, position string, dept string)
+  ROW FORMAT DELIMITED
+  FIELDS TERMINATED BY ','
+  STORED AS TEXTFILE
+  LOCATION 's3a://cdpsaasdemo-cdp-private-default-1ogvplm/user/andrena';
+
+For example, specify location
+                        s3a://cdpsaasdemo-cdp-private-default-1ogvplm/user/andrena.
+
+Check that the data loaded into the employees table.
+SELECT * FROM employees;
+The output, formatted to fit this publication,
+                    appears:
++------+---------------+-------------+-------+---------+
+| eid  |    name       | position    | dept  |         |
++------+---------------+-------------+-------+---------|
+| 1    | jane doe      | engineer    | service         |
+| 2    | john smith    | sales rep   | sales           |
+| 3    | naoko murai   | service rep | service         |
+| 4    | somporn thong | ceo         | sales           |
+| 5    | xi singh      | cfo         | finance         |
++------+---------------+-------------+-----------------+
+
+Create a partitioned table.
+
+CREATE EXTERNAL TABLE EMP_PART (eid int, name string, position string) 
+  PARTITIONED BY (dept string);
+
+
+Set dynamic partition mode (nonstrict) to create partitioned directories of
+                    data dynamically when data is inserted:
+
+SET hive.exec.dynamic.partition.mode=nonstrict;
+
+
+Insert data from the unpartitioned table (all the data) into the partitioned table
+               , dynamically creating the partitions.
+INSERT INTO TABLE EMP_PART PARTITION (DEPT)
+  SELECT eid,name,position,dept FROM employees;
+Partitions are created dynamically.
+
+Check that the partitions were created.
+SHOW PARTITIONS emp_part;
++----------------+
+|   partition    |
++----------------+
+| dept=finance   |
+| dept=sales     |
+| dept=service   |
++----------------+
+
+Select the data in the emp_part table;
+SELECT * from emp_part;
+Output looks something like this:
+                    +---------------+----------------+--------------------+----------------+
+| emp_part.eid  | emp_part.name  | emp_part.position  | emp_part.dept  |
++---------------+----------------+--------------------+----------------+
+| 5             | xi singh       | cfo                | finance        |
+| 2             | john smith     | sales rep          | sales          |
+| 4             | somporn thong  | ceo                | sales          |
+| 1             | jane doe       | engineer           | service        |
+| 3             | naoko murai    | service rep        | service        |
++---------------+----------------+--------------------+----------------+
+
+Query the data to return only rows in the sales department partition.
+SELECT * FROM emp_part WHERE emp_part.dept="sales";
++---------------+----------------+--------------------+----------------+
+| emp_part.eid  | emp_part.name  | emp_part.position  | emp_part.dept  |
++---------------+----------------+--------------------+----------------+
+| 2             | john smith     | sales rep          | sales          |
+| 4             | somporn thong  | ceo                | sales          |
++---------------+----------------+--------------------+----------------+
+
+
+Parent topic: Partitioned tables

@@ -1,0 +1,263 @@
+Understanding Keystores and TruststoresCloudera Docs
+Understanding Keystores and Truststores
+Configuring Cloudera Manager Server and cluster components to use TLS/SSL requires
+    obtaining keys, certificates, and related security artifacts. 
+Related informationHow to Convert File Encodings (DER, JKS, PEM) for TLS/SSL
+                            Certificates and KeysManually Configuring TLS Encryption for Cloudera Managerkeytool - Key and Certificate Management Tool Java Secure Socket Extension (JSSE) Reference GuideJava Keystore and Truststore
+
+All clients in a Cloudera Manager cluster configured for TLS/SSL need
+        access to the truststore to validate certificates presented during
+        TLS/SSL session negotiation. The certificates assure the client or
+        server process that the issuing authority for the certificate is part of
+        a legitimate chain of trust. 
+The standard Oracle Java JDK distribution includes a default
+          truststore (cacerts) that contains root
+        certificates for many well-known CAs, including Symantec. Rather than
+        using the default truststore, Cloudera recommends using the
+          alternative truststore, jssecacerts. The
+        alternative truststore is created by copying cacerts to
+        that filename (jssecacerts). Certificates can be added
+        to this truststore when needed for additional roles or services. This
+        alternative truststore is loaded by Hadoop daemons at startup.
+importantFor use with Cloudera clusters, the alternative trust
+          store—jssecacerts—must start as a copy of cacerts
+        because cacerts contains all available default certificates needed to
+        establish the chain of trust during the TLS/SSL handshake. After
+          jssecacerts has been created, new public and private root CAs are added
+        to it for use by the cluster. See Manually Configuring TLS Encryption for Cloudera
+          Manager>On Each Cluster Host for details.
+The private keys are maintained in the keystore. 
+noteFor detailed information about the Java keystore and
+        truststore, see Oracle documentation: 
+Keytool—Key and Certificate Management Tool 
+JSSE Reference Guide for Java
+
+Although the keystore and truststore in some environments may comprise
+      the same file, as configured for Cloudera Manager Server and CDP clusters,
+      the keystore and truststore are distinct files. For Cloudera Manager
+      Server clusters, each host should have its own keystore, while several
+      hosts can share the same truststore. This table summarizes the general
+      differences between keystore and the truststore in Cloudera Manager Server
+      clusters. 
+
+
+Keystore
+Truststore
+
+
+
+Used by the server side of a TLS/SSL client-server
+              connection.
+Used by the client side of a TLS/SSL client-server
+              connection.
+
+
+Typically contains 1 private key for the host system. 
+Contains no keys of any kind.
+
+
+Contains the certificate for the host's private key. 
+Contains root certificates for well-known public certificate
+              authorities. May contain certificates for intermediary certificate
+              authorities.
+
+
+Password protected. Use the same password for the key and its
+              keystore. 
+Password-protection not needed. However, if password has been
+              used for the truststore, never use the same password as used for a
+              key and keystore.
+
+
+Password stored in a plaintext file read permissions granted
+              to a specific group only (OS filesystem permissions set to 0440,
+              hadoop:hadoop).
+Password (if there is one for the truststore) stored in a
+              plaintext file readable by all (OS filesystem permissions set to
+              0440).
+
+
+No default. Provide a keystore name and password when you
+              create the private key and CSR for any host system.
+For Java JDK, cacerts is the default unless the
+              alternative default jssecacerts is available.
+
+
+Must be owned by hadoop user and group so
+              that HDFS, MapReduce, YARN can access the private key.
+HDFS, MapReduce, and YARN need client access to
+              truststore.
+
+
+The details in the table above are specific to the Java KeyStore (JKS) format, which is
+        used by Java-based cluster services such as Cloudera Manager Server, Cloudera Management
+        Service, and many (but not all) CDP components and services. See Certificate Formats
+          (JKS, PEM) and Cluster Components for information about certificate and key file type
+        used various processes. 
+
+
+CDP Services as TLS/SSL Servers and Clients
+
+Cluster services function as a TLS/SSL server, client, or
+        both: 
+
+
+
+Component
+Client
+Server
+
+
+
+HBase
+
+
+
+
+HDFS
+
+
+
+
+
+Hive
+
+
+
+
+
+Hue (Hue is a TLS/SSL client of HDFS, MapReduce, YARN,
+                  HBase, and Oozie.)
+
+
+
+
+MapReduce
+
+
+
+
+
+Oozie
+
+
+
+
+
+YARN
+
+
+
+
+ZooKeeper
+
+
+
+
+
+Daemons that function as TLS/SSL servers load the keystores when
+        starting up. When a client connects to an TLS/SSL server daemon, the
+        server transmits the certificate loaded at startup time to the client,
+        and the client then uses its truststore to validate the certificate
+        presented by the server.
+
+
+Certificate Formats (JKS, PEM) and Cluster Components
+
+Cloudera Manager Server, Cloudera Management Service, and many other CDP services use JKS
+        formatted keystores and certificates. Cloudera Manager Agent, Hue, Key Trustee Server,
+        Impala, and other Python or C++ based services require PEM formatted certificates and
+        keystores rather than Java. Specifically, PEM certificates conform to PKCS #8, which
+        requires individual Base64-encoded text files for certificate and password-protected private
+        key file. The table summarizes certificate types required by several components.
+
+
+Component
+JKS
+PEM
+
+
+
+HBase
+
+
+
+
+
+HDFS
+
+
+
+
+
+Hive (Hive clients and HiveServer 2)
+
+
+
+
+
+Hue
+
+
+
+
+
+Impala
+
+
+
+
+
+MapReduce
+
+
+
+
+
+Oozie
+
+
+
+
+
+Solr
+
+
+
+
+
+YARN
+
+
+
+
+ZooKeeper
+
+
+
+
+For more information, see:
+
+How to Convert File Encodings (DER, JKS, PEM) for TLS/SSL Certificates and
+          Keys
+OpenSSL Cryptography and TLS/SSL Toolkit
+
+
+
+Recommended Keystore and Truststore Configuration
+
+Cloudera recommends the following for keystores and truststores for
+        Cloudera Manager clusters: 
+Create a separate keystore for each host. Each keystore should
+            have a name that helps identify it as to the type of host—server or
+            agent, for example. The keystore contains the private key and should
+            be password protected. 
+Create a single truststore that can be used by the entire cluster. This truststore
+            contains the root CA and intermediate CAs used to authenticate certificates presented
+            during TLS/SSL handshake. The truststore does not need to be password protected.
+            
+
+The steps included in Manually Configuring TLS Encryption for Cloudera Manager>On
+          Each Cluster Host follow this approach.
+
+

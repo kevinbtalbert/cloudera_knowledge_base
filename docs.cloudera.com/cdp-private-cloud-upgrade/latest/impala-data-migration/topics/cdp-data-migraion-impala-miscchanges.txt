@@ -1,0 +1,144 @@
+Other Miscellaneous Changes in ImpalaCloudera Docs
+Other Miscellaneous Changes in Impala
+Review the changes to Impala syntax or service that might affect Impala after migrating
+  your workload from CDH version 5.13-5.16 or CDH version 6.1 or later to CDP Private Cloud Base or CDP
+  Public Cloud. The version of Impala you used in CDH version 5.11 - 5.16 or 6.1 or later changes to
+  Impala 3.4 in CDP Private Cloud Base.
+Decimal V2 Default
+ In CDP, Impala uses DECIMAL V2 by default.
+ To continue using the first version of the DECIMAL type for the backward
+    compatibility of your queries, set the DECIMAL_V2 query option to
+     FALSE: SET DECIMAL_V2=FALSE;
+
+Column Aliases Substitution
+To conform to the SQL standard, Impala no longer performs alias substitution in the
+    subexpressions of GROUP BY, HAVING, and ORDER
+     BY.
+The example below references to the actual column sum(ss_quantity) in the
+     ORDER BY clause instead of the alias Total_Quantity_Purchased
+    and also references to the actual column ss_item_sk in the GROUP
+     BY clause instead of the alias Item because aliases are no longer
+    supported in the subexpressions.
+select
+    ss_item_sk as Item,
+    count(ss_item_sk) as Times_Purchased,
+    sum(ss_quantity) as Total_Quantity_Purchased
+    from store_sales
+    group by ss_item_sk
+    order by sum(ss_quantity) desc
+    limit 5;
+    +-------+-----------------+--------------------------+
+    | item  | times_purchased | total_quantity_purchased |
+    +-------+-----------------+--------------------------+
+    | 9325  | 372             | 19072                    |
+    | 4279  | 357             | 18501                    |
+    | 7507  | 371             | 18475                    |
+    | 5953  | 369             | 18451                    |
+    | 16753 | 375             | 18446                    |
+    +-------+-----------------+--------------------------+
+
+Default PARQUET_ARRAY_RESOLUTION
+The PARQUET_ARRAY_RESOLUTION query option controls the behavior of the
+    indexed-based resolution for nested arrays in Parquet. In Parquet, you can represent an array
+    using a 2-level or 3-level representation. The default value for the PARQUET_ARRAY_RESOLUTION is
+    THREE_LEVEL to match the Parquet standard 3-level encoding. See Parquet_Array_Resolution Query Option for more
+    information.
+
+Clustered Hint Default
+The clustered hint is enabled by default, which adds a local sort by the partitioning columns
+    in HDFS and Kudu tables to a query plan. The noclustered hint, which prevents clustering in
+    tables having ordering columns, is ignored with a warning. 
+
+Query Options Removed 
+ The following query options have been removed: 
+
+DEFAULT_ORDER_BY_LIMIT
+
+
+ABORT_ON_DEFAULT_LIMIT_EXCEEDED
+
+
+V_CPU_CORES
+
+
+RESERVATION_REQUEST_TIMEOUT
+
+
+RM_INITIAL_MEM
+
+
+SCAN_NODE_CODEGEN_THRESHOLD
+
+
+MAX_IO_BUFFERS
+
+
+RM_INITIAL_MEM
+
+
+DISABLE_CACHED_READS
+
+
+
+Shell Option refresh_after_connect
+ The refresh_after_connect option for starting the Impala Shell is removed. 
+
+EXTRACT and DATE_PART Functions
+ The EXTRACT and DATE_PART functions changed in the
+    following way: 
+ The output type of the EXTRACT and DATE_PART functions
+      changed to BIGINT. 
+
+ Extracting the millisecond part from a TIMESTAMP returns the seconds
+       component and the milliseconds component. For example, EXTRACT (CAST('2006-05-12
+        18:27:28.123456789' AS TIMESTAMP), 'MILLISECOND') returns 28123. 
+
+
+
+Port for SHUTDOWN Command
+ If you upgraded from CDH 6.1 or later and specified a port as a part of the
+     SHUTDOWN command, change the port number parameter to use the Kudu7: RPC
+    (KRPC) port for communication between the Impala brokers.
+
+Change in Client Connection Timeout
+The default behavior of client connection timeout changes after upgrading.
+In CDH 6.2 and lower, the client waited indefinitely to open the new session if the maximum
+    number of threads specified by --fe_service_threads has been allocated.
+After upgrading, the server requires a new startup flag,
+     --accepted_client_cnxn_timeout to control treatment of new connection
+    requests. The configured number of server threads is insufficient for the workload.
+If --accepted_client_cnxn_timeout > 0, new connection requests are
+    rejected after the specified timeout.
+If --accepted_client_cnxn_timeout=0, client waits indefinitely to connect to
+    Impala. This sets pre-upgrade behavior.
+The default timeout is 5 minutes. 
+
+Interoperability between Hive and Impala
+Impala supports a number of file formats used in Apache Hadoop. It can also load and query data
+    files produced by other Hadoop components such as Hive. After upgrading from any CDH 5.x version
+    to CDP Private Cloud Base 7.1, if you create an RC file in Hive using the default
+     LazyBinaryColumnarSerDe, Impala can not read the RC file. However you can set
+    the configuration option of hive.default.rcfile.serde to
+     ColumnarSerDe to maintain the interoperability between hive and impala.
+
+Improvements in Metadata
+After upgrading from CDH to CDP, the on-demand use_local_catalog mode is set
+    to True by default on all the Impala coordinators so that the Impala
+    coordinators pull metadata from catalogd and cache it locally. This reduces memory footprint on
+    coordinators and automates the cache eviction.
+In CDP, the catalog_topic_mode is set to minimal by default
+    to enable on-demand metadata for all coordinators.
+
+Recompute the Statistics
+After migrating the workload from any CDH 5.x version to CDP Private Cloud Base 7.1, recompute the
+    statistics for Impala. Even though CDH 5.x statistics are available after the upgrade, the
+    queries do not benefit from the new features until the statistics are recomputed.
+
+Mitigating Excess Network Traffic
+The catalog metadata can become large and lead to excessive network traffic due to
+    dissemination through the statestore. The --compact_catalog_topic flag was
+    introduced to mitigate this issue by compressing the catalog topic entries to reduce their
+    serialized size. This saves network bandwidth at the cost of a small quantity of CPU time. This
+    flag is enabled by default.
+
+

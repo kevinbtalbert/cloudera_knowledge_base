@@ -1,0 +1,260 @@
+Sample Custom Alert ScriptCloudera Docs
+Sample Custom Alert Script
+You can use this sample script to respond to an alert by sending
+    emails based on the content of the alert.
+The Sample Custom Alert Script provided below provides an
+      example of how custom alert scripts can be implemented. This example uses
+      a Python script, which includes multiple routing rules called Alert
+      Templates. Once the script is called, it parses the alert JSON file using
+      a path provided by the Alert Publisher. Based on the Alert Templates, it
+      sends out alerts to different email addresses based on the content of the
+      alert.
+The script requires an SMTP server (defined by its host and
+      port) and an email address to send out the emails. You need to set these
+      parameters in the script.
+There are multiple Alert Templates in the sample script as
+      examples. Pick the ones you need and delete the rest, or create new
+      templates. 
+Python should be always available on your hosts because hosts
+      managed by Cloudera Manager require Python for the Cloudera Manager Agent
+      to run. Because the Alert Publisher is not able to execute python scripts,
+      a small Bash script is needed to execute the main Python script.
+
+Parent topic: Configuring Custom Alert Scripts
+Bash Script
+This Bash script is required to execute the Python
+      script.
+# © 2022 by Cloudera, Inc. All rights reserved.
+# Scripts and sample code are licensed under the Apache License, 
+# Version 2.0
+
+#!/bin/bash
+
+python /bin/script_test/main.py $1
+
+
+
+
+Python script
+
+
+Setting up the Python script
+To use the Python script, you will need to provide the values
+        described below.
+
+
+SMTP
+              hostname:host = "mailserver.mycompany.com"
+SMTP port:port = 25
+Sender email
+              address:sender_address = "noreply@mycompany.com"
+Values for the AlertTemplate(email, attribute_key,
+                attribute_value, remove_after) method:
+Email addresses:
+AlertTemplate("admin@mycompany.com", "SEVERITY", "CRITICAL", False)
+Specify two or more recipients using this format:
+                    AlertTemplate("admin@mycompany.com, admin2@mycompany.com", "SEVERITY", "CRITICAL", False)
+An attribute_key and
+                    attribute_value containing the rules that
+                  your alert should match for the email to be
+                  sent: AlertTemplate("admin@mycompany.com", "SEVERITY", "CRITICAL", False),To
+                  use Regular Expression matching for your alerts, use
+                    “REGEX” as the
+                    attribute_key:
+                    AlertTemplate("admin@mycompany.com", "REGEX", '.*content": "This is a test alert that was generated.*', False)
+                    A None attribute_key and
+                      attribute_value pair indicates a default
+                    template, which should be applied to all alerts. You can use
+                    this when there's no matching
+                    AlertTemplate, but you still do not want to
+                    lose the Alert.
+remove_after: Set this argument to
+                      True if you want the alert to not be
+                    sent, even if further Alert Templates match the alert:
+                     AlertTemplate("admin@mycompany.com", "SEVERITY", "CRITICAL", True),
+
+
+
+
+
+
+Sample Python script
+You can copy this script and modify it for your
+        deployment.
+# -*- coding: utf-8 -*-
+# © 2022 by Cloudera, Inc. All rights reserved.
+# Scripts and sample code are licensed under the Apache License,
+# Version 2.0
+
+#!/usr/bin/env python2
+from __future__ import print_function
+
+import sys
+import smtplib
+import json
+import re
+
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+
+class AlertReader(object):
+    def __init__(self, file_path):
+        self.alerts = []
+        self.file_path = file_path
+
+    def read_alert(self):
+        alert_file = open(self.file_path, "r")
+        data = json.load(alert_file)
+        for alert in data:
+            self.alerts.append(alert["body"]["alert"])
+        print("Done reading " + self.file_path)
+
+    def print_alerts(self):
+        print(self.alerts)
+
+
+def alert_as_string(alert):
+    return json.dumps(alert)
+
+
+class AlertTemplate(object):
+    def __init__(self, email, attribute_key, attribute_value, remove_after):
+        self.email = email
+        self.attribute_key = attribute_key
+        self.attribute_value = attribute_value
+        self.remove_after = remove_after
+        """
+        A None attribute_key and attribute_value pair
+        indicates a default template, which should be
+        applied to all alerts. You can use this when
+        there's no matching AlertTemplate, but you still
+        don't want to lose the Alert.
+
+        Put these AlertTemplates to the end of your
+        AlertTemplate list to catch all remaining alerts.
+
+        But if only one of the attribute_key or attribute_value is None,
+        that is an invalid state.
+        """
+        if (self.attribute_key is None) != (self.attribute_value is None):
+            raise ValueError("AlertTemplate is in invalid state, "
+                             "one of attribute_key or attribute_value is None.")
+
+    def does_apply(self, alert):
+        if self.attribute_key == "REGEX":
+            alert_string = alert_as_string(alert)
+            search_result = re.search(self.attribute_value, alert_string)
+            return search_result is not None
+        if self.attribute_key == "CONTENT":
+            if self.attribute_value in alert["content"]:
+                return True
+            return False
+        if self.attribute_key is None and self.attribute_value is None:
+            return True
+        try:
+            if self.attribute_value in alert["attributes"][self.attribute_key]:
+                return True
+        except KeyError:
+            print("There's no match for attribute_key: " + self.attribute_key)
+        return False
+
+    def to_string(self):
+        return "AlertTemplate[" + \
+               str(self.attribute_key) + ": " + \
+               str(self.attribute_value) + ", " + \
+               str(self.email) + "]"
+
+
+class EmailSender(object):
+    def __init__(self, smtp_host, smtp_port, sender):
+        self.server = smtplib.SMTP(smtp_host, smtp_port)
+        self.sender = sender
+
+    def send_email_to_recipients(self, alerts, alert_templates):
+        print("Processing alerts to send emails.")
+        for alert in alerts:
+            for alert_template in alert_templates:
+                if alert_template.does_apply(alert):
+                    """
+                    With a template with no email address, you usually want to exclude
+                    a type of alert from the processed alert list. Use None to email address
+                    with remove_after = True if you want an alert to be removed from the
+                    list of alerts sent.
+                    These templates should be in the beginning of the template list.
+                    """
+                    if alert_template.email is not None:
+                        self.send_email(alert_template, alert)
+                        print(create_message_text(alert_template, alert))
+                    print("Sending alert based on " + alert_template.to_string())
+                    if alert_template.remove_after:
+                        break
+        print("All alerts are processed.")
+
+    def send_email(self, alert_template, alert):
+        message = MIMEMultipart("alternative")
+        message["Subject"] = "Cloudera Alert"
+        message["From"] = self.sender
+        message["To"] = alert_template.email
+        message.attach(MIMEText(create_message_text(alert_template, alert), "plain"))
+        self.server.sendmail(self.sender, alert_template.email.split(","), message.as_string())
+
+
+def create_message_text(alert_template, alert):
+    out = alert_template.to_string()
+    out += " firing for: \n"
+    out += alert_as_string(alert)
+    return out
+
+
+if __name__ == '__main__':
+    """
+    SMTP server parameters:
+      - email where the emails sent from
+      - file name, where the alerts are coming from. This is provided by the script interface.
+    Alert templates:
+      - email address to send email to when the alert contains the specified key with the specified value.
+      - Set remove_after to True if you don't want the alert sent to other recipients,
+        even if the template is matching. Because of this, it is required that the recipients
+        list is in a specific order.
+    """
+    host = "mailserver.mycompany.com"  # SMTP server host name
+    port = 25  # SMTP Server port
+    sender_address = "noreply@"MyCompanyMailServer"  # Email address to send emails from
+    # The file's name which contains the alerts is provided by the script framework
+    if len(sys.argv) < 2:
+        print("Please provide a file path for alerts. Usually this comes from the script framework.")
+        exit(2)
+    file_name = sys.argv[1]
+    alert_reader = AlertReader(file_name)
+
+    recipients = []
+    try:
+        recipients = [AlertTemplate(None, None, None, True),  # This template matches every alert
+                      # This template matches to all alerts which matches to the given regex pattern
+                      AlertTemplate("admin@mycompany.com", "REGEX", '.*content": "This is a test alert that was generated.*', False),
+                      # This template matches only for issues with critical severity
+                      AlertTemplate("admin@mycompany.com", "SEVERITY", "CRITICAL", False),
+                      # This template matches only for Kafka related issues
+                      AlertTemplate("kafka_admin@mycompany.com", "SERVICE_TYPE", "KAFKA", True),
+                      # This template matches only for Kafka Broker related issues
+                      AlertTemplate("user1@gmail.com", "ROLE_TYPE", "KAFKA_BROKER", True),
+                      # This template matches only for a specific host's alerts
+                      AlertTemplate("admin2@mycompany.com", "HOSTS", "myhost", True),
+                      # This template matches for a specific cluster's alerts
+                      AlertTemplate("admin3@mycompany.com", "CLUSTER", "Cluster 1", True),
+                      # This template matches for a specific health test message
+                      AlertTemplate("admin@mycompany.com", "CONTENT", "This is a test alert that was generated by user request from "
+                                                     "Cloudera Manager", True)]
+    except ValueError as error:
+        print(error)
+        exit(2)
+
+    alert_reader.read_alert()
+    alert_reader.print_alerts()
+    email_sender = EmailSender(host, port, sender_address)
+    email_sender.send_email_to_recipients(alert_reader.alerts, recipients)
+
+
+
+

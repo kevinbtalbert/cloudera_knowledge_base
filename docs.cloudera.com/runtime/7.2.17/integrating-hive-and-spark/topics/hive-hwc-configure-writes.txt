@@ -1,0 +1,86 @@
+Writing data through HWCCloudera Docs
+Writing data through HWC
+A step-by-step procedure walks you through connecting to HiveServer (HS2) to perform
+        batch writes from Spark, which is recommended for production. You configure HWC for the
+        managed table write, launch the Spark session, and write ACID, managed tables to Apache
+        Hive.
+
+Accept the default
+                        spark.datasource.hive.warehouse.load.staging.dir for the
+                    temporary staging location required by HWC.
+Check that spark.hadoop.hive.zookeeper.quorum is
+                    configured.
+Set Kerberos configurations for HWC, or for an unsecured cluster, set
+                        spark.security.credentials.hiveserver2.enabled=false.
+
+The way data is written from HWC is not impacted by the read modes configured for
+            HWC. For write operations, HWC writes to an intermediate location (as defined by the
+            value of config spark.datasource.hive.warehouse.load.staging.dir) from
+            Spark, followed by executing a "LOAD DATA" query in hive via JDBC. Exception: writing to
+            dynamic partitions creates and intermediate temporary external table.Using HWC to
+                write data is recommended for production in CDP. 
+
+Open a terminal window, start the Apache Spark session, and
+                    include the URL for HiveServer.
+
+spark-shell --jars /opt/cloudera/parcels/CDH/jars/hive-warehouse-connector-assembly-<version>.jar \
+-- conf spark.sql.hive.hiveserver2.jdbc.url=<JDBC endpoint for HiveServer>
+...                
+
+
+Include in the launch string a configuration of the intermediate location to use as a staging directory. 
+Example
+                    syntax:...
+--conf spark.datasource.hive.warehouse.load.staging.dir=<path to directory>
+
+Write a Hive managed table.
+For example, in Scala:
+                    import com.hortonworks.hwc.HiveWarehouseSession
+import com.hortonworks.hwc.HiveWarehouseSession._
+
+val hive = HiveWarehouseSession.session(spark).build();
+hive.setDatabase("tpcds_bin_partitioned_orc_1000");
+val df = hive.sql("select * from web_sales");
+df.createOrReplaceTempView("web_sales");
+hive.setDatabase("testDatabase");
+
+hive.createTable("newTable").ifNotExists()
+ .column("ws_sold_time_sk", "bigint")
+ .column("ws_ship_date_sk", "bigint")
+ .create();
+
+sql("SELECT ws_sold_time_sk, ws_ship_date_sk FROM web_sales WHERE ws_sold_time_sk > 80000)
+ .write.format(HIVE_WAREHOUSE_CONNECTOR)
+ .mode("append")
+ .option("table", "newTable")
+ .save();           
+HWC internally fires the following query to Hive through JDBC:
+LOAD DATA INPATH '<spark.datasource.hive.warehouse.load.staging.dir>' INTO TABLE tpcds_bin_partitioned_orc_1000.newTable 
+
+
+Write to a statically partitioned, Hive managed table named t1 having two partitioned columns c1
+                    and c2.
+
+df.write.format(HIVE_WAREHOUSE_CONNECTOR).mode("append").option("partition", "c1='val1',c2='val2'").option("table", "t1").save();
+
+ HWC internally fires the following query to Hive through JDBC after
+                    writing data to a temporary location.
+                    LOAD DATA INPATH '<spark.datasource.hive.warehouse.load.staging.dir>' [OVERWRITE] INTO TABLE db.t1 PARTITION (c1='val1',c2='val2'); 
+
+
+Write to a dynamically partitioned table named t1 having two partitioned cols c1 and c2.
+
+df.write.format(HIVE_WAREHOUSE_CONNECTOR).mode("append").option("partition", "c1='val1',c2").option("table", "t1").save(); 
+
+ HWC internally fires the following query to Hive through JDBC after
+                    writing data to a temporary location.
+                        CREATE TEMPORARY EXTERNAL TABLE db.job_id_table(cols....) STORED AS ORC LOCATION '<spark.datasource.hive.warehouse.load.staging.dir>';
+
+INSERT INTO TABLE t1 PARTITION (c1='val1',c2)  SELECT <cols> FROM db.job_id_table;         
+                        where <cols> should have comma separated list of columns in the table
+                        with dynamic partition columns being the last in the list and in the same
+                        order as the partition definition.
+
+
+
+Related informationUsing Direct Reader modeUsing JDBC read modeApache Spark executor task statisticsParent topic: Introduction to HWC

@@ -1,0 +1,73 @@
+Task architecture and load-balancingCloudera Docs
+Task architecture and load-balancing
+Learn how tasks are distributed and how load is balanced by the Streams Replication
+    Manager Drivers that are running in the same cluster.
+Streams Replication Manager Driver roles (SRM Driver) of the same cluster share the load of
+      the replications among each other. They utilize the task load balancing of the Connect
+      framework. Each Connector in a replication creates a set of task configurations. The number of
+      tasks depend on the replicated topic partitions, groups, and the Tasks
+        Max configuration of SRM. These task instances provide a way to parallelize the
+      work in an SRM replication. After the Connectors create the task configurations, the Connect
+      framework distributes the tasks between the SRM Drivers. More specifically, between the
+      Connect workers running in the SRM Drivers corresponding to a specific replication flow. The
+      task instances are as follows:
+MirrorSourceTask
+The MirrorSourceTask is created by the MirrorSourceConnector. It is responsible for
+        executing data replication. A MirrorSourceTask wraps a consumer and a producer instance. The
+        consumer instance is managed by the task. The producer instance is managed by the Connect
+        framework.
+Each task receives its assignment from the MirrorSourceConnector as a list of topic
+        partitions. These are assigned to the consumer. The fetched records are then forwarded to
+        the producer. The target topic name is generated based on the ReplicationPolicy.
+The number of MirrorSourceTasks created in a replication is based on the following
+        formula: min(tasks.max, source_topic_partition_count)In this formula,
+          tasks.max corresponds to what Tasks Max is set to
+        in SRM's configuration. The source_topic_partition_count is the number of
+        replicated topic partitions, which is based on the topic allow and deny lists configured
+        with the srm-control tool.
+
+
+MirrorCheckpointTask
+The MirrorCheckpointTask is created by the MirrorCheckpointConnector. It responsible for
+        executing the consumer group offset sync. A MirrorCheckpointTask wraps an admin client and a
+        producer instance. The admin client is managed by the task. The producer instance is managed
+        by the Connect framework.
+Each task receives its assignment from the MirrorCheckpointConnector as a list of consumer
+        groups. The assigned consumer group offsets are periodically queried for the replicated
+        topic partitions through the admin client, and are written into the target cluster’s
+        checkpoints topic. The replicated offsets can also be applied to the consumer groups in the
+        target cluster by setting sync.group.offsets.enabled to
+          true.
+The number of MirrorCheckpointTasks created in a replication flow is based on the following
+        formula:min(tasks.max, source_consumer_group_count)In this formula,
+          tasks.max corresponds to what Tasks Max is set to
+        in SRM's configuration. The source_consumer_group_count is the number of
+        replicated consumer groups, which is based on the group allow and deny lists configured with
+        the srm-control tool.
+
+MirrorHeartbeatTask
+The MirrorHeartbeatTask is created by the MirrorHeartbeatConnector. It is responsible for
+        producing heartbeats into the target cluster’s heartbeats topic. A MirrorHeartbeatTask wraps
+        a producer instance that is managed by the Connect framework. In each replication, there is
+        a single MirrorHeartbeatTask instance.
+
+Task load balancing
+Multiple Connect workers participate in each replication. This typically means that each
+        SRM Driver of the cluster has one Connect worker dedicated to a specific replication.
+After the Connect group is formed by the Connect workers, the Connectors are instantiated
+        and task configurations are generated. This results in three Connectors, a number of
+        MirrorSourceTasks and MirrorCheckpointTasks, as well as a MirrorHeartbeatTask. For a newly
+        formed group, these Connectors and task instances are assigned to the Connect workers in a
+        round robin fashion. When the group already has an existing assignment, and there is
+        membership change (for example, a Connect worker joins or leaves the group), the Connectors
+        and tasks are assigned in a cooperative and incremental manner. This allows for the majority
+        of the work to continue without interruption.
+Unless there are no changes made to the task configurations, meaning that no new topics and
+        groups are added to the replication, the task definitions stay the same. However, based on
+        Connect group membership changes, the tasks can be moved between workers. With classic
+        Connect, these tasks can be managed separately through an admin API, but in the case of SRM,
+        this API is not available, and tasks can only be restarted by restarting the SRM Driver
+        cluster.
+
+
+Parent topic: Streams Replication Manager Driver

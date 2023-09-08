@@ -1,0 +1,56 @@
+Materialized view featureCloudera Docs
+Materialized view feature
+Using a materialized view can accelerate query execution. Creating a materialized
+        view on top of Iceberg tables in CDP can further accelerate the performance. You can create
+        a materialized view of an Iceberg V1 or V2 table based on an existing Hive or Iceberg table. 
+The materialized view is stored in Hive ACID or Iceberg format. Materialized view source
+            tables either must be native ACID tables or must support table snapshots. Automatic
+            rewriting of a materialized view occurs under the following conditions:
+The view definition contains the following operators only: 
+TableScan
+Project
+Filter
+Join(inner) 
+Aggregate
+
+Source tables are native ACID or Iceberg v1 or v2
+The view is not based on time travel queries because those views do not
+                    have up-to-date data by definition.
+
+
+Hive example
+The following example creates a materialized view of an Iceberg table from Hive.
+drop table if exists tbl_ice;
+create external table tbl_ice(a int, b string, c int) stored by iceberg stored as orc tblproperties ('format-version'='2');
+                
+create materialized view mat1 as
+select b, c from tbl_ice for system_version as of 5422037307753150798;
+The following example creates a materialized view of two Iceberg tables.  Joined
+                tables must be in the same table format, either Iceberg or Hive ACID.
+
+drop table if exists tbl_ice2;
+create table tbl_ice2(a int, b string, c int) stored as orc TBLPROPERTIES ('transactional'='true');
+INSERT INTO tbl_ice2 VALUES (2, 'apache', 3);
+
+drop table if exists tbl_ice;
+create external table tbl_ice(a int, b string, c int) stored by iceberg stored as orc tblproperties ('format-version'='2');
+INSERT INTO tbl_acid VALUES (4, 'iceberg', 5);
+
+create materialized view mat1 as
+select tbl_ice2.b, tbl_ice2.c from tbl_ice join tbl_ice2 on tbl_ice.a = tbl_ice2.a;
+The following example uses explain to examine a materialized view and then creates a materialized view of an Iceberg V1 table from Hive.
+drop materialized view if exists mat1;
+drop table if exists tbl_ice;
+
+create table tbl_ice(a int, b string, c int) stored by iceberg stored as orc tblproperties ('format-version'='1');
+insert into tbl_ice values (1, 'one', 50), (2, 'two', 51), (3, 'three', 52), (4, 'four', 53), (5, 'five', 54);
+
+explain create materialized view mat1 stored by iceberg stored as orc tblproperties ('format-version'='1') as
+select tbl_ice.b, tbl_ice.c from tbl_ice where tbl_ice.c > 52;
+
+create materialized view mat1 stored by iceberg stored as orc tblproperties ('format-version'='1') as
+select tbl_ice.b, tbl_ice.c from tbl_ice where tbl_ice.c > 52;
+
+
+
+Related informationMaterialized view rebuild featureParent topic: Apache Iceberg features

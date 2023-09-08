@@ -1,0 +1,38 @@
+Best practices for rack and node setup for ECCloudera Docs
+Best practices for rack and node setup for EC
+In a CDP Private Cloud Base deployment, when setting up a cluster to take advantage of EC,
+    consider the number of racks and nodes in your setup.
+Ideally, the number of racks exceed the data-stripe width to account
+        for downtime and outages. If there are fewer racks than the data-stripe
+        width, HDFS spreads data blocks across multiple nodes to maintain fault
+        tolerance at the node level. When distributing blocks to racks, HDFS
+        attempts to distribute the blocks evenly across all racks. Because of
+        this behavior, Cloudera recommends setting up each rack with a similar
+        number of DataNodes. Otherwise, racks with fewer DataNodes may be filled
+        up faster than racks with more DataNodes.
+To achieve node-level fault tolerance, the number of nodes needs to equal the data-stripe
+        width. For example, in order for a RS-6-3-1024k policy to be node failure tolerant, you need
+        at least nine nodes. Note that the write will fail if the number of DataNodes is less than
+        the policy's number of data blocks. The write will succeed but show a warning message if the
+        number of DataNodes is less than the policy's number of data blocks + parity blocks. For
+        example, with RS(6,3), if there are six to eight DataNodes, the write will succeed but show
+        a warning message. If there are less than six DataNodes, the write fails.
+For rack-level fault tolerance, there must be enough number of racks such that each rack
+        contains at most the same number of blocks as the erasure coding parity blocks. The number
+        of racks is calculated as (data stripe width) / (number of parity blocks). For example, with
+        RS(6,3), the minimum number of racks must be (6+3)/3 = 3. Cloudera recommends at least nine
+        racks, which leads to one data or parity block on each rack. Ideally, the number of racks
+        exceeds the sum of the number of data and parity blocks. 
+If you decide to use three racks, spread the nine nodes evenly across three racks. The data
+        and parity blocks, when distributed evenly, lead to the following placement on the racks:
+Rack 1 with three nodes: Three blocks
+Rack 2 with three nodes: Three blocks
+Rack 3 with three nodes: Three blocks
+
+A policy with a wide data-stripe width like RS-6-3-1024k comes with a tradeoff though. Data
+        must be read from six blocks, increasing the overall network load. Choose your EC policy
+        based on your network settings and expected storage efficiency. Note, the larger the cluster
+        and colder the data, the more appropriate it is to use EC policies with large data-stripe
+        widths. Larger data-stripe widths have the benefit of a better storage efficiency. 
+
+Parent topic: Erasure coding overview

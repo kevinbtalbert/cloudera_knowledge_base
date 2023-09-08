@@ -1,0 +1,95 @@
+Autoscaling behaviorCloudera Docs
+Autoscaling behavior
+Before you define an autoscaling policy, note the following autoscaling
+    behaviors.
+General behaviors
+
+
+Clusters can perform one upscale or downscale operation at a time.
+A cluster will continue to accept jobs while it is running, regardless of any
+            in-progress upscale or downscale operations.
+Only one autoscale policy type (either load-based or schedule-based) can be configured
+            for a single host group, in a single cluster, at a time.
+Autoscaling is available for host groups with nodes running YARN NodeManager only (and
+            optionally client/GATEWAY components, but not any other service components).
+If there are not enough nodes available to match the requested scale operation, the
+            operation will proceed on however many nodes are available (for example, during a
+            request for a 10 node scale-up, if the cluster loses 1 node, the operation will proceed
+            with scaling-up 9 nodes instead of 10).
+Autoscaling will be disabled if the cluster has any node failures on instances running
+            YARN ResourceManager, or the ClouderaManager node. 
+After scaling down, nodes will show up as UNHEALTHY in Cloudera Manager. This is
+            expected. While scaling down, stopped nodes are put into maintenance mode, to suppress
+            alerts.
+
+noteAutoscaling is not available for Data Hubs created with the default
+          Streaming Analytics Light Duty cluster template.
+
+
+noteMake sure to create clusters with at least one node in each host group running YARN
+          NodeManagers, for automatic resource configuration to take effect (unless explicitly
+          configuring YARN node-level resources in the cluster template). Once a cluster has been
+          created, the node count for the same can go to 0 (or the minimum can be set to 0 via
+          autoscaling configuration).
+
+
+Cluster management
+          operations with load-based autoscaling enabled
+You may receive a warning when you try to perform certain administrative operations on a
+        cluster with a load-based autoscaling policy enabled. When a cluster is running with stopped
+        instances (as a result of a downscale), operations like Data Hub upgrades or certificate
+        rotation are not allowed. To perform these operations, make sure that the cluster is in a
+        state where there are 0 stopped instances. You can do this by starting all instances that
+        are in a stopped state (temporarily disable autoscaling, then use the beta CLI command
+cdp datahub start-instances --cluster CLUSTER --host-group HOST_GROUP
+          [--instance-count INSTANCE_COUNT]). Alternatively you can delete all instances in
+        a stopped state. Specific operations are affected as follows:
+
+Node repair: If there are STOPPED nodes in a cluster, and some other nodes need
+          to be repaired - the operation can be performed by including all of the stopped
+          nodes in the set of nodes to be repaired.
+Cluster stop/start: Cluster stop is supported. During a cluster start, all nodes
+          in the host group will be started and recommissioned.
+Node delete: Node delete (non-forced) is supported, including for STOPPED
+          instances. Forced node delete may require you to End Maintenance (Enable
+            Alerts/Recommission) in Cloudera Manager after performing another upscale
+          operation.
+Retry: Do not attempt retry on an autoscale operation. Instead, see
+            Manually recovering from load-based scaling failures. The nature of
+          load-based autoscaling is to automatically try again after some time, based on the load on
+          the cluster. There are a few scenarios where this retry will be adequate to continue
+          cluster operations.
+
+Only a single management operation (including scaling) can be performed on a cluster at a
+        time. For example, if an upgrade is in progress, scaling cannot be performed until the
+        upgrade completes.
+
+EBS versus ephemeral storage
+cautionWhen you configure a load-based policy, you may receive a warning about
+        using attached EBS volumes over a certain size. While instances are in a STOPPED state
+        (scaled-down), EBS volumes continue to be charged. In order to reduce costs, Cloudera
+        recommends using instances with ephemeral storage (for example, the r5d or m5d instance
+        families) for compute nodes. Ephemeral volumes will also result in better performance of the
+        workloads–they are typically faster, and don’t utilize network throughput when writing data. 
+
+YARN Decommission Timeout
+
+
+Schedule-based downscaling will attempt to remove nodes to reach the target count,
+            regardless of whether the node has running tasks, or data for a running job. You can use
+            YARN DecommissionTimeout to control the leeway available to jobs beyond the scheduled
+            decommission time. For example, with YARN decommission timeout set to one hour, a
+            scheduled downscale will result in the following behavior:
+Vacant nodes (no running tasks, no tasks previously run for running jobs) will be
+                removed immediately.
+Other nodes will be marked as decommissioning, and will not accept new work.
+The remaining nodes will be terminated once any jobs complete, or at the one hour
+                (YARN decommission timeout) mark.
+
+
+
+For load-based autoscaling, the YARN DecommissionTimeout should be set to 30 seconds. See
+          Configuring autoscaling for more details.
+
+
+Related informationManually recovering from load-based scaling failuresConfiguring autoscalingParent topic: Autoscaling clusters

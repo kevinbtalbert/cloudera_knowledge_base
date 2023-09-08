@@ -1,0 +1,125 @@
+Configuring Impyla for ImpalaCloudera Docs
+Configuring Impyla for Impala
+Explains how to install Impyla to connect to and submit SQL queries to Impala. Impyla
+        is a Python client wrapper around the HiveServer2 Thrift Service. It connects to Impala and
+        implements Python DB API 2.0.
+
+Impyla releases are available at pypi.org. To get the available releases, check Release history.
+noteCloudera will not support versions of Impyla that are built manually from source code.
+Key Features of Impyla
+
+HiveServer2 compliant.
+Works with Impala including nested data.
+DB API 2.0 (PEP 249)-compliant Python client (similar to sqlite or MySQL
+                    clients) supporting Python 2.6+ and Python 3.3+.
+Works with LDAP, SSL.
+SQLAlchemy connector.
+Converts to pandas DataFrame, allowing easy integration into the Python data
+                    stack (including scikit-learn and matplotlib); see the Ibis project for a
+                    richer experience.
+For more information, see here.
+
+
+
+Different systems require different packages to be installed to enable SASL support
+                in Impyla. The following list shows some examples of how to install the packages on
+                different distributions.
+You must have the following installed in your environment before installing
+                impyla. Python 2.6+ or 3.3+ and the pip packages six, bitarray, thrift and
+                thriftpy2 will be automatically installed as dependencies when installing
+                impyla. However if you clone the impyla repo and run their local copy, you must
+                install these pip packages manually.
+
+Install the latest pip and setuptools:
+                    python -m pip install --upgrade pip setuptools
+
+
+                    RHEL/CentOS: sudo yum install gcc-c++ cyrus-sasl-md5 cyrus-sasl-plain cyrus-sasl-gssapi cyrus-sasl-devel
+
+
+                    Ubuntu: sudo apt install g++ libsasl2-dev libsasl2-2 libsasl2-modules-gssapi-mit
+
+
+
+
+Using pip you can install the latest release: pip install impyla
+
+
+You also need to pip-install pandas for conversion to DataFrame objects or 
+                    sqlalchemy for the SQLAlchemy engine.
+
+
+
+Sample codes
+
+Impyla implements the 
+                Python DB API v2.0 (PEP 249) database interface (refer to it for API details):
+from impala.dbapi import connect
+
+conn = connect(host = "my.host.com", port = 21050)
+cursor = conn.cursor()
+cursor.execute("SELECT * FROM mytable LIMIT 100")
+print(cursor.description)  # prints the result set's schema
+results = cursor.fetchall()
+cursor.close()
+conn.close()
+The Cursorobject also exposes the iterator interface, which is buffered (controlled by 
+                cursor.arraysize):
+cursor.execute("SELECT * FROM mytable LIMIT 100")
+for row in cursor:
+    print(row)
+Furthermore the Cursor object returns you information about the columns returned in
+                the query. This is useful to export your data as a csv file.
+import csv
+
+cursor.execute("SELECT * FROM mytable LIMIT 100")
+columns = [datum[0] for datum in cursor.description]
+targetfile = "/tmp/foo.csv"
+
+with open(targetfile, "w", newline = "") as outcsv:
+    writer = csv.writer(
+        outcsv,
+        delimiter = ",",
+        quotechar = '"',
+        quoting = csv.QUOTE_ALL,
+        lineterminator = "\n")
+writer.writerow(columns)
+
+for row in cursor:
+    writer.writerow(row)
+You can also get back a pandas DataFrame object
+from impala.util import as_pandas
+
+# carry df through scikit-learn, for example
+df = as_pandas(cur)
+
+
+
+Connecting to Impala Virtual Warehouse
+Lists an example code to connect to Impala VW with LDAP over http using LDAP as the
+            authentication mechanism.
+
+
+Sample code
+
+from impala.dbapi import connect
+
+conn = connect(
+    host = "Impala VW endpoint",  # could be coordinator or impala-proxy
+    port = 443,
+    auth_mechanism = "LDAP",
+    use_ssl = True,
+    use_http_transport = True,
+    http_path = "cliservice",
+    user = "ldap_userId",
+    password = "ldap_password")
+cursor = conn.cursor()
+cursor.execute("SELECT * FROM default.emax_temp")
+
+for row in cursor:
+    print(row)
+cursor.close()
+conn.close()
+
+
+

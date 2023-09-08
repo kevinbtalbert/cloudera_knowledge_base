@@ -1,0 +1,359 @@
+Maintaining Cloudera Navigator EncryptCloudera Docs
+Maintaining Cloudera Navigator Encrypt
+
+
+
+
+Manually Backing Up Navigator Encrypt
+
+It is recommended that you back up Navigator Encrypt configuration
+        directory after installation, and again after any configuration
+        updates.
+
+
+To manually back up the Navigator Encrypt configuration directory
+              (/etc/navencrypt):
+              zip -r --encrypt nav-encrypt-conf.zip /etc/navencryptThe
+                --encrypt option prompts you to create a
+              password used to encrypt the zip file. This password is also
+              required to decrypt the file. Ensure that you protect the password
+              by storing it in a secure location.
+Move the backup file (nav-encrypt-conf.zip) to
+            a secure location.
+
+
+warningFailure to back up the configuration directory makes
+        your backed-up encrypted data unrecoverable in the event of data
+        loss.
+
+
+
+Validating Navigator Encrypt Configuration
+
+To validate the Navigator Encrypt deployment, run the following
+        command:
+sudo navencrypt status --integrity
+This command verifies that:
+
+The mount encryption key (MEK) exists for each mount point.
+Each mount point in /etc/navencrypt/ztab has a
+          corresponding entry in the control file
+            (/etc/navencrypt/control).
+Each mount point directory exists.
+For loop devices, the file used for encrypted storage
+          exists.
+
+The output is similar to the following:
+$ sudo navencrypt status --integrity
+Checking MEKs integrity
+
+        Mountpoint: /dev/loop0
+                MEK file exist: ......................   [YES]
+        Mountpoint: /dev/loop1
+                MEK file exist: ......................   [YES]
+
+Checking Ztab Mountpoints integrity
+
+         Mountpoint: /dev/loop0
+                 ztab vs control correspondence: .....   [YES]
+                 Mountpoint directory exists: ........   [YES]
+         Mountpoint: /dev/loop1
+                 ztab vs control correspondence: .....   [YES]
+                 Mountpoint directory exists: ........   [YES]
+
+Checking Datastore backend files
+
+         Datastore: '/root/my_storage_test'
+                 Backend file exist: .................   [YES]
+
+
+
+Restoring Mount Encryption Keys (MEKs) and Control File
+
+Navigator Encrypt deposits its mount encryption keys (MEKs) and control
+        file (/etc/navencrypt/control) in Cloudera Navigator
+        Key Trustee Server. If these files are accidentally deleted, they can be
+        restored from Key Trustee Server using the following commands:
+
+To restore
+          MEKs:sudo navencrypt key --restore-keys
+To restore the control
+          file:sudo navencrypt control --restore-control-file
+
+
+
+
+Access Modes
+
+Navigator Encrypt provides three different access modes:
+Enforcing is the default mode in which Navigator Encrypt
+            validates access from all processes against the ACL. To protect your
+            data, enforcing mode must be enabled.
+Permissive mode causes action="denied"
+            messages to be logged in dmesg. It does not 
+            prevent access to the encrypted data. This mode is a dry-run feature
+            to run and build ACL rules.
+Admin mode, as well as permissive mode, does not
+            prevent access to the encrypted data. It allows any process to
+            access the information because the ACL rules are not validated
+            against the process. Admin mode does not cause
+              action="denied" messages to be logged in
+              dmesg.
+
+To view the current access mode, run the following
+        command:sudo /usr/sbin/navencrypt status -d
+noteThe navencrypt status command reports that the
+          navencrypt module is not running if no volumes are
+        encrypted or the kernel module is not loaded.
+To change the access mode, use the following
+        command:sudo /usr/sbin/navencrypt set --mode={enforcing|permissive|admin}
+You cannot change the Navigator Encrypt access mode unless the
+        Navigator Encrypt module is running. To view the status of the Navigator
+        Encrypt module, run navencrypt status --module.
+To start the Navigator Encrypt module there must be at least one active
+        mount-point. To verify the mount-points status, run the following
+        command:sudo /etc/init.d/navencrypt-mount status
+For RHEL 7, use systemctl
+        instead:sudo systemctl status navencrypt-mount
+
+
+
+Changing and Verifying the Master Key
+
+You can perform two operations with the navencrypt key
+        command: change and verify.
+You can verify a key against the Navigator Encrypt module, the
+        Navigator Key Trustee server, or both. For
+        example:sudo /usr/sbin/navencrypt key --verify
+sudo /usr/sbin/navencrypt key --verify --only-module
+sudo /usr/sbin/navencrypt key --verify --only-keytrustee
+noteThe navencrypt key command fails if no volumes are
+        encrypted or the kernel module is not loaded.
+The master key can be changed in the event that another key-type
+        authentication mechanism or a new master key is required. Valid master
+        key types are single-passphrase, dual-passphrase, and RSA key files. To
+        change the master key type, issue the following command and follow the
+        interactive
+        console:sudo /usr/sbin/navencrypt key –-change
+You can use the --trustees, --votes,
+        and --recoverable options for the new key as described
+        in Table 1.
+
+
+
+Listing Categories
+
+To list the existing categories for each mount point, run the command
+          navencrypt-move --list-categories. For
+        example:$ sudo navencrypt-move --list-categories
+Navigator Encrypt Categories found per Mountpoint:
+
+  /dmcrypt-storage
+     @mysql
+     @keytabs
+
+  /home/jdoe/secrets
+     @moms_recipes
+     @world_domination_plan
+
+
+
+
+Updating ACL Fingerprints
+
+All rules reference a process fingerprint (a SHA256 digest) that is used to authenticate
+        the process into the file system. If the file system detects a fingerprint that is different
+        from the one stored in the ACL, the Linux process is denied access and treated as an
+        untrusted process.
+Occasionally this process fingerprint must be updated, such as when
+        software is upgraded. When the fingerprint must be updated, the
+        Navigator Encrypt administrator re-authenticates the process on the ACL
+        by executing the command navencrypt acl --update.
+The following example demonstrates how to determine when a process
+        fingerprint has been changed and must be
+        updated:$ sudo /usr/sbin/navencrypt acl --list
+Type MASTER passphrase:
+# -  Type Category    Path         Profile  Process
+1 !! ALLOW @mysql *            /usr/sbin/mysqld
+2 ALLOW @log * /usr/sbin/mysqld
+3 !! ALLOW @apache * /usr/lib/apache2/mpm-prefork/
+In the example above, the double exclamation (!!)
+        characters indicate that a process fingerprint has changed and must be
+        updated. Similarly, double E (EE) characters indicate a
+        process read error. This error can be caused by a process that does not
+        exist or that has permission issues.
+note
+For RHEL-compatible OSes, the prelink application
+          may also be responsible for ACL fingerprint issues. Prelinking is
+          intended to speed up a system by reducing the time a program needs to
+          begin. Cloudera highly recommends disabling any automated
+            prelink jobs, which are enabled by default in some
+          systems. As an alternative, Cloudera recommends that you integrate a
+          manual prelink run into your existing change control
+          policies to ensure minimal downtime for applications accessing
+          encrypted data.
+To disable prelinking, modify the
+            /etc/sysconfig/prelink file and change
+            PRELINKING=yes to PRELINKING=no.
+          Then, run the /etc/cron.daily/prelink script as root.
+          Once finished, automatic prelinking is disabled.
+For more information about how prelinking affects your system, see
+            prelink.
+
+
+
+
+Managing Mount Points
+
+The /etc/init.d/navencrypt-mount command mounts all
+        mount points that were registered with the
+          navencrypt-prepare command and are listed in the
+          /etc/navencrypt/ztab file. The possible operations
+          are:
+start
+stop
+status
+restart
+
+For RHEL 7, use systemctl [start|stop|status|restart]
+          navencrypt-mount.noteOn RHEL 7, the
+            systemctl command can obscure the exit status of
+          the start and/or stop commands
+          because navencrypt-mount is loaded as a kernel module
+          instead of running as a background process. Cloudera strongly
+          recommends that you run systemctl status
+            navencrypt-mount whenever you run the
+            start and/or stop command to
+          verify that the status of the navencrypt kernel
+          module is still healthy and functioning.
+noteDo not manually unmount the encryption mount
+        point (for example, using umount). If you do so, you
+        must manually close the dm-crypt device using the
+        following procedure:
+Run dmsetup table to list the
+              dm-crypt devices.
+Run cryptsetup luksClose
+                <device_name> to close the device
+            for the unmounted mount point.
+
+When executing the stop operation, the encrypted mount
+        point is unmounted, and your data becomes inaccessible.
+The following example shows how to run navencrypt-mount
+          status with some inactive mount
+        points:sudo /etc/init.d/navencrypt-mount status
+The following example shows how to run the navencrypt-mount
+          stop
+        command:sudo /etc/init.d/navencrypt-mount stop
+The following example shows how to run the navencrypt-mount
+          start
+        command:sudo /etc/init.d/navencrypt-mount start
+Here is an example command used to manually mount a
+        directory:sudo /usr/sbin/mount.navencrypt /path/to_encrypted_data/ /path/to/mountpoint
+This command can be executed only if the
+          navencrypt-prepare command was previously
+        executed.
+
+
+
+Navigator Encrypt Kernel Module Setup
+
+If the kernel headers were not installed on your host, or if the wrong
+        version of the kernel headers were installed, the Navigator Encrypt
+        module was not built at installation time. To avoid reinstalling the
+        system, install the correct headers and run the
+          navencrypt-module-setup command. This attempts to
+        build the module and install it.
+This method is also an efficient way to install any new Navigator
+        Encrypt module feature or fix without otherwise modifying your current
+        Navigator Encrypt environment.
+
+
+
+Navigator Encrypt Configuration Directory Structure
+
+The file and directory structure of /etc/navencrypt is
+        as
+        follows:$ tree /etc/navencrypt/
+/etc/navencrypt/
+├── control -> /etc/navencrypt/jSpi9SM65xUIIhrau1Nn8ZXmQhrrQ9e363EUz8HKiRs
+├── jSpi9SM65xUIIhrau1Nn8ZXmQhrrQ9e363EUz8HKiRs
+├── rules
+├── ztab
+locust
+└── keytrustee
+	├── clientname
+	├── deposits
+	│   ├── dev.loop0
+	│   ├── media.31E5-79B9locustlocust[system ~]# . /etc/*release[system ~]# . /etc/*release
+	│   ├── mnt.a
+	│   ├── mnt.encrypted
+	│   └── mnt.tomount
+	├── pubring.gpg
+	├── pubring.gpg~
+	├── random_seed
+	├── secring.gpg
+	├── trustdb.gpg
+	└── ztrustee.conf
+The following files and folders are part of the created file
+          structure:
+controlFile that saves information about the
+              mount points and corresponding Navigator Key Trustee keys. If this
+              file is accidentally deleted, you can restore it using the navencrypt
+                  control --restore-control-file
+            command.
+rulesFile that contains the ACL rules. It is
+              encrypted with the user-provided master key.
+ztabFile that contains information about all
+              the mount points and their encryption type.importantUse caution when editing the
+            /etc/navencrypt/ztab file. Entries are
+          tab-separated (not space-separated). The ztab file
+          must not contain empty lines.
+keytrusteeDirectory where Navigator Key
+              Trustee GPG keys are stored. These are generated during
+                navencrypt register operations.
+keytrustee/depositsDirectory where the Navigator Encrypt mount
+              encryption keys (MEKs) are saved. These are encrypted with the user-provided master
+              key. If these are accidentally deleted, you can restore them from Key Trustee Server
+              using the navencrypt key
+                  --restore-keys command.
+
+Every mount point has an internal randomly-generated encryption
+        passphrase.
+
+
+
+Collecting Navigator Encrypt Environment Information
+
+When troubleshooting problems with Navigator Encrypt, it is helpful to
+        gather information about the installation and environment. Navigator
+        Encrypt provides a command to facilitate this:
+sudo navencrypt-collect
+This command collects and outputs to the console the following
+        information:
+
+Information about the system on which Navigator Encrypt is
+          installed
+Entries from /etc/navencrypt/ztab
+The contents of the keytrustee.conf file
+Recent entries from the Navigator Encrypt log file
+Configured software repositories
+Checksums of all /usr/src/navencrypt* and
+            /usr/sbin/navencrypt* files
+
+You can use this information to compare Navigator Encrypt installations, and you can also
+        provide this information to Cloudera Support for troubleshooting. The
+          navencrypt-collect command only outputs this information on the console,
+        and does not generate any files or upload to Cloudera.
+To save the information to a file, use the redirect operator
+          (>). For example:
+sudo navencrypt-collect > navencrypt.info
+
+
+
+Upgrading Navigator Encrypt Hosts
+
+See "Best Practices for Upgrading Navigator Encrypt Hosts" in the Upgrading Cloudera
+          Navigator Encrypt guide for information about upgrading operating systems (OS) and
+        kernels on hosts that have Navigator Encrypt installed.
+
+

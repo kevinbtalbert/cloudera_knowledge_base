@@ -1,0 +1,230 @@
+LOAD DATA statementCloudera Docs
+LOAD DATA statement
+The LOAD DATA statement streamlines the ETL process for an internal
+    Impala table by moving a data file or all the data files in a directory from an HDFS location
+    into the Impala data directory for that table.
+Syntax:
+LOAD DATA INPATH 'hdfs_file_or_directory_path' [OVERWRITE] INTO TABLE tablename
+  [PARTITION (partcol1=val1, partcol2=val2 ...)]
+    When the LOAD DATA statement operates on a partitioned table,
+    it always operates on one partition at a time. Specify the PARTITION clauses
+    and list all the partition key columns, with a constant value specified for each.
+  
+Statement type: DML (but still affected by the SYNC_DDL query
+        option) 
+note
+
+When the LOAD DATA statement operates on a partitioned table, ensure that the
+          partition exists.
+You must be aware of the authorization behavior for the LOAD DATA command in Impala.
+          When the LOAD DATA command is executed in Impala, the command checks if the user has ALL
+          access to the source HDFS file/dir through a URL policy. This implies that the
+          requesting user must have the ALL privilege on the source path in Ranger's policy
+          repository of HADOOP SQL even if the requesting user is granted some privilege on the
+          source path using Rangers' policy repository of HDFS or HDFS ACLs. 
+
+
+
+Usage notes:
+
+
+        The loaded data files are moved, not copied, into the Impala data directory.
+      
+
+        You can specify the HDFS path of a single file to be moved, or the HDFS path of a directory to move all the
+        files inside that directory. You cannot specify any sort of wildcard to take only some of the files from a
+        directory. When loading a directory full of data files, keep all the data files at the top level, with no
+        nested directories underneath.
+      
+
+        Currently, the Impala LOAD DATA statement only imports files from HDFS, not from the local
+        filesystem. It does not support the LOCAL keyword of the Hive LOAD DATA
+        statement. You must specify a path, not an hdfs:// URI.
+      
+
+        In the interest of speed, only limited error checking is done. If the loaded files have the wrong file
+        format, different columns than the destination table, or other kind of mismatch, Impala does not raise any
+        error for the LOAD DATA statement. Querying the table afterward could produce a runtime
+        error or unexpected results. Currently, the only checking the LOAD DATA statement does is
+        to avoid mixing together uncompressed and LZO-compressed text files in the same table.
+      
+
+        When you specify an HDFS directory name as the LOAD DATA argument, any hidden files in
+        that directory (files whose names start with a .) are not moved to the Impala data
+        directory.
+      
+ The operation fails if the source directory contains any
+        non-hidden directories. Prior to Impala 2.5 if the source directory contained any
+        subdirectory, even a hidden one such as _impala_insert_staging, the
+        LOAD DATA statement would fail. In Impala 2.5 and higher, LOAD
+          DATA ignores hidden subdirectories in the source directory, and only fails if
+        any of the subdirectories are non-hidden. 
+
+        The loaded data files retain their original names in the new location, unless a name conflicts with an
+        existing data file, in which case the name of the new file is modified slightly to be unique. (The
+        name-mangling is a slight difference from the Hive LOAD DATA statement, which replaces
+        identically named files.)
+      
+
+        By providing an easy way to transport files from known locations in HDFS into the Impala data directory
+        structure, the LOAD DATA statement lets you avoid memorizing the locations and layout of
+        HDFS directory tree containing the Impala databases and tables. (For a quick way to check the location of
+        the data files for an Impala table, issue the statement DESCRIBE FORMATTED
+          table_name.)
+      
+
+        The PARTITION clause is especially convenient for ingesting new data for a partitioned
+        table. As you receive new data for a time period, geographic region, or other division that corresponds to
+        one or more partitioning columns, you can load that data straight into the appropriate Impala data
+        directory, which might be nested several levels down if the table is partitioned by multiple columns. When
+        the table is partitioned, you must specify constant values for all the partitioning columns.
+      
+
+Complex type considerations:
+ Because Impala currently cannot create Parquet data files containing complex types
+      (ARRAY, STRUCT, and MAP), the
+      LOAD DATA statement is especially important when working with tables
+      containing complex type columns. You create the Parquet data files outside Impala, then use
+      either LOAD DATA, an external table, or HDFS-level file operations followed
+      by REFRESH to associate the data files with the corresponding table. If you connect to different Impala nodes within an
+          impala-shell session for load-balancing purposes, you can enable the
+          SYNC_DDL query option to make each DDL statement wait before returning,
+        until the new or changed metadata has been received by all the Impala nodes.important
+        After adding or replacing data in a table used in performance-critical queries, issue a COMPUTE
+        STATS statement to make sure all statistics are up-to-date. Consider updating statistics for a
+        table after any INSERT, LOAD DATA, or CREATE TABLE AS
+        SELECT statement in Impala, or after loading data through Hive and doing a REFRESH
+        table_name in Impala. This technique is especially important for tables that
+        are very large, used in join queries, or both.
+      
+Examples:
+
+        First, we use a trivial Python script to write different numbers of strings (one per line) into files stored
+        in the doc_demo HDFS user account. (Substitute the path for your own HDFS user account when
+        doing hdfs dfs operations like these.)
+      random_strings.py 1000 | hdfs dfs -put - /user/doc_demo/thousand_strings.txt
+random_strings.py 100 | hdfs dfs -put - /user/doc_demo/hundred_strings.txt
+random_strings.py 10 | hdfs dfs -put - /user/doc_demo/ten_strings.txt
+  Next, we create a table and load an initial set of data into it. Remember, unless you specify a
+  STORED AS clause, Impala tables default to TEXTFILE format with Ctrl-A (hex
+  01) as the field delimiter. This example uses a single-column table, so the delimiter is not significant. For
+  large-scale ETL jobs, you would typically use binary format data files such as Parquet or Avro, and load them
+  into Impala tables that use the corresponding file format.
+[localhost:21000] > create table t1 (s string);
+[localhost:21000] > load data inpath '/user/doc_demo/thousand_strings.txt' into table t1;
+Query finished, fetching results ...
++----------------------------------------------------------+
+| summary                                                  |
++----------------------------------------------------------+
+| Loaded 1 file(s). Total files in destination location: 1 |
++----------------------------------------------------------+
+Returned 1 row(s) in 0.61s
+[kilo2-202-961.cs1cloud.internal:21000] > select count(*) from t1;
+Query finished, fetching results ...
++------+
+| _c0  |
++------+
+| 1000 |
++------+
+Returned 1 row(s) in 0.67s
+[localhost:21000] > load data inpath '/user/doc_demo/thousand_strings.txt' into table t1;
+ERROR: AnalysisException: INPATH location '/user/doc_demo/thousand_strings.txt' does not exist. 
+  As indicated by the message at the end of the previous example, the data file was moved from its original
+  location. The following example illustrates how the data file was moved into the Impala data directory for
+  the destination table, keeping its original filename:
+$ hdfs dfs -ls /user/hive/warehouse/load_data_testing.db/t1
+Found 1 items
+-rw-r--r--   1 doc_demo doc_demo      13926 2013-06-26 15:40 /user/hive/warehouse/load_data_testing.db/t1/thousand_strings.txt
+  The following example demonstrates the difference between the INTO TABLE and
+  OVERWRITE TABLE clauses. The table already contains 1000 rows. After issuing the
+  LOAD DATA statement with the INTO TABLE clause, the table contains 100 more
+  rows, for a total of 1100. After issuing the LOAD DATA statement with the OVERWRITE
+    INTO TABLE clause, the former contents are gone, and now the table only contains the 10 rows from
+  the just-loaded data file.
+[localhost:21000] > load data inpath '/user/doc_demo/hundred_strings.txt' into table t1;
+Query finished, fetching results ...
++----------------------------------------------------------+
+| summary                                                  |
++----------------------------------------------------------+
+| Loaded 1 file(s). Total files in destination location: 2 |
++----------------------------------------------------------+
+Returned 1 row(s) in 0.24s
+[localhost:21000] > select count(*) from t1;
+Query finished, fetching results ...
++------+
+| _c0  |
++------+
+| 1100 |
++------+
+Returned 1 row(s) in 0.55s
+[localhost:21000] > load data inpath '/user/doc_demo/ten_strings.txt' overwrite into table t1;
+Query finished, fetching results ...
++----------------------------------------------------------+
+| summary                                                  |
++----------------------------------------------------------+
+| Loaded 1 file(s). Total files in destination location: 1 |
++----------------------------------------------------------+
+Returned 1 row(s) in 0.26s
+[localhost:21000] > select count(*) from t1;
+Query finished, fetching results ...
++-----+
+| _c0 |
++-----+
+| 10  |
++-----+
+Returned 1 row(s) in 0.62s
+Amazon S3 considerations:
+ In Impala 2.6 and higher, the Impala DML
+        statements (INSERT, LOAD DATA, and CREATE TABLE AS
+          SELECT) can write data into a table or partition that resides in the Amazon
+        Simple Storage Service (S3). The syntax of the DML statements is the same as for any other
+        tables, because the S3 location for tables and partitions is specified by an
+          s3a:// prefix in the LOCATION attribute of
+          CREATE TABLE or ALTER TABLE statements. If you bring
+        data into S3 using the normal S3 transfer mechanisms instead of Impala DML statements, issue
+        a REFRESH statement for the table before using Impala to query the S3 data.  Because of differences between
+        S3 and traditional filesystems, DML operations for S3 tables can take longer than for tables
+        on HDFS. For example, both the LOAD DATA statement and the final stage of
+        the INSERT and CREATE TABLE AS SELECT statements involve
+        moving files from one directory to another. (In the case of INSERT and
+          CREATE TABLE AS SELECT, the files are moved from a temporary staging
+        directory to the final destination directory.) Because S3 does not support a rename
+        operation for existing objects, in these cases Impala actually copies the data files from
+        one location to another and then removes the original files. In Impala 2.6, the
+          S3_SKIP_INSERT_STAGING query option provides a way to speed up
+          INSERT statements for S3 tables and partitions, with the tradeoff that a
+        problem during statement execution could leave data in an inconsistent state. It does not
+        apply to INSERT OVERWRITE or LOAD DATA statements.
+ADLS considerations:
+ In Impala 2.9 and higher, the Impala DML statements
+          (INSERT, LOAD DATA, and CREATE TABLE AS
+          SELECT) can write data into a table or partition that resides in the Azure Data
+        Lake Store (ADLS). ADLS Gen2 is supported in Impala 3.1 and higher.In theCREATE TABLE or
+          ALTER TABLE statements, specify the ADLS location for
+        tables and partitions with the adl:// prefix for ADLS
+        Gen1 and abfs:// or abfss:// for ADLS
+        Gen2 in the LOCATION attribute.If you bring data into ADLS
+        using the normal ADLS transfer mechanisms instead of Impala DML
+        statements, issue a REFRESH statement for the table
+        before using Impala to query the ADLS data. 
+Cancellation: Cannot be cancelled.
+      
+HDFS permissions:
+
+    The user ID that the impalad daemon runs under,
+    typically the impala user, must have read and write
+    permissions for the files in the source directory, and write
+    permission for the destination directory.
+  Kudu considerations:The LOAD DATA statement cannot be used
+        with Kudu tables. 
+HBase considerations:
+
+        The LOAD DATA statement cannot be used with HBase tables.
+      
+Related information:
+ The LOAD DATA statement is an alternative to the INSERT
+    statement. Use LOAD DATA when you have the data files in HDFS but outside
+    of any Impala table.  The LOAD DATA statement is also an alternative to the CREATE EXTERNAL
+      TABLE statement. Use LOAD DATA when it is appropriate to move
+      the data files under Impala control rather than querying them from their original location. 
+Related informationReading and writing ADLS data with ImpalaParent topic: Impala SQL statements

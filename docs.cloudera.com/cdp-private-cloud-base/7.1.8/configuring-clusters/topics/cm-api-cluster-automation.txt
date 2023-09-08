@@ -1,0 +1,129 @@
+Using the Cloudera Manager API for Cluster AutomationCloudera Docs
+Using the Cloudera Manager API for Cluster Automation
+How to use the Cloudera Manager API to automate cluster
+    management.
+One of the complexities of Apache Hadoop is the need to deploy clusters
+      of servers, potentially on a regular basis. If you maintain hundreds of
+      test and development clusters in different configurations, this process
+      can be complex and cumbersome if it is not automated.
+
+Parent topic: Using the Cloudera Manager API to Manage and Configure Clusters
+Cluster Automation Use Cases
+
+Cluster automation is useful in various situations. For example, you
+        might work on many versions of Cloudera Runtime, which works on a wide
+        variety of OS distributions (RHEL, Ubuntu, and SLES). You might have
+        complex configuration combinations—highly available HDFS or simple HDFS,
+        Kerberized or non-secure, YARN or MRv1, and so on. With these
+        requirements, you need an easy way to create a new cluster that has the
+        required setup. This cluster can also be used for integration, testing,
+        customer support, demonstrations, and other purposes.
+You can install and configure components according to precise
+        specifications using the Cloudera Manager Cloudera
+          Manager REST API documentation.
+        Using the API, you can add hosts, install Cloudera Runtime, and define
+        the cluster and its services. You can also tune heap sizes, set up HDFS
+        HA, turn on Kerberos security and generate keytabs, and customize
+        service directories and ports. Every configuration available in Cloudera
+        Manager is exposed in the API.
+The API also provides access to management functions:
+Obtaining logs and monitoring the system
+Starting and stopping services
+Polling cluster events
+Creating a disaster recovery replication schedule
+For example, you can use the API to retrieve logs from HDFS, HBase,
+        or any other service, without knowing the log locations. You can also
+        stop any service with no additional steps.
+Use cases for the Cloudera Manager API for cluster automation might
+        include:
+
+OEM and hardware partners that deliver Hadoop-in-a-box appliances
+          using the API to set up Cloudera Runtime and Cloudera Manager on bare
+          metal in the factory.
+Automated deployment of new clusters, using a combination of Puppet
+          and the Cloudera Manager API. Puppet does the OS-level provisioning
+          and installs the software. The Cloudera Manager API sets up the Hadoop
+          services and configures the cluster.
+Integrating the API with reporting and alerting infrastructure. An
+          external script can poll the API for health and metrics information,
+          as well as the stream of events and alerts, to feed into a custom
+          dashboard.
+
+
+
+
+Java API Example
+
+This example covers the Java API client.
+To use the Java client, add this dependency to your project's
+          pom.xml:
+<project>
+  <repositories>
+    <repository>
+      <id>cdh.repo</id>
+      <url>https://repository.cloudera.com/artifactory/cloudera-repos</url>
+      <name>Cloudera Repository</name>
+    </repository>
+    …
+  </repositories>
+  <dependencies>
+    <dependency>
+      <groupId>com.cloudera.api</groupId>
+      <artifactId>cloudera-manager-api</artifactId>
+      <version>4.6.2</version>      <!-- Set to the version of Cloudera Manager you use -->
+    </dependency>
+    …
+  </dependencies>
+  ...
+</project>
+The Java client works like a proxy. It hides from the caller any
+        details about REST, HTTP, and JSON. The entry point is a handle to the
+        root of the API:
+RootResourcev49 apiRoot = new ClouderaManagerClientBuilder().withHost("cm.cloudera.com")
+.withUsernamePassword("admin", "admin").build().getRootv49();
+From the root, you can traverse down to all other resources. (It's
+        called "v49"
+        because that is the current Cloudera Manager API version, but the same
+        builder will also return a root from an earlier version of the API.) The
+        tree view shows some key resources and supported operations:
+RootResourcev49
+ClustersResourcev49 - host membership, start cluster
+ServicesResourcev49 - configuration, get metrics, HA, service
+                      commands
+RolesResource - add roles, get
+                        metrics, logs
+RoleConfigGroupsResource -
+                        configuration
+
+ParcelsResource - parcel management
+
+
+HostsResource - host management, get metrics
+UsersResource - user management
+
+For more information, see the Javadoc.
+The following example lists and starts a cluster:
+// List of clusters
+ApiClusterList clusters = apiRoot.getClustersResource().readClusters(DataView.SUMMARY);
+for (ApiCluster cluster : clusters) {
+  LOG.info("{}: {}", cluster.getName(), cluster.getVersion());
+}
+
+// Start the first cluster
+ApiCommand cmd = apiRoot.getClustersResource().startCommand(clusters.get(0).getName());
+while (cmd.isActive()) {
+   Thread.sleep(100);
+   cmd = apiRoot.getCommandsResource().readCommand(cmd.getId());
+}
+LOG.info("Cluster start {}", cmd.getSuccess() ? "succeeded" : "failed " + cmd.getResultMessage());
+
+
+
+Python Example
+
+You can see an example of automation with Python at the following link:
+          Python example. The example
+        contains information on the requirements and steps to automate a cluster
+        deployment. 
+
+

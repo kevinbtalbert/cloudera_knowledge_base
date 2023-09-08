@@ -1,0 +1,77 @@
+Configure Advanced Threat Triage RulesCloudera Docs
+Configure Advanced Threat
+    Triage Rules
+To assign more detailed threat triage rules and scores, you must use the CLI or the
+      Raw JSON field in the Advanced section of the
+    sensor panel in the Management user interface.
+Determine the rules you want to implement to prioritize alerts using the configuration
+          guidelines provided in Understanding Threat Triage Rule Configuration.
+
+Modify the configuration for the sensor in the enrichment topology.
+For example:
+
+“triageConfig” : {
+   “riskLevelRules” : [
+{
+“name” : “zeusList is alerted"
+“comment” : “Threat intelligence enrichment type zeusList is alerted."
+“rule”: "exists(threatintels.hbaseThreatIntel.domain_without_subdomains.zeusList)”
+“score” : 5
+}
+{
+“name” : “Does not end with .com or .net"
+“comment” : “The URL ends with neither .com nor .net."
+“rule”: “not(ENDS_WITH(domain_without_subdomains, ‘.com’) or ENDS_WITH(domain_without_subdomains, ‘.net’))“ : 10
+“score” : 10
+}
+]
+      ,“aggregator” : “MAX”
+       ,”aggregationConfig” : { }
+}
+
+
+Log in as root user to the host on which Metron is installed.
+
+Modify $METRON_HOME/config/zookeeper/sensors/$DATASOURCE.json to match
+          the configuration on disk:
+Because the configuration in ZooKeeper might be out of sync with the configuration on
+          disk, ensure that they are in sync by downloading the ZooKeeper configuration
+          first:
+
+$METRON_HOME/bin/zk_load_configs.sh -m PULL -z $ZOOKEEPER_HOST:2181 -f -o $METRON_HOME/config/zookeeper
+
+Validate that the enrichment configuration for the data source exists:  
+
+cat $METRON_HOME/config/zookeeper/enrichments/$DATASOURCE.json
+
+In the $METRON_HOME/config/zookeeper/enrichments/$DATASOURCE.json
+          file, add the following to the triageConfig section in the threat
+          intelligence section:  
+
+"threatIntel" : {
+    "fieldMap" : {
+      "hbaseThreatIntel" : [ "domain_without_subdomains" ]
+    },
+    "fieldToTypeMap" : {
+      "domain_without_subdomains" : [ "zeusList" ]
+    },
+    "config" : { },
+    "triageConfig" : {
+      "riskLevelRules" : {
+         "exists(threatintels.hbaseThreatIntel.domain_without_subdomains.zeusList)" : 5
+              , "not(ENDS_WITH(domain_without_subdomains, '.com') or ENDS_WITH(domain_without_subdomains, '.net'))" : 10
+                           }
+        ,"aggregator" : "MAX"
+        ,"aggregationConfig" : { }
+                      }
+                  }
+  }
+
+
+Ensure that the aggregator field indicates MAX. 
+
+Push the configuration back to ZooKeeper:  
+
+$METRON_HOME/bin/zk_load_configs.sh -m PUSH -z $ZOOKEEPER_HOST:2181 -i $METRON_HOME/config/zookeeper
+
+

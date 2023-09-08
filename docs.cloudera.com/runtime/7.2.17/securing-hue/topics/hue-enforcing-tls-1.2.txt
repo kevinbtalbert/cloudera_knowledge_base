@@ -1,0 +1,116 @@
+Enforcing TLS version 1.2 for HueCloudera Docs
+Enforcing TLS version 1.2 for Hue
+CDP Data Hub cluster components and services such as the Cloudera Manager web UI, the
+        Hue web UI, and the Impala web UI communicate with each other using TLS 1.2 as the default
+        TLS protocol, and TLS 1.1 or 1.0 if a client requests it. You can enforce these services to
+        only use TLS 1.2 by specifying the SSL protocol in Cloudera
+        Manager.
+
+noteThe TLS version that is auto-applied depends on the Python version. If your
+                installed Python version is higher than 2.7.9, then both the client and the server
+                use the latest TLS. But if your installed Python version is lower than 2.7.9, then
+                TLS 1.0 is used.
+noteThe following steps do not apply to the connections between Hue and its backend
+                database or external identity services such as LDAP and Active Directory.
+
+
+Sign in to Cloudera Manager as an Administrator.
+
+Go to Clusters > Hue service > Configuration > Load Balancers > Advanced and add the following line in the SSL
+                        Protocol field:
+
+-all +TLSv1.2
+
+
+Click Save Changes.
+
+Restart the Hue service.
+
+Verify that TLS version 1.2 is used for encryption and all the ciphers used are
+                    “strong” by using a security scanner such as Nmap.
+
+
+Open a CLI console on a machine in your cluster.
+
+
+Run the following command:
+
+nmap -sV --script +ssl-enum-ciphers -p 8889 [***HOSTNAME***] -f
+
+Replace [***HOSTNAME***] with the actual name of the host.
+The following is a sample output.
+                            It
+                            shows that only TLS 1.2 is available for the handshake and that all the
+                            ciphers are
+                            “strong”:Starting Nmap 7.80 ( http://nmap.org ) at 2020-30-10 11:16 PDT
+Nmap scan report for hostname.example.com (a.b.c.d)
+Host is up (-1800s latency).
+PORT STATE SERVICE VERSION
+8889/tcp open ssl/http Apache httpd 2.4.6 ((CentOS) OpenSSL/1.0.2k-fips)
+| ssl-enum-ciphers:
+| SSLv3: No supported ciphers found
+| TLSv1.2:
+| ciphers:
+| TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA - strong
+| TLS_DHE_RSA_WITH_AES_128_CBC_SHA - strong
+| TLS_DHE_RSA_WITH_AES_128_CBC_SHA256 - strong
+| TLS_DHE_RSA_WITH_AES_128_GCM_SHA256 - strong
+| TLS_DHE_RSA_WITH_AES_256_CBC_SHA - strong
+| TLS_DHE_RSA_WITH_AES_256_CBC_SHA256 - strong
+| TLS_DHE_RSA_WITH_AES_256_GCM_SHA384 - strong
+| TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA - strong
+| TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA - strong
+| TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256 - strong
+| TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 - strong
+| TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA - strong
+| TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384 - strong
+| TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 - strong
+| TLS_RSA_WITH_3DES_EDE_CBC_SHA - strong
+| TLS_RSA_WITH_AES_128_CBC_SHA - strong
+| TLS_RSA_WITH_AES_128_CBC_SHA256 - strong
+| TLS_RSA_WITH_AES_128_GCM_SHA256 - strong
+| TLS_RSA_WITH_AES_256_CBC_SHA - strong
+| TLS_RSA_WITH_AES_256_CBC_SHA256 - strong
+| TLS_RSA_WITH_AES_256_GCM_SHA384 - strong
+| compressors:
+| NULL
+|_ least strength: strong
+
+Service detection performed. Please report any incorrect results at http://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 22.43 seconds
+You have new mail in /var/spool/mail/root
+
+noteYou must perform steps 2 through 5 every time you upgrade Cloudera
+                                Manager.
+
+
+
+
+Set the SSL_CIPHER_LIST property for the Hue Server in
+                    Cloudera Manager.
+
+
+Sign in to Cloudera Manager as an Administrator.
+
+
+Go to Clusters > Hue service > Configuration > Hue Server and specify the following in the Hue Server
+                                Advanced Configuration Snippet (Safety Valve) for
+                                hue_safety_valve_server.ini field:
+
+[desktop]
+ssl_cipher_list=DEFAULT:!aNULL:!eNULL:!LOW:!EXPORT:!SSLv2:!SSLv3:!TLSv1
+
+The SSL_CIPHER_LIST property is a list of one or more
+                            cipher suite strings separated by colons. This restricts the use of the
+                            default cipher suite before establishing an encrypted SSL
+                            connection.
+
+
+Click Save Changes.
+
+
+Restart the Hue service.
+
+
+
+

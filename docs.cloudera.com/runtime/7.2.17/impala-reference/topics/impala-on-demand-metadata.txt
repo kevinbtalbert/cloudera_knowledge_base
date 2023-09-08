@@ -1,0 +1,78 @@
+On-demand MetadataCloudera Docs
+On-demand Metadata
+ With the on-demand metadata feature, the Impala coordinators pull
+    metadata as needed from catalogd and cache it locally. The
+    cached metadata gets evicted automatically under memory pressure. 
+
+      The granularity of on-demand metadata fetches is at the partition level between the
+      coordinator and catalogd. Common use cases like add/drop partitions do
+      not trigger unnecessary serialization/deserialization of large metadata.
+    
+ The feature can be used in either of the following modes. 
+ Metadata on-demand mode 
+ In this mode, all coordinators use the metadata on-demand. 
+ Set the following on catalogd:
+            --catalog_topic_mode=minimal
+
+ Set the following on all impalad coordinators:
+            --use_local_catalog=true
+
+ Mixed mode 
+ In this mode, only some coordinators are enabled to use the metadata on-demand. 
+ We recommend that you use the mixed mode only for testing local catalog’s impact on
+            heap usage. 
+ Set the following on catalogd:
+            --catalog_topic_mode=mixed
+
+ Set the following on impalad coordinators with metdadata on-demand:
+            --use_local_catalog=true 
+
+Flags related to use_local_catalog
+When use_local_catalog is enabled or set to True on the impalad
+          coordinators the following list of flags configure various parameters as described below. It is not
+          recommended to change the default values on these flags.
+        
+
+
+The flag local_catalog_cache_mb (defaults to -1) configures the
+              size of the catalog cache within each coordinator. With the default set to -1, the
+              cache is auto-configured to 60% of the configured Java heap size. Note that the
+              Java heap size is distinct from and typically smaller than the overall Impala
+              memory limit.
+The flag local_catalog_cache_expiration_s (defaults to 3600) configures the
+              expiration time of the catalog cache within each impalad. Even if the configured
+              cache capacity has not been reached, items are removed from the cache if they have not
+              been accessed in the defined amount of time.
+The flag local_catalog_max_fetch_retries (defaults to 40) configures
+              the maximum number of retries needed for queries to fetch a metadata object from the impalad
+              coordinator's local catalog cache.
+
+
+Limitation:
+
+ HDFS caching is not supported in On-demand metadata mode coordinators.
+note In Impala 3.4.0 and above, global INVALIDATE METADATA statement is supported
+         when On-demand feature is enabled.
+
+INVALIDATE METADATA Usage Notes:
+To return accurate query results, Impala needs to keep the metadata current for the
+      databases and tables queried. Through "automatic invalidation" or "HMS event polling" support,
+      Impala automatically picks up most changes in metadata from the underlying systems. However
+      there are some scenarios where you might need to run INVALIDATE METADATA or
+        REFRESH. 
+if some other entity modifies information used by Impala in the metastore, the
+          information cached by Impala must be updated via INVALIDATE METADATA or
+            REFRESH,
+if you have "local catalog" enabled without "HMS event polling" and need to pick up
+          metadata changes that were done outside of Impala in Hive and other Hive client, such as
+          SparkSQL,
+and so on.
+
+
+noteAs this is a very expensive operation compared to the incremental metadata update
+            done by the REFRESH statement, when possible, prefer
+              REFRESH rather than INVALIDATE METADATA.
+
+
+
+

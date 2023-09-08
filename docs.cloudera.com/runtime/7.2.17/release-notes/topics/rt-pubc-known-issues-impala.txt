@@ -1,0 +1,475 @@
+Known Issues in Apache ImpalaCloudera Docs
+Known Issues in Apache Impala
+Learn about the known issues in Impala, the impact or changes to the functionality, and
+    the workaround.
+
+
+CDPD-41138: Reading through https://github.com/hunterhacker/jdom/issues/189, the fix for CVE-2021-33813 is specifically that if you were relying on setFeature("http://xml.org/sax/features/external-general-entities", false), it was not applied correctly and you were still vulnerable. However if you used setExpandEntities(false) then you're not vulnerable to CVE-2021-33813.
+I found sources for rome 0.9 at http://www.java2s.com/Code/Jar/r/Downloadrome09sourcesjar.htm (it's no longer available at https://java.net/) and verified it uses both setFeature and setExpandEntities to prevent XXE attacks. So I don't believe rome in particular is vulnerable to this issue, and jdom 1.0 is only included for rome 0.9.
+None
+
+
+Impala known limitation when querying compacted
+          tables
+When the compaction process deletes the files for a table from the underlying HDFS
+          location, the Impala service does not detect the changes as the compactions does not
+          allocate new write ids. When the same table is queried from Impala it throws a 'File does
+          not exist' exception that looks something like
+          this:Query Status: Disk I/O error on <node>:22000: Failed to open HDFS file hdfs://nameservice1/warehouse/tablespace/managed/hive/<database>/<table>/xxxxx
+Error(2): No such file or directory Root cause: RemoteException: File does not exist: /warehouse/tablespace/managed/hive/<database>/<table>/xxxx
+Use the REFRESH/INVALIDATE statements on the affected
+          table to overcome the 'File does not exist' exception.
+
+
+TSB 2021-502: Impala logs the session / operation secret on most RPCs at INFO level 
+
+Impala logs contain the session / operation secret. With this information a
+            person who has access to the Impala logs might be able to hijack other users' sessions.
+            This means the attacker is able to execute statements for which they do not have the
+            necessary privileges otherwise. Impala deployments where Apache Sentry or Apache Ranger
+            authorization is enabled may be vulnerable to privilege escalation. Impala deployments
+            where audit logging is enabled may be vulnerable to incorrect audit logging.
+Restricting access to the Impala logs that expose secrets will reduce the
+            risk of an attack. Additionally, restricting access to trusted users for the Impala
+            deployment will also reduce the risk of an attack. Log redaction techniques can be used
+            to redact secrets from the logs. For more information, see the Cloudera Manager
+              documentation.
+For log redaction, users can create a rule with a search pattern: secret \(string\)
+            [=:].*And the replacement could be for example: secret=LOG-REDACTED
+This vulnerability is fixed upstream under IMPALA-10600
+
+
+Severity
+7.5 (High) CVSS:3.1/AV:N/AC:H/PR:L/UI:N/S:U/C:H/I:H/A:H
+Releases affected
+
+
+
+CDP Private Cloud Base 7.0.3, 7.1.1, 7.1.2, 7.1.3, 7.1.4, 7.1.5 and
+                7.1.6
+
+CDP Public Cloud 7.0.0, 7.0.1, 7.0.2, 7.1.0, 7.2.0, 7.2.1, 7.2.2, 7.2.6,
+              7.2.7, and 7.2.8
+
+All CDH 6.3.4 and lower releases
+
+
+
+Impact
+Unauthorized access
+Users affected
+Impala users of the affected releases
+Action required
+
+Upgrade to a CDP Private Cloud Base or CDP Public Cloud version containing the fix.
+
+Addressed in patch/release/hotfix
+
+
+
+CDP Private Cloud Base 7.1.7
+
+
+CDP Public Cloud 7.2.9 or higher versions
+
+
+
+Knowledge article
+
+For the latest update on this issue see the corresponding Knowledge article: TSB 2021-502: Impala logs the session / operation
+              secret on most RPCs at INFO level
+
+
+
+
+HADOOP-15720: Queries stuck on failed HDFS calls and not timing out
+In Impala 3.2 and higher, if the following error appears multiple
+          times in a short duration while running a query, it would mean that the connection between
+          the impalad and the HDFS NameNode is in a bad state.
+          "hdfsOpenFile() for <filename> at backend <hostname:port> failed to finish before the <hdfs_operation_timeout_sec> second timeout " 
+          In Impala 3.1 and lower, the same issue would cause Impala to wait for a long time or not
+          respond without showing the above error message.
+Restart the impalad.
+
+
+
+
+IMPALA-532: Impala should tolerate bad locale settings
+
+          If the LC_* environment variables specify an unsupported locale,
+          Impala does not start.
+        
+Add LC_ALL="C" to the environment settings for
+          both the Impala daemon and the Statestore daemon. 
+          
+        
+
+
+
+
+IMPALA-5605: Configuration to prevent crashes caused by thread resource limits
+Impala could encounter a serious error due to resource usage under very high
+          concurrency. The error message is similar to: 
+F0629 08:20:02.956413 29088 llvm-codegen.cc:111] LLVM hit fatal error: Unable to allocate section memory!
+terminate called after throwing an instance of 'boost::exception_detail::clone_impl<boost::exception_detail::error_info_injector<boost::thread_resource_error> >'
+
+          
+To prevent such errors, configure each host running an
+          impalad daemon with the following settings:
+          
+          
+            echo 2000000 > /proc/sys/kernel/threads-max
+            echo 2000000 > /proc/sys/kernel/pid_max
+            echo 8000000 > /proc/sys/vm/max_map_count
+          
+          
+
+            Add the following lines in /etc/security/limits.conf:
+          
+          
+          
+            impala soft nproc 262144
+            impala hard nproc 262144
+          
+
+
+
+
+IMPALA-635: Avro Scanner fails to parse some schemas
+
+          The default value in Avro schema must match type of first union type, e.g. if the
+          default value is null, then the first type in the
+          UNION must be "null".
+        
+Swap the order of the fields in the schema specification. For
+          example, use ["null", "string"] instead of ["string",
+            "null"]. Note that the files written with the problematic schema must be
+          rewritten with the new schema because Avro files have embedded schemas.
+        
+
+
+
+
+IMPALA-691: Process mem limit does not account for the JVM's memory usage
+
+          Some memory allocated by the JVM used internally by Impala is not counted against the
+          memory limit for the impalad daemon.
+        
+To monitor overall memory usage, use the top command, or add the
+          memory figures in the Impala web UI /memz tab to JVM memory usage shown on the
+          /metrics tab.
+        
+
+
+
+
+IMPALA-9350: Ranger audit logs for applying column masking policies missing
+Impala is not producing these logs.
+None
+
+
+
+
+IMPALA-1024: Impala BE cannot parse Avro schema that contains a trailing semi-colon
+
+          If an Avro table has a schema definition with a trailing semicolon, Impala encounters
+          an error when the table is queried.
+        
+Remove trailing semicolon from the Avro schema.
+        
+
+
+
+
+IMPALA-1652: Incorrect results with basic predicate on CHAR typed column
+When comparing a CHAR column value to a string literal, the literal
+          value is not blank-padded and so the comparison might fail when it should match.
+Use the RPAD() function to blank-pad literals
+          compared with CHAR columns to the expected length.
+        
+
+
+
+
+IMPALA-1792: ImpalaODBC: Can not get the value in the SQLGetData(m-x th column) after the SQLBindCol(m th column)
+If the ODBC SQLGetData is called on a series of columns, the function
+          calls must follow the same order as the columns. For example, if data is fetched from
+          column 2 then column 1, the SQLGetData call for column 1 returns
+          NULL.
+Fetch columns in the same order they are defined in the table.
+        
+
+
+
+
+IMPALA-1821: Casting scenarios with invalid/inconsistent results
+Using a CAST() function to convert large literal values to smaller
+          types, or to convert special values such as NaN or
+          Inf, produces values not consistent with other database systems. This
+          could lead to unexpected results from queries.
+
+
+
+
+IMPALA-2005: A failed CTAS does not drop the table if the insert fails
+If a CREATE TABLE AS SELECT operation successfully creates the target
+          table but an error occurs while querying the source table or copying the data, the new
+          table is left behind rather than being dropped.
+Drop the new table manually after a failed CREATE TABLE AS
+          SELECT
+
+
+
+
+
+IMPALA-2422: % escaping does not work correctly when occurs at the end in a LIKE clause
+ If the final character in the RHS argument of a LIKE operator is an
+          escaped \% character, it does not match a % final
+          character of the LHS argument.
+
+
+
+
+IMPALA-2603: Crash: impala::Coordinator::ValidateCollectionSlots
+A query could encounter a serious error if includes multiple nested levels of
+          INNER JOIN clauses involving subqueries.
+
+
+
+
+IMPALA-3094: Incorrect result due to constant evaluation in query with outer join
+
+An OUTER JOIN query could omit some expected result rows due to a
+          constant such as FALSE in another join clause. For example:
+          
+          
+          
+explain SELECT 1 FROM alltypestiny a1
+  INNER JOIN alltypesagg a2 ON a1.smallint_col = a2.year AND false
+  RIGHT JOIN alltypes a3 ON a1.year = a1.bigint_col;
++-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+
+| Explain String                                          |
++-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+
+| Estimated Per-Host Requirements: Memory=1.00KB VCores=1 |
+|                                                         |
+| 00:EMPTYSET                                             |
++-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+
+
+          
+
+
+
+
+
+IMPALA-3509: Breakpad minidumps can be very large when the thread count is high
+The size of the breakpad minidump files grows linearly with the number of threads. By
+          default, each thread adds 8 KB to the minidump size. Minidump files could consume
+          significant disk space when the daemons have a high number of threads.
+Add
+          -\-minidump_size_limit_hint_kb=size
+          to set a soft upper limit on the size of each minidump file. If the minidump file
+          would exceed that limit, Impala reduces the amount of information for each thread from
+          8 KB to 2 KB. (Full thread information is captured for the first 20 threads, then 2 KB
+          per thread after that.) The minidump file can still grow larger than the "hinted"
+          size. For example, if you have 10,000 threads, the minidump file can be more than 20
+          MB.
+        
+
+
+
+
+IMPALA-4978: Impala requires FQDN from hostname command on Kerberized clusters
+The method Impala uses to retrieve the host name while constructing the Kerberos
+          principal is the gethostname() system call. This function might not
+          always return the fully qualified domain name, depending on the network configuration.
+          If the daemons cannot determine the FQDN, Impala does not start on a Kerberized
+          cluster.
+Test if a host is affected by checking whether the output of the
+          hostname command includes the FQDN. On hosts where
+          hostname, only returns the short name, pass the command-line flag
+          ‑‑hostname=fully_qualified_domain_name
+          in the startup options of all Impala-related daemons.
+        
+
+
+
+
+IMPALA-6671: Metadata operations block read-only operations on unrelated tables
+Metadata operations that change the state of a table, like COMPUTE
+        STATS or ALTER RECOVER PARTITIONS, may delay metadata
+        propagation of unrelated unloaded tables triggered by statements like
+        DESCRIBE or SELECT queries.
+Workaround: None
+
+
+
+
+IMPALA-7072: Impala does not support Heimdal Kerberos
+
+
+
+CDPD-28139: Set spark.hadoop.hive.stats.autogather to false by default
+As an Impala user, if you submit a query against a table containing data ingested using
+        Spark and you are concerned about the quality of the query plan, you must run COMPUTE
+        STATS against such a table in any case after an ETL operation because numRows created by
+        Spark could be incorrect. Also, use other stats computed by COMPUTE STATS, e.g., Number of
+        Distinct Values (NDV) and NULL count for good selectivity estimates. 
+For example, when a user ingests data from a file into a partition of an existing table
+        using Spark, if spark.hadoop.hive.stats.autogather is not set to false explicitly, numRows
+        associated with this partition would be 0 even though there is at least one row in the
+        file. To avoid this, the workaround is to set "spark.hadoop.hive.stats.autogather=false"
+        in the "Spark Client Advanced Configuration Snippet (Safety Valve) for
+        spark-conf/spark-defaults.conf" in Spark's CM Configuration section. 
+
+
+Technical Service Bulletins
+
+
+
+TSB 2021-479: Impala can return incomplete results through
+              JDBC and ODBC clients in all CDP offerings
+In CDP, we introduced a timeout on queries to Impala defaulting to 10 seconds. The
+              timeout setting is called FETCH_ROWS_TIMEOUT_MS. Due to this setting, JDBC, ODBC, and
+              Beeswax clients running Impala queries believe the data returned at 10 seconds is a
+              complete dataset and present it as the final output. However, in cases where there are
+              still results to return after this timeout has passed, when the driver closes the
+              connection, based on the timeout, it results in a scenario where the query results are
+              incomplete.
+
+Upstream JIRA
+IMPALA-7561
+Impact
+Potential incorrect query results, due to incomplete dataset.
+Action required
+
+
+
+
+Upgrade (recommended)
+This is fixed in the newest versions of the Impala JDBC driver and the
+                        Impala ODBC driver, available at the following locations:
+
+
+Impala ODBC 2.6.12 - https://www.cloudera.com/downloads/connectors/impala/odbc/2-6-12.html
+Impala JDBC 2.6.20 - https://www.cloudera.com/downloads/connectors/impala/jdbc/2-6-20.html
+
+
+
+
+
+
+Workaround
+
+Set the property "FETCH_ROWS_TIMEOUT_MS" to 0 if you
+                          are unable to use one of the newer versions of the respective drivers
+                          listed above. This way, the client can fetch the complete set of data
+                          without any issues. Setting the timeout to 0 effectively turns the fetch
+                          call into a blocking request which will not timeout and will wait till all
+                          the results are fetched. It will wait until all the results come through
+                          and/or the network layer timeouts.
+This can be set at the Impala server level (via 
+                          
+                          Impala Daemon Query Options safety
+                              valve),
+                          or in a pool used with Admission Control, or at the
+                          session level, or at the query level.
+
+On the command line, it can be changed at the server level
+                            as follows:
+                            bin/start-impala-cluster.py
+                              --impalad_args="--default_query_options=fetch_rows_timeout_ms=0"
+To set the query option at the user session level: SET
+                            fetch_rows_timeout_ms=0;
+To set it in admission controls pools via CM:
+Click Clusters > Impala Admission Control Configuration.You will see a screen similar to the
+                              following:
+
+
+Click Edit and scroll down to
+                              Default Query Options.
+Click + and add the query option
+                              FETCH_ROWS_TIMEOUT_MS = 0
+
+In CDW, users can configure their Impala VW by the following steps:
+Click the three dots and choose the
+                              Edit option.
+Select the Impala coordinator tab within
+                              the Configurations tab.
+Select flagfile in the drop-down menu.
+Find the default_query_options key and add
+                              the following to the end of the value string:
+                              FETCH_ROWS_TIMEOUT_MS = 0.  Make sure to add a
+                              comma before adding this to the value string.
+
+
+
+Knowledge article
+For the latest update on this issue, see the corresponding Knowledge
+                        article: TSB-2021 479: Impala can return
+                            incomplete results through JDBC and ODBC clients in all CDP
+                            offerings
+
+
+
+
+
+
+
+
+
+
+TSB 2022-543: Impala query with predicate on analytic
+                function may produce incorrect results
+
+Apache Impala may produce incorrect results for a query which has all of
+                the following conditions:
+
+
+There are two or more analytic functions (for example,
+                      row_number()) in an inline view
+
+
+Some of the functions have partition-by expression while the others
+                    do not
+
+
+There is a predicate on the inline view's output expression
+                    corresponding to the analytic function
+
+
+
+
+Upstream JIRA
+IMPALA-11030
+Impact
+Incorrect results returned from certain Impala queries.
+Action required
+
+
+
+
+Preferred Solution/Upgrade
+Please contact Cloudera Support for raising a Hotfix request until a
+                        release with the fix is available.
+
+
+
+
+Workaround
+
+None
+
+Knowledge article
+For the latest update on this issue, see the corresponding Knowledge
+                        article: TSB 2022-543: Impala query with
+                            predicate on analytic function may produce incorrect results
+
+
+
+
+
+
+
+
+
+Parent topic: Known Issues In Cloudera Runtime 7.2.17

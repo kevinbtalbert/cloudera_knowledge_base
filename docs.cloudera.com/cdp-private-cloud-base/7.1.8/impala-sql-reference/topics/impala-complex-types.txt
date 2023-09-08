@@ -1,0 +1,2075 @@
+Complex typesCloudera Docs
+Complex types
+Complex types (also referred to as nested types) let you
+    represent multiple data values within a single row/column position. They differ from the
+    familiar column types such as BIGINT and STRING, known as
+      scalar types or primitive types, which represent a single data value
+    within a given row/column position. Impala supports the complex types ARRAY,
+      MAP, and STRUCT in Impala 2.3 and higher. The Hive
+      UNION type is not currently supported.Once you understand the basics of complex types, refer to the individual type topics when you
+        need to refresh your memory about syntax and examples: 
+
+ARRAY complex type
+
+
+STRUCT complex type
+
+
+MAP complex type
+
+
+Benefits of Impala complex types
+ The reasons for using Impala complex types include the following: 
+
+
+ You already have data produced by Hive or other non-Impala component that uses the
+            complex type column names. You might need to convert the underlying data to Parquet to
+            use it with Impala. 
+
+
+ Your data model originates with a non-SQL programming language or a NoSQL data
+            management system. For example, if you are representing Python data expressed as nested
+            lists, dictionaries, and tuples, those data structures correspond closely to Impala
+              ARRAY, MAP, and STRUCT types. 
+
+
+ Your analytic queries involving multiple tables could benefit from greater locality
+            during join processing. By packing more related data items within each HDFS data block,
+            complex types let join queries avoid the network overhead of the traditional Hadoop
+            shuffle or broadcast join techniques. 
+
+
+ The Impala complex type support produces result sets with all scalar values, and the
+        scalar components of complex types can be used with all SQL clauses, such as GROUP
+          BY, ORDER BY, all kinds of joins, subqueries, and inline views.
+        The ability to process complex type data entirely in SQL reduces the need to write
+        application-specific code in Java or other programming languages to deconstruct the
+        underlying data structures. 
+
+Overview of Impala complex types
+
+        
+        The ARRAY and MAP types are closely related: they
+        represent collections with arbitrary numbers of elements, where each element is the same
+        type. In contrast, STRUCT groups together a fixed number of items into a
+        single element. The parts of a STRUCT element (the fields) can
+        be of different types, and each field has a name. 
+ The elements of an ARRAY or MAP, or the fields of a
+          STRUCT, can also be other complex types. You can construct elaborate data
+        structures with up to 100 levels of nesting. For example, you can make an
+          ARRAY whose elements are STRUCTs. Within each
+          STRUCT, you can have some fields that are ARRAY,
+          MAP, or another kind of STRUCT. The Impala documentation
+        uses the terms complex and nested types interchangeably; for simplicity, it primarily uses
+        the term complex types, to encompass all the properties of these types. 
+ When visualizing your data model in familiar SQL terms, you can think of each
+          ARRAY or MAP as a miniature table, and each
+          STRUCT as a row within such a table. By default, the table represented by
+        an ARRAY has two columns, POS to represent ordering of
+        elements, and ITEM representing the value of each element. Likewise, by
+        default, the table represented by a MAP encodes key-value pairs, and
+        therefore has two columns, KEY and VALUE.
+        
+      
+ The ITEM and VALUE names are only required for the very
+        simplest kinds of ARRAY and MAP columns, ones that hold
+        only scalar values. When the elements within the ARRAY or
+          MAP are of type STRUCT rather than a scalar type, then
+        the result set contains columns with names corresponding to the STRUCT
+        fields rather than ITEM or VALUE. 
+ You write most queries that process complex type columns using familiar join syntax, even
+        though the data for both sides of the join resides in a single table. The join notation
+        brings together the scalar values from a row with the values from the complex type columns
+        for that same row. The final result set contains all scalar values, allowing you to do all
+        the familiar filtering, aggregation, ordering, and so on for the complex data entirely in
+        SQL or using business intelligence tools that issue SQL queries.
+        
+      
+ Behind the scenes, Impala ensures that the processing for each row is done efficiently on
+        a single host, without the network traffic involved in broadcast or shuffle joins. The most
+        common type of join query for tables with complex type columns is INNER
+          JOIN, which returns results only in those cases where the complex type contains
+        some elements. Therefore, most query examples in this section use either the INNER
+          JOIN clause or the equivalent comma notation. 
+note
+ Although Impala can query complex types that are present in Parquet files, Impala
+          currently cannot create new Parquet files containing complex types. Therefore, the
+          discussion and examples presume that you are working with existing Parquet data produced
+          through Hive, Spark, or some other source. See Constructing Parquet / ORC
+            files with complex columns using Hive for examples of constructing Parquet data
+          files with complex type columns. 
+ For learning purposes, you can create empty tables with complex type columns and
+          practice query syntax, even if you do not have sample data with the required structure.
+        
+
+
+Design considerations for complex types
+ When planning to use Impala complex types, and designing the Impala schema, first learn
+        how this kind of schema differs from traditional table layouts from the relational database
+        and data warehousing fields. Because you might have already encountered complex types in a
+        Hadoop context while using Hive for ETL, also learn how to write high-performance analytic
+        queries for complex type data using Impala SQL syntax. 
+
+How complex types differ from traditional data warehouse schemas
+
+ Complex types let you associate arbitrary data structures with a particular row. If
+              you are familiar with schema design for relational database management systems or data
+              warehouses, a schema with complex types has the following differences: 
+
+
+ Logically, related values can now be grouped tightly together in the same table. 
+ In traditional data warehousing, related values were typically arranged in one
+                  of two ways: 
+
+
+ Split across multiple normalized tables. Foreign key columns specified which
+                      rows from each table were associated with each other. This arrangement avoided
+                      duplicate data and therefore the data was compact, but join queries could be
+                      expensive because the related data had to be retrieved from separate
+                      locations. (In the case of distributed Hadoop queries, the joined tables might
+                      even be transmitted between different hosts in a cluster.) 
+
+
+ Flattened into a single denormalized table. Although this layout eliminated
+                      some potential performance issues by removing the need for join queries, the
+                      table typically became larger because values were repeated. The extra data
+                      volume could cause performance issues in other parts of the workflow, such as
+                      longer ETL cycles or more expensive full-table scans during queries. 
+
+
+ Complex types represent a middle ground that addresses these performance and
+                  volume concerns. By physically locating related data within the same data files,
+                  complex types increase locality and reduce the expense of join queries. By
+                  associating an arbitrary amount of data with a single row, complex types avoid the
+                  need to repeat lengthy values such as strings. Because Impala knows which complex
+                  type values are associated with each row, you can save storage by avoiding
+                  artificial foreign key values that are only used for joins. The flexibility of the
+                    STRUCT, ARRAY, and MAP types
+                  lets you model familiar constructs such as fact and dimension tables from a data
+                  warehouse, and wide tables representing sparse matrices. 
+
+
+
+
+
+Physical storage for complex types in Parquet
+
+ Physically, the scalar and complex columns in each row are located adjacent to each
+              other in the same Parquet data file, ensuring that they are processed on the same host
+              rather than being broadcast across the network when cross-referenced within a query.
+              This co-location simplifies the process of copying, converting, and backing all the
+              columns up at once. Because of the column-oriented layout of Parquet files, you can
+              still query only the scalar columns of a table without imposing the I/O penalty of
+              reading the (possibly large) values of the composite columns. 
+ Within each Parquet data file, the constituent parts of complex type columns are
+              stored in column-oriented format: 
+
+
+ Each field of a STRUCT type is stored like a column, with all
+                  the scalar values adjacent to each other and encoded, compressed, and so on using
+                  the Parquet space-saving techniques. 
+
+
+ For an ARRAY containing scalar values, all those values
+                  (represented by the ITEM pseudocolumn) are stored adjacent to
+                  each other. 
+
+
+ For a MAP, the values of the KEY pseudocolumn
+                  are stored adjacent to each other. If the VALUE pseudocolumn is a
+                  scalar type, its values are also stored adjacent to each other. 
+
+
+ If an ARRAY element, STRUCT field, or
+                    MAP
+VALUE part is another complex type, the column-oriented storage
+                  applies to the next level down (or the next level after that, and so on for deeply
+                  nested types) where the final elements, fields, or values are of scalar types.
+                
+
+
+ The numbers represented by the POS pseudocolumn of an
+                ARRAY are not physically stored in the data files. They are
+              synthesized at query time based on the order of the ARRAY elements
+              associated with each row. 
+
+
+
+File format support for Impala complex types
+
+ Currently, Impala queries support complex type data in the Parquet and ORC file
+              formats. See Using Parquet data files for details about the performance
+              benefits and physical layout of Parquet file format. 
+ Because Impala does not parse the data structures containing nested types for
+              unsupported formats such as text, Avro, SequenceFile, or RCFile, you cannot use data
+              files in these formats with Impala, even if the query does not refer to the nested
+              type columns. Also, if a table using an unsupported format originally contained nested
+              type columns, and then those columns were dropped from the table using ALTER
+                TABLE ... DROP COLUMN, any existing data files in the table still contain
+              the nested type data and Impala queries on that table will generate errors. 
+ The one exception to the preceding rule is
+                COUNT(*) queries on RCFile tables that include complex types. Such
+              queries are allowed in Impala 2.6 and higher. 
+ You can perform DDL operations for tables involving complex types in most file
+              formats other than Parquet or ORC. You cannot create tables in Impala with complex
+              types using text files. 
+ You can have a partitioned table with complex type columns that uses a format other
+              than Parquet or ORC, and use ALTER TABLE to change the file format to
+              Parquet/ORC for individual partitions. When you put Parquet/ORC files into those
+              partitions, Impala can run queries against that data as long as the query does not
+              involve any of the non-Parquet and non-ORC partitions. 
+ If you use the parquet-tools command to examine the structure of
+              a Parquet data file that includes complex types, you see that both
+                ARRAY and MAP are represented as a
+                Bag in Parquet terminology, with all fields marked
+                Optional because Impala allows any column to be nullable. 
+ Impala supports either 2-level and 3-level encoding within each Parquet data file.
+              When constructing Parquet data files outside Impala, use either encoding style but do
+              not mix 2-level and 3-level encoding within the same data file. 
+
+
+
+Choosing between complex types and normalized tables
+
+ Choosing between multiple normalized fact and dimension tables, or a single table
+              containing complex types, is an important design decision. 
+
+
+ If you are coming from a traditional database or data warehousing background,
+                  you might be familiar with how to split up data between tables. Your business
+                  intelligence tools might already be optimized for dealing with this kind of
+                  multi-table scenario through join queries. 
+
+
+ If you are pulling data from Impala into an application written in a programming
+                  language that has data structures analogous to the complex types, such as Python
+                  or Java, complex types in Impala could simplify data interchange and improve
+                  understandability and reliability of your program logic. 
+
+
+ You might already be faced with existing infrastructure or receive high volumes
+                  of data that assume one layout or the other. For example, complex types are
+                  popular with web-oriented applications, for example to keep information about an
+                  online user all in one place for convenient lookup and analysis, or to deal with
+                  sparse or constantly evolving data fields. 
+
+
+ If some parts of the data change over time while related data remains constant,
+                  using multiple normalized tables lets you replace certain parts of the data
+                  without reloading the entire data set. Conversely, if you receive related data all
+                  bundled together, such as in JSON files, using complex types can save the overhead
+                  of splitting the related items across multiple tables. 
+
+
+ From a performance perspective: 
+
+
+ In Parquet or ORC tables, Impala can skip columns that are not referenced in
+                      a query, avoiding the I/O penalty of reading the embedded data. When complex
+                      types are nested within a column, the data is physically divided at a very
+                      granular level; for example, a query referring to data nested multiple levels
+                      deep in a complex type column does not have to read all the data from that
+                      column, only the data for the relevant parts of the column type hierarchy.
+                      
+                    
+
+
+ Complex types avoid the possibility of expensive join queries when data from
+                      fact and dimension tables is processed in parallel across multiple hosts. All
+                      the information for a row containing complex types is typically to be in the
+                      same data block, and therefore does not need to be transmitted across the
+                      network when joining fields that are all part of the same row. 
+
+
+The tradeoff with complex types is that fewer rows fit in each data block.
+                      Whether it is better to have more data blocks with fewer rows, or fewer data
+                      blocks with many rows, depends on the distribution of your data and the
+                      characteristics of your query workload. If the complex columns are rarely
+                      referenced, using them might lower efficiency. If you are seeing low
+                      parallelism due to a small volume of data (relatively few data blocks) in each
+                      table partition, increasing the row size by including complex columns might
+                      produce more data blocks and thus spread the work more evenly across the
+                      cluster. See Scalability considerations for more on this advanced
+                      topic. 
+
+
+
+
+
+
+
+Differences between Impala and Hive complex types
+
+ Impala can query Parquet and ORC tables containing
+                ARRAY, STRUCT, and
+                MAP columns produced by Hive. There are some
+              differences to be aware of between the Impala SQL and Hive SQL
+              syntax for complex types, primarily for queries. 
+Impala supports a subset of the syntax that Hive supports for specifying
+                ARRAY, STRUCT, and MAP types in
+              the CREATE TABLE statements.
+ Because Impala STRUCT columns include user-specified field names,
+              you use the NAMED_STRUCT() constructor in Hive rather than the
+                STRUCT() constructor when you populate an Impala
+                STRUCT column using a Hive INSERT statement. 
+ The Hive UNION type is not currently supported in Impala. 
+ While Impala usually aims for a high degree of compatibility
+              with Hive SQL query syntax, Impala syntax differs from Hive for
+              queries involving complex types. The differences are intended to
+              provide extra flexibility for queries involving these kinds of
+              tables. 
+
+ Impala uses dot notation for referring to element names or
+                elements within complex types, and join notation for
+                cross-referencing scalar columns with the elements of complex
+                types within the same row, rather than the LATERAL
+                  VIEW clause and EXPLODE() function
+                of Hive SQL. 
+ Using join notation lets you use all the kinds of join queries with complex type
+                columns. For example, you can use a LEFT OUTER JOIN, LEFT
+                  ANTI JOIN, or LEFT SEMI JOIN query to evaluate different
+                scenarios where the complex columns do or do not contain any elements. 
+ You can include references to collection types inside subqueries and inline
+                views. For example, you can construct a FROM clause where one of
+                the tables is a subquery against a complex type column, or use a subquery
+                against a complex type column as the argument to an IN or
+                  EXISTS clause. 
+ The Impala pseudocolumn POS lets you
+                retrieve the position of elements in an array along with the
+                elements themselves, equivalent to the
+                  POSEXPLODE() function of Hive SQL. You do not
+                use index notation to retrieve a single array element in a
+                query; the join query loops through the array elements and you
+                use WHERE clauses to specify which elements to
+                return. 
+Join clauses involving complex type columns do not require an ON
+                or USING clause. Impala implicitly applies the join key so that the
+                correct array entries or map elements are associated with the correct row from the
+                table. 
+ Impala does not currently support the UNION complex type. 
+
+
+
+
+Limitations and restrictions for complex types
+
+ Complex type columns can only be used in tables or partitions with the Parquet or
+              ORC file format. 
+ Complex type columns cannot be used as partition key columns in a partitioned table. 
+ When you use complex types with the ORDER BY, GROUP
+                BY, HAVING, or WHERE clauses, you cannot
+              refer to the column name by itself. Instead, you refer to the names of the scalar
+              values within the complex type, such as the ITEM,
+                POS, KEY, or VALUE pseudocolumns,
+              or the field names from a STRUCT. 
+ The maximum depth of nesting for complex types is 100 levels. 
+
+            The maximum length of the column definition for any complex type, including declarations for any nested types,
+            is 4000 characters.
+          
+ For ideal performance and scalability, use small or medium-sized collections, where
+              all the complex columns contain at most a few hundred megabytes per row. Remember, all
+              the columns of a row are stored in the same HDFS data block, whose size in Parquet
+              files typically ranges from 256 MB to 1 GB. 
+ Including complex type columns in a table introduces some overhead that might make
+              queries that do not reference those columns somewhat slower than Impala queries
+              against tables without any complex type columns. Expect at most a 2x slowdown compared
+              to tables that do not have any complex type columns. 
+ Currently, the COMPUTE STATS statement does not collect any
+              statistics for columns containing complex types. Impala uses heuristics to construct
+              execution plans involving complex type columns. 
+ Currently, Impala built-in functions and user-defined functions cannot accept
+              complex types as parameters or produce them as function return values. (When the
+              complex type values are materialized in an Impala result set, the result set contains
+              the scalar components of the values, such as the POS or
+                ITEM for an ARRAY, the KEY or
+                VALUE for a MAP, or the fields of a
+                STRUCT; these scalar data items can be used with built-in
+              functions and UDFs as usual.) 
+
+        Impala currently cannot write new data files containing complex type columns.
+        Therefore, although the SELECT statement works for queries
+        involving complex type columns, you cannot use a statement form that writes
+        data to complex type columns, such as CREATE TABLE AS SELECT or INSERT ... SELECT.
+        To create data files containing complex type data, use the Hive INSERT statement, or another
+        ETL mechanism such as MapReduce jobs, Spark jobs, Pig, and so on.
+      
+ Currently, Impala can query complex type columns only from Parquet/ORC tables or
+              Parquet/ORC partitions within partitioned tables. Although you can use complex types
+              in tables with Avro, text, and other file formats as part of your ETL pipeline, for
+              example as intermediate tables populated through Hive, doing analytics through Impala
+              requires that the data eventually ends up in a Parquet/ORC table. The requirement for
+              Parquet/ORC data files means that you can use complex types with Impala tables hosted
+              on other kinds of file storage systems such as Isilon and Amazon S3, but you cannot
+              use Impala to query complex types from HBase tables.
+
+
+
+Using complex types in SQL
+ When using complex types through SQL in Impala, you learn the notation for <
+          > delimiters for the complex type columns in CREATE TABLE
+        statements, and how to construct join queries to unpack the scalar values nested
+        inside the complex data structures. You might need to condense a traditional RDBMS or data
+        warehouse schema into a smaller number of Parquet tables, and use Hive, Spark, Pig, or other
+        mechanism outside Impala to populate the tables with data. 
+
+Complex type syntax for DDL statements
+
+ The definition of data_type, as seen in the CREATE
+                TABLE and ALTER TABLE statements, now includes complex
+              types in addition to primitive types: 
+  primitive_type
+| array_type
+| map_type
+| struct_type
+
+ Unions are not currently supported. 
+
+Array, struct, and map column type
+              declarations are specified in the CREATE TABLE statement. You can
+              also add or change the type of complex columns through the ALTER
+                TABLE statement. 
+ Currently, Impala queries allow complex types only in tables that use the Parquet
+              format. If an Impala query encounters complex types in a table or partition using
+              another file format, the query returns a runtime error. 
+ You can use ALTER TABLE ... SET FILEFORMAT PARQUET to change the
+              file format of an existing table containing complex types to Parquet, after which
+              Impala can query it. Make sure to load Parquet files into the table after changing the
+              file format, because the ALTER TABLE ... SET FILEFORMAT statement
+              does not convert existing data to the new file format. 
+
+        Partitioned tables can contain complex type columns.
+        All the partition key columns must be scalar types.
+      
+ Because use cases for Impala complex types require that you already have Parquet/ORC
+              data files produced outside of Impala, you can use the Impala CREATE TABLE
+                LIKE PARQUET syntax to produce a table with columns that match the
+              structure of an existing Parquet file, including complex type columns for nested data
+              structures. Remember to include the STORED AS PARQUET clause in this
+              case, because even with CREATE TABLE LIKE PARQUET, the default file
+              format of the resulting table is still text. 
+You cannot use the CREATE TABLE AS SELECT syntax to create a table
+              with nested type columns because the complex columns are omitted from the result set
+              of an Impala SELECT * or SELECT
+                col_name query, and because Impala currently does not
+              support writing Parquet files with complex type columns, 
+note
+ Once you have a table set up with complex type columns, use the
+                  DESCRIBE and SHOW CREATE TABLE statements to see
+                the correct notation with < and > delimiters
+                and comma and colon separators within the complex type definitions. If you do not
+                have existing data with the same layout as the table, you can query the empty table
+                to practice with the notation for the SELECT statement. In the
+                  SELECT list, you use dot notation and pseudocolumns such as
+                  ITEM, KEY, and VALUE for
+                referring to items within the complex type columns. In the FROM
+                clause, you use join notation to construct table aliases for any referenced
+                  ARRAY and MAP columns. 
+
+ For example, when defining a table that holds contact information, you might
+              represent phone numbers differently depending on the expected layout and relationships
+              of the data, and how well you can predict those properties in advance. 
+ Here are different ways that you might represent phone numbers in a traditional
+              relational schema, with equivalent representations using complex types.
+
+Traditional relational representation of phone numbers: single table
+
+ The traditional, simplest way to represent phone numbers in a relational table
+                    is to store all contact info in a single table, with all columns having scalar
+                    types, and each potential phone number represented as a separate column. In this
+                    example, each person can only have these 3 types of phone numbers. If the person
+                    does not have a particular kind of phone number, the corresponding column is
+                      NULL for that row. 
+
+CREATE TABLE contacts_fixed_phones
+(
+    id BIGINT
+  , name STRING
+  , address STRING
+  , home_phone STRING
+  , work_phone STRING
+  , mobile_phone STRING
+) STORED AS PARQUET;
+
+
+
+
+An array of phone numbers
+
+ Using a complex type column to represent the phone numbers adds some extra
+                    flexibility. Now there could be an unlimited number of phone numbers. Because
+                    the array elements have an order but not symbolic names, you could decide in
+                    advance that phone_number[0] is the home number, [1] is the work number, [2] is
+                    the mobile number, and so on. (In subsequent examples, you will see how to
+                    create a more flexible naming scheme using other complex type variations, such
+                    as a MAP or an ARRAY where each element is a
+                      STRUCT.) 
+
+CREATE TABLE contacts_array_of_phones
+(
+    id BIGINT
+  , name STRING
+  , address STRING
+  , phone_number ARRAY < STRING >
+) STORED AS PARQUET;
+
+
+
+
+
+A map of phone numbers
+
+ Another way to represent an arbitrary set of phone numbers is with a
+                      MAP column. With a MAP, each element is
+                    associated with a key value that you specify, which could be a numeric, string,
+                    or other scalar type. This example uses a STRING key to give
+                    each phone number a name, such as 'home' or
+                      'mobile'. A query could filter the data based on the key
+                    values, or display the key values in reports. 
+
+CREATE TABLE contacts_unlimited_phones
+(
+  id BIGINT, name STRING, address STRING, phone_number MAP < STRING,STRING >
+) STORED AS PARQUET;
+
+
+
+
+
+Traditional relational representation of phone numbers: normalized tables
+
+ If you are an experienced database designer, you already know how to work
+                    around the limitations of the single-table schema from Traditional
+                      relational representation of phone numbers: single table. By
+                    normalizing the schema, with the phone numbers in their own table, you can
+                    associate an arbitrary set of phone numbers with each person, and associate
+                    additional details with each phone number, such as whether it is a home, work,
+                    or mobile phone. 
+ The flexibility of this approach comes with some drawbacks. Reconstructing all
+                    the data for a particular person requires a join query, which might require
+                    performance tuning on Hadoop because the data from each table might be
+                    transmitted from a different host. Data management tasks such as backups and
+                    refreshing the data require dealing with multiple tables instead of a single
+                    table. 
+ This example illustrates a traditional database schema to store contact info
+                    normalized across 2 tables. The fact table establishes the identity and basic
+                    information about person. A dimension table stores information only about phone
+                    numbers, using an ID value to associate each phone number with a person ID from
+                    the fact table. Each person can have 0, 1, or many phones; the categories are
+                    not restricted to a few predefined ones; and the phone table can contain as many
+                    columns as desired, to represent all sorts of details about each phone number. 
+
+CREATE TABLE fact_contacts (id BIGINT, name STRING, address STRING) STORED AS PARQUET;
+CREATE TABLE dim_phones
+(
+    contact_id BIGINT
+  , category STRING
+  , international_code STRING
+  , area_code STRING
+  , exchange STRING
+  , extension STRING
+  , mobile BOOLEAN
+  , carrier STRING
+  , current BOOLEAN
+  , service_start_date TIMESTAMP
+  , service_end_date TIMESTAMP
+)
+STORED AS PARQUET;
+
+
+
+
+Phone Numbers Represented as an Array of Structs
+
+ To represent a schema equivalent to the one from Traditional relational
+                      representation of phone numbers: normalized tables using complex types,
+                    this example uses an ARRAY where each array element is a
+                      STRUCT. As with the earlier complex type examples, each
+                    person can have an arbitrary set of associated phone numbers. Making each array
+                    element into a STRUCT lets us associate multiple data items
+                    with each phone number, and give a separate name and type to each data item. The
+                      STRUCT fields of the ARRAY elements
+                    reproduce the columns of the dimension table from the previous example. 
+ You can do all the same kinds of queries with the complex type schema as with
+                    the normalized schema from the previous example. The advantages of the complex
+                    type design are in the areas of convenience and performance. Now your backup and
+                    ETL processes only deal with a single table. When a query uses a join to
+                    cross-reference the information about a person with their associated phone
+                    numbers, all the relevant data for each row resides in the same HDFS data block,
+                    meaning each row can be processed on a single host without requiring network
+                    transmission. 
+
+CREATE TABLE contacts_detailed_phones
+(
+  id BIGINT, name STRING, address STRING
+    , phone ARRAY < STRUCT <
+        category: STRING
+      , international_code: STRING
+      , area_code: STRING
+      , exchange: STRING
+      , extension: STRING
+      , mobile: BOOLEAN
+      , carrier: STRING
+      , current: BOOLEAN
+      , service_start_date: TIMESTAMP
+      , service_end_date: TIMESTAMP
+    >>
+) STORED AS PARQUET;
+
+
+
+
+
+
+SQL statements that support complex types
+
+ The Impala SQL statements that support complex types are currently
+                CREATE_TABLE, ALTER_TABLE,
+                DESCRIBE, LOAD_DATA, and SELECT.
+              That is, currently Impala can create or alter tables containing complex type columns,
+              examine the structure of a table containing complex type columns, import existing data
+              files containing complex type columns into a table, and query Parquet/ORC tables
+              containing complex types.
+
+        Impala currently cannot write new data files containing complex type columns.
+        Therefore, although the SELECT statement works for queries
+        involving complex type columns, you cannot use a statement form that writes
+        data to complex type columns, such as CREATE TABLE AS SELECT or INSERT ... SELECT.
+        To create data files containing complex type data, use the Hive INSERT statement, or another
+        ETL mechanism such as MapReduce jobs, Spark jobs, Pig, and so on.
+      
+
+DDL statements and complex types
+
+ Column specifications for complex or nested types use <
+                    and > delimiters: 
+-- What goes inside the < > for an ARRAY is a single type, either a scalar or another
+-- complex type (ARRAY, STRUCT, or MAP).
+CREATE TABLE array_t
+(
+  id BIGINT,
+  a1 ARRAY <STRING>,
+  a2 ARRAY <BIGINT>,
+  a3 ARRAY <TIMESTAMP>,
+  a4 ARRAY <STRUCT <f1: STRING, f2: INT, f3: BOOLEAN>>
+)
+STORED AS PARQUET;
+
+-- What goes inside the < > for a MAP is two comma-separated types specifying the types of the key-value pair:
+-- a scalar type representing the key, and a scalar or complex type representing the value.
+CREATE TABLE map_t
+(
+  id BIGINT,
+  m1 MAP <STRING, STRING>,
+  m2 MAP <STRING, BIGINT>,
+  m3 MAP <BIGINT, STRING>,
+  m4 MAP <BIGINT, BIGINT>,
+  m5 MAP <STRING, ARRAY <STRING>>
+)
+STORED AS PARQUET;
+
+-- What goes inside the < > for a STRUCT is a comma-separated list of fields, each field defined as
+-- name:type. The type can be a scalar or a complex type. The field names for each STRUCT do not clash
+-- with the names of table columns or fields in other STRUCTs. A STRUCT is most often used inside
+-- an ARRAY or a MAP rather than as a top-level column.
+CREATE TABLE struct_t
+(
+  id BIGINT,
+  s1 STRUCT <f1: STRING, f2: BIGINT>,
+  s2 ARRAY <STRUCT <f1: INT, f2: TIMESTAMP>>,
+  s3 MAP <BIGINT, STRUCT <name: STRING, birthday: TIMESTAMP>>
+)
+STORED AS PARQUET;
+
+
+
+
+
+Queries and complex types
+
+ The result set of an Impala query always contains all scalar types; the
+                    elements and fields within any complex type queries must be unpacked
+                    using join queries. A query cannot directly retrieve the entire value for a
+                    complex type column. Impala returns an error in this case. Queries using
+                      SELECT * are allowed for tables with complex types, but the
+                    columns with complex types are skipped. 
+ The following example shows how referring directly to a complex type column
+                    returns an error, while SELECT * on the same table succeeds,
+                    but only retrieves the scalar columns. 
+note Many of the complex type examples refer to tables such
+        as CUSTOMER and REGION adapted from the tables used in the
+        TPC-H benchmark.
+SELECT c_orders FROM customer LIMIT 1;
+ERROR: AnalysisException: Expr 'c_orders' in select list returns a complex type 'ARRAY<STRUCT<o_orderkey:BIGINT,o_orderstatus:STRING, ... l_receiptdate:STRING,l_shipinstruct:STRING,l_shipmode:STRING,l_comment:STRING>>>>'.
+Only scalar types are allowed in the select list.
+
+-- Original column has several scalar and one complex column.
+DESCRIBE customer;
++--------------+------------------------------------+
+| name         | type                               |
++--------------+------------------------------------+
+| c_custkey    | bigint                             |
+| c_name       | string                             |
+...
+| c_orders     | array<struct<                      |
+|              |   o_orderkey:bigint,               |
+|              |   o_orderstatus:string,            |
+|              |   o_totalprice:decimal(12,2),      |
+...
+|              | >>                                 |
++--------------+------------------------------------+
+
+-- When we SELECT * from that table, only the scalar columns come back in the result set.
+CREATE TABLE select_star_customer STORED AS PARQUET AS SELECT * FROM customer;
++------------------------+
+| summary                |
++------------------------+
+| Inserted 150000 row(s) |
++------------------------+
+
+-- The c_orders column, being of complex type, was not included in the SELECT * result set.
+DESC select_star_customer;
++--------------+---------------+
+| name         | type          |
++--------------+---------------+
+| c_custkey    | bigint        |
+| c_name       | string        |
+| c_address    | string        |
+| c_nationkey  | smallint      |
+| c_phone      | string        |
+| c_acctbal    | decimal(12,2) |
+| c_mktsegment | string        |
+| c_comment    | string        |
++--------------+---------------+
+
+ References to fields within STRUCT columns use dot notation.
+                    If the field name is unambiguous, you can omit qualifiers such as table name,
+                    column name, or even the ITEM or VALUE
+                    pseudocolumn names for STRUCT elements inside an
+                      ARRAY or a MAP. 
+SELECT id, address.city FROM customers WHERE address.zip = 94305;
+
+ References to elements within ARRAY columns use the
+                      ITEM pseudocolumn: 
+select r_name, r_nations.item.n_name from region, region.r_nations limit 7;
++--------+----------------+
+| r_name | item.n_name    |
++--------+----------------+
+| EUROPE | UNITED KINGDOM |
+| EUROPE | RUSSIA         |
+| EUROPE | ROMANIA        |
+| EUROPE | GERMANY        |
+| EUROPE | FRANCE         |
+| ASIA   | VIETNAM        |
+| ASIA   | CHINA          |
++--------+----------------+
+
+ References to fields within MAP columns use the
+                      KEY and VALUE pseudocolumns. In this
+                    example, once the query establishes the alias MAP_FIELD for a
+                      MAP column with a STRING key and an
+                      INT value, the query can refer to
+                      MAP_FIELD.KEY and MAP_FIELD.VALUE, which
+                    have zero, one, or many instances for each row from the containing table. 
+DESCRIBE table_0;
++---------+-----------------------+
+| name    | type                  |
++---------+-----------------------+
+| field_0 | string                |
+| field_1 | map<string,int>       |
+...
+
+SELECT field_0, map_field.key, map_field.value
+  FROM table_0, table_0.field_1 AS map_field
+WHERE length(field_0) = 1
+LIMIT 10;
++---------+-----------+-------+
+| field_0 | key       | value |
++---------+-----------+-------+
+| b       | gshsgkvd  | NULL  |
+| b       | twrtcxj6  | 18    |
+| b       | 2vp5      | 39    |
+| b       | fh0s      | 13    |
+| v       | 2         | 41    |
+| v       | 8b58mz    | 20    |
+| v       | hw        | 16    |
+| v       | 65l388pyt | 29    |
+| v       | 03k68g91z | 30    |
+| v       | r2hlg5b   | NULL  |
++---------+-----------+-------+
+
+
+ When complex types are nested inside each other, you use a combination of
+                    joins, pseudocolumn names, and dot notation to refer to specific fields at the
+                    appropriate level. This is the most frequent form of query syntax for complex
+                    columns, because the typical use case involves two levels of complex types, such
+                    as an ARRAY of STRUCT elements. 
+SELECT id, phone_numbers.area_code FROM contact_info_many_structs INNER JOIN contact_info_many_structs.phone_numbers phone_numbers LIMIT 3;
+
+ You can express relationships between ARRAY and
+                      MAP columns at different levels as joins. You include
+                    comparison operators between fields at the top level and within the nested type
+                    columns so that Impala can do the appropriate join operation. 
+note Many of the complex type examples refer to tables such
+        as CUSTOMER and REGION adapted from the tables used in the
+        TPC-H benchmark.
+ For example, the following queries work equivalently. They each return
+                    customer and order data for customers that have at least one order. 
+SELECT c.c_name, o.o_orderkey FROM customer c, c.c_orders o LIMIT 5;
++--------------------+------------+
+| c_name             | o_orderkey |
++--------------------+------------+
+| Customer#000072578 | 558821     |
+| Customer#000072578 | 2079810    |
+| Customer#000072578 | 5768068    |
+| Customer#000072578 | 1805604    |
+| Customer#000072578 | 3436389    |
++--------------------+------------+
+
+SELECT c.c_name, o.o_orderkey FROM customer c INNER JOIN c.c_orders o LIMIT 5;
++--------------------+------------+
+| c_name             | o_orderkey |
++--------------------+------------+
+| Customer#000072578 | 558821     |
+| Customer#000072578 | 2079810    |
+| Customer#000072578 | 5768068    |
+| Customer#000072578 | 1805604    |
+| Customer#000072578 | 3436389    |
++--------------------+------------+
+
+ The following query using an outer join returns customers that have orders,
+                    plus customers with no orders (no entries in the C_ORDERS
+                    array): 
+SELECT c.c_custkey, o.o_orderkey
+  FROM customer c LEFT OUTER JOIN c.c_orders o
+LIMIT 5;
++-----------+------------+
+| c_custkey | o_orderkey |
++-----------+------------+
+| 60210     | NULL       |
+| 147873    | NULL       |
+| 72578     | 558821     |
+| 72578     | 2079810    |
+| 72578     | 5768068    |
++-----------+------------+
+
+ The following query returns only customers that have no orders. (With
+                      LEFT ANTI JOIN or LEFT SEMI JOIN, the query
+                    can only refer to columns from the left-hand table, because by definition there
+                    is no matching information in the right-hand table.) 
+SELECT c.c_custkey, c.c_name
+  FROM customer c LEFT ANTI JOIN c.c_orders o
+LIMIT 5;
++-----------+--------------------+
+| c_custkey | c_name             |
++-----------+--------------------+
+| 60210     | Customer#000060210 |
+| 147873    | Customer#000147873 |
+| 141576    | Customer#000141576 |
+| 85365     | Customer#000085365 |
+| 70998     | Customer#000070998 |
++-----------+--------------------+
+
+ You can also perform correlated subqueries to examine the properties of
+                    complex type columns for each row in the result set. 
+ Count the number of orders per customer. Note the correlated reference to the
+                    table alias C. The COUNT(*) operation applies
+                    to all the elements of the C_ORDERS array for the corresponding
+                    row, avoiding the need for a GROUP BY clause. 
+select c_name, howmany FROM customer c, (SELECT COUNT(*) howmany FROM c.c_orders) v limit 5;
++--------------------+---------+
+| c_name             | howmany |
++--------------------+---------+
+| Customer#000030065 | 15      |
+| Customer#000065455 | 18      |
+| Customer#000113644 | 21      |
+| Customer#000111078 | 0       |
+| Customer#000024621 | 0       |
++--------------------+---------+
+
+ Count the number of orders per customer, ignoring any customers that have not
+                    placed any orders: 
+SELECT c_name, howmany_orders
+FROM
+  customer c,
+  (SELECT COUNT(*) howmany_orders FROM c.c_orders) subq1
+WHERE howmany_orders > 0
+LIMIT 5;
++--------------------+----------------+
+| c_name             | howmany_orders |
++--------------------+----------------+
+| Customer#000072578 | 7              |
+| Customer#000046378 | 26             |
+| Customer#000069815 | 11             |
+| Customer#000079058 | 12             |
+| Customer#000092239 | 26             |
++--------------------+----------------+
+
+ Count the number of line items in each order. The reference to
+                      C.C_ORDERS in the FROM clause is needed
+                    because the O_ORDERKEY field is a member of the elements in the
+                      C_ORDERS array. The subquery labelled SUBQ1
+                    is correlated: it is re-evaluated for the C_ORDERS.O_LINEITEMS
+                    array from each row of the CUSTOMERS table. 
+SELECT c_name, o_orderkey, howmany_line_items
+FROM
+  customer c,
+  c.c_orders t2,
+  (SELECT COUNT(*) howmany_line_items FROM c.c_orders.o_lineitems) subq1
+WHERE howmany_line_items > 0
+LIMIT 5;
++--------------------+------------+--------------------+
+| c_name             | o_orderkey | howmany_line_items |
++--------------------+------------+--------------------+
+| Customer#000020890 | 1884930    | 95                 |
+| Customer#000020890 | 4570754    | 95                 |
+| Customer#000020890 | 3771072    | 95                 |
+| Customer#000020890 | 2555489    | 95                 |
+| Customer#000020890 | 919171     | 95                 |
++--------------------+------------+--------------------+
+
+ Get the number of orders, the average order price, and the maximum items in
+                    any order per customer. For this example, the subqueries labelled
+                      SUBQ1 and SUBQ2 are correlated: they are
+                    re-evaluated for each row from the original CUSTOMER table, and
+                    only apply to the complex columns associated with that row. 
+SELECT c_name, howmany, average_price, most_items
+FROM
+  customer c,
+  (SELECT COUNT(*) howmany, AVG(o_totalprice) average_price FROM c.c_orders) subq1,
+  (SELECT MAX(l_quantity) most_items FROM c.c_orders.o_lineitems ) subq2
+LIMIT 5;
++--------------------+---------+---------------+------------+
+| c_name             | howmany | average_price | most_items |
++--------------------+---------+---------------+------------+
+| Customer#000030065 | 15      | 128908.34     | 50.00      |
+| Customer#000088191 | 0       | NULL          | NULL       |
+| Customer#000101555 | 10      | 164250.31     | 50.00      |
+| Customer#000022092 | 0       | NULL          | NULL       |
+| Customer#000036277 | 27      | 166040.06     | 50.00      |
++--------------------+---------+---------------+------------+
+
+ For example, these queries show how to access information about the
+                      ARRAY elements within the CUSTOMER table
+                    from the nested TPC-H schema, starting with the initial
+                      ARRAY elements and progressing to examine the
+                      STRUCT fields of the ARRAY, and then the
+                    elements nested within another ARRAY of
+                    STRUCT: 
+-- How many orders does each customer have?
+-- The type of the ARRAY column doesn't matter, this is just counting the elements.
+SELECT c_custkey, count(*)
+  FROM customer, customer.c_orders
+GROUP BY c_custkey
+LIMIT 5;
++-----------+----------+
+| c_custkey | count(*) |
++-----------+----------+
+| 61081     | 21       |
+| 115987    | 15       |
+| 69685     | 19       |
+| 109124    | 15       |
+| 50491     | 12       |
++-----------+----------+
+
+-- How many line items are part of each customer order?
+-- Now we examine a field from a STRUCT nested inside the ARRAY.
+SELECT c_custkey, c_orders.o_orderkey, count(*)
+  FROM customer, customer.c_orders c_orders, c_orders.o_lineitems
+GROUP BY c_custkey, c_orders.o_orderkey
+LIMIT 5;
++-----------+------------+----------+
+| c_custkey | o_orderkey | count(*) |
++-----------+------------+----------+
+| 63367     | 4985959    | 7        |
+| 53989     | 1972230    | 2        |
+| 143513    | 5750498    | 5        |
+| 17849     | 4857989    | 1        |
+| 89881     | 1046437    | 1        |
++-----------+------------+----------+
+
+-- What are the line items in each customer order?
+-- One of the STRUCT fields inside the ARRAY is another
+-- ARRAY containing STRUCT elements. The join finds
+-- all the related items from both levels of ARRAY.
+SELECT c_custkey, o_orderkey, l_partkey
+  FROM customer, customer.c_orders, c_orders.o_lineitems
+LIMIT 5;
++-----------+------------+-----------+
+| c_custkey | o_orderkey | l_partkey |
++-----------+------------+-----------+
+| 113644    | 2738497    | 175846    |
+| 113644    | 2738497    | 27309     |
+| 113644    | 2738497    | 175873    |
+| 113644    | 2738497    | 88559     |
+| 113644    | 2738497    | 8032      |
++-----------+------------+-----------+
+
+
+
+
+
+
+Pseudocolumns for ARRAY and MAP types
+
+ Each element in an ARRAY type has a position, indexed starting from
+              zero, and a value. Each element in a MAP type represents a key-value
+              pair. Impala provides pseudocolumns that let you retrieve this metadata as part of a
+              query, or filter query results by including such things in a WHERE
+              clause. You refer to the pseudocolumns as part of qualified column names in queries: 
+
+
+ITEM: The value of an array element. If the ARRAY
+                contains STRUCT elements, you can refer to either
+                    array_name.ITEM.field_name
+                or use the shorthand
+                    array_name.field_name. 
+
+POS: The position of an element within an array. 
+
+KEY: The value forming the first part of a key-value pair in a map.
+                It is not necessarily unique. 
+
+VALUE: The data item forming the second part of a key-value pair in
+                a map. If the VALUE part of the MAP element is a
+                  STRUCT, you can refer to either
+                    map_name.VALUE.field_name
+                or use the shorthand
+                    map_name.field_name.
+              
+
+
+ITEM and POS pseudocolumns
+
+ When an ARRAY column contains STRUCT
+                    elements, you can refer to a field within the STRUCT using a
+                    qualified name of the form
+                        array_column.field_name.
+                    If the ARRAY contains scalar values, Impala recognizes the
+                    special name array_column.ITEM to represent
+                    the value of each scalar array element. For example, if a column contained an
+                      ARRAY where each element was a STRING, you
+                    would use array_name.ITEM to refer to each
+                    scalar value in the SELECT list, or the WHERE
+                    or other clauses. 
+ This example shows a table with two ARRAY columns whose
+                    elements are of the scalar type STRING. When referring to the
+                    values of the array elements in the SELECT list,
+                      WHERE clause, or ORDER BY clause, you use
+                    the ITEM pseudocolumn because within the array, the individual
+                    elements have no defined names. 
+create TABLE persons_of_interest
+(
+person_id BIGINT,
+aliases ARRAY <STRING>,
+associates ARRAY <STRING>,
+real_name STRING
+)
+STORED AS PARQUET;
+
+-- Get all the aliases of each person.
+SELECT real_name, aliases.ITEM
+  FROM persons_of_interest, persons_of_interest.aliases
+ORDER BY real_name, aliases.item;
+
+-- Search for particular associates of each person.
+SELECT real_name, associates.ITEM
+  FROM persons_of_interest, persons_of_interest.associates
+WHERE associates.item LIKE '% MacGuffin';
+
+ Because an array is inherently an ordered data structure, Impala recognizes
+                    the special name array_column.POS to
+                    represent the numeric position of each element within the array. The
+                      POS pseudocolumn lets you filter or reorder the result set
+                    based on the sequence of array elements. 
+ The following example uses a table from a flattened version of the TPC-H
+                    schema. The REGION table only has a few rows, such as one row
+                    for Europe and one for Asia. The row for each region represents all the
+                    countries in that region as an ARRAY of STRUCT
+                    elements: 
+[localhost:21000] > desc region;
++-------------+--------------------------------------------------------------------+
+| name        | type                                                               |
++-------------+--------------------------------------------------------------------+
+| r_regionkey | smallint                                                           |
+| r_name      | string                                                             |
+| r_comment   | string                                                             |
+| r_nations   | array<struct<n_nationkey:smallint,n_name:string,n_comment:string>> |
++-------------+--------------------------------------------------------------------+
+
+ To find the countries within a specific region, you use a join query. To find
+                    out the order of elements in the array, you also refer to the
+                      POS pseudocolumn in the select list: 
+[localhost:21000] > SELECT r1.r_name, r2.n_name, r2.POS
+                  > FROM region r1 INNER JOIN r1.r_nations r2
+                  > WHERE r1.r_name = 'ASIA';
++--------+-----------+-----+
+| r_name | n_name    | pos |
++--------+-----------+-----+
+| ASIA   | VIETNAM   | 0   |
+| ASIA   | CHINA     | 1   |
+| ASIA   | JAPAN     | 2   |
+| ASIA   | INDONESIA | 3   |
+| ASIA   | INDIA     | 4   |
++--------+-----------+-----+
+
+ Once you know the positions of the elements, you can use that information in
+                    subsequent queries, for example to change the ordering of results from the
+                    complex type column or to filter certain elements from the array: 
+[localhost:21000] > SELECT r1.r_name, r2.n_name, r2.POS
+                  > FROM region r1 INNER JOIN r1.r_nations r2
+                  > WHERE r1.r_name = 'ASIA'
+                  > ORDER BY r2.POS DESC;
++--------+-----------+-----+
+| r_name | n_name    | pos |
++--------+-----------+-----+
+| ASIA   | INDIA     | 4   |
+| ASIA   | INDONESIA | 3   |
+| ASIA   | JAPAN     | 2   |
+| ASIA   | CHINA     | 1   |
+| ASIA   | VIETNAM   | 0   |
++--------+-----------+-----+
+[localhost:21000] > SELECT r1.r_name, r2.n_name, r2.POS
+                  > FROM region r1 INNER JOIN r1.r_nations r2
+                  > WHERE r1.r_name = 'ASIA' AND r2.POS BETWEEN 1 and 3;
++--------+-----------+-----+
+| r_name | n_name    | pos |
++--------+-----------+-----+
+| ASIA   | CHINA     | 1   |
+| ASIA   | JAPAN     | 2   |
+| ASIA   | INDONESIA | 3   |
++--------+-----------+-----+
+
+
+
+
+KEY and VALUE pseudocolumns
+
+ The MAP data type is suitable for representing sparse or wide
+                    data structures, where each row might only have entries for a small subset of
+                    named fields. Because the element names (the map keys) vary depending on the
+                    row, a query must be able to refer to both the key and the value parts of each
+                    key-value pair. The KEY and VALUE
+                    pseudocolumns let you refer to the parts of the key-value pair independently
+                    within the query, as map_column.KEY and
+                        map_column.VALUE. 
+ The KEY must always be a scalar type, such as
+                      STRING, BIGINT, or
+                      TIMESTAMP. It can be NULL. Values of the
+                      KEY field are not necessarily unique within the same
+                      MAP. You apply any required DISTINCT,
+                      GROUP BY, and other clauses in the query, and loop through
+                    the result set to process all the values matching any specified keys. 
+ The VALUE can be either a scalar type or another complex
+                    type. If the VALUE is a STRUCT, you can
+                    construct a qualified name
+                        map_column.VALUE.struct_field
+                    to refer to the individual fields inside the value part. If the
+                      VALUE is an ARRAY or another
+                      MAP, you must include another join condition that establishes
+                    a table alias for map_column.VALUE, and then
+                    construct another qualified name using that alias, for example
+                        table_alias.ITEM or
+                        table_alias.KEY and
+                        table_alias.VALUE
+
+ The following example shows different ways to access a MAP
+                    column using the KEY and VALUE pseudocolumns.
+                    The DETAILS column has a STRING first part
+                    with short, standardized values such as 'Recurring',
+                      'Lucid', or 'Anxiety'. This is the
+                      key that is used to look up particular kinds of elements from the
+                      MAP. The second part, also a STRING, is a
+                    longer free-form explanation. Impala gives you the standard pseudocolumn names
+                      KEY and VALUE for the two parts, and you
+                    apply your own conventions and interpretations to the underlying values. 
+note If you find that the single-item nature of the VALUE makes
+                    it difficult to model your data accurately, the solution is typically to add
+                    some nesting to the complex type. For example, to have several sets of key-value
+                    pairs, make the column an ARRAY whose elements are
+                      MAP. To make a set of key-value pairs that holds more
+                    elaborate information, make a MAP column whose
+                      VALUE part contains an ARRAY or a
+                      STRUCT. 
+CREATE TABLE dream_journal
+(
+  dream_id BIGINT,
+  details MAP <STRING,STRING>
+)
+STORED AS PARQUET;
+
+
+-- What are all the types of dreams that are recorded?
+SELECT DISTINCT details.KEY FROM dream_journal, dream_journal.details;
+
+-- How many lucid dreams were recorded?
+-- Because there is no GROUP BY, we count the 'Lucid' keys across all rows.
+SELECT COUNT(details.KEY)
+  FROM dream_journal, dream_journal.details
+WHERE details.KEY = 'Lucid';
+
+-- Print a report of a subset of dreams, filtering based on both the lookup key
+-- and the detailed value.
+SELECT dream_id, details.KEY AS "Dream Type", details.VALUE AS "Dream Summary"
+  FROM dream_journal, dream_journal.details
+WHERE
+  details.KEY IN ('Happy', 'Pleasant', 'Joyous')
+  AND details.VALUE LIKE '%childhood%';
+
+ The following example shows a more elaborate version of the previous table,
+                    where the VALUE part of the MAP entry is a
+                      STRUCT rather than a scalar type. Now instead of referring to
+                    the VALUE pseudocolumn directly, you use dot notation to refer
+                    to the STRUCT fields inside it. 
+CREATE TABLE better_dream_journal
+(
+  dream_id BIGINT,
+  details MAP <STRING,STRUCT <summary: STRING, when_happened: TIMESTAMP, duration: DECIMAL(5,2), woke_up: BOOLEAN> >
+)
+STORED AS PARQUET;
+
+
+-- Do more elaborate reporting and filtering by examining multiple attributes within the same dream.
+SELECT dream_id, details.KEY AS "Dream Type", details.VALUE.summary AS "Dream Summary", details.VALUE.duration AS "Duration"
+  FROM better_dream_journal, better_dream_journal.details
+WHERE
+  details.KEY IN ('Anxiety', 'Nightmare')
+  AND details.VALUE.duration > 60
+  AND details.VALUE.woke_up = TRUE;
+
+-- Remember that if the ITEM or VALUE contains a STRUCT, you can reference
+-- the STRUCT fields directly without the .ITEM or .VALUE qualifier.
+SELECT dream_id, details.KEY AS "Dream Type", details.summary AS "Dream Summary", details.duration AS "Duration"
+  FROM better_dream_journal, better_dream_journal.details
+WHERE
+  details.KEY IN ('Anxiety', 'Nightmare')
+  AND details.duration > 60
+  AND details.woke_up = TRUE;
+
+
+
+
+
+
+Loading data containing complex types
+
+ Because the Impala INSERT statement does not currently support
+              creating new data with complex type columns, or copying existing complex type values
+              from one table to another, you primarily use Impala to query Parquet/ORC tables with
+              complex types where the data was inserted through Hive, or create tables with complex
+              types where you already have existing Parquet/ORC data files. 
+ Because the Impala INSERT statement does not currently support
+              creating new data with complex type columns, or copying existing complex type values
+              from one table to another, you primarily use Impala to query Parquet/ORC tables with
+              complex types where the data was inserted through Hive, or create tables with complex
+              types where you already have existing Parquet/ORC data files. 
+ If you have existing Parquet data files containing complex types, located outside of
+              any Impala or Hive table, such as data files created by Spark jobs, you can use an
+              Impala CREATE TABLE ... STORED AS PARQUET statement, followed by an
+              Impala LOAD DATA statement to move the data files into the table. As
+              an alternative, you can use an Impala CREATE EXTERNAL TABLE statement
+              to create a table pointing to the HDFS directory that already contains the Parquet or
+              ORC data files.
+The simplest way to get started with complex type data is to take a denormalized
+              table containing duplicated values, and use an INSERT ... SELECT
+              statement to copy the data into a Parquet table and condense the repeated values into
+              complex types. With the Hive INSERT statement, you use the
+                COLLECT_LIST(), NAMED_STRUCT(), and
+                MAP() constructor functions within a GROUP BY
+              query to produce the complex type values. COLLECT_LIST() turns a
+              sequence of values into an ARRAY. NAMED_STRUCT()
+              uses the first, third, and so on arguments as the field names for a
+                STRUCT, to match the field names from the CREATE
+                TABLE statement. 
+note Because Hive currently cannot construct individual rows using complex types
+              through the INSERT ... VALUES syntax, you prepare the data in flat
+              form in a separate table, then copy it to the table with complex columns using
+                INSERT ... SELECT and the complex type constructors.
+
+
+
+Using complex types as nested types
+
+ The ARRAY, STRUCT, and MAP types
+              can be the top-level types for nested type columns. That is, each of these
+              types can contain other complex or scalar types, with multiple levels of nesting to a
+              maximum depth of 100. For example, you can have an array of structures, a map
+              containing other maps, a structure containing an array of other structures, and so on.
+              At the lowest level, there are always scalar types making up the fields of a
+                STRUCT, elements of an ARRAY, and keys and values
+              of a MAP. 
+ Schemas involving complex types typically use some level of nesting for the complex
+              type columns. 
+ For example, to model a relationship like a dimension table and a fact table, you
+              typically use an ARRAY where each array element is a
+                STRUCT. The STRUCT fields represent what would
+              traditionally be columns in a separate joined table. It makes little sense to use a
+                STRUCT as the top-level type for a column, because you could just
+              make the fields of the STRUCT into regular table columns. 
+ Perhaps the only use case for a top-level STRUCT would be to to
+              allow STRUCT fields with the same name as columns to coexist in the
+              same table. The following example shows how a table could have a column named
+                ID, and two separate STRUCT fields also named
+                ID. Because the STRUCT fields are always
+              referenced using qualified names, the identical ID names do not cause
+              a conflict. 
+CREATE TABLE struct_namespaces
+(
+  id BIGINT
+  , s1 STRUCT < id: BIGINT, field1: STRING >
+  , s2 STRUCT < id: BIGINT, when_happened: TIMESTAMP >
+)
+STORED AS PARQUET;
+
+select id, s1.id, s2.id from struct_namespaces;
+
+ It is common to make the value portion of each key-value pair in a
+                MAP a STRUCT, ARRAY of
+                STRUCT, or other complex type variation. That way, each key in the
+                MAP can be associated with a flexible and extensible data
+              structure. The key values are not predefined ahead of time (other than by specifying
+              their data type). Therefore, the MAP can accommodate a rapidly
+              evolving schema, or sparse data structures where each row contains only a few data
+              values drawn from a large set of possible choices. 
+ Although you can use an ARRAY of scalar values as the top-level
+              column in a table, such a simple array is typically of limited use for analytic
+              queries. The only property of the array elements, aside from the element value, is the
+              ordering sequence available through the POS pseudocolumn. To record
+              any additional item about each array element, such as a TIMESTAMP or
+              a symbolic name, you use an ARRAY of STRUCT rather
+              than of scalar values. 
+ If you are considering having multiple ARRAY or
+                MAP columns, with related items under the same position in each
+                ARRAY or the same key in each MAP, prefer to use a
+                STRUCT to group all the related items into a single
+                ARRAY or MAP. Doing so avoids the additional
+              storage overhead and potential duplication of key values from having an extra complex
+              type column. Also, because each ARRAY or MAP that
+              you reference in the query SELECT list requires an additional join
+              clause, minimizing the number of complex type columns also makes the query easier to
+              read and maintain, relying more on dot notation to refer to the relevant fields rather
+              than a sequence of join clauses. 
+ For example, here is a table with several complex type columns all at the top level
+              and containing only scalar types. To retrieve every data item for the row requires a
+              separate join for each ARRAY or MAP column. The
+              fields of the STRUCT can be referenced using dot notation, but there
+              is no real advantage to using the STRUCT at the top level rather than
+              just making separate columns FIELD1 and FIELD2. 
+CREATE TABLE complex_types_top_level
+(
+  id BIGINT,
+  a1 ARRAY<INT>,
+  a2 ARRAY<STRING>,
+  s STRUCT<field1: INT, field2: STRING>,
+-- Numeric lookup key for a string value.
+  m1 MAP<INT,STRING>,
+-- String lookup key for a numeric value.
+  m2 MAP<STRING,INT>
+)
+STORED AS PARQUET;
+
+describe complex_types_top_level;
++------+-----------------+
+| name | type            |
++------+-----------------+
+| id   | bigint          |
+| a1   | array<int>      |
+| a2   | array<string>   |
+| s    | struct<         |
+|      |   field1:int,   |
+|      |   field2:string |
+|      | >               |
+| m1   | map<int,string> |
+| m2   | map<string,int> |
++------+-----------------+
+
+select
+  id,
+  a1.item,
+  a2.item,
+  s.field1,
+  s.field2,
+  m1.key,
+  m1.value,
+  m2.key,
+  m2.value
+from
+  complex_types_top_level,
+  complex_types_top_level.a1,
+  complex_types_top_level.a2,
+  complex_types_top_level.m1,
+  complex_types_top_level.m2;
+
+ For example, here is a table with columns containing an ARRAY of
+                STRUCT, a MAP where each key value is a
+                STRUCT, and a MAP where each key value is an
+                ARRAY of STRUCT. 
+CREATE TABLE nesting_demo
+(
+  user_id BIGINT,
+  family_members ARRAY < STRUCT < name: STRING, email: STRING, date_joined: TIMESTAMP >>,
+  foo map < STRING, STRUCT < f1: INT, f2: INT, f3: TIMESTAMP, f4: BOOLEAN >>,
+  gameplay MAP < STRING , ARRAY < STRUCT <
+    name: STRING, highest: BIGINT, lives_used: INT, total_spent: DECIMAL(16,2)
+  >>>
+)
+STORED AS PARQUET;
+
+ The DESCRIBE statement rearranges the < and
+                > separators and the field names within each
+                STRUCT for easy readability: 
+DESCRIBE nesting_demo;
++----------------+-----------------------------+
+| name           | type                        |
++----------------+-----------------------------+
+| user_id        | bigint                      |
+| family_members | array<struct<               |
+|                |   name:string,              |
+|                |   email:string,             |
+|                |   date_joined:timestamp     |
+|                | >>                          |
+| foo            | map<string,struct<          |
+|                |   f1:int,                   |
+|                |   f2:int,                   |
+|                |   f3:timestamp,             |
+|                |   f4:boolean                |
+|                | >>                          |
+| gameplay       | map<string,array<struct<    |
+|                |   name:string,              |
+|                |   highest:bigint,           |
+|                |   lives_used:int,           |
+|                |   total_spent:decimal(16,2) |
+|                | >>>                         |
++----------------+-----------------------------+
+
+ To query the complex type columns, you use join notation to refer to the
+              lowest-level scalar values. If the value is an ARRAY element, the
+              fully qualified name includes the ITEM pseudocolumn. If the value is
+              inside a MAP, the fully qualified name includes the
+                KEY or VALUE pseudocolumn. Each reference to a
+              different ARRAY or MAP (even if nested inside
+              another complex type) requires an additional join clause. 
+SELECT
+-- The lone scalar field doesn't require any dot notation or join clauses.
+    user_id
+-- Retrieve the fields of a STRUCT inside an ARRAY.
+-- The FAMILY_MEMBERS name refers to the FAMILY_MEMBERS table alias defined later in the FROM clause.
+  , family_members.item.name
+  , family_members.item.email
+  , family_members.item.date_joined
+-- Retrieve the KEY and VALUE fields of a MAP, with the value being a STRUCT consisting of more fields.
+-- The FOO name refers to the FOO table alias defined later in the FROM clause.
+  , foo.key
+  , foo.value.f1
+  , foo.value.f2
+  , foo.value.f3
+  , foo.value.f4
+-- Retrieve the KEY fields of a MAP, and expand the VALUE part into ARRAY items consisting of STRUCT fields.
+-- The GAMEPLAY name refers to the GAMEPLAY table alias defined later in the FROM clause (referring to the MAP item).
+-- The GAME_N name refers to the GAME_N table alias defined later in the FROM clause (referring to the ARRAY
+-- inside the MAP item's VALUE part.)
+  , gameplay.key
+  , game_n.name
+  , game_n.highest
+  , game_n.lives_used
+  , game_n.total_spent
+FROM
+    nesting_demo
+  , nesting_demo.family_members AS family_members
+  , nesting_demo.foo AS foo
+  , nesting_demo.gameplay AS gameplay
+  , nesting_demo.gameplay.value AS game_n;
+
+ Once you understand the notation to refer to a particular data item in the
+                SELECT list, you can use the same qualified name to refer to that
+              data item in other parts of the query, such as the WHERE clause,
+                ORDER BY or GROUP BY clauses, or calls to built-in
+              functions. For example, you might frequently retrieve the VALUE part
+              of each MAP item in the SELECT list, while choosing
+              the specific MAP items by running comparisons against the
+                KEY part in the WHERE clause. 
+
+
+
+Accessing complex type data in flattened form using views
+
+ The layout of complex and nested types is largely a physical consideration. The
+              complex type columns reside in the same data files rather than in separate normalized
+              tables, for your convenience in managing related data sets and performance in querying
+              related data sets. You can use views to treat tables with complex types as if they
+              were flattened. By putting the join logic and references to the complex type columns
+              in the view definition, you can query the same tables using existing queries intended
+              for tables containing only scalar columns. This technique also lets you use tables
+              with complex types with BI tools that are not aware of the data types and query
+              notation for accessing complex type columns. 
+ For example, the variation of the TPC-H schema containing complex types has a table
+                REGION. This table has 5 rows, corresponding to 5 regions such as
+                NORTH AMERICA and AFRICA. Each row has an
+                ARRAY column, where each array item is a STRUCT
+              containing details about a country in that region. 
+DESCRIBE region;
++-------------+-------------------------+
+| name        | type                    |
++-------------+-------------------------+
+| r_regionkey | smallint                |
+| r_name      | string                  |
+| r_comment   | string                  |
+| r_nations   | array<struct<           |
+|             |   n_nationkey:smallint, |
+|             |   n_name:string,        |
+|             |   n_comment:string      |
+|             | >>                      |
++-------------+-------------------------+
+
+ The same data could be represented in traditional denormalized form, as a single
+              table where the information about each region is repeated over and over, alongside the
+              information about each country. The nested complex types let us avoid the repetition,
+              while still keeping the data in a single table rather than normalizing across multiple
+              tables. 
+ To use this table with a JDBC or ODBC application that expected scalar columns, we
+              could create a view that represented the result set as a set of scalar columns (three
+              columns from the original table, plus three more from the STRUCT
+              fields of the array elements). In the following examples, any column with an
+                R_* prefix is taken unchanged from the original table, while any
+              column with an N_* prefix is extracted from the
+                STRUCT inside the ARRAY. 
+CREATE VIEW region_view AS
+  SELECT
+    r_regionkey,
+    r_name,
+    r_comment,
+    array_field.item.n_nationkey AS n_nationkey,
+    array_field.item.n_name AS n_name,
+    array_field.n_comment AS n_comment
+FROM
+  region, region.r_nations AS array_field;
+
+ Then we point the application queries at the view rather than the original table.
+              From the perspective of the view, there are 25 rows in the result set, one for each
+              nation in each region, and queries can refer freely to fields related to the region or
+              the nation. 
+-- Retrieve info such as the nation name from the original R_NATIONS array elements.
+select n_name from region_view where r_name in ('EUROPE', 'ASIA');
++----------------+
+| n_name         |
++----------------+
+| UNITED KINGDOM |
+| RUSSIA         |
+| ROMANIA        |
+| GERMANY        |
+| FRANCE         |
+| VIETNAM        |
+| CHINA          |
+| JAPAN          |
+| INDONESIA      |
+| INDIA          |
++----------------+
+
+-- UNITED STATES in AMERICA and UNITED KINGDOM in EUROPE.
+SELECT DISTINCT r_name FROM region_view WHERE n_name LIKE 'UNITED%';
++---------+
+| r_name  |
++---------+
+| AMERICA |
+| EUROPE  |
++---------+
+
+-- For conciseness, we only list some view columns in the SELECT list.
+-- SELECT * would bring back all the data, unlike SELECT *
+-- queries on the original table with complex type columns.
+SELECT r_regionkey, r_name, n_nationkey, n_name FROM region_view LIMIT 7;
++-------------+--------+-------------+----------------+
+| r_regionkey | r_name | n_nationkey | n_name         |
++-------------+--------+-------------+----------------+
+| 3           | EUROPE | 23          | UNITED KINGDOM |
+| 3           | EUROPE | 22          | RUSSIA         |
+| 3           | EUROPE | 19          | ROMANIA        |
+| 3           | EUROPE | 7           | GERMANY        |
+| 3           | EUROPE | 6           | FRANCE         |
+| 2           | ASIA   | 21          | VIETNAM        |
+| 2           | ASIA   | 18          | CHINA          |
++-------------+--------+-------------+----------------+
+
+
+
+
+Tutorials and examples for complex types
+The following examples illustrate the query syntax for some common use cases involving
+        complex type columns:
+
+Sample schema and data for experimenting with Impala complex types
+
+ The tables used for earlier examples of complex type syntax are trivial ones with no
+              actual data. The more substantial examples of the complex type feature use these
+              tables, adapted from the schema used for TPC-H testing: 
+SHOW TABLES;
++----------+
+| name     |
++----------+
+| customer |
+| part     |
+| region   |
+| supplier |
++----------+
+
+DESCRIBE customer;
++--------------+------------------------------------+
+| name         | type                               |
++--------------+------------------------------------+
+| c_custkey    | bigint                             |
+| c_name       | string                             |
+| c_address    | string                             |
+| c_nationkey  | smallint                           |
+| c_phone      | string                             |
+| c_acctbal    | decimal(12,2)                      |
+| c_mktsegment | string                             |
+| c_comment    | string                             |
+| c_orders     | array<struct<                      |
+|              |   o_orderkey:bigint,               |
+|              |   o_orderstatus:string,            |
+|              |   o_totalprice:decimal(12,2),      |
+|              |   o_orderdate:string,              |
+|              |   o_orderpriority:string,          |
+|              |   o_clerk:string,                  |
+|              |   o_shippriority:int,              |
+|              |   o_comment:string,                |
+|              |   o_lineitems:array<struct<        |
+|              |     l_partkey:bigint,              |
+|              |     l_suppkey:bigint,              |
+|              |     l_linenumber:int,              |
+|              |     l_quantity:decimal(12,2),      |
+|              |     l_extendedprice:decimal(12,2), |
+|              |     l_discount:decimal(12,2),      |
+|              |     l_tax:decimal(12,2),           |
+|              |     l_returnflag:string,           |
+|              |     l_linestatus:string,           |
+|              |     l_shipdate:string,             |
+|              |     l_commitdate:string,           |
+|              |     l_receiptdate:string,          |
+|              |     l_shipinstruct:string,         |
+|              |     l_shipmode:string,             |
+|              |     l_comment:string               |
+|              |   >>                               |
+|              | >>                                 |
++--------------+------------------------------------+
+
+DESCRIBE part;
++---------------+---------------+
+| name          | type          |
++---------------+---------------+
+| p_partkey     | bigint        |
+| p_name        | string        |
+| p_mfgr        | string        |
+| p_brand       | string        |
+| p_type        | string        |
+| p_size        | int           |
+| p_container   | string        |
+| p_retailprice | decimal(12,2) |
+| p_comment     | string        |
++---------------+---------------+
+
+DESCRIBE region;
++-------------+--------------------------------------------------------------------+
+| name        | type                                                               |
++-------------+--------------------------------------------------------------------+
+| r_regionkey | smallint                                                           |
+| r_name      | string                                                             |
+| r_comment   | string                                                             |
+| r_nations   | array<struct<n_nationkey:smallint,n_name:string,n_comment:string>> |
++-------------+--------------------------------------------------------------------+
+
+DESCRIBE supplier;
++-------------+----------------------------------------------+
+| name        | type                                         |
++-------------+----------------------------------------------+
+| s_suppkey   | bigint                                       |
+| s_name      | string                                       |
+| s_address   | string                                       |
+| s_nationkey | smallint                                     |
+| s_phone     | string                                       |
+| s_acctbal   | decimal(12,2)                                |
+| s_comment   | string                                       |
+| s_partsupps | array<struct<ps_partkey:bigint,              |
+|             | ps_availqty:int,ps_supplycost:decimal(12,2), |
+|             | ps_comment:string>>                          |
++-------------+----------------------------------------------+
+
+
+ The volume of data used in the following examples is: 
+SELECT count(*) FROM customer;
++----------+
+| count(*) |
++----------+
+| 150000   |
++----------+
+
+SELECT count(*) FROM part;
++----------+
+| count(*) |
++----------+
+| 200000   |
++----------+
+
+SELECT count(*) FROM region;
++----------+
+| count(*) |
++----------+
+| 5        |
++----------+
+
+SELECT count(*) FROM supplier;
++----------+
+| count(*) |
++----------+
+| 10000    |
++----------+
+
+
+
+
+
+Constructing Parquet / ORC files with complex columns using Hive
+
+ The following examples demonstrate the Hive syntax to transform flat data (tables
+              with all scalar columns) into Parquet/ORC tables where Impala can query the complex
+              type columns. Each example shows the full sequence of steps, including switching back
+              and forth between Impala and Hive. Although the source table can use any file format,
+              the destination table must use the Parquet/ORC file format. We take Parquet in the
+              following examples. You can replace Parquet with ORC to do the same things in ORC file
+              format. 
+
+Create table with ARRAY in Impala, load data in Hive, query in
+                Impala:
+
+ This example shows the cycle of creating the tables and querying the complex data in
+              Impala, and using Hive (either the hive shell or
+                beeline) for the data loading step. The data starts in flattened,
+              denormalized form in a text table. Hive writes the corresponding Parquet data,
+              including an ARRAY column. Then Impala can run analytic queries on
+              the Parquet table, using join notation to unpack the ARRAY column. 
+/* Initial DDL and loading of flat, denormalized data happens in impala-shell */CREATE TABLE flat_array (country STRING, city STRING);INSERT INTO flat_array VALUES
+    ('Canada', 'Toronto') , ('Canada', 'Vancouver') , ('Canada', "St. John\'s")
+  , ('Canada', 'Saint John') , ('Canada', 'Montreal') , ('Canada', 'Halifax')
+  , ('Canada', 'Winnipeg') , ('Canada', 'Calgary') , ('Canada', 'Saskatoon')
+  , ('Canada', 'Ottawa') , ('Canada', 'Yellowknife') , ('France', 'Paris')
+  , ('France', 'Nice') , ('France', 'Marseilles') , ('France', 'Cannes')
+  , ('Greece', 'Athens') , ('Greece', 'Piraeus') , ('Greece', 'Hania')
+  , ('Greece', 'Heraklion') , ('Greece', 'Rethymnon') , ('Greece', 'Fira');
+
+CREATE TABLE complex_array (country STRING, city ARRAY <STRING>) STORED AS PARQUET;
+
+
+/* Conversion to Parquet and complex and/or nested columns happens in Hive */
+
+INSERT INTO complex_array SELECT country, collect_list(city) FROM flat_array GROUP BY country;
+Query ID = dev_20151108160808_84477ff2-82bd-4ba4-9a77-554fa7b8c0cb
+Total jobs = 1
+Launching Job 1 out of 1
+...
+
+
+/* Back to impala-shell again for analytic queries */
+
+REFRESH complex_array;
+SELECT country, city.item FROM complex_array, complex_array.city
++---------+-------------+
+| country | item        |
++---------+-------------+
+| Canada  | Toronto     |
+| Canada  | Vancouver   |
+| Canada  | St. John's  |
+| Canada  | Saint John  |
+| Canada  | Montreal    |
+| Canada  | Halifax     |
+| Canada  | Winnipeg    |
+| Canada  | Calgary     |
+| Canada  | Saskatoon   |
+| Canada  | Ottawa      |
+| Canada  | Yellowknife |
+| France  | Paris       |
+| France  | Nice        |
+| France  | Marseilles  |
+| France  | Cannes      |
+| Greece  | Athens      |
+| Greece  | Piraeus     |
+| Greece  | Hania       |
+| Greece  | Heraklion   |
+| Greece  | Rethymnon   |
+| Greece  | Fira        |
++---------+-------------+
+
+
+
+Create table with STRUCT and ARRAY in Impala,
+                load data in Hive, query in Impala:
+
+ This example shows the cycle of creating the tables and querying the complex data in
+              Impala, and using Hive (either the hive shell or
+                beeline) for the data loading step. The data starts in flattened,
+              denormalized form in a text table. Hive writes the corresponding Parquet data,
+              including a STRUCT column with an ARRAY field. Then
+              Impala can run analytic queries on the Parquet table, using join notation to unpack
+              the ARRAY field from the STRUCT column. 
+/* Initial DDL and loading of flat, denormalized data happens in impala-shell */
+
+CREATE TABLE flat_struct_array (continent STRING, country STRING, city STRING);
+INSERT INTO flat_struct_array VALUES
+    ('North America', 'Canada', 'Toronto') , ('North America', 'Canada', 'Vancouver')
+  , ('North America', 'Canada', "St. John\'s") , ('North America', 'Canada', 'Saint John')
+  , ('North America', 'Canada', 'Montreal') , ('North America', 'Canada', 'Halifax')
+  , ('North America', 'Canada', 'Winnipeg') , ('North America', 'Canada', 'Calgary')
+  , ('North America', 'Canada', 'Saskatoon') , ('North America', 'Canada', 'Ottawa')
+  , ('North America', 'Canada', 'Yellowknife') , ('Europe', 'France', 'Paris')
+  , ('Europe', 'France', 'Nice') , ('Europe', 'France', 'Marseilles')
+  , ('Europe', 'France', 'Cannes') , ('Europe', 'Greece', 'Athens')
+  , ('Europe', 'Greece', 'Piraeus') , ('Europe', 'Greece', 'Hania')
+  , ('Europe', 'Greece', 'Heraklion') , ('Europe', 'Greece', 'Rethymnon')
+  , ('Europe', 'Greece', 'Fira');
+
+CREATE TABLE complex_struct_array (continent STRING, country STRUCT <name: STRING, city: ARRAY <STRING> >) STORED AS PARQUET;
+
+
+/* Conversion to Parquet and complex and/or nested columns happens in Hive */
+
+INSERT INTO complex_struct_array SELECT continent, named_struct('name', country, 'city', collect_list(city)) FROM flat_array_array GROUP BY continent, country;
+Query ID = dev_20151108163535_11a4fa53-0003-4638-97e6-ef13cdb8e09e
+Total jobs = 1
+Launching Job 1 out of 1
+...
+
+
+/* Back to impala-shell again for analytic queries */
+
+REFRESH complex_struct_array;
+SELECT t1.continent, t1.country.name, t2.item
+  FROM complex_struct_array t1, t1.country.city t2
++---------------+--------------+-------------+
+| continent     | country.name | item        |
++---------------+--------------+-------------+
+| Europe        | France       | Paris       |
+| Europe        | France       | Nice        |
+| Europe        | France       | Marseilles  |
+| Europe        | France       | Cannes      |
+| Europe        | Greece       | Athens      |
+| Europe        | Greece       | Piraeus     |
+| Europe        | Greece       | Hania       |
+| Europe        | Greece       | Heraklion   |
+| Europe        | Greece       | Rethymnon   |
+| Europe        | Greece       | Fira        |
+| North America | Canada       | Toronto     |
+| North America | Canada       | Vancouver   |
+| North America | Canada       | St. John's  |
+| North America | Canada       | Saint John  |
+| North America | Canada       | Montreal    |
+| North America | Canada       | Halifax     |
+| North America | Canada       | Winnipeg    |
+| North America | Canada       | Calgary     |
+| North America | Canada       | Saskatoon   |
+| North America | Canada       | Ottawa      |
+| North America | Canada       | Yellowknife |
++---------------+--------------+-------------+
+
+
+
+
+
+Flattening normalized tables into a single table with complex types
+
+ One common use for complex types is to embed the contents of one table into another.
+              The traditional technique of denormalizing results in a huge number of rows with some
+              column values repeated over and over. With complex types, you can keep the same number
+              of rows as in the original normalized table, and put all the associated data from the
+              other table in a single new column. 
+ In this flattening scenario, you might frequently use a column that is an
+                ARRAY consisting of STRUCT elements, where each
+              field within the STRUCT corresponds to a column name from the table
+              that you are combining. 
+ The following example shows a traditional normalized layout using two tables, and
+              then an equivalent layout using complex types in a single table. 
+/* Traditional relational design */
+
+-- This table just stores numbers, allowing us to look up details about the employee
+-- and details about their vacation time using a three-table join query.
+CREATE table employee_vacations
+(
+  employee_id BIGINT,
+  vacation_id BIGINT
+)
+STORED AS PARQUET;
+
+-- Each kind of information to track gets its own "fact table".
+CREATE table vacation_details
+(
+  vacation_id BIGINT,
+  vacation_start TIMESTAMP,
+  duration INT
+)
+STORED AS PARQUET;
+
+-- Any time we print a human-readable report, we join with this table to
+-- display info about employee #1234.
+CREATE TABLE employee_contact
+(
+  employee_id BIGINT,
+  name STRING,
+  address STRING,
+  phone STRING,
+  email STRING,
+  address_type STRING /* 'home', 'work', 'remote', etc. */
+)
+STORED AS PARQUET;
+
+/* Equivalent flattened schema using complex types */
+
+-- For analytic queries using complex types, we can bundle the dimension table
+-- and multiple fact tables into a single table.
+CREATE TABLE employee_vacations_nested_types
+(
+-- We might still use the employee_id for other join queries.
+-- The table needs at least one scalar column to serve as an identifier
+-- for the complex type columns.
+  employee_id BIGINT,
+
+-- Columns of the VACATION_DETAILS table are folded into a STRUCT.
+-- We drop the VACATION_ID column because Impala doesn't need
+-- synthetic IDs to join a complex type column.
+-- Each row from the VACATION_DETAILS table becomes an array element.
+  vacation ARRAY < STRUCT <
+    vacation_start: TIMESTAMP,
+    duration: INT
+  >>,
+
+-- The ADDRESS_TYPE column, with a small number of predefined values that are distinct
+-- for each employee, makes the EMPLOYEE_CONTACT table a good candidate to turn into a MAP,
+-- with each row represented as a STRUCT. The string value from ADDRESS_TYPE becomes the
+-- "key" (the anonymous first field) of the MAP.
+  contact MAP < STRING, STRUCT <
+    address: STRING,
+    phone: STRING,
+    email: STRING
+  >>
+)
+STORED AS PARQUET;
+
+
+
+
+
+Interchanging complex type tables and data files with Hive and other components
+
+ You can produce Parquet data files through several Hadoop components and APIs.
+ If you have a Hive-created Parquet table that includes ARRAY,
+                STRUCT, or MAP columns, Impala can query that same
+              table in Impala 2.3 and higher, subject to the usual restriction that all other
+              columns are of data types supported by Impala, and also that the file type of the
+              table must be Parquet. 
+ If you have a Parquet data file produced outside of Impala, Impala can automatically
+              deduce the appropriate table structure using the syntax CREATE TABLE ... LIKE
+                PARQUET 'hdfs_path_of_parquet_file'. In Impala 2.3 and
+              higher, this feature works for Parquet files that include ARRAY,
+                STRUCT, or MAP types. 
+/* In impala-shell, find the HDFS data directory of the original table.
+DESCRIBE FORMATTED tpch_nested_parquet.customer;
+...
+| Location: | hdfs://localhost:20500/test-warehouse/tpch_nested_parquet.db/customer   | NULL |
+...
+
+# In the Unix shell, find the path of any Parquet data file in that HDFS directory.
+$ hdfs dfs -ls hdfs://localhost:20500/test-warehouse/tpch_nested_parquet.db/customer
+Found 4 items
+-rwxr-xr-x   3 dev supergroup  171298918 2015-09-22 23:30 hdfs://localhost:20500/blah/tpch_nested_parquet.db/customer/000000_0
+...
+
+/* Back in impala-shell, use the HDFS path in a CREATE TABLE LIKE PARQUET statement. */
+CREATE TABLE customer_ctlp
+  LIKE PARQUET 'hdfs://localhost:20500/blah/tpch_nested_parquet.db/customer/000000_0'
+  STORED AS PARQUET;
+
+/* Confirm that old and new tables have the same column layout, including complex types. */
+DESCRIBE tpch_nested_parquet.customer
++--------------+------------------------------------+---------+
+| name         | type                               | comment |
++--------------+------------------------------------+---------+
+| c_custkey    | bigint                             |         |
+| c_name       | string                             |         |
+| c_address    | string                             |         |
+| c_nationkey  | smallint                           |         |
+| c_phone      | string                             |         |
+| c_acctbal    | decimal(12,2)                      |         |
+| c_mktsegment | string                             |         |
+| c_comment    | string                             |         |
+| c_orders     | array<struct<                      |         |
+|              |   o_orderkey:bigint,               |         |
+|              |   o_orderstatus:string,            |         |
+|              |   o_totalprice:decimal(12,2),      |         |
+|              |   o_orderdate:string,              |         |
+|              |   o_orderpriority:string,          |         |
+|              |   o_clerk:string,                  |         |
+|              |   o_shippriority:int,              |         |
+|              |   o_comment:string,                |         |
+|              |   o_lineitems:array<struct<        |         |
+|              |     l_partkey:bigint,              |         |
+|              |     l_suppkey:bigint,              |         |
+|              |     l_linenumber:int,              |         |
+|              |     l_quantity:decimal(12,2),      |         |
+|              |     l_extendedprice:decimal(12,2), |         |
+|              |     l_discount:decimal(12,2),      |         |
+|              |     l_tax:decimal(12,2),           |         |
+|              |     l_returnflag:string,           |         |
+|              |     l_linestatus:string,           |         |
+|              |     l_shipdate:string,             |         |
+|              |     l_commitdate:string,           |         |
+|              |     l_receiptdate:string,          |         |
+|              |     l_shipinstruct:string,         |         |
+|              |     l_shipmode:string,             |         |
+|              |     l_comment:string               |         |
+|              |   >>                               |         |
+|              | >>                                 |         |
++--------------+------------------------------------+---------+
+
+describe customer_ctlp;
++--------------+------------------------------------+-----------------------------+
+| name         | type                               | comment                     |
++--------------+------------------------------------+-----------------------------+
+| c_custkey    | bigint                             | Inferred from Parquet file. |
+| c_name       | string                             | Inferred from Parquet file. |
+| c_address    | string                             | Inferred from Parquet file. |
+| c_nationkey  | int                                | Inferred from Parquet file. |
+| c_phone      | string                             | Inferred from Parquet file. |
+| c_acctbal    | decimal(12,2)                      | Inferred from Parquet file. |
+| c_mktsegment | string                             | Inferred from Parquet file. |
+| c_comment    | string                             | Inferred from Parquet file. |
+| c_orders     | array<struct<                      | Inferred from Parquet file. |
+|              |   o_orderkey:bigint,               |                             |
+|              |   o_orderstatus:string,            |                             |
+|              |   o_totalprice:decimal(12,2),      |                             |
+|              |   o_orderdate:string,              |                             |
+|              |   o_orderpriority:string,          |                             |
+|              |   o_clerk:string,                  |                             |
+|              |   o_shippriority:int,              |                             |
+|              |   o_comment:string,                |                             |
+|              |   o_lineitems:array<struct<        |                             |
+|              |     l_partkey:bigint,              |                             |
+|              |     l_suppkey:bigint,              |                             |
+|              |     l_linenumber:int,              |                             |
+|              |     l_quantity:decimal(12,2),      |                             |
+|              |     l_extendedprice:decimal(12,2), |                             |
+|              |     l_discount:decimal(12,2),      |                             |
+|              |     l_tax:decimal(12,2),           |                             |
+|              |     l_returnflag:string,           |                             |
+|              |     l_linestatus:string,           |                             |
+|              |     l_shipdate:string,             |                             |
+|              |     l_commitdate:string,           |                             |
+|              |     l_receiptdate:string,          |                             |
+|              |     l_shipinstruct:string,         |                             |
+|              |     l_shipmode:string,             |                             |
+|              |     l_comment:string               |                             |
+|              |   >>                               |                             |
+|              | >>                                 |                             |
++--------------+------------------------------------+-----------------------------+
+
+
+
+
+
+Related informationUsing Parquet data filesScalability considerationsQuerying arraysDescribes how to use UNNEST function to query arrays. ARRAY data types represent     collections with arbitrary numbers of elements, where each element is the same type.Zipping unnest on arrays from views Before this release, zipping unnest functionality worked for arrays only in "tables"     but did not support "views" as a source. This release improves that support further by accepting     inputs from views as well.Parent topic: Impala SQL data types

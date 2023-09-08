@@ -1,0 +1,111 @@
+Migrating Atlas dataCloudera Docs
+Migrating Atlas data
+After Atlas is available on the CDP Private Cloud Base cluster,
+        you must import the Atlas data that the Atlas migration exporter utility exported from the
+        HDP 2.6.5.x cluster.
+Use these properties to improve the speed of Atlas data
+                import:For a node with 4 cores and 8 GB of heap space, the estimated duration for
+                import is 0.75 million entities per hour. 
+
+Navigate to Atlas > Configs > Advanced > Custom
+                            application-properties:
+atlas.migration.mode.batch.size: Recommended value is
+                        3000.
+atlas.migration.mode.workers: Value to be set depends on
+                        the number of cores on the node on which Atlas runs. Typically, set the
+                        value as (number of cores - 1) * 2. For an 8 core node, set this property to
+                        (8 - 1) * 2 = 14.
+
+Additional patches are applied after the migration is completed. These are the
+                properties that will help with improving the speed of patches.
+
+Configure Atlas in CDP Private Cloud Base with the
+                    location of the exported data.
+
+Configure atlas.migration.data.filename property.
+
+In Cloudera Manager, navigate to
+                        Clusters and select
+                    Atlas.
+
+From Atlas configuration, set the Advanced Configuration Snippet
+                        (Safety Valve) value to the location which contains exported
+                    Atlas data. For example, 
+
+Set additional properties:
+
+
+atlas.migration.mode.batch.size=3000.
+atlas.migration.mode.workers=<use the value
+                                from calculation above>
+atlas.patch.batchSize=3000
+atlas.patch.numWorkers=<use the value from
+                                calculation above>
+
+For example:
+atlas.migration.data.filename=/var/lib/atlas-data
+atlas.migration.mode.batch.size=3000.
+atlas.migration.mode.workers=14
+atlas.patch.batchSize=3000
+atlas.patch.numWorkers=14
+
+
+
+
+
+
+Save the configuration.
+
+Restart Atlas from Cloudera Manager. Go to
+                        Atlas>Actions>Restart.
+
+
+
+
+
+
+Atlas starts in the migration mode and data import should commence. During the
+                    migration process, Atlas blocks all the REST API calls and Atlas Hook
+                    notification processing.
+
+To check the migration status 
+
+http://[atlas_server]:21000/api/atlas/admin/status
+The migration status is displayed in the browser window:
+{"Status":"Migration","currentIndex":139,"percent":67,"
+startTimeUTC":"2018-04-06T00:54:53.399Z"}
+
+
+
+The progress of import can be monitored using Atlas logs on the node where the
+                    migration is running. On the completion of migration, the log should have this
+                    entry: Done! loadLegacyGraphSON.
+                        (GraphDBGraphSONMigrator:76)
+
+
+After the migration is complete, change the status of Atlas from migration mode
+                    to normal operation by removing the
+                        atlas.migration.data.filename property and restarting
+                    Atlas in Cloudera Manager.
+
+note
+
+After Atlas is up and running, it continues processing messages from
+                                the integrated services. Explicitly importing data through import
+                                scripts is not required.
+As part of this migration, the value of
+                                    atlas.cluster.name is mapped to the new
+                                property atlas.metadata.namespace. This value
+                                is used within Atlas for generating unique names of entities.
+You must restart Atlas and then remove the property
+                                    atlas.migration.mode.hdp.to.cdp=true from
+                                the Atlas Server Advanced Configuration Snippet (Safety
+                                    Valve) for
+                                    conf/atlas-application.properties after the
+                                solr collections are migrated to the CDP cluster.
+
+
+
+
+
+Parent topic: Post transition steps

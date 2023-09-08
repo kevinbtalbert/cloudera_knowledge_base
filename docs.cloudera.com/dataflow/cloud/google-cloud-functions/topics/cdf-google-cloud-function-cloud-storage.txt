@@ -1,0 +1,74 @@
+Cloud storageCloudera Docs
+Cloud storage
+
+Providing custom extensions / NARs
+
+Cloudera Maven Repository
+The binary that is deployed for running the Google Cloud function does not include the
+            full NiFi deployment with all NARs / extensions, as it would result in very long startup
+            times and would require more expensive configurations for the Cloud function. Instead,
+            it packages only the NARs necessary to run Stateless NiFi. If any other extension is
+            needed to run the data flow, it is automatically downloaded from the Cloudera Maven
+            Repository by default when the Cloud function is initialized on a cold start.
+Nexus repository
+You can configure an alternative Nexus repository by setting the
+              NEXUS_URL environment variable to the URL of the Nexus Repository
+            where extensions should be downloaded. For example, to use Google's mirror of the Maven
+            Central repository, set the NEXUS_URL environment variable to:
+              https://maven-central.storage-download.googleapis.com/maven2noteAny configured URL must either be accessible through http or be
+              served over https with a trusted certificate.
+Cloud Storage bucket
+If there is a need to provide custom extensions, you can use a Cloud Storage
+              bucket:
+Create a Cloud Storage bucket and create a directory with a descriptive
+                name, like extensions.
+Upload all NAR files that will need to be used to this directory.
+Add the following environment variables to tell the Cloud function where
+                to look for the extensions:
+STORAGE_BUCKET containing the name of the
+                    bucket
+STORAGE_EXTENSIONS_DIRECTORY with the full
+                    directory path of the above extensions directorynoteIf
+                      you do not specify this variable, the directory defaults to
+                      extensions.
+
+
+
+noteIf you add a lot of extensions, it will take longer for the Cloud
+        function to load on a cold start, and it will take more memory to load the additional files
+        and classes. Although extensions are supported, Cloudera does not recommend uploading
+        hundreds of MBs or more of extensions.
+
+Providing additional resources
+In addition to NiFi extensions, some data flows may also require additional
+        resources to function. For example, a JDBC driver may be required for establishing a
+        database connection, or a CSV file to provide data enrichment. The recommended approach for
+        providing such resources to your Cloud function is using the Cloud Storage bucket.
+
+Create a Cloud Storage bucket, if you do not already have one and create a
+          directory with a descriptive name, like "resources".
+Upload all resources required for the data flow to run to this
+            directory.These resources will appear in the Cloud function's
+              /tmp/resources directory to be accessed by the data
+          flow.
+
+Because each deployment of a given data flow may need to reference files in a
+        different location, depending on its environment, it is generally considered a best practice
+        to parameterize all resources that need to be accessed by the data flow. For example, if the
+        data flow contains a DBCPConnectionPool controller service for accessing a database, it is
+        recommended to use a Parameter for the "Database Driver Location(s)" property of the
+        Controller Service. This allows each deployment to specify the location of the JDBC driver
+        independently.
+For example:
+You can set the Database Driver Location(s) property to a
+            value of #{JDBC_DRIVER_LOCATION}.
+In the Cloud Storage, you can upload a file that contains your JDBC driver,
+              database-jdbc-driver.jar.
+You can add an Environment Variable named
+              JDBC_DRIVER_LOCATION with a value of
+              /tmp/resources/database-jdbc-driver.jar.
+
+By taking this approach, your data flow is more reusable, as it can be deployed
+        in many different environments.
+
+

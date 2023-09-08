@@ -1,0 +1,72 @@
+Planner changes for CPU usageCloudera Docs
+Planner changes for CPU usage
+This release brings some changes to the query planner to improve parallel sizing and
+  resource estimation. This is done for workload-aware autoscaling and will be available as query
+  options. These additional query options are added for tuning purposes. This new functionality will
+  allow additional customers to enable multi-threaded queries globally for improved
+  performance.
+Before you begin
+
+You must obtain the entitlement to use this feature.
+
+Overview
+Until this release, estimating the peak memory was the scaling factor in selecting an executor
+    group to run large queries. This estimation was calculated during the query compilation time.
+    When large queries were identified, they were enabled to run on larger executor groups mapped to
+    different resource groups.
+This release adds a new CPU costing algorithm as the scaling factor by establishing an
+    infrastructure to allow the weighted total amount of data to process to be used as a new factor
+    in the selection of an executor group. The new costing algorithm returns a number representing
+    an ideal CPU core count required for a query to run efficiently. This number will be compared
+    against the total CPU count of an Impala executor group to determine if it fits to run in that
+    executor group or not. If the CPU requirement is higher than the
+    max-query-cpu-core-per-node-limit, even in the largest exec group, the query may be
+    rejected.
+The following query options are added to control this CPU costing algorithm.
+
+COMPUTE_PROCESSING_COSTOption to enable this CPU costing algorithm. Set MT_DOP > 0 to enable this query
+       option.noteIf entitlement is enabled,
+        COMPUTE_PROCESSING_COST will be set to true by default. If you use the
+        REQUEST_POOL query option to direct a query to a specific pool or queue and
+       you want to maintain the original MT_DOP behavior then you must explicitly
+       set the flag COMPUTE_PROCESSING_COST to False.
+PROCESSING_COST_MIN_THREADS
+Option to control the minimum number of fragment instances (threads) that the costing
+      algorithm is allowed to adjust. The costing algorithm is in charge of increasing the
+      fragment's instance count beyond this minimum number through producer-consumer rate
+      comparison. The maximum number of fragments is max between PROCESSING_COST_MIN_THREADS,
+       MT_DOP, and number of cores per executor.
+
+You can also use the following backend flags to tune the algorithm.
+
+query_cpu_count_divisor
+Use this flag to divide the CPU requirement of a query to fit the total available CPU in
+       the executor group. For example, setting the value to 2 will fit the query with CPU
+       requirement 2X to an executor group with total available CPU X. Note that setting with a
+       fractional value less than 1 effectively multiplies the query CPU requirement. A valid value
+       is > 0.0. The default value is 1.
+processing_cost_use_equal_expr_weight
+The default value of this flag is True. When the default value is retained, all expression
+       evaluations are weighted equally to 1 during the plan node's processing cost
+        calculation.noteThis flag is experimental and the default value
+        should not be changed.
+min_processing_per_thread
+This flag defines the minimum processing load (in processing cost unit) that a fragment
+       instance needs to work on before the planner considers increasing the instance count based on
+       the processing cost rather than the MT_DOP setting. The decision is per fragment. If you set
+       this flag to a higher number, it will reduce parallelism of a fragment (more workload per
+       fragment), and when set to a lower number, it will increase parallelism (less workload per
+       fragment). Actual parallelism might still be constrained by the total number of cores in the
+       selected executor groups, MT_DOP, or the
+        PROCESSING_COST_MIN_THREADS query option. The value of this flag must be a
+       positive integer and it defaults to 10M.
+skip_resource_checking_on_last_executor_group_setThis flag defines if the
+       resource checking will be skipped on the last executor group set. If this backend flag is set
+       to true, memory and cpu resource checking will be skipped when a query is being planned
+       against the last (largest) executor group set. Setting true will ensure that query will
+       always get admitted into the last executor group set if it does not fit in any other group
+       set.
+
+
+
+Parent topic: Performance Considerations

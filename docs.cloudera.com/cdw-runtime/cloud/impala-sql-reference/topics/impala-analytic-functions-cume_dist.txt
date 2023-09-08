@@ -1,0 +1,149 @@
+CUME_DISTCloudera Docs
+CUME_DIST
+Returns the cumulative distribution of a value. The value for
+              each row in the result set is greater than 0 and less than or
+              equal to 1.
+
+
+Syntax:
+
+CUME_DIST (expr)
+  OVER ([partition_by_clause] order_by_clause)
+
+ The ORDER BY clause is required. The
+                PARTITION BY clause is optional. The window
+              clause is not allowed. 
+
+Usage notes:
+
+ Within each partition of the result set, the
+                CUME_DIST() value represents an ascending
+              sequence that ends at 1. Each value represents the proportion of
+              rows in the partition whose values are less than or equal to the
+              value in the current row. 
+ If the sequence of input values contains ties, the
+                CUME_DIST() results are identical for the tied
+              values. 
+ Impala only supports the CUME_DIST() function
+              in an analytic context, not as a regular aggregate function. 
+
+Examples:
+
+ This example uses a table with 9 rows. The
+                CUME_DIST() function evaluates the entire table
+              because there is no PARTITION BY clause, with the
+              rows ordered by the weight of the animal. the sequence of values
+              shows that 1/9 of the values are less than or equal to the
+              lightest animal (mouse), 2/9 of the values are less than or equal
+              to the second-lightest animal, and so on up to the heaviest animal
+              (elephant), where 9/9 of the rows are less than or equal to its
+              weight. 
+create table animals (name string, kind string, kilos decimal(9,3));
+insert into animals values
+  ('Elephant', 'Mammal', 4000), ('Giraffe', 'Mammal', 1200), ('Mouse', 'Mammal', 0.020),
+  ('Condor', 'Bird', 15), ('Horse', 'Mammal', 500), ('Owl', 'Bird', 2.5),
+  ('Ostrich', 'Bird', 145), ('Polar bear', 'Mammal', 700), ('Housecat', 'Mammal', 5);
+
+select name, cume_dist() over (order by kilos) from animals;
++------------+-----------------------+
+| name       | cume_dist() OVER(...) |
++------------+-----------------------+
+| Elephant   | 1                     |
+| Giraffe    | 0.8888888888888888    |
+| Polar bear | 0.7777777777777778    |
+| Horse      | 0.6666666666666666    |
+| Ostrich    | 0.5555555555555556    |
+| Condor     | 0.4444444444444444    |
+| Housecat   | 0.3333333333333333    |
+| Owl        | 0.2222222222222222    |
+| Mouse      | 0.1111111111111111    |
++------------+-----------------------+
+
+ Using a PARTITION BY clause produces a separate
+              sequence for each partition group, in this case one for mammals
+              and one for birds. Because there are 3 birds and 6 mammals, the
+              sequence illustrates how 1/3 of the Bird rows have a
+                kilos value that is less than or equal to the
+              lightest bird, 1/6 of the Mammal rows have a
+                kilos value that is less than or equal to the
+              lightest mammal, and so on until both the heaviest bird and
+              heaviest mammal have a CUME_DIST() value of 1. 
+select name, kind, cume_dist() over (partition by kind order by kilos) from animals
++------------+--------+-----------------------+
+| name       | kind   | cume_dist() OVER(...) |
++------------+--------+-----------------------+
+| Ostrich    | Bird   | 1                     |
+| Condor     | Bird   | 0.6666666666666666    |
+| Owl        | Bird   | 0.3333333333333333    |
+| Elephant   | Mammal | 1                     |
+| Giraffe    | Mammal | 0.8333333333333334    |
+| Polar bear | Mammal | 0.6666666666666666    |
+| Horse      | Mammal | 0.5                   |
+| Housecat   | Mammal | 0.3333333333333333    |
+| Mouse      | Mammal | 0.1666666666666667    |
++------------+--------+-----------------------+
+
+ We can reverse the ordering within each partition group by using
+              an ORDER BY ... DESC clause within the
+                OVER() clause. Now the lightest (smallest value
+              of kilos) animal of each kind has a
+                CUME_DIST() value of 1. 
+select name, kind, cume_dist() over (partition by kind order by kilos desc) from animals
++------------+--------+-----------------------+
+| name       | kind   | cume_dist() OVER(...) |
++------------+--------+-----------------------+
+| Owl        | Bird   | 1                     |
+| Condor     | Bird   | 0.6666666666666666    |
+| Ostrich    | Bird   | 0.3333333333333333    |
+| Mouse      | Mammal | 1                     |
+| Housecat   | Mammal | 0.8333333333333334    |
+| Horse      | Mammal | 0.6666666666666666    |
+| Polar bear | Mammal | 0.5                   |
+| Giraffe    | Mammal | 0.3333333333333333    |
+| Elephant   | Mammal | 0.1666666666666667    |
++------------+--------+-----------------------+
+
+ The following example manufactures some rows with identical
+              values in the kilos column, to demonstrate how
+              the results look in case of tie values. For simplicity, it only
+              shows the CUME_DIST() sequence for the
+                Bird rows. Now with 3 rows all with a value of 15, all of
+              those rows have the same CUME_DIST() value. 4/5
+              of the rows have a value for kilos that is less
+              than or equal to 15. 
+insert into animals values ('California Condor', 'Bird', 15), ('Andean Condor', 'Bird', 15)
+
+select name, kind, cume_dist() over (order by kilos) from animals where kind = 'Bird';
++-------------------+------+-----------------------+
+| name              | kind | cume_dist() OVER(...) |
++-------------------+------+-----------------------+
+| Ostrich           | Bird | 1                     |
+| Condor            | Bird | 0.8                   |
+| California Condor | Bird | 0.8                   |
+| Andean Condor     | Bird | 0.8                   |
+| Owl               | Bird | 0.2                   |
++-------------------+------+-----------------------+
+
+ The following example shows how to use an ORDER
+                BY clause in the outer block to order the result set in
+              case of ties. Here, all the Bird rows are together, then in
+              descending order by the result of the CUME_DIST()
+              function, and all tied CUME_DIST() values are
+              ordered by the animal name. 
+select name, kind, cume_dist() over (partition by kind order by kilos) as ordering
+  from animals
+where
+  kind = 'Bird'
+order by kind, ordering desc, name;
++-------------------+------+----------+
+| name              | kind | ordering |
++-------------------+------+----------+
+| Ostrich           | Bird | 1        |
+| Andean Condor     | Bird | 0.8      |
+| California Condor | Bird | 0.8      |
+| Condor            | Bird | 0.8      |
+| Owl               | Bird | 0.2      |
++-------------------+------+----------+
+
+
+

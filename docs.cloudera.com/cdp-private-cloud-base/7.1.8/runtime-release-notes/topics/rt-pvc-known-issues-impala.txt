@@ -1,0 +1,250 @@
+Known Issues in Apache ImpalaCloudera Docs
+Known Issues in Apache Impala
+Learn about the known issues in Impala, the impact or changes to the functionality, and
+    the workaround.
+
+
+CDPD-42958: After upgrading the CDH 7.1.8 from CDH 6.x, under
+          certain conditions you cannot insert data into a table 
+Under the following conditions, after upgrading from CDH 6.x
+          to CDH 7.1.8 you cannot insert data into a table from Impala: 
+On CDH 6.x, you created a database with Impala in a user specified HDFS
+              location.
+Using Hive, you then created a table in the database.
+Under these conditions, the database and table are stored in the user-specified HDFS
+          directory. After upgrading, the HDFS directory of the table is read-only for Impala.
+          Consequently, from Impala you cannot insert new data into the table because Impala does
+          not have write permission on the HDFS directory.Workaround: To resolve this issue, use either one of the following workarounds:
+Using the Ranger Web UI, in the policy repository cm_hdfs, grant the user 'impala'
+              write permission on the directory where the table resides.
+Enter the following command to grant write permission to user 'impala' on the HDFS
+              directory where the table
+              resides.hdfs dfs -setfacl -m default:user:impala:rwx <HDFS directory>
+
+
+
+Impala known limitation when querying compacted
+          tables
+When the compaction process deletes the files for a table from the underlying HDFS
+          location, the Impala service does not detect the changes as the compactions does not
+          allocate new write ids. When the same table is queried from Impala it throws a 'File does
+          not exist' exception that looks something like
+          this:Query Status: Disk I/O error on <node>:22000: Failed to open HDFS file hdfs://nameservice1/warehouse/tablespace/managed/hive/<database>/<table>/xxxxx
+Error(2): No such file or directory Root cause: RemoteException: File does not exist: /warehouse/tablespace/managed/hive/<database>/<table>/xxxx
+Use the REFRESH/INVALIDATE statements on the affected
+          table to overcome the 'File does not exist' exception.
+
+
+CDPD-28431: Intermittent errors could be potentially encountered when Impala UI is accessed from multiple Knox nodes.
+You must use a single Knox node to access Impala UI. 
+
+
+Impala api calls via knox require configuration if the
+          knox customized kerberos principal name is a default service user name
+To access impala api calls via knox, if the knox
+          customized kerberos principal name is a default service user name, then configure
+          "authorized_proxy_user_config" by clicking Clusters->impala->configuration. Include the
+          knox customized kerberos principal name in the comma separated list of values
+          <knox_custom_kerberos_principal_name>=*" where <knox_custom_kerberos_principal_name> is the value
+          of the Kerberos Principal in the Knox service. Select Clusters>Knox>Configuration and
+          search for Kerberos Principal to display this value.
+
+
+CDPD-21828: Multiple permission assignment through grant is not working
+None
+
+
+Problem configuring masking on tables using Ranger
+The following Knowledge Base article describes the behavior when we configure masking on
+          tables using Ranger. This configuration works for Hive, but breaks queries in some
+          scenarios for Impala.
+For
+          a workaround, see the following Knowledge Base article: ERROR: "AnalysisException: No matching function with
+            signature: mask(FLOAT)" when Impala jobs fail with the following error with signature:
+            mask(FLOAT)
+
+
+IMPALA-532: Impala should tolerate bad locale settings
+
+          If the LC_* environment variables specify an unsupported locale,
+          Impala does not start.
+        
+Add LC_ALL="C" to the environment settings for
+          both the Impala daemon and the Statestore daemon. 
+        
+
+
+IMPALA-5605: Configuration to prevent crashes caused by thread resource limits
+Impala could encounter a serious error due to resource usage under very high
+          concurrency. The error message is similar to: 
+F0629 08:20:02.956413 29088 llvm-codegen.cc:111] LLVM hit fatal error: Unable to allocate section memory!
+terminate called after throwing an instance of 'boost::exception_detail::clone_impl<boost::exception_detail::error_info_injector<boost::thread_resource_error> >'
+
+          
+ To prevent such errors, configure each host running an
+          impalad daemon with the following settings:
+          
+            echo 2000000 > /proc/sys/kernel/threads-max
+            echo 2000000 > /proc/sys/kernel/pid_max
+            echo 8000000 > /proc/sys/vm/max_map_count
+          
+            Add the following lines in /etc/security/limits.conf:
+          
+            impala soft nproc 262144
+            impala hard nproc 262144
+          
+
+
+Avro Scanner fails to parse some schemas
+
+          The default value in Avro schema must match type of first union type, e.g. if the
+          default value is null, then the first type in the
+          UNION must be "null".
+Swap the order of the fields in the schema specification. For
+          example, use ["null", "string"] instead of ["string",
+            "null"]. Note that the files written with the problematic schema must be
+          rewritten with the new schema because Avro files have embedded schemas.
+
+
+IMPALA-691: Process mem limit does not account for the JVM's memory usage
+
+          Some memory allocated by the JVM used internally by Impala is not counted against the
+          memory limit for the impalad daemon.
+        
+To monitor overall memory usage, use the top command, or add the
+          memory figures in the Impala web UI /memz tab to JVM memory usage shown on the
+          /metrics tab. 
+
+
+IMPALA-9350: Ranger audit logs for applying column masking policies missing
+Impala is not producing these logs.
+None
+
+
+IMPALA-1024: Impala BE cannot parse Avro schema that contains a trailing semi-colon
+
+          If an Avro table has a schema definition with a trailing semicolon, Impala encounters
+          an error when the table is queried.
+        
+Remove trailing semicolon from the Avro schema.
+        
+
+
+IMPALA-1652: Incorrect results with basic predicate on CHAR typed column
+When comparing a CHAR column value to a string literal, the literal
+          value is not blank-padded and so the comparison might fail when it should match.
+Use the RPAD() function to blank-pad literals
+          compared with CHAR columns to the expected length.
+        
+
+
+IMPALA-1821: Casting scenarios with invalid/inconsistent results
+Using a CAST() function to convert large literal values to smaller
+          types, or to convert special values such as NaN or
+          Inf, produces values not consistent with other database systems. This
+          could lead to unexpected results from queries.
+None
+
+
+IMPALA-2005: A failed CTAS does not drop the table if the insert fails
+If a CREATE TABLE AS SELECT operation successfully creates the target
+          table but an error occurs while querying the source table or copying the data, the new
+          table is left behind rather than being dropped.
+Drop the new table manually after a failed CREATE TABLE AS
+          SELECT
+
+
+
+IMPALA-2422: % escaping does not work correctly when occurs at the end in a LIKE clause
+ If the final character in the RHS argument of a LIKE operator is an
+          escaped \% character, it does not match a % final
+          character of the LHS argument.
+None
+
+
+IMPALA-2603: Crash: impala::Coordinator::ValidateCollectionSlots
+A query could encounter a serious error if includes multiple nested levels of
+          INNER JOIN clauses involving subqueries.
+None
+
+
+IMPALA-3094: Incorrect result due to constant evaluation in query with outer join
+
+An OUTER JOIN query could omit some expected result rows due to a
+          constant such as FALSE in another join clause. For example:
+          
+explain SELECT 1 FROM alltypestiny a1
+  INNER JOIN alltypesagg a2 ON a1.smallint_col = a2.year AND false
+  RIGHT JOIN alltypes a3 ON a1.year = a1.bigint_col;
++-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+
+| Explain String                                          |
++-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+
+| Estimated Per-Host Requirements: Memory=1.00KB VCores=1 |
+|                                                         |
+| 00:EMPTYSET                                             |
++-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-\-+
+
+          
+
+
+
+IMPALA-3509: Breakpad minidumps can be very large when the thread count is high
+The size of the breakpad minidump files grows linearly with the number of threads. By
+          default, each thread adds 8 KB to the minidump size. Minidump files could consume
+          significant disk space when the daemons have a high number of threads.
+Add -\-minidump_size_limit_hint_kb=size
+          to set a soft upper limit on the size of each minidump file. If the minidump file
+          would exceed that limit, Impala reduces the amount of information for each thread from
+          8 KB to 2 KB. (Full thread information is captured for the first 20 threads, then 2 KB
+          per thread after that.) The minidump file can still grow larger than the "hinted"
+          size. For example, if you have 10,000 threads, the minidump file can be more than 20
+          MB.
+        
+
+
+IMPALA-4978: Impala requires FQDN from hostname command on Kerberized clusters
+The method Impala uses to retrieve the host name while constructing the Kerberos
+          principal is the gethostname() system call. This function might not
+          always return the fully qualified domain name, depending on the network configuration.
+          If the daemons cannot determine the FQDN, Impala does not start on a Kerberized
+          cluster.
+Test if a host is affected by checking whether the output of the
+          hostname command includes the FQDN. On hosts where
+          hostname, only returns the short name, pass the command-line flag
+          ‑‑hostname=fully_qualified_domain_name
+          in the startup options of all Impala-related daemons.
+        
+
+
+IMPALA-7072: Impala does not support Heimdal Kerberos
+None
+
+
+OPSAPS-46641: A single parameter exists in Cloudera Manager for
+          specifying the Impala Daemon Load Balancer. Because BDR and Hue need to use different
+          ports when connecting to the load balancer, it is not possible to configure the load
+          balancer value so that BDR and Hue will work correctly in the same cluster.
+The workaround is to use the load balancer configuration either without a port specification, or with the Beeswax port: this will configure BDR. To configure Hue use the "Hue Server Advanced Configuration Snippet (Safety Valve) for impalad_flags" to specify the the load balancer address with the HiveServer2 port.
+
+
+CDPD-28139: Set spark.hadoop.hive.stats.autogather to false by default
+As an Impala user, if you submit a query against a table containing data ingested using
+          Spark and you are concerned about the quality of the query plan, you must run COMPUTE
+          STATS against such a table in any case after an ETL operation because numRows created by
+          Spark could be incorrect. Also, use other stats computed by COMPUTE STATS, e.g., Number of
+          Distinct Values (NDV) and NULL count for good selectivity estimates. 
+For example, when a user ingests data from a file into a partition of an existing table
+          using Spark, if spark.hadoop.hive.stats.autogather is not set to false explicitly, numRows
+          associated with this partition would be 0 even though there is at least one row in the
+          file. To avoid this, the workaround is to set "spark.hadoop.hive.stats.autogather=false"
+          in the "Spark Client Advanced Configuration Snippet (Safety Valve) for
+          spark-conf/spark-defaults.conf" in Spark's CM Configuration section. 
+
+
+Some of the unresolved issues include:
+IMPALA-6841
+IMPALA-635
+
+
+
+Parent topic: Known issues in Cloudera Runtime 7.1.8

@@ -1,0 +1,43 @@
+Min/Max FilteringCloudera Docs
+Min/Max Filtering
+This feature is available for users of Cloudera Data Warehouse release August 27, 2021
+  or later. In addition to filtering at the partition level, the Parquet file format supports
+  filtering at three levels: row group, page and row levels based on the minimum and maximum values
+  of row group or page, and the value of the row in the file. These minimum/maximum column values
+  are stored in the footer of the file. If the range between the minimum and maximum value in the
+  file does not overlap with the range of data specified by the query, then the system skips the row
+  group, page or row during scans.
+CDW August 27, 2021 release enables min/max filters, by default, for equi-joins on lexical
+   (leading column) or Z-Order (all columns) sorted columns in a Parquet table created by Impala.
+   When such a sorted column is also the equi- join column, the min/max values in the filter are
+   computed from the hash table build side and applied to the sorted column. In this way, the user
+   can take advantage of Impala sorting the min/max values in column index in each data file for the
+   table by quickly eliminating non-matching row groups, pages or rows. The query option
+   minmax_filter_sorted_columns which defaults to true can be used to control the feature. When
+   minmax_filter_sorted_columns is true, the patch will generate min/max filters only for the sort
+   columns. The normal control knobs minmax_filter_threshold (for threshold) and
+   minmax_filtering_level (for filtering level) will also continue to work. When the threshold is 0,
+   the patch automatically assigns a reasonable value for the threshold, and selects PAGE to be the
+   filtering level.
+In the backend, the skipped pages are quickly found by taking a fast code path to identify the
+   corresponding lower and the upper bounds in the sorted min and max value arrays, given a range in
+   the filter. The skipped pages are expressed as page ranges which are translated into row ranges
+   later on.
+A new query option minmax_filter_fast_code_path is added to control the work of the fast code
+   path. This option can be assigned one of these three values ON (default), OFF, or VERIFICATION.
+   The last value helps verify that the results from both the fast and the regular code path are the
+   same.
+The following example shows how min/max filtering on leading sort-by columns improves the
+   performance of scan operators greatly.
+   select straight_join a.l_orderkey from
+    simpflified_lineitem a join [SHUFFLE] tpch_parquet.lineitem b
+    where a.l_orderkey = b.l_orderkey and b.l_receiptdate = "1998-12-31"When
+     this query is run on pages containing no more than 24000 rows, the results with different
+     filtering options are as shown here: 
+84.62ms (page level filtering) 
+115.27ms (row group level filtering)
+137.14ms (no filtering)
+
+
+
+Parent topic: Performance Considerations

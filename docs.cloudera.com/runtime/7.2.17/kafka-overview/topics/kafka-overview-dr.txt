@@ -1,0 +1,94 @@
+Kafka disaster recoveryCloudera Docs
+Kafka disaster recovery
+Learn about the cluster architectures you can use when designing highly available and
+    resilient Kafka clusters.
+Kafka has built-in replication for its topics and allows users to carefully tweak the data
+      durability configurations to achieve desired redundancy guarantees. When designing a
+      deployment where data is replicated over multiple Data Centers (DC) and has disaster recovery
+      (DR) options, you need to carefully analyse your data durability and business continuity
+      requirements. The following sections introduce the architectural options that you can choose
+      from when building a resilient multi-DC Kafka deployment. Additionally, guidance is provided
+      that help you in choosing the right architecture for your use case.
+There are two major architectural groups for achieving multi-DC DR with Kafka. These are as follows:
+Stretch clusters
+A stretch cluster is a single logical Kafka cluster deployed across multiple DCs or
+            other independent physical infrastructures such as cloud availability zones. For more
+            information, see Stretch clusters or Kafka Stretch cluster reference
+              architecture.
+
+Replication using SRM
+Streams Replication Manager (SRM) is an enterprise-grade replication solution that
+            enables fault tolerant, scalable, and robust cross-cluster Kafka topic replication. A
+            deployment that utilizes SRM for disaster recovery uses multiple Kafka clusters. SRM
+            acts as a bridge between the clusters and replicates the data. For more information, see
+              Streams Replication Manager Overview.
+
+The major difference between stretch clusters and an SRM based architecture is how data is
+      replicated between DCs. With stretch clusters, synchronous replication can be achieved. This
+      enables strict guarantees on data durability. With SRM based replication, only asynchronous
+      replication is available. This provides weaker guarantees but higher performance.noteIn
+        addition to using either a stretch cluster or SRM, you can also choose to have multiple
+        stretch cluster deployments that are replicated by SRM. This can, under the right
+        circumstances, provide the benefits of both approaches. The DCs located close to each
+          other (low latency) can run as a stretch cluster. SRM can be used to replicate the data to
+          remote DCs (high latency). In this setup, using the 2.5 DC architecture for the stretch
+          clusters can also lower the cost, while the usage of SRM compensates for the lower
+          availability guarantees provided by the 2.5 DC architecture. Additionally, when
+          requirements allow it, if a DC goes down, clients can fail over to a backup cluster and
+          keep the service functional with a temporarily lowered durability guarantee.This
+          type of architecture is not covered in detail in this document. 
+Use a stretch cluster if
+
+
+You have a zero Recovery Point Objective (RPO=0) requirement
+RPO=0 means that data should be replicated to multiple DCs before a write is deemed
+              successful (acknowledged by the broker). This can only be achieved by using
+              synchronous replication between DCs, which can be achieved by using a stretch
+                cluster.However, consider the following. If you can replay data from upstream
+                sources, such as databases, then implementing that recovery function once may be
+                easier than operating and maintaining a stretch cluster.
+You need strict message ordering guarantees across DCs
+Strict message ordering per partition can only be achieved with a single topic
+              spanning multiple DCs. The SRM architecture involves multiple topics (one original and
+              many replicas), which cannot guarantee the strict ordering during failover or failback
+                operations.However, consider the following. If your data has an attribute that
+                can be reliably used for ordering, then implementing a reordering step in your
+                downstream processing during application development might be an easier and more
+                cost-effective solution compared to operating and maintaining a stretch
+              cluster.
+
+
+You need automatic failover for your clients when a DC goes down
+The Kafka protocol has built-in cluster discovery and leadership migration on
+              failures. Therefore, fully automatic failover operations can be achieved using a
+              stretch cluster. The SRM based architecture requires a manual step in the failover
+              process. This makes SRM unsuitable for this use case.
+
+
+You need exactly once transactional processing
+Exactly once processing in Kafka is currently only supported within a single
+              cluster.
+
+
+
+Use SRM with multiple clusters if
+
+You need high availability during cluster maintenance
+When a Kafka cluster needs to be stopped for maintenance, clients can fail over to a
+            backup cluster. With the stretch cluster solution, this is not supported. This is due to
+            the fact there is a single Kafka cluster in the architecture.
+You need replication between clusters that have high latency (replication across
+            multiple regions)
+The stretch cluster architecture is sensitive to high latency, making it unsuitable
+            for multi-region deployments. The asynchronous replication provided by SRM works well
+            even in high latency environments.
+
+
+You need high throughput replication between DCs
+The throughput of the stretch cluster architecture degrades rapidly with increasing
+            latency. SRM, on the other hand, can provide better replication throughput even in high
+            latency environments.
+
+
+
+Related informationKafka stretch clustersApache Kafka stretch cluster reference architectureStreams Replication Manager Overview

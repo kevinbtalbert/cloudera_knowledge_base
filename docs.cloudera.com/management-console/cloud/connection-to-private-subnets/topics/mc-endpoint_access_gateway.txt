@@ -1,0 +1,172 @@
+Public Endpoint Access GatewayCloudera Docs
+Public Endpoint Access Gateway
+If the network into which you are deploying your CDP environment does not have
+  pre-established connectivity with your corporate network, enabling the Public Access Gateway can
+  reduce the complexity users face when interacting with the CDP endpoints. 
+notePublic Endpoint Access Gateway is only available for AWS and Azure environments. Support for
+   GCP is currently available as a preview.
+The recommended way to deploy production-ready CDP environments is to deploy them on
+   private networks, but this additional security makes it difficult for users to access UIs and
+   APIs without configuring complex network connectivity between users and internal cloud provider
+   networks. The Public Endpoint Access Gateway provides secure connectivity to UIs and APIs in Data
+   Lake and Data Hub clusters deployed using private networking, allowing users to access these
+   resources without complex changes to their networking or creating direct connections to cloud
+   provider networks. 
+You can enable the Public Endpoint Access Gateway when registering your AWS or Azure
+   environment in CDP. The gateway interfaces the Knox service, which is automatically integrated
+   with your identity provider configured in CDP, allowing you to authenticate using your SSO
+   credentials without any additional configuration. All communication with the gateway is over TLS,
+   so connections are secure. You can control the IP ranges from where connections to the gateway
+   can be established by configuring your security groups.
+The following diagram illustrates this setup:
+
+
+
+noteThe gateway provides secure connectivity to UIs and APIs. All Knox-enabled endpoints are
+   supported. The gateway does not cover SSH or data access paths (such as Kafka Broker and NiFi
+   Site2Site endpoints). Cloudera recommends that you set up connectivity between private networks
+   in the public cloud and internal customer networks for secure and fast Kafka and NiFi
+   deployments. 
+
+
+Enabling Public Endpoint Access Gateway for AWS
+You can enable Public Endpoint Access Gateway during AWS environment registration after
+  enabling Cluster Connectivity Manager (CCM).
+Once activated, the gateway will be used for the Data Lake and all the Data Hubs within the
+   environment. There is no way to activate it on a per Data Lake or per Data Hub level. Once it is
+   enabled for an environment, there is no way to deactivate it. The gateway can be used either with
+   an existing VPC or with a new VPC created by CDP.
+Prerequisites
+
+If you choose to enable Public Endpoint Access Gateway, CDP will create two AWS
+    network load balancers (AWS NLB) per cluster (that is for each Data Lake and Data Hub). Make
+    sure that your AWS NLB limits allow for the load balancer creation.
+If you are using your existing network, you should have at least 2 public subnets
+    in the VPC that you would like to use for CDP. The  availability zones of the public and private
+    subnets must match. 
+
+Steps 
+
+CDP UICDP CLI
+When registering your AWS environment, make sure to do the following:
+
+On the Region, Networking, and Security page, select your existing VPC or
+    select to have a new VPC created.
+If you selected an existing VPC, select at least two existing private subnets (or
+    at least three subnets if you would like to provision Data Warehouse instances). 
+The Enable Cluster Connectivity Manager option is enabled by default to
+    enable communication via private subnets. noteIn spite of the warning that you see on the UI,
+     with the Public Endpoint Gateway enabled, you do not need to set up any additional connectivity
+     in order to use CCM. 
+Click on Enable Public Endpoint Access Gateway to enable it. This enables
+    UIs and APIs of the Data Lake and Data Hub clusters to be accessible over the internet.
+If you selected an existing VPC, under Select Endpoint Access Gateway
+       Subnets, select the public subnets for which you would like to use the gateway. The
+      availability zones of the public subnets must be the same as the availability zones of the
+      private subnets selected under Select Subnets.
+
+
+Under Security Access Settings, make sure to restrict access to only be
+    accepted from sources coming from your external network range.noteThe security access settings
+     do not apply to the network load balancer used by the Public Endpoint Access Gateway, but they
+     apply to the instances that are running in private subnets and to which the Public Endpoint
+     Access Gateway routes traffic. Therefore the security access settings should allow the users’
+     public IP ranges to be able to connect through the public load balancer.
+Finish registering your environment.
+
+
+During environment registration via CDP CLI, you can optionally enable public
+   endpoint access gateway using the following CLI parameters: 
+--endpoint-access-gateway-scheme PUBLIC 
+--endpoint-access-gateway-subnet-ids subnet-0232c7711cd864c7b subnet-05d4769d88d875cda 
+The first parameter enables the gateway and the second one allows you to specify public
+     subnets. The availability zones of the public subnets must be the same as the availability
+     zones of the private subnets specified under --subnet-ids. For example:
+cdp environments create-aws-environment \
+--environment-name gk1dev \
+--credential-name gk1cred \
+--region "us-west-2" \
+--security-access cidr=0.0.0.0/0 \
+--authentication publicKeyId="gk1" \
+--log-storage storageLocationBase=s3a://gk1priv-cdp-bucket,instanceProfile=arn:aws:iam::152813717728:instance-profile/mock-idbroker-admin-role \
+--vpc-id vpc-037c6d94f30017c24 \
+--subnet-ids subnet-0232c7711cd864c7b subnet-05d4769d88d875cda \
+--endpoint-access-gateway-scheme PUBLIC \
+--endpoint-access-gateway-subnet-ids subnet-0232c7711cd864c7b subnet-05d4769d88d875cda \
+--free-ipa instanceCountByGroup=1 \
+Equivalent CLI JSON for an environment request looks like this: 
+
+"endpointAccessGatewayScheme": "PUBLIC",
+"endpointAccessGatewaySubnetIds": 
+       ["subnet-0232c7711cd864c7b", 
+       "subnet-05d4769d88d875cda"],
+
+
+
+
+Enabling Public Endpoint Access Gateway for Azure
+You can enable Public Endpoint Access Gateway during Azure environment registration
+  after enabling Cluster Connectivity Manager (CCM).
+Once activated, the gateway will be used for the Data Lake and all the Data Hubs
+   within the environment. There is no way to activate it on a per Data Lake or per Data Hub level.
+   Once it is enabled for an environment, there is no way to deactivate it. The gateway can be used
+   either with an existing VNet or with a new VNet created by CDP.
+If you choose to enable Public Endpoint Access Gateway, CDP will create two Azure
+   load balancers per cluster (that is, two for each Data Lake and Data Hub). 
+Steps 
+
+CDP UICDP CLI
+When registering your Azure environment, make sure to do the following:
+
+
+On the Region, Networking, and Security page, select your existing VNet or
+       select to have a new VNet created.
+
+
+If you selected an existing VNet, select at least one existing private subnet (or
+       at least three subnets if you would like to provision Data Warehouse instances). 
+
+
+The Enable Cluster Connectivity Manager option is enabled by default to enable
+       communication via private subnets. 
+Note: In spite of the warning that you see on the UI, with the Public Endpoint
+       Gateway enabled, you do not need to set up any additional connectivity in order to use
+       CCM.
+
+
+Click on Enable Public Endpoint Access Gateway to enable it. This enables
+       UIs and APIs of the Data Lake and Data Hub clusters to be accessible over the internet.
+
+
+
+
+Under Security Access Settings, make sure to restrict access to only be
+       accepted from sources coming from your external network range.noteThe security access
+        settings do not apply to the load balancer used by the Public Endpoint Access Gateway, but
+        they apply to the instances that are running in private subnets and to which the Public
+        Endpoint Access Gateway routes traffic. Therefore the security access settings should allow
+        the users’ public IP ranges to be able to connect through the public load
+       balancer.
+
+
+Finish registering your environment.
+
+
+
+During Azure environment registration via CDP CLI, you can optionally enable public
+     endpoint access gateway using the following CLI parameter:  
+--endpoint-access-gateway-scheme PUBLIC
+When enabling Endpoint Access Gateway, you should also enable CCM using the
+      --enable-tunnel parameter.
+For
+     example:cdp environments create-azure-environment 
+...
+--enable-tunnel
+--endpoint-access-gateway-scheme PUBLIC 
+Equivalent CLI JSON for an environment request looks like this: 
+cdp environments create-azure-environment
+...
+"enableTunnel": true,
+"endpointAccessGatewayScheme": "PUBLIC" 
+
+

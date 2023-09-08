@@ -1,0 +1,56 @@
+Securing an endpoint under AutoTLSCloudera Docs
+Securing an endpoint under AutoTLS
+The default cluster configuration for HiveServer (HS2) with AutoTLS secures the HS2
+        WebUI Port, but not the JDBC/ODBC endpoint. 
+ The default cluster configuration for HS2 with AutoTLS will secure the HS2 Server
+            WebUI Port, but not the JDBC/ODBC endpoint.Assumptions:
+Auto-TLS Self-signed Certificates. 
+Proper CA Root certs eliminate the need for any of the following truststore
+                    actions.
+When HS2 TLS is enabled hive.server2.use.SSL=true, the
+                auto-connect feature on gateway servers is not supported. The auto-connect feature
+                uses /etc/hive/conf/beeline-site.xml to automatically connect to Cloudera Manager
+                controlled HS2 services. Also, with hive.server2.use.SSL=true, ZooKeeper discovery
+                mode is not supported because the HS2 reference stored in ZooKeeper does not include
+                the ssl=true and other TLS truststore references (self-signed) needed to connect
+                with TLS.The beeline-site.xml file managed for gateways doesn't not include
+                ssl=true or a reference to a truststore that includes a CA for the self-signed TLS
+                certificate used by ZooKeeper or HiveServer. The best practice, under the
+                default configuration, is to have all external clients connect to Hive (JDBC/ODBC)
+                through the Apache Knox proxy. With TLS enabled via Auto-TLS with a self-signed
+                cert, you can use the jks file downloaded from Knox as the client trusted CA for the
+                Knox host. That cert will only work for KNOX. And since KNOX and HS2 TLS server
+                certs are from the same CA, Knox connects without adjustments.To connect
+                through Knox:
+
+
+Configure the HS2 transport mode as http to support the Knox proxy
+                    interface.
+
+jdbc:hive2://<host>:8443/;ssl=true;\
+transportMode=http;httpPath=gateway/cdp-proxy-api/hive;\
+...          
+
+
+                    The TLS Public Certificate in <path>/bin/certs/gateway-client-trust.jks will not work.
+                
+
+Build a TLS Public Certificate
+                    from the self-signed root CA used for the cluster in Cloudera Manager.
+keytool -import -v -trustcacerts -alias home90-ca -file \
+/var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_cacerts.pem \
+-keystore <my_cacert>.jks
+
+Connect to HS2 on the Beeline command line, using the -u option.
+
+hive -u jdbc:hive2://<HS2 host>:10001/default;ssl=true;\
+transportMode=http;httpPath=cliservice;\
+principal=hive/_HOST@<realm>;user=<user name>;\
+sslTrustStore=<path>/certs/home90_cacert.jks;\
+trustStorePassword=changeit                  
+
+The httpPath default is configured in Cloudera Manager. The sslTrustStore is
+                    required is you are using a self-signed certificate.
+
+
+Securing Hive metastoreCloudera recommends using Apache Ranger policies to secure Hive data in Hive         metastore. You need to perform a few actions to prevent users from bypassing HiveServer to         access the Hive metastore and the Hive metastore database. 

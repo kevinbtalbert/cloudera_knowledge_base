@@ -1,0 +1,119 @@
+Update Cloudera Data Warehouse Private Cloud log configuration to point to OzoneCloudera Docs
+Update Cloudera Data Warehouse Private Cloud log configuration to point to Ozone
+This topic describes how to configure Cloudera Data Warehouse (CDW) Private Cloud to
+      store logs on Ozone.
+    
+
+To configure CDW Private Cloud and the underlying OpenShift cluster to store Hive and
+        Impala logs on Ozone, you must gather some information and prepare a block of code that you
+        will insert into the Virtual Warehouse ConfigMap on the OpenShift pod. These preliminary
+        steps are described in the following section.
+
+
+Get the following information and prepare the block of code for the Virtual Warehouse
+        ConfigMap before you start the steps of updating the configuration:
+
+Get the CDW namespace for your Virtual Warehouse:
+
+From the Management Console home page left menu, click Data
+                  Warehouse in the left menu. You are taken to the Overview page of CDW
+                  Private Cloud service.
+Locate the Virtual Warehouse you want to configure log storage for in the
+                  right-most column of the page, and locate the CDW namespace, which starts with
+                  compute- as shown below:
+                
+
+
+
+
+
+Prepare the code block that must be pasted into the OpenShift ConfigMap:
+Here is an example:
+<match **>
+       @type s3
+       @log_level debug
+       aws_key_id <access-id>
+       aws_sec_key <sec-key>
+       s3_bucket <bucket-name>
+       s3_endpoint <ozone-s3-gateway-endpoint>
+       ssl_verify_peer false
+       s3_object_key_format
+       "<warehouse_prefix>/warehouse/tablespace/external/hive/sys.db/logs/dt=%Y-%m-%d/${path_tag}/%{time_slice}_${unique_file_key}.log.%{file_extension}"
+       time_slice_format %Y-%m-%d-%H-%M
+       store_as gzip
+       auto_create_bucket false
+       check_apikey_on_start false
+       force_path_style true
+       check_bucket false
+       check_object false
+       <buffer path_tag, unique_file_key, time, warehouse>
+        @type file
+        path /tmp/fluentd-buffers/%{unique_file_key}-s3.buffer
+        timekey 900 # minute precision for time_slice_format to have minute in file name
+        timekey_use_utc true
+        chunk_limit_size 265m
+        flush_mode interval
+        flush_interval "900s"
+        flush_thread_count 8
+        flush_at_shutdown true
+       </buffer>
+       <format>
+        @type single_value
+        message_key log
+        add_newline true
+       </format>
+     </match>
+In the above code block example:
+
+<bucket-name> indicates the name of the
+              Ozone bucket used for storing the CDW Private Cloud logs.
+<ozone-s3-gateway-endpoint> indicates the
+              endpoint of the Ozone S3 Gateway. Get this value from the Ozone S3 Gateway
+                Web UI page of Cloudera Manager.
+<access_id> and
+                  <sec_key> are the AWS access credentials
+              for the Ozone S3 Gateway. Get these values by using the kinit -kt and
+              the ozone s3 getsecre commands on the Private Cloud Base OpenShift
+              cluster.
+
+
+
+
+
+Using OpenShift commands, view the OpenShift project for the pod where the CDW Private Cloud instance
+                  is running by specifying the CDW namespace for the Virtual Warehouse that you noted in
+                  the Before
+                  you begin section above.
+
+For example, if the CDW namespace is compute-1596663501-224q,
+                  you can view the OpenShift project with the following command:
+oc project compute-1596663501-224q
+
+
+Open the ConfigMap for the Virtual Warehouse that is associated with the CDW namespace.
+          For example:
+
+oc edit configmap warehouse-fluentd-config
+This command opens the ConfigMap in a separate editor that is similar to
+              vi.
+
+
+Replace the match section of the ConfigMap with the code block you
+              prepared in the Before
+                you begin section above, and then save your changes
+
+Verify that the new configuration is correctly updated by running the following
+              command:
+
+oc get namespace -o yaml | grep fluentd-status
+If the configuration is successfully updated, the value of the
+                fluentd-status returns an empty string as shown in the following
+                example:
+com.cloudera/fluentd-status: ""
+      com.cloudera/fluentd-status: ""
+      com.cloudera/fluentd-status: ""
+      com.cloudera/fluentd-status: ""
+
+
+
+Parent topic: Configuring Hive/Impala logging on Ozone for Cloudera Data Warehouse Private Cloud

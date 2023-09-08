@@ -1,0 +1,176 @@
+Apache Impala changes in CDPCloudera Docs
+Apache Impala changes in CDP
+You need to understand changes that affect Impala after you upgrade from CDH 5.13-5.16
+  or CDH 6.1 or later to CDP Private Cloud Base. The version of Impala you used in CDH 5.11 - 5.16 or 6.1 or 
+  later changes to Impala 3.4 when you upgrade to CDP Private Cloud Base.
+
+
+Table Changes
+Upgrading CDH to CDP Private Cloud Base converts Impala managed tables to external tables.
+
+Location of Tables
+If Impala managed tables were located on the HDFS in /user/hive/warehouse before
+    the upgrade, the tables, converted to external, remain there. The upgrade process sets the
+    hive.metastore.warehouse.dir property to this location, designating it the Hive
+    warehouse location.
+
+Changes to Impala Syntax or Service
+
+
+If you upgrade from 5.11-5.16 to CDP Private Cloud Base, the following changes described in detail
+      below, are relevant: 
+Decimal V2 Default
+Behavior of Column Aliases
+Default PARQUET_ARRAY_RESOLUTION
+Enable Clustering Hint for Inserts
+Deprecated Query Options Removed
+refresh_after_connect Impala Shell Option Removed
+ Return Type Changed for EXTRACT and DATE_PART Functions 
+
+If you upgrade from CDH 5.15 or 5.14, the
+     ‑‑compact_catalog_topicimpalad flag default value
+    changed to true.
+If you upgrade from 6.1-6.3 to CDP Private Cloud Base, the following changes, described in detail
+      below, are relevant: 
+
+       Port Change for SHUTDOWN Command
+Change in Client Connection Timeout
+
+
+
+After upgrading from any CDH 5.x version to CDP Private Cloud Base 7.1, recompute the statistics for Impala. Even though CDH 5.x statistics will be available after the upgrade, the queries will not benefit from the new features until the statistics are recomputed.
+Impala supports a number of file formats used in Apache Hadoop. It can also load and
+      query data files produced by other Hadoop components such as hive. After upgrading from any
+      CDH 5.x version to CDP Private Cloud Base 7.1, if you create a RC file in Hive using the default
+      LazyBinaryColumnarSerDe, Impala will not be able to read the RC file. However you can set the
+      configuration option of hive.default.rcfile.serde to ColumnarSerDe to maintain the interoperability
+      between hive and impala.
+After upgrading from CDH to CDP, the on-demand use_local_catalog mode is
+      set to True by default on all the Impala coordinators so that the Impala
+      coordinators pull metadata as needed from catalogd and cache it locally. This reduces memory
+      footprint on coordinators and automate the cache eviction.
+In CDP, the catalog_topic_mode is set to minimal by
+      default to enable on demand metadata for all coordinators.
+
+
+
+Decimal V2 Default
+ In CDP, Impala uses DECIMAL V2 by default.
+
+    If you need to continue using the first version of the DECIMAL type for
+    the backward compatibility of your queries, set the DECIMAL_V2 query
+    option to FALSE:
+    SET DECIMAL_V2=FALSE;
+
+
+Column Aliases Substitution
+To conform to the SQL standard, Impala no longer performs alias substitution in the
+    subexpressions of GROUP BY, HAVING, and ORDER
+     BY.
+The example below references to the actual column sum(ss_quantity) in the
+     ORDER BY clause instead of the alias Total_Quantity_Purchased
+    and also references to the actual column ss_item_sk in the GROUP
+     BYclause instead of the alias Item since aliases are no longer
+    supported in the subexpressions.
+select
+ss_item_sk as Item,
+count(ss_item_sk) as Times_Purchased,
+sum(ss_quantity) as Total_Quantity_Purchased
+from store_sales
+group by ss_item_sk
+order by sum(ss_quantity) desc
+limit 5;
++-------+-----------------+--------------------------+
+| item  | times_purchased | total_quantity_purchased |
++-------+-----------------+--------------------------+
+| 9325  | 372             | 19072                    |
+| 4279  | 357             | 18501                    |
+| 7507  | 371             | 18475                    |
+| 5953  | 369             | 18451                    |
+| 16753 | 375             | 18446                    |
++-------+-----------------+--------------------------+
+
+Default PARQUET_ARRAY_RESOLUTION
+ The default value for the PARQUET_ARRAY_RESOLUTION is THREE_LEVEL to match the Parquet
+    standard 3-level encoding. 
+
+Clustered Hint Default
+The clustered hint is enabled by default, which adds a local sort by the partitioning
+    columns HDFS and Kudu tables to a query plan. The noclustered hint, which prevents
+    clustering in tables having ordering columns, is ignored with a warning. 
+ 
+
+Query Options Removed 
+ The following query options have been removed: 
+
+DEFAULT_ORDER_BY_LIMIT
+
+
+ABORT_ON_DEFAULT_LIMIT_EXCEEDED
+
+
+V_CPU_CORES
+
+
+RESERVATION_REQUEST_TIMEOUT
+
+
+RM_INITIAL_MEM
+
+
+SCAN_NODE_CODEGEN_THRESHOLD
+
+
+MAX_IO_BUFFERS
+
+
+RM_INITIAL_MEM
+
+
+DISABLE_CACHED_READS
+
+
+
+
+Shell Option refresh_after_connect
+ The refresh_after_connect option for starting the Impala Shell is
+    removed.
+
+Deprecated Support to LZOCompressed Tables
+In CDH, you might have used LZO compression for the text files for more compact data. And Impala
+   supported text files that employ LZO compression. But in CDP, we deprecated support to LZO compressed tables
+   since impala-lzo plugin is no longer shipped as part of GPL Extras.
+
+EXTRACT and DATE_PART Functions
+ The EXTRACT and DATE_PART functions changed in the
+    following way: 
+ The output type of the EXTRACT and DATE_PART functions
+      was changed to BIGINT. 
+
+ Extracting the millisecond part from a TIMESTAMP returns the seconds
+       component and the milliseconds component. For example, EXTRACT (CAST('2006-05-12
+        18:27:28.123456789' AS TIMESTAMP), 'MILLISECOND') will return
+        28123. 
+
+
+
+Port for SHUTDOWN Command
+ If you upgraded from CDH 6.1 or later and specified a port as part of the
+    SHUTDOWN command, change the port number parameter to use the Kudu7: RPC
+    (KRPC) port for communication between the Impala brokers.
+
+Change in Client Connection Timeout
+The default behavior of client connection timeout changes after upgrading.
+In CDH 6.2 and lower, the client waited indefinitely to open the new session if the maximum
+    number of threads specified by --fe_service_threads has been allocated.
+After upgrading, the server requires a new startup flag,
+    --accepted_client_cnxn_timeout to control treatment of new connection
+    requests the configured number of server threads is insufficient for the workload.
+If --accepted_client_cnxn_timeout > 0, new connection requests are
+    rejected after the specified timeout.
+If --accepted_client_cnxn_timeout=0, clients waits indefinitely to connect
+    to Impala. This sets pre-upgrade behavior.
+The default timeout is 5 minutes. 
+
+
+Related informationDecimal Data TypeImpala AliasesImpala Query OptionsSet ACLs for ImpalaTo allow Impala to write to the Hive Warehouse Directory you must set ACLs for         Impala.Impala Configuration ChangesThe upgrade process to CDP Private Cloud Base changes the default values of some Impala     configuration properties and adds new properties.Interoperability between Hive and ImpalaThis topic describes the changes made in CDP for the optimal interoperability   between Hive and Impala for the improved user experience.Revert to CDH-like TablesIn CDH 5 and CDH 6, CREATE TABLE created managed non-ACID tables in          text format. In CDP, CREATE TABLE creates an INSERT-ONLY table         in parquet format. After upgrading, to avoid code changes due to new features in CDP,         you might want want to disable the new transactional (ACID) table type and parquet file         format defaults. The old table type and file format (managed, non-transactional and text)         take effect when you disable the new defaults. Authorization Provider for ImpalaIn CDP, Ranger is the authorization provider instead of Sentry.   There are some changes with how Ranger enforces a policy which may be different from using Sentry.Data Governance Support by AtlasBoth CDH  and CDP environments support governance functionality for   Impala operations. The two environments collect similar information to   describe Impala activities, including:Handling Data FilesYou must know how to recursively load the data files, for transactional tables, that are not         stored directly within the partition directories, but instead are stored within         subdirectories corresponding to writeIds, compactions, etc.Parent topic: CDH 5 to CDP Private Cloud Base post-upgrade transition steps

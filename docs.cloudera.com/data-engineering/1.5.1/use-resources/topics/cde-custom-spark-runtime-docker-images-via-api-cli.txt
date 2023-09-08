@@ -1,0 +1,130 @@
+Using Custom Spark Runtime Docker Images Via API/CLICloudera Docs
+Using Custom Spark Runtime Docker Images Via API/CLI 
+This is a detailed usage guide to demonstrate how to run jobs using custom spark
+    runtime with examples.
+Steps
+
+Create a custom docker imageBuild “custom-spark-dex-runtime” images
+          based on the dex-spark-runtime image of the CDE version.noteThe image should be based on the dex-spark-runtime of the current
+            dex version.The relevant dex-spark-runtime image
+          is<registry-host>/cloudera/dex/dex-spark-runtime-<spark version>-<cdh version>:<dex version>
+Example: DockerFile for DEX 1.18.2-b70, Spark 2.4.7 version, and
+          CDH
+          version.DockerFile for DEX 1.18.2-b70, spark 2.4.7 version, and CDH version.
+FROM docker-private.infra.cloudera.com/cloudera/dex/dex-spark-runtime-2.4.7-7.1.7.1000:1.18.2-b70
+USER root
+RUN yum install -y git && yum clean all && rm -rf /var/cache/yum
+RUN pip2 install virtualenv-api
+RUN pip3 install virtualenv-api
+USER ${DEX_UID}
+Build the docker image tagging it with the custom registry to be used and push it to the
+        custom registry.
+          Example:mac@local:$ docker build --network=host -t docker.my-company.registry.com/custom-dex/dex-spark-runtime-2.4.7-7.1.7.1000:1.18.2-b70-custom . -f Dockerfile
+mac@local:$ docker push docker.my-company.registry.com/custom-dex/dex-spark-runtime-2.4.7-7.1.7.1000:1.18.2-b70-customHere,
+          the custom registry is docker.my-company.registry.com and the registry namespace is
+          custom-dex.
+note Obtain $CDE_TOKEN to execute the REST API examples by
+            following Getting a Cloudera Data Engineering API access
+                token document.
+
+Create the credentials for the custom image registry.Register docker registry image
+          pull credentials using the CDE CLI or REST API. These credentials are stored as a
+          secret.
+noteIf using public registry skip to this step 
+
+
+CLIREST API
+mac@local:$ ./cde credential create --name docker-creds --type docker-basic --docker-server docker-sandbox.infra.cloudera.com --docker-username my-username
+
+
+curl -X POST -k 'https://<dex-vc-host>/dex/api/v1/credentials' \
+  -H "Authorization: Bearer ${CDE_TOKEN}"  \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  --data  ‘{
+  "dockerBasic": {
+    "password": "password123",
+    "server": "docker-sandbox.infra.cloudera.com",
+    "username": "my-username"
+  },
+  "name": "docker-creds",
+  "type": "docker-basic"
+}’
+
+
+Create custom-runtime-image resource referring to the credential created
+          previously.Register “custom-spark-dex-runtime”docker image
+          as a resource of type custom-runtime-image specifying the name of the
+          credential created in the previous step.
+CLIREST API
+mac@local:$ ./cde resource create --name custom-image-resource --image 
+docker.my-company.registry.com/custom-dex/dex-spark-runtime-2.4.7-7.1.7.1000:1.18.2-b70-custom --image-engine spark2 --type custom-runtime-image --image-credential docker-creds
+
+
+curl -X POST -k 'https://<dex-vc-host>/dex/api/v1/resources \
+  -H "Authorization: Bearer ${CDE_TOKEN}"  \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  --data  ‘{
+  "customRuntimeImage": {
+    "credential": "docker-creds",
+    "engine": "spark2",
+    "image":    "docker.my-company.registry.com/custom-dex/dex-spark-runtime-2.4.7-7.1.7.1000:1.18.2-b70-custom"
+  },
+  "name": "custom-image-resource",
+   "type": "custom-runtime-image"
+}'
+
+
+
+
+Submit a job by setting the “custom-spark-dex-runtime” image
+          as a resource using the CLI
+SPARK COMMANDJOB COMMAND
+mac@local:$ ./cde --user cdpuser1 spark submit /Users/my-username/spark-examples_2.11-2.4.4.jar 
+--class org.apache.spark.examples.SparkPi 1000 --runtime-image-resource-name=custom-image-resource
+
+
+mac@local:$ ./cde --user cdpuser1 resource create --name spark-jar
+mac@local:$ ./cde --user cdpuser1 resource upload --name spark-jar --local-path spark-examples_2.11-2.4.4.jar
+
+mac@local:$ ./cde --user cdpuser1 job create --name spark-pi-job-cli --type spark --mount-1-resource spark-jar --application-file spark-examples_2.11-2.4.4.jar --class org.apache.spark.examples.SparkPi --user cdpuser1 --arg 22 --runtime-image-resource-name custom-image-resource
+
+
+
+
+The spark driver/executor pods should use this specific image and you can confirm it by
+        opening a shell into those pods and verifying if the external installed libraries or files
+        exist.
+
+Public docker registries
+Create the resource for the registries which do not require any auth. You do not need to
+      specify the credentials.
+CLIREST API
+mac@local:$ cde resource create --name custom-image-resource --image docker.my-company.registry.com/custom-dex/dex-spark-runtime-2.4.7-7.1.7.1000:1.18.2-b70-custom --image-engine spark2 --type custom-runtime-image
+
+
+ccurl -X POST -k 'https://<dex-vc-host>/dex/api/v1/resources \
+  -H "Authorization: Bearer ${CDE_TOKEN}"  \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  --data  ‘{
+  "customRuntimeImage": {
+    "engine": "spark2",
+    "image":    "docker.my-company.registry.com/custom-dex/dex-spark-runtime-2.4.7-7.1.7.1000:1.18.2-b70-custom"
+  },
+  "name": "custom-image-resource",
+   "type": "custom-runtime-image"
+}’
+
+
+Once done, skip to #step 5 to submit the job.
+Error: Custom image resource with missing or wrong credentials
+Creating a custom image resource with missing or wrong credentials should result in the below
+      error which can be seen in the logs or in kubernetes pod events.
+Example
+Failed to pull image "docker.my-company.registry.com/custom-dex/dex-spark-runtime-2.4.7-7.1.7.1000:1.18.2-b70-custom": 
+rpc error: code = Unknown desc = Error reading manifest 1.18.2-b70-custom in docker.my-company.registry.com/custom-dex/dex-spark-runtime-2.4.7-7.1.7.1000: 
+errors: denied: requested access to the resource is denied unauthorized: authentication required
+
+

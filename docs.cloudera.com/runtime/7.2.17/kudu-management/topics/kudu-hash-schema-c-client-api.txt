@@ -1,0 +1,80 @@
+Range-specific hash schemas example: Using Kudu C++ client APICloudera Docs
+Range-specific hash schemas example: Using Kudu C++ client API
+Review an example of using Kudu C++ client API to create a table with a range partition
+    having range-specific hash schema and then alter the table, adding one more range with custom
+    hash schema. 
+
+
+noteAfter adding or dropping ranges with custom hash schemas you
+          have to refresh the KuduTable handle.
+
+ // Define the column schema for the table.
+  KuduSchema schema;
+  {
+    KuduSchemaBuilder b;
+    b.AddColumn("key")->Type(KuduColumnSchema::INT32)->NotNull()->PrimaryKey();
+    b.AddColumn("int_col")->Type(KuduColumnSchema::INT32)->NotNull();
+    b.AddColumn("string_col")->Type(KuduColumnSchema::STRING);
+    RETURN_NOT_OK(b.Build(&schema));
+  }
+
+  unique_ptr<KuduTableCreator> tc(client->NewTableCreator());
+  // The table is range-partitioned by the ‘key’ column and has table-wide hash schema:
+  // one-dimensional hash bucketing into two buckets by the ‘key’ column.
+  table_creator->table_name("test")
+      .schema(&schema)
+      .add_hash_partitions({ "key" }, 2)
+      .set_range_partition_columns({ "key" });
+
+  // Add [0, 100) range partition with custom hash schema:
+  // 5 buckets with hash based on the "key" column with hash seed 8.
+  {
+    unique_ptr<KuduPartialRow> lower(schema.NewRow());
+    RETURN_NOT_OK(lower->SetInt32("key", 0));
+
+    unique_ptr<KuduPartialRow> upper(schema.NewRow());
+    RETURN_NOT_OK(upper->SetInt32("key", 100));
+
+    unique_ptr<KuduRangePartition> p(
+        new KuduRangePartition(lower.release(), upper.release()));
+    RETURN_NOT_OK(p->add_hash_partitions({ "key" }, 5, 8));
+    tc->add_custom_range_partition(p.release());
+  }
+
+  // Create the ‘test’ table with the specified column schema
+  // and one range partition.
+  RETURN_NOT_OK(tc->Create());
+
+  // Open the table and work with it.
+  shared_ptr<KuduTable> table;
+  RETURN_NOT_OK(client->OpenTable("test", &table));
+  . . .
+
+  // Alter the table, adding a new range [100, 200) with range-specific hash
+  // schema: 3 buckets with hash based on the "key" column with hash seed 1.
+  {
+    unique_ptr<KuduPartialRow> lower(schema.NewRow());
+    RETURN_NOT_OK(lower->SetInt32("key", 222));
+
+    unique_ptr<KuduPartialRow> upper(schema.NewRow());
+    RETURN_NOT_OK(upper->SetInt32("key", 333));
+
+    unique_ptr<KuduRangePartition> p(
+        new KuduRangePartition(lower.release(), upper.release()));
+    RETURN_NOT_OK(p->add_hash_partitions({ "key" }, 3, 1));
+
+    unique_ptr<KuduTableAlterer> ta(client->NewTableAlterer(kTableName));
+    ta->AddRangePartition(p.release());
+    RETURN_NOT_OK(ta->Alter());
+  }
+
+  // NOTE: after adding or dropping a range with custom hash schemas
+  //       it’s necessary to refresh the KuduTable handle
+  RETURN_NOT_OK(client->OpenTable("test", &table));
+
+  // Continue working with the table.
+  . . .
+
+
+
+Parent topic: Managing Kudu tables with range-specific hash schemas

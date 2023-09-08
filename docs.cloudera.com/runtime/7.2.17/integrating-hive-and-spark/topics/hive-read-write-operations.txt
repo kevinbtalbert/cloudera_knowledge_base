@@ -1,0 +1,73 @@
+Read and write operationsCloudera Docs
+Read and write operations
+Brief descriptions of HWC API operations and examples cover how to read and write
+    Apache Hive tables from Apache Spark. You learn how to update statements and write DataFrames to
+    partitioned Hive tables, perform batch writes, and use HiveStreaming.
+Read operations
+Run a Hive SELECT query and return a DataFrame.
+
+hive.sql("select * from web_sales")
+HWC supports push-downs of DataFrame filters and projections applied to
+          .sql().
+
+Run a Hive update statement
+Run CREATE, UPDATE, DELETE, INSERT, and MERGE statements in this
+  way:hive.executeUpdate("ALTER TABLE old_name RENAME TO
+            new_name")
+
+Write a DataFrame to Hive in batch
+This operation uses LOAD DATA INTO
+        TABLE.
+Java/Scala:
+df.write.format(HIVE_WAREHOUSE_CONNECTOR).option("table", <tableName>).save()
+Python:
+df.write.format(HiveWarehouseSession().HIVE_WAREHOUSE_CONNECTOR).option("table", &tableName>).save()
+
+Write a DataFrame to Hive, specifying partitions
+HWC follows Hive semantics for overwriting data with and without partitions and is not
+        affected by the setting of spark.sql.sources.partitionOverwriteMode to
+        static or dynamic. This behavior mimics the latest Spark Community trend reflected in
+        Spark-20236 (link below).
+Java/Scala:df.write.format(HIVE_WAREHOUSE_CONNECTOR).option("table", <tableName>).option("partition", <partition_spec>).save()Python:df.write.format(HiveWarehouseSession().HIVE_WAREHOUSE_CONNECTOR).option("table", &tableName>).option("partition", <partition_spec>).save()
+Where
+          <partition_spec> is in one of the following forms:
+option("partition", "c1='val1',c2=val2") // static
+
+option("partition", "c1='val1',c2") // static followed by
+              dynamic
+option("partition", "c1,c2") // dynamic
+
+Depending on the partition spec, HWC generates queries in one of the following forms for
+          writing data to Hive. 
+No partitions specified = LOAD DATA
+Only static partitions specified = LOAD DATA...PARTITION
+ Some dynamic partition present = CREATE TEMP TABLE + INSERT INTO/OVERWRITE query.
+            
+
+Note: Writing static partitions is faster than writing dynamic partitions.
+
+Write a DataFrame to Hive using
+        HiveStreaming
+When using HiveStreaming to write a DataFrame to Hive or a Spark Stream to Hive, you need
+        to escape any commas in the stream.
+Java/Scala:
+//Using dynamic partitioning
+df.write.format(DATAFRAME_TO_STREAM).option("table", <tableName>).save()
+          
+//Or, writing to a static partition
+df.write.format(DATAFRAME_TO_STREAM).option("table", <tableName>).option("partition", <partition>).save() 
+Python:
+//Using dynamic partitioning
+df.write.format(HiveWarehouseSession().DATAFRAME_TO_STREAM).option("table", <tableName>).save()
+          
+//Or, writing to a static partition
+df.write.format(HiveWarehouseSession().DATAFRAME_TO_STREAM).option("table", <tableName>).option("partition", <partition>).save()     
+
+Write a Spark Stream to Hive using HiveStreaming
+Java/Scala:
+stream.writeStream.format(STREAM_TO_STREAM).option("table", "web_sales").start()
+Python:
+stream.writeStream.format(HiveWarehouseSession().STREAM_TO_STREAM).option("table", "web_sales").start()
+
+
+Related informationHMS storageSPARK-20236Parent topic: Introduction to HWC and DataFrame APIs

@@ -1,0 +1,42 @@
+Restoring Data VisualizationCloudera Docs
+Restoring Data Visualization
+You can restore the Data Visualization instance that you backed up. 
+
+Find the necessary information like database name, host, port, user, and password. On the new cluster, this information will be different from the old cluster.
+
+$ kubectl get secrets/pg-db-secret -o=jsonpath={.data.'\.pgpass'} -n <viz-id> | base64 -D
+
+postgres-service:<port>:<database name>:<user>:<password>For
+                    example:
+                    $ kubectl get secrets/pg-db-secret -o=jsonpath={.data.'\.pgpass'} -n viz-1680129861-kbtr | base64 -D
+
+postgres-service:5432:metastore:hive:ZufGC6Dmh03N1iW042uTosZtr4XvCtJIYPQ==
+
+Using these properties you will be able to connect to the database and
+                    load the backup.  
+
+Use kubectl or k9s to access Hue container in the targeted CDW environment
+                    (need KUBECONFIG setup), and find the namespace for Hue and for Data
+                    Visualization.
+$ kubectl get pods --all-namespaces --field-selector metadata.name=huebackend-0
+
+$ kubectl get pods --all-namespaces --field-selector metadata.name=viz-webapp-0
+If you have multiple Data Visualization instances running, match the new Data
+                    Visualization namespace names to the user-friendly names on the CDW UI.
+
+Select one of the Hue namespaces and copy the dump file to your container.
+                
+$ kubectl cp ~/Downloads/logs/viz_pg_dump.tar <Hue container>/huebackend-0:/opt/hive/viz_pg_dump.tar -c hueFor
+                    example:
+                    $ kubectl cp ~/Downloads/logs/viz_pg_dump.tar impala-1679934278-6pgc/huebackend-0:/opt/hive/viz_pg_dump.tar -c hue                
+
+Shell into the container.
+$ kubectl exec -it huebackend-0 -n <Hue container> -c hue -- /bin/bash
+
+Load the dump back to the database, taking care if you have multiple DataViz instances to load the contents back to the right database. 
+pg_restore -d <DataViz database ID> -h postgres-service ./viz_pg_dump.tar -c -U hiveFor
+                    example:
+                    pg_restore -d viz-1680137534-87s4_vizdb -h postgres-service ./viz_pg_dump.tar -c -U hive
+
+
+Parent topic: Restoring the environment

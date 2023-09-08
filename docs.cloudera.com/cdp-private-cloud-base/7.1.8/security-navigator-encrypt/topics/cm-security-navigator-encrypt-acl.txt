@@ -1,0 +1,248 @@
+Navigator Encrypt Access Control ListCloudera Docs
+Navigator Encrypt Access Control List
+
+
+Managing the Access Control List
+
+Cloudera Navigator Encrypt manages file system permissions with an access control list (ACL). This ACL is a security access control created by Cloudera that enables a predefined Linux process to access a file or directory managed by Navigator Encrypt.
+The ACL uses rules to control process access to files. The rules specify whether a Linux process has access permissions to read from or write to a specific Navigator Encrypt path.
+A rule is defined in the following order:# TYPE @CATEGORY PATH PROCESS PARAMETERS
+The following table defines the ACL rule components:Table 1. ACL Rule Components
+
+Component
+Description
+
+
+
+TYPE
+Specifies whether to allow or deny a process. It can have either of the following values: ALLOW or DENY.
+
+
+@CATEGORY
+This is a user-defined shorthand, or container, for the
+                  encrypted dataset that the process will have access to. For
+                  example, if you are encrypting the directory
+                    /var/lib/mysql, you could use the category
+                    @mysql to indicate that this rule is
+                  granting access to a process on the MySQL data. See Listing Categories for instructions on viewing existing categories.
+
+
+PATH
+Specifies the rights permissions of a specific path. For
+                  example: *, www/*.htaccess.
+                  Omit the leading slash (/).
+
+
+PROCESS
+Specifies the process or command name for the rule.
+
+
+PARAMETERS
+
+Tells the process the parent-child process to be executed:
+--shell defines the script for Navigator
+                    Encrypt to allow for executable process. Supported shells
+                    are /usr/bin/bash,
+                      /bin/bash,
+                    /usr/bin/dash, and
+                      /bin/bash.
+--children defines for Navigator Encrypt which child processes to allow that are executed by a process/script.
+Example: --shell=/bin/bash, --children=/bin/df,/bin/ls
+
+
+
+All rules are stored in an encrypted policy file together with a set of process signatures that are used by Navigator Encrypt to authenticate each Linux process. This file is encrypted with the Navigator Encrypt key you defined during installation.
+Cloudera recommends using permissive mode to assist
+        with the initial ACL rule creation for your environment. In
+          permissive mode, Navigator Encrypt allows full access
+        to the encrypted data by all processes, but logs them in
+          dmesg as action="denied" messages.
+        Consult these messages to identify required ACL rules. To set Navigator
+        Encrypt to permissive mode, use the following
+        command:sudo /usr/sbin/navencrypt set --mode=permissive
+To view the current mode, run navencrypt status -d. For more information on access modes, see Access Modes.
+deny2allow
+After you generate the action="denied" messages, use the navencrypt deny2allow command to show which ACL rules are required, based on the action="denied" messages in dmesg. To show which ACL rules are required, perform the following steps:
+Save the dmesg content to a
+              file:sudo dmesg > /tmp/dmesg.txt
+Use the dmesg.txt file content as input to the
+                deny2allow command to analyze the
+                action="denied" messages and display a list of
+              required ACL rules based on the action="denied"
+              messages. Here is an example command and
+              output:$ sudo /usr/sbin/navencrypt deny2allow /tmp/dmesg.txt
+ALLOW @mysql employees/* /usr/sbin/mysqld
+ALLOW @mysql * /bin/bash
+ALLOW @mysql * /bin/ls
+
+If you need to clear the dmesg log and start fresh, run dmesg -c.
+If a rule is displayed in the output from the command, it does not automatically mean the ACL rule must be added. You must determine which rules are actually needed. For example, the rule for ls would not typically be added as an ACL rule.
+After the initial ACL rules are created, disable
+            permissive mode with the following
+          command:sudo /usr/sbin/navencrypt set --mode=enforcing
+
+Adding ACL Rules
+Rules can be added one at a time using the command line or by
+          specifying a policy file containing multiple rules. The following
+          example shows how to add a single rule using the navencrypt
+            acl --add
+          command:sudo /usr/sbin/navencrypt acl --add --rule="ALLOW @mysql * /usr/sbin/mysqld"
+See Listing Categories for instructions on viewing existing categories.
+The following example shows how to add multiple rules using a policy
+          file:sudo /usr/sbin/navencrypt acl --add --file=/mnt/private/acl_rules
+The contents of the policy file should contain one rule per line. For example:ALLOW @mysql * /usr/sbin/mysqld
+ALLOW @log * /usr/sbin/mysqld
+ALLOW @apache * /usr/lib/apache2/mpm-prefork/apache2
+Navigator Encrypt releases 3.10 and higher support comments in the
+          policy file. Comments begin with the hash (#) symbol.
+          You can use comments to annotate the policy file, or to temporarily
+          disable a rule for testing. For example:
+# Cloudera Navigator Encrypt policy file
+# Allow mysqld to access all database files
+ALLOW @mysql * /usr/sbin/mysqld
+# Allow mysqld to write logs
+ALLOW @log * /usr/sbin/mysqld
+# ALLOW @apache * /usr/lib/apache2/mpm-prefork/apache2
+Using a policy file is the fastest way to add multiple rules because it only requires the security key one time.
+It is also possible to overwrite the entire current rules set with the option --overwrite. When this command is executed, all current rules are replaced by the ones specified in the file that contains the new set of rules. Cloudera recommends to save a copy of your current set of rules by printing it with the option --print.
+Here is an example command using the --overwrite
+          option:sudo /usr/sbin/navencrypt acl --overwrite --file=/mnt/private/acl_rules
+
+Adding ACL Rules by Profile
+If your environment requires more granular controls on the processes
+          that can access the data, you can add extra controls by using
+          profiles. Profiles set requirements on a process other than just
+          having the correct fingerprint. They can include such things as
+          process owner and group, required open files, and the current working
+          directory. To see more about adding rules by profile, see ACL Profile Rules. For details about
+          fingerprints, see Process-Based Access Control List.
+
+Deleting ACL Rules
+Rules can be deleted in one of two ways:
+Manually specifying the rule to delete using the command line.
+Specifying the line number of the rule to delete.
+
+The following example shows how to delete a rule by passing it as a
+          parameter:sudo /usr/sbin/navencrypt acl --del --rule="ALLOW @mysql * /usr/sbin/mysqld "
+If you remove a MySQL ALLOW rule, the MySQL cache must be cleaned by executing the FLUSH TABLES; MySQL statement. Otherwise, it will still be possible to view data from encrypted table.
+The following example shows how to delete a rule by specifying a line
+          number:sudo /usr/sbin/navencrypt acl --del --line 3
+It is also possible to delete multiple ACL rules in a single
+          command:sudo /usr/sbin/navencrypt acl --del --line=1,3
+See Printing ACL Rules for information on determining line numbers.
+
+Deleting ACL Rules by Profile
+See ACL Profile Rules for instructions on deleting rules by profile.
+
+Printing ACL Rules
+You can print the current Access Control List using the following
+          command:sudo /usr/sbin/navencrypt acl --print
+Save the ACL to a file with the --file
+          option:sudo /usr/sbin/navencrypt acl --print --file=policy-backup
+To display additional information about the organization of the
+          policy file, use the --list
+          option:sudo /usr/sbin/navencrypt acl --list
+
+Universal ACL Rules
+Universal ACLs will allow or deny a process access to all files or directories encrypted with Navigator Encrypt.
+The rule ALLOW @* * /process allows the designated process to access anything from all encrypted categories.
+The rule ALLOW @data * * allows all processes access to any path under the @data category.
+The rule ALLOW @* * * allows all processes access to
+          all encrypted categories. Cloudera does not recommend using this rule.
+          Use it only in test environments.
+Here is an example adding a universal ACL rule and then displaying
+          it:$ sudo /usr/sbin/navencrypt acl --add --rule="ALLOW @* * /usr/sbin/mysqld"
+Type MASTER passphrase:
+1 rule(s) were added
+# navencrypt acl --listType MASTER passphrase:
+# -  Type     Category       Path                     Profile  Process
+1    ALLOW    @*             *                                 /usr/sbin/mysqld   
+
+Enabling Shell Scripts to Be Detected by ACL
+All of the previous rules work for binary files. There may be times a script, such as a shell script, must be allowed to access the encrypted directory.
+You can add the script as a rule by indicating the executable binary process of this script using the --shell option, for example:ALLOW @scripts * /root/script.sh --shell=/bin/bash
+The --shell option identifies which executable
+          process is used to run the script. Supported shells are
+            /usr/bin/bash, /bin/bash,
+            /usr/bin/dash, and /bin/bash
+If the script is altered, it will no longer be trusted by the ACL because the fingerprint has changed. If you edit the script you must invoke the update option to update the ACL with the new fingerprint.
+In some cases, it may be necessary to grant permissions to
+          sub-processes invoked by scripts. For example, it may be necessary to
+          grant permissions to /bin/bash that also allow
+          running the /bin/df command to allow the system
+          administrator to check disk capacity through a script run using a
+            crontab entry. By using the
+            --children option, you can specify these
+          permissions. For
+          example:ALLOW @scripts * /root/script.sh --shell=/bin/bash --children=/bin/df
+The --children option tells Navigator Encrypt to allow the /bin/df binary process if it is executed by /root/script.sh.
+To allow more than one sub-process, identify them with the --children option as comma-separated values. For example:ALLOW @scripts * /root/script.sh --shell=/bin/bash --children=/bin/df,/bin/ls
+To add shell-children sub-processes, run the navencrypt
+            acl --add command, for
+          example:$ sudo /usr/sbin/navencrypt acl --add --rule="ALLOW @mysql * /usr/bin/mysqld_safe \
+--shell=/bin/bash --children=/bin/df,/bin/ls"
+
+
+
+
+ACL Profile Rules
+
+If your environment requires more granular controls on the processes that can access the data, you can add extra controls by using profiles. Profiles set requirements on a process other than just having the correct fingerprint. They can include such things as process owner and group, required open files, and the current working directory.
+A profile is generated by using the following
+        command:usr/sbin/navencrypt-profile --pid=<pid>
+The output, by default, will be displayed on the screen. You can
+        redirect the output to a file using the > or
+          >> redirect operators. You can then edit the
+        JSON output in the file to remove lines you do not want. By default, the
+        profile includes the UID, the short name of the binary or script
+        (identified as comm ), and the full command line of the running process
+        (including any parameters passed). You can generate information by using
+        one of these flags:
+-c, --with-cwdOutput the
+              current working directory
+-e, --with-egidOutput the
+              egid
+-g, --with-gidOutput the
+              gid
+-u, --with-euidOutput the
+              euid
+
+Example output from the navencrypt-profile command:{
+"uid":"0",
+"comm":"NetworkManager",
+"cmdline":"NetworkManager –pid-file=/var/run/NetwrkManager/NetworkManager.pid",
+"gid":"0"
+"cwd":"/",
+"fd0":"/dev/null",
+"fd1":"/dev/null",
+"fd2":"/dev/null"
+}
+Some distributions do not support euid and
+          guid. Make sure that your profile file is correct by
+        executing the following command to verify the expected
+        IDs:ps -p <pid_of_process> -o euid,egid
+If cmdline parameters are variable, such as appending a process start
+        timestamp to a file name, then the process profile will not match on subsequent restarts of
+        the process because the current profile will have an updated timestamp and access will be
+        denied by the ACL. You can mark those parameters as variable inside the profile file. For
+        example, if the cmdline of a process is something like
+        this:"cmdline":"NetworkManager –pid-file=/var/run/NetworkManager/NetworkManager.pid \
+-logfile=/var/log/NetworkManager/log-20130808152300.log"
+Where log-20130505122300.log is a variable cmdline parameter, before adding the process profile to the ACL, edit the process profile file and use ## to specify that a particular parameter is variable:"cmdline":"NetworkManager –pid-file=/var/run/NetworkManager/NetworkManager.pid -logfile=##"
+With the above configuration, the ACL will allow any value for the -logfile
+cmdline parameter.
+To enable a profile in the ACL, use the additional parameter
+          --profile-file=<filename> when adding the rule
+        to the
+        ACL:$ sudo /usr/sbin/navencrypt acl --add --rule="ALLOW @mysql * /usr/sbin/mysqld" \
+–-profile-file=/path/to/profile/file
+To display the profile portion of the rules, use the
+          --all parameter with navencrypt acl
+          --list:$ sudo /usr/sbin/navencrypt acl --list --all
+Type MASTER passphrase:
+# - Type Category Path Profile Process
+1 ALLOW @mysql * YES /usr/sbin/mysqld
+PROFILE:
+{"uid":"120","comm":"mysqld","cmdline":"mysqld"}
+
+

@@ -1,0 +1,172 @@
+Step 9: Complete Post-Upgrade steps for upgrades to CDP Private Cloud BaseCloudera Docs
+Step 9: Complete Post-Upgrade steps for upgrades to CDP Private Cloud Base
+Steps to perform after upgrading a cluster.
+
+
+
+Loading Filters ...
+
+ 
+7.0.3 7.1.1 7.1.2 7.1.3 7.1.4
+          7.2.4 7.3.1 7.4.4 7.5.1 7.6.1 7.6.7 7.7.1
+          7.7.3
+
+
+7.1.8 7.1.7.1000 7.1.7 7.1.6 7.1.5
+          7.1.4 7.1.3 7.1.2 7.1.1
+7.1.7.2000
+7.7.3 7.7.1 7.6.7 7.6.1
+          7.5.1 7.4.4 7.4.3 7.3.1 7.2.4 7.1.4 7.1.3 7.1.2
+          7.1.1
+
+ Some components might require additional steps after you complete the upgrade to CDP Private Cloud Base:importantDuring
+        the course of the upgrade to CDP if you experience any issue midway through the process, the
+        Install YARN MapReduce Framework JARs, Tez MR Framework JARs, and Oozie Sharelib processes
+        may not complete successfully. This action ensures that the latest MR Framework JARs exist
+        in HDFS. For example: /user/yarn/mapreduce/mr-framework/, and that they
+        are used instead of any old ones. This situation can create an issue when upgrading to a
+        version containing the fix for log4j vulnerabilities, such as 7.1.7 Service Pack releases,
+        because the old vulnerable log4j files are contained within the MR Framework JARs tar file.
+      As a post-upgrade step, you must check that location in HDFS to ensure that it is the
+      latest version, and run the following if it does
+      not:hdfs dfs -ls /user/yarn/mapreduce/mr-framework/If
+      only the old version's tar file exists there, such as:
+/user/yarn/mapreduce/mr-framework/3.1.1.7.1.7.78-12-mr-framework.tar.gzThen
+      perform the following: Cloudera Manager > Yarn >
+        Actions > Install YARN MapReduce Framework
+        JARs.You can clear out the old tar file after this is done for keeping it
+      clean.
+Tez MR Framework JARs and Oozie Sharelib
+      entities must be examined in the similar manner. Check that location in HDFS to ensure that it
+      is the latest version, and run the following if it does not: 
+Cloudera Manager > Yarn >
+            Actions > Install YARN MapReduce Framework
+            JARs
+Cloudera Manager > Tez >
+            Actions > Upload Tez tar file to HDFS
+Cloudera Manager > Oozie >
+            Actions > Install Oozie ShareLib
+Clear any old files out of these directories: 
+
+hdfs dfs -ls -R /user/yarn/mapreduce/mr-framework/
+
+
+hdfs dfs -ls -R /user/tez/
+
+
+hdfs dfs -ls /user/oozie/share/lib/
+
+noteIf service specific instructions are not displayed on this
+        page, then there are no post-upgrade steps required for your upgrade. 
+gRPC TLS configuration for
+          Ozone is supported only on new CDP 7.1.7 clusters and not on clusters upgraded from CDP
+          7.1.6 to CDP 7.1.7. If you want to enable gRPC TLS on the upgraded CDP 7.1.7 clusters, you
+          must contact Cloudera Support for more information.
+Schema RegistryThe Ranger SchemaRegistry Plugin
+            Audit Directory is not created automatically when upgrading a cluster. This causes the
+            Schema Registry service to encounter an issue. As a result, following an upgrade, you
+            must manually initiate the command in Cloudera Manager that creates the audit directory.
+              
+In Cloudera Manager, select the Schema Registry service. 
+Click Actions > Create Ranger Schema Registry Plugin Audit Directory.
+
+Kafka
+Remove the following properties from the Kafka Broker Advanced
+                Configuration Snippet (Safety Valve) for kafka.properties configuration
+              property. 
+inter.broker.protocol.version
+log.message.format.version
+
+Save your changes. 
+Perform a rolling restart:
+Select the Kafka service.
+Click Actions > Rolling Restart.
+In the pop-up dialog box, select the options you want and click
+                    Rolling Restart.
+Click Close once the command has finished. 
+
+
+Streams Messaging ManagerFollowing a successful
+            upgrade, if you want to use SMM to monitor SRM replications, you must reconnect the two
+            services. This is done by enabling the STREAMS_REPLICATION_MANAGER Service SMM property
+            which is disabled by default. importantSMM can only
+              connect to and monitor an SRM service that is running in the same cluster as SMM.
+              Monitoring an SRM service that is running in a cluster that is external to SMM is no
+              longer supported.
+In Cloudera Manager, select the SMM service.
+Go to Configuration.
+Find and enable the STREAMS_REPLICATION_MANAGER Service
+                property.
+Click Save Changes.
+Restart the service.
+
+Kafka ConnectUpgrading a Kafka Connect cluster can
+            fail with the following ClassNotFoundException:
+            Error: ClassNotFoundException exception occurred: com.cloudera.dim.kafka.config.provider.CmAgentConfigProvider
+exception occurred: com.cloudera.dim.kafka.config.provider.CmAgentConfigProviderThis
+            is due to the Cloudera Manager agent not being able to properly create the symlinks and
+            alternatives when performing an upgrade. The issue also occurs when a custom path is set
+            for plugin.path in Cloudera Manager, which does not contain the
+            expected plugin JARs. Complete the following steps to resolve the issue:
+Manually install missing symlinks or alternatives relevant to kafka-connect by
+                checking cloudera-scm-agent.log.
+Ensure that the kafka-connect libraries are present in
+                  /var/lib/kafka or change the plugin.path to a
+                value where these libraries are present.If required, manually copy the JARs to
+                  the location configured in plugin.path.
+
+If the issue persists, set the plugin.path
+                to:/opt/cloudera/parcels/CDH-[***VERSION***]/lib/kafka_connect_ext/libsThis
+                is the location where kafka-connect libraries are set when installing parcels.
+
+Kafka producerKafka producers upgraded to Kafka 3.0.1,
+            3.1.1, or all versions after 3.1.1 have idempotence enabled by default. Idempotent
+            producers must have Idempotent Write permission set on the cluster resource in Ranger.
+            As a result, If you upgraded your producers and use Ranger to provide authorization for
+            the Kafka service, you must do either of the following after upgrading your producers.
+            If configuration is not done, the producers fail to initialize due to an authorization
+            failure. 
+Explicitly disable idempotence for the producers. This can be done by setting
+                enable.idempotence to false.
+Update your policies in Ranger and ensure that producers have Idempotent Write
+              permission on the cluster resource.
+
+Streams Replication ManagerDuring the upgrade SRM uses
+            the legacy versions of its intra cluster protocol and internal changelog data format to
+            ensure backward compatibility. After a successful upgrade, you must configure SRM to use
+            the new protocol and data format otherwise some features will not function.
+In Cloudera Manager select the Streams Replication Manager service. 
+Go to configuration and clear the following properties:
+Use Legacy Intra Cluster Host Name Format
+Use Legacy Internal Changelog Data Format
+
+Restart the SRM service.
+
+Streams Replication ManagerThe value set in the
+              Log Format property is cleared during the upgrade. If you
+            customized the log format using this property, its value must be manually reconfigured
+            following the upgrade.
+In Cloudera Manager select the SRM service. 
+Go to Configuration and configure the Log
+                  Format property.
+Restart the SRM service.
+
+Streams Replication ManagerIn Cloudera Runtime 7.1.8 and
+            higher, the separator configured with replication.policy.separator in
+            Streams Replication Manager applies to the names of the offsets-syncs and checkpoints
+            internal topics if the default replication (DefaultReplicationPolicy) policy is in use.
+            If you have been using a custom separator, when SRM is restarted after the upgrade, a
+            new set of internal topics will be automatically created using the separator that is
+            configured. These topics however will be empty and will only be repopulated with data
+            after replication restarts. If you want to export translated consumer group offsets
+            after the upgrade but before replication starts, you must export the translated consumer
+            group offsets from the old topics as the data is not yet available in the new topics.
+            This is done by specifically instructing the srm-control tool to use
+            the default separator, which is the dot (.). For
+            example:srm-control offsets --config [***CONFIG FILE***] --source [SOURCE_CLUSTER] --target [TARGET_CLUSTER] --group [GROUP1] --export > out.csvWhere
+            the [***CONFIG FILE***] specified in --config
+            contains the following configuration
+            entryreplication.policy.separator=.
+
+
+Parent topic: Upgrading a Cloudera Runtime Cluster

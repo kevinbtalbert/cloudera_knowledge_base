@@ -1,0 +1,122 @@
+Azure FunctionsCloudera Docs
+Azure Functions
+This section helps you to check the list of actions you must perfom before you start
+    working on your function.
+
+
+You have the latest version of the Azure Functions CLI.
+You have jq installed to extract some information from the JSON
+          responses when executing commands.
+
+
+
+Start by setting all the parameters required for deploying your function using the
+          Azure CLI.
+
+# Name of the binary you download from the CDP Public Cloud control plane.
+FILEKEY="NaafAzureFunctions.zip"
+
+# Location where the function will be deployed. Change this value to match your needs/requirements.
+LOCATION=francecentral
+
+# Name of the file share where the binary will be uploaded. Change this value to match your needs/requirements.
+BUCKET_NAME=mydffresizeimagebucket
+
+# Name of the function (only lower case letters). Change this value to match your needs/requirements.
+FUNCTIONNAME=resizeimageabc
+
+# Flow CRN. Add the Customer Resource Number you obtained from the DataFlow Catalog.
+FLOW_CRN=***YOUR VALUE HERE***
+
+# Credentials of the machine user
+DF_ACCESS_KEY=***YOUR VALUE HERE***
+DF_PRIVATE_KEY=***YOUR VALUE HERE***
+
+# Name of the resource group that is going to be created for the function. Change this value to match your needs/requirements.
+RESOURCEGROUP=MyDFFResourceGroup
+
+# Subscription ID to use. Change this value to match your needs/requirements.
+SUBSCRIPTIONID=***YOUR VALUE HERE***
+
+# Name of the hosting plan that is going to be created for the function. Change this value to match your needs/requirements.
+HOSTINGPLANNAME=MyHostingPlanDFF
+
+# Name of the storage account that is going to be created (only lower case letters). Change this value to match your needs/requirements.
+STORAGEACCOUNTNAME=mydffstorageaccountname
+
+
+
+Download the deployment template from here.
+
+Execute the below commands:
+
+
+Create a resource
+              group.az group create -l $LOCATION -n $RESOURCEGROUP
+
+echo "please
+Deploy the Function App.
+az deployment group create --resource-group $RESOURCEGROUP \
+	--template-file template.json \
+	--parameters \
+	    subscriptionId=$SUBSCRIPTIONID \
+	    name=$FUNCTIONNAME \
+	    location=$LOCATION \
+	    hostingPlanName=$HOSTINGPLANNAME \
+	    resourceGroup=$RESOURCEGROUP \
+	    storageAccountName=$STORAGEACCOUNTNAME \
+	    FLOW_CRN=$FLOW_CRN \
+	    DF_ACCESS_KEY=$DF_ACCESS_KEY \
+	    DF_PRIVATE_KEY=$DF_PRIVATE_KEY
+
+echo "please wait a bit more (10 sec)..."
+sleep 10
+Retrieve the file share name created in the previous
+              step.FILESHARE=`az storage share list --account-name $STORAGEACCOUNTNAME | jq -r '.[0].name'`
+Create the right directories for the
+              binary.az storage directory create --account-name $STORAGEACCOUNTNAME --share-name $FILESHARE --name data
+az storage directory create --account-name $STORAGEACCOUNTNAME --share-name $FILESHARE --name data/SitePackages
+Upload the binary and the metadata
+              file.az storage file upload -s $FILESHARE --source $FILEKEY --path data/SitePackages/ --account-name $STORAGEACCOUNTNAME
+
+echo "$FILEKEY" > /tmp/packagename.txt && az storage file upload -s $FILESHARE --source /tmp/packagename.txt --path data/SitePackages/ --account-name $STORAGEACCOUNTNAME && rm /tmp/packagename.txt
+
+When the execution is complete (it takes a few minutes), the function will be
+            publicly listening on:https://<function
+        name>.azurewebsites.net/api/StatelessNiFiHttpBinaryTriggerFunction
+You can now use a tool like Postman to send your picture.
+Make sure to override the Content-Type header with
+              application/octet-stream.
+You can add two custom headers (resize-width and
+              resize-height) to specify the resizing dimensions. If not specified,
+            the default values of the NiFi flow parameters are used.
+
+
+
+
+
+
+noteThe first attempt may fail due to a cold start and timeout.
+              A subsequent retry after a minute should work and should return the resized image much
+              faster. For more information, see Cold start.
+
+It is possible to send a request to your function using
+            curl.
+For
+            example:curl -X POST https://myresizeimage.azurewebsites.net/api/StatelessNiFiHttpBinaryTriggerFunction \
+-H "Content-Type: application/octet-stream" \
+-H "resize-width: 400" \
+-H "resize-height: 200" \
+--data-binary "@/Users/pierre/Desktop/test.png" \
+--output /tmp/my_resized_image.png
+
+
+noteThe function will be open to the internet. Make sure to
+              secure it if you want to keep it running or delete everything once you are done with
+              this quickstart. For more information, see Securing your Azure Function App.
+
+You can delete the function using the following command: az group
+              delete --name $RESOURCEGROUP --yes
+
+
+

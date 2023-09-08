@@ -1,0 +1,195 @@
+Back up Key Trustee Server using the ktbackup.sh scriptCloudera Docs
+Back up Key Trustee Server using the ktbackup.sh script
+Key Trustee Server releases 5.7 and higher include a script, ktbackup.sh, to simplify
+        and automate backing up Key Trustee Server. 
+When run on a Key Trustee Server host, the script creates a tarball containing the
+                Key Trustee Server private GPG keys and the PostgreSQL database. 
+To preserve the security of the backup, you must specify a GPG recipient. Because
+                this recipient is the only entity that can decrypt the backup, the recipient must be
+                someone authorized to access the Key Trustee Server database, such as a key
+                administrator.
+
+Creating and Importing a GPG Key for Encrypting and Decrypting Backups
+If the key administrator responsible for backing up and restoring Key Trustee Server
+                does not already have a GPG key pair, they can create one using the gpg
+                    --gen-key command. The following example demonstrates this
+                procedure:
+noteBy default, gpg --gen-key fails at the password prompt if you
+                have logged in to your user account with the su command. You must
+                log in to the SSH session with the user account for which you want to generate the
+                GPG key pair.
+[john.doe@backup-host ~]$ gpg --gen-key
+gpg (GnuPG) 2.0.14; Copyright (C) 2009 Free Software Foundation, Inc.
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
+
+Please select what kind of key you want:
+   (1) RSA and RSA (default)
+   (2) DSA and Elgamal
+   (3) DSA (sign only)
+   (4) RSA (sign only)
+Your selection? 1
+RSA keys may be between 1024 and 4096 bits long.
+What keysize do you want? (2048)
+Requested keysize is 2048 bits
+Please specify how long the key should be valid.
+         0 = key does not expire
+      <n>  = key expires in n days
+      <n>w = key expires in n weeks
+      <n>m = key expires in n months
+      <n>y = key expires in n years
+Key is valid for? (0)
+Key does not expire at all
+Is this correct? (y/N) y
+
+GnuPG needs to construct a user ID to identify your key.
+
+Real name: John Doe
+Email address: john.doe@example.com
+Comment: Key Trustee Backup
+You selected this USER-ID:
+    "John Doe (Key Trustee Backup) <john.doe@example.com>"
+
+Change (N)ame, (C)omment, (E)mail or (O)kay/(Q)uit? O
+You need a Passphrase to protect your secret key.
+
+can't connect to `/home/john.doe/.gnupg/S.gpg-agent': No such file or directory
+gpg-agent[10638]: directory `/home/john.doe/.gnupg/private-keys-v1.d' created
+We need to generate a lot of random bytes. It is a good idea to perform
+some other action (type on the keyboard, move the mouse, utilize the
+disks) during the prime generation; this gives the random number
+generator a better chance to gain enough entropy.
+We need to generate a lot of random bytes. It is a good idea to perform
+some other action (type on the keyboard, move the mouse, utilize the
+disks) during the prime generation; this gives the random number
+generator a better chance to gain enough entropy.
+gpg: /home/john.doe/.gnupg/trustdb.gpg: trustdb created
+gpg: key 0936CB67 marked as ultimately trusted
+public and secret key created and signed.
+
+gpg: checking the trustdb
+gpg: 3 marginal(s) needed, 1 complete(s) needed, PGP trust model
+gpg: depth: 0  valid:   1  signed:   0  trust: 0-, 0q, 0n, 0m, 0f, 1u
+pub   2048R/0936CB67 2016-02-10
+      Key fingerprint = CE57 FDED 3AFE E67D 2041  9EBF E64B 7D00 0936 CB67
+uid                  John Doe (Key Trustee Backup) <john.doe@example.com>
+sub   2048R/52A6FC5C 2016-02-10
+After the GPG key pair is generated, you can export the public key:
+[john.doe@backup-host ~]$ gpg --armor --output /path/to/johndoe.pub --export 'John Doe'
+Copy the public key (johndoe.pub in this example) to the Key Trustee
+                Server host, and import it into the service account keyring
+                    (keytrustee for Key Trustee Server):
+
+On the Key Trustee Server
+                    host:sudo -u keytrustee gpg --import /path/to/johndoe.pub
+
+
+Running the ktbackup.sh Script
+You must run ktbackup.sh as the service account. The location of the
+                script depends on the service and installation method. See the following table for
+                the script location and default service account for package- and parcel-based
+                installations for Key Trustee Server.
+Table 1. Backup Script Locations
+
+Service
+Service Account
+Parcel-Based Installation
+Package-Based Installation
+
+
+
+Key Trustee Server
+keytrustee
+/opt/cloudera/parcels/KEYTRUSTEE_SERVER/bin/ktbackup.sh
+/usr/bin/ktbackup.sh
+
+
+The following table lists the command options for ktbackup.sh.
+Table 2. Command Options for ktbackup.sh
+
+Command Option
+Description
+
+
+
+-c, --confdir=CONFDIR
+Specifies the Key Trustee configuration directory. Defaults to
+                                    /var/lib/keytrustee/.keytrustee for
+                                parcel-based Key Trustee Server. For package-based Key Trustee
+                                Server, you must specify this option.
+
+
+--database-port=PORT
+Specifies the Key Trustee Server database port. Defaults to
+                                    11381 for parcel-based installations. For
+                                package-based Key Trustee Server installations, you must specify
+                                this option.
+
+
+--gpg-recipient=GPG_RECIPIENT
+Specifies the GPG recipient. The backup is encrypted with the
+                                public key of the specified recipient. The GPG recipient public key
+                                must be imported into the service account keyring before running the
+                                script. 
+
+
+--cleartext
+Outputs an unencrypted tarball. To preserve the security of the
+                                cryptographic keys, do not use this option in production
+                                environments.
+
+
+--output=DIR
+Specifies the output directory for the tarball. Defaults to
+                                    /var/lib/keytrustee for parcel-based Key
+                                Trustee Server. For package-based Key Trustee Server, you must
+                                specify this option.
+
+
+--roll=n
+Deletes backups older than the last n backups
+                                from the directory specified by the --output
+                                parameter. For example, if you have 10 backups, specifying
+                                    --roll=10 creates a new backup (11 backups
+                                total) and then delete the oldest backup. Specifying
+                                    --roll=1 creates a new backup and then deletes
+                                all other backups.
+
+
+-q, --quiet
+Suppresses console log messages and, if successful, returns only
+                                the backup tarball file path. This is useful for automating
+                                backups.
+
+
+--verbose
+Outputs additional log messages to the console for
+                                debugging.
+
+
+The following examples demonstrate the command usage for different scenarios:
+
+To back up a parcel-based Key Trustee Server, specifying the GPG recipient by
+                    name:$ sudo -u keytrustee /opt/cloudera/parcels/KEYTRUSTEE_SERVER/bin/ktbackup.sh --gpg-recipient='John Doe'
+To back up a package-based Key Trustee Server with the database running on a
+                    non-default port (12345 in this
+                    example):$ sudo -u keytrustee ktbackup.sh --database-port=12345 --gpg-recipient=john.doe@example.com
+
+
+Automating Backups Using cron
+You can schedule automatic backups of Key Trustee Server using the
+                    cron scheduling utility.
+Create a crontab entry using the following commands:
+
+Edit the crontab by running the following
+                    command:sudo -u keytrustee crontab -e
+Add the following entry to run the backup script every 30 minutes. This example
+                    is for a parcel-based installation of Key Trustee Server. See the Backup
+                        Script Locations table for the package-based script
+                        location.*/30 * * * * /opt/cloudera/parcels/KEYTRUSTEE_SERVER/bin/ktbackup.sh --gpg-recipient='John Doe' --quiet --output=/tmp/backups --roll=10Run
+                            man 5 crontab to see the crontab man
+                        page for details on using cron to schedule backups at
+                        different intervals. 
+
+
+Parent topic: Backing up Key Trustee Server and clients

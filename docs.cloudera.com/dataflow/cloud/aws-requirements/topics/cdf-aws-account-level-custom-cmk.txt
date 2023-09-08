@@ -1,0 +1,81 @@
+Define a new default KMS key for AWS account level EBS encryptionCloudera Docs
+Define a new default KMS key for AWS account level EBS encryption
+When you define a new account level default key in AWS, you need to add policies to
+        your key definition that allow for storage provisioning and fulfilling scaling requests. 
+
+importantDefining a new default key affects all EBS
+                storage encryption within your account. 
+
+
+Create a custom encryption key on the AWS Management
+                        Console.
+The key policy section of the new key must
+                        contain additional permissions. Add the three required permission blocks in
+                        the example below.Replace
+                                [***YOUR ACCOUNT ID***] and [***YOUR
+                                ACCOUNT REGION***] with your AWS account ID and with the
+                            AWS region where you want to deploy CDF,
+                            respectively.       {
+            "Sid": "AllowAutoscalingServiceLinkedRoleForAttachmentOfPersistentResources",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::[***YOUR ACCOUNT ID***]:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+            },
+            "Action": "kms:CreateGrant",
+            "Resource": "*",
+            "Condition": {
+                "Bool": {
+                    "kms:GrantIsForAWSResource": "true"
+                }
+            }
+        },
+        {
+            "Sid": "AllowAutoscalingServiceLinkedRoleUseOfTheCMK",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "arn:aws:iam::[***YOUR ACCOUNT ID***]:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+            },
+            "Action": [
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "Allow EKS access to EBS.",
+            "Effect": "Allow",
+            "Principal": {
+                "AWS": "*"
+            },
+            "Action": [
+                "kms:CreateGrant",
+                "kms:Encrypt",
+                "kms:Decrypt",
+                "kms:ReEncrypt*",
+                "kms:GenerateDataKey*",
+                "kms:DescribeKey"
+           ],
+           "Resource": "*",
+           "Condition": {
+               "StringEquals": {
+                   "kms:CallerAccount": "[***YOUR ACCOUNT ID***]",
+                   "kms:viaService": "ec2.[***YOUR ACCOUNT REGION***].amazonaws.com"
+               }
+           }
+        }importantIf
+                            you fail to add these permissions, you will encounter failures when
+                            enabling DataFlow since it will be unable to provision the necessary
+                            encrypted storage using the custom key.
+
+Set the newly created key as the default KMS key for EBS encryption.
+For more information, see Default KMS key for EBS
+                    encryption.
+
+If you are also using restricted IAM policies with CDP, make sure you provide
+                    the KMS CMK for volume encryption when you Create the restricted policies and attach them to the CDP cross-account role.
+
+
+Parent topic: Using Customer Managed Keys with DataFlow

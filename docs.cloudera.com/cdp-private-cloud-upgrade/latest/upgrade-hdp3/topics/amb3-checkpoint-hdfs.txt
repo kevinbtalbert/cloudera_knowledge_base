@@ -1,0 +1,62 @@
+Checkpoint HDFSCloudera Docs
+Checkpoint HDFS
+You must perform additional steps before upgrading your HDP cluster if you have
+        configured NameNode HA to create a checkpoint for HDFS.
+
+If you are configured for NameNode HA, then locate the Active NameNode
+                        from Ambari Web > Services > HDFS in the Summary area.
+
+Check the NameNode directory to ensure that there is no snapshot of any prior HDFS upgrade. Specifically, using Ambari Web, browse to Services > HDFS > Configs, and examine the dfs.namenode.name.dir in the NameNode Directories property. Make sure that only a /current directory exists and remove /previous directory on the NameNode host.
+
+Create the following log and other files. Creating these logs allows you to
+                    check the integrity of the file system after the Stack upgrade. 
+
+As the HDFS user, su -l [HDFS_USER], run the following
+                        (where [HDFS_USER] is the HDFS Service user, for example, hdfs):
+
+Run fsck with the following flags and send the results to a
+                                log. The resulting file contains a complete block map of the file
+                                system. You use this log later to confirm the upgrade.
+                                hdfs fsck / -files -blocks -locations > dfs-old-fsck-1.log
+                            
+ Create a list of all the DataNodes in the cluster.
+                                hdfs dfsadmin -report > dfs-old-report-1.log
+
+
+Optional: Capture the complete namespace of the file system. The
+                            following command does a recursive listing of the root file system:
+                                hdfs dfs -ls -R / > dfs-old-lsr-1.log
+
+Optional: Take a backup of the HDFS data to your local
+                            file system or the backup instance of your HDFS.
+
+
+
+Save the namespace. As the HDFS user, " su -l [HDFS_USER] ", you must put the cluster in Safe Mode.
+
+
+hdfs dfsadmin -safemode enter
+hdfs dfsadmin -saveNamespace
+
+noteIn a highly-available NameNode configuration, the command hdfs
+                            dfsadmin -saveNamespace sets a checkpoint in the first
+                        NameNode specified in the configuration, in
+                            dfs.ha.namenodes.[nameserviceID]. You can also use
+                        the dfsadmin -fs .
+
+
+Copy the checkpoint files located in
+                        $[dfs.namenode.name.dir]/current into a backup
+                    directory.
+
+Store the layout version for the NameNode located at
+                        $[dfs.namenode.name.dir]/current/VERSION into a backup
+                    directory where $[dfs.namenode.name.dir] is the value of the
+                    config parameter NameNode directories. 
+
+This file will be used later to verify that the layout version is upgraded. As
+                    the HDFS user, su -l [HDFS_USER], take the NameNode out of
+                    Safe Mode. hdfs dfsadmin -safemode leave
+
+
+Parent topic: Before you upgrade

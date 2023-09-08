@@ -1,0 +1,299 @@
+Set up Luna 6 HSM for Ranger KMS, KTS, and KeyHSMCloudera Docs
+Set up Luna 6 HSM for Ranger KMS, KTS, and KeyHSM
+ How to integrate Ranger KMS and KTS with with the Luna 6 HSM appliance supplied by
+        SafeNet. 
+
+ This task describes how to set up the Luna 7 hardware security moudule (HSM)
+                supplied by SafeNet. The process inlcudes setting up Luna 6 HSM on a client (host),
+                intalling KeyHSM and using Luna 7 HSM to validate keys.
+
+You must:
+Acquire the Luna 6 HSM from SafeNet. 
+Have both Ranger Key Management System and Key Trustee Server installed in your
+                    environment.
+Get KeyHSM software.
+See related topics for more information about installing Ranger KMS and KTS to
+                store keys.
+
+Set Up the Luna 6 ClientnotePerform the following steps
+                        on both active and passive KTS nodes.
+
+SSH to (active or passive) KTS node.
+
+alternatives --install /usr/bin/java java /usr/java/jdk1.8.0_232-cloudera/bin/java 1
+
+
+Untar the Luna 7 client.
+
+tar -xvf safenet-linux-64bit-client-6.2.2.tar
+
+the LunaClient_6.2.2-x_Linux/ folder gets created.
+
+Navigate to the Luna client folder.
+
+cd LunaClient_6.2.2-x_Linux/64/
+
+
+In the Luna clent folder, install Luna products and components.
+
+noteBefore the install begins, you must select network HSM and JSP as shown in
+                        the example.
+
+
+yes | ./linux/64/install.sh -p sa 
+
+Example:
+
+
+At the (y/n) prompt, choose y.
+
+If you select no or n,
+                                this product will not be installed.
+
+
+
+At the Products prompt, choose Luna products to be installed:
+
+
+[1]: Luna Network HSM
+[2]: Luna PCIe HSM
+[3]: Luna USB HSM
+[4]: Luna Backup HSM
+[N|n]: Next
+[Q|q]: Quit
+
+
+ Enter selection: 1, then enter selection
+                                n.
+
+
+At the Components prompt, choose Luna Components to be installed
+
+
+[1]: Luna SDK
+[2]: Luna JSP (Java)
+[3]: Luna JCProv (Java)
+[B|b]: Back to Products selection
+[I|i]: Install
+[Q|q]: Quit
+
+
+ Enter selection: i, then enter selection
+                                Q.
+ Enter selection:
+                            1,2,and
+                                3 then type
+                            i.
+
+
+
+Register the HSM on this client.
+
+
+Retrieve the HSM's public key.
+
+$ scp admin@luna-2.atx.cloudera.com:server.pem .
+
+
+
+Register the HSM on the client machine.
+
+$ /usr/safenet/lunaclient/bin/vtl addServer -n luna-2.atx.cloudera.com -c server.pem
+
+
+
+Confirm the HSM has been added.
+
+$ /usr/safenet/lunaclient/bin/vtl list
+
+
+
+you should see the following:
+                            lsnew server
+                            <luna.server.name> successfully added to server
+                        list
+
+Create client certificate.
+
+$ /usr/safenet/lunaclient/bin/vtl createCert -n $(hostname -f)
+where  $(hostname -f) is the ip address if running on a virtual machine.
+noteThe Luna appliance must be able to connect to the hostname across your
+                        network.
+
+
+Send the client's public key created in the step above to the HSM.
+
+$ scp /usr/safenet/lunaclient/cert/client/$(hostname -f).pem
+
+
+$ scp /usr/safenet/lunaclient/cert/client/$(hostname -f).pem admin@luna-2.atx.cloudera.com.
+
+
+Register the client on the HSM.
+
+
+SSH to the HSM.
+
+$ ssh admin@luna-2.atx.cloudera.com
+
+
+
+Register the client with a friendly name on the HSM.
+
+lunaclient> client register -client <friendly.name> -h <hostname.from.step 5.a>
+
+
+[luna-2] lunash:> client register -client dsranktkmslunahsm-4.dsranktkmslunahsm.root.hwx.site -h dsranktkmslunahsm-4.dsranktkmslunahsm.root.hwx.site
+
+
+
+Assign a partition to the client.
+
+lunaclient> client assignpartition -client <friendly name> -partition par1
+
+
+noteThis example assumes only acceess to
+                                partitions 1 and 2. 
+
+
+[luna-2] lunash:>client assignpartition -client dsranktkmslunahsm-4.dsranktkmslunahsm.root.hwx.site -partition par1
+
+
+
+
+[luna-2] lunash:> client register -client dsranktkmslunahsm-4.dsranktkmslunahsm.root.hwx.site -h dsranktkmslunahsm-4.dsranktkmslunahsm.root.hwx.site
+'client register successful.
+Command result : 0 (Success)
+luna-2] lunash:>client assignpartition -client dsranktkmslunahsm-4.dsranktkmslunahsm.root.hwx.site -partition par1
+'client assignPartition successful.
+Command result : 0 (Success)
+
+
+Verify registration on the client.
+
+$ /usr/safenet/lunaclient/bin/vtl verify
+
+
+root@dsranktkmslunahsm-4 /usr/safenet/lunaclient/bin/vtl verify                 
+
+
+The following Luna SA Slots/Partitions were found:
+Slot        Serial #         Label
+====        =============    ===========
+  0             462309014          par1
+
+Install and Configure HSMnotePerform the following
+                    steps on both active and passive KTS nodes.
+SSH to active/passive KTS node.
+
+Obtain Key HSM software.
+
+Install Key HSM software.
+
+# rpm -ivh keytrustee-keyhsm-*.rpm            
+
+
+Move the Key Trustee Server and Key HSM installation directory.
+
+cd /usr/share/keytrustee-server-keyhsm/               
+
+
+Configure Key HSM to use SafeNet Luna client.
+
+
+Run # keyhsm setup luna.
+
+# keyhsm setup luna
+
+
+
+Use the hostname and any port above 1024.
+The recommended port is 9090.
+
+
+Provide data about the HSM slot.
+
+
+
+# service keyhsm setup luna
+-- Configuring keyHsm General Setup --
+Please enter keyHsm SSL listener IP address: oks-hsm.vpc.cloudera.com
+Please enter keyHsm SSL listener PORT number: 9090
+validate Port:                                	:[ Successful ]
+ 
+-- Configuring SafeNet Luna HSM --
+Please enter SafeNetHSM Slot Number: 0
+Please enter SafeNet HSM password (input suppressed):
+Configuration stored in: 'application.properties'. (Note: You can also use service keyHsm settings to quickly view your current configuration)
+Configuration saved in 'application.properties' file                    
+
+
+Validate the Key HSM service.
+
+$ service keyhsm validate
+
+
+Check Key HSM is stopped             :[Successful]
+Configuration Available              :[Successful]
+Port 127.0.0.1:9090 available        :[Successful]
+Unlimited-Strength JCE               :[Successful]
+Validate cipher list                 :[Successful]
+HSM availability                     :[Successful]
+All services available:              :[Successful]                         
+
+
+Start the Key HSM service.
+
+$ service keyhsm start 
+
+
+Configure Key HSM to trust KTS. 
+
+noteMust be the full path to the file.
+
+
+$ keyhsm trust /var/lib/keytrustee/.keytrustee/.ssl/ssl-cert-keytrustee.pem
+
+
+Configure KTS to trust the Key HSM server.
+
+$ ktadmin keyhsm --server http://$(hostname -f):<port configured in step 14.b> --trust
+
+
+$ktadmin keyhsm --server http://127.0.0.1:9090 --trust
+
+
+Restart Key HSM.
+
+$ service keyhsm restart 
+
+
+Restart the KTS from Cloudera Manager UI.
+
+Test the HSM.
+
+curl -k https://$(hostname -f):11371/test_hsm                
+
+
+Login Ranger UI using keyadmin user role for creating an encryption zone
+                    key.
+
+Validating Keys in Luna HSM
+
+Login to Luna HSM machine .
+
+ssh admin@luna-2.atx.cloudera.com
+
+
+[luna-2] lunash:>partition showContents -par par1
+
+Enter the password for the partition and the Keys will be visible as partition
+                    objects.
+
+
+Ranger KMS is successfully started. 
+
+We can now create Encryption zone keys using hadoop
+            command or from Ranger UI using credentials of keyadmin user.
+
+Parent topic: Integrating Components for Encrypting Data at Rest

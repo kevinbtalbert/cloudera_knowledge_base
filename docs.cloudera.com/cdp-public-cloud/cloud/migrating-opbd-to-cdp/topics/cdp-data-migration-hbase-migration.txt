@@ -1,0 +1,330 @@
+Migrating HBase data from CDH/HDP to COD CDP Public CloudCloudera Docs
+Migrating HBase data from CDH/HDP to COD CDP Public Cloud
+When you are migrating from CDH or HDP to COD CDP Public Cloud, you have to set up
+        the Cloudera Replication Plugin and then use a snapshot to migrate your data to COD CDP
+        Public Cloud. Once your data is migrated, optionally you can use the HashTable/CldrSyncTable
+        tool to verify the migration.
+
+Ensure you have understood and performed all the necessary data migration preparation
+                tasks listed in HBase migration prerequisites.
+
+
+Provide the Cloudera Replication Plugin by configuring HBase Client
+                        Environment Advanced Configuration Snippet (Safety Valve) for
+                        hbase-env.sh for Gateway and HBase Service
+                        Environment Advanced Configuration Snippet (Safety Valve) for
+                    RegionServers and Masters on the source cluster.
+
+CDHHDP
+In Cloudera Manager, navigate to HBase >  Configuration.
+Find the HBase Client Environment Advanced Configuration
+                                    Snippet (Safety Valve) for hbase-env-sh property and
+                                add the following configuration to provide the Cloudera Replication
+                                Plugin path for the
+                                    Gateway:HBASE_CLASSPATH=$HBASE_CLASSPATH:/opt/cloudera/parcels/cloudera-opdb-replication-[***REPLICATION PLUGIN VERSION***]-cdh[***CDH VERSION***]-/lib/*For
+                                    example:HBASE_CLASSPATH=$HBASE_CLASSPATH:/opt/cloudera/parcels/cloudera-opdb-replication-1.0-cdh5.14.4-/lib/*
+
+Find the HBase Service Environment Advanced Configuration
+                                    Snippet (Safety Valve) property and add the same
+                                configuration to provide the Cloudera Replication Plugin path for
+                                RegionServers and
+                                    Masters:HBASE_CLASSPATH=$HBASE_CLASSPATH:/opt/cloudera/parcels/cloudera-opdb-replication-[***REPLICATION PLUGIN VERSION***]-cdh[***CDH VERSION***]-/lib/*For
+                                    example:HBASE_CLASSPATH=$HBASE_CLASSPATH:/opt/cloudera/parcels/cloudera-opdb-replication-1.0-cdh5.14.4-/lib/*
+
+
+In Ambari, navigate to CONFIGS >  ADVANCED >  Advanced hbase-env >  hbase-env template.
+Find the following
+                                line:export HBASE_CLASSPATH=${HBASE_CLASSPATH}
+Modify the line to include the following
+                                    configuration:export HBASE_CLASSPATH=${HBASE_CLASSPATH}:/usr/hdp/cloudera-opdb-replication-[***REPLICATION PLUGIN VERSION***]-hdp[***version***]-SNAPSHOT/lib/*For
+                                    example:export HBASE_CLASSPATH=${HBASE_CLASSPATH}:/usr/hdp/cloudera-opdb-replication-1.0-hdp-2.6.5-SNAPSHOT/lib/*
+
+
+
+Generate and distribute credentials.
+
+
+Create a machine user with the name hbase-replication
+                            (or any one of your choice) in User Management Service
+                                (UMS) on the CDP Management
+                                Console.
+
+
+Set your workload password.
+
+
+Add this machine user as an Environment User using Manage Access in the
+                            destination CDP environment.
+
+
+Perform FreeIPA synchronization for the destination environments.
+
+
+Verify credentials using the kinit srv_$YOUR_REP_USER
+                            (for example, if the specified user was
+                                hbase-replication, this would be
+                                srv_hbase-replication) command on any node.
+
+
+In the destination cluster, run the following command to generate the
+                            keystore:
+
+hbase 
+com.cloudera.hbase.security.token.CldrReplicationSecurityTool -sharedkey cloudera -password [***PASSWORD***] -keystore localjceks://file/tmp/credentials.jceks
+
+
+
+Obtain hdfs user kerberos credentials on the destination cluster.
+
+Ensure that you have root access to execute the following
+                                command.
+kinit -kt /var/run/cloudera-scm-agent/process/`ls -1 /var/run/cloudera-scm-agent/process/ | grep -i "namenode\|datanode" | sort -n | tail -1`/hdfs.keytab hdfs/$(hostname -f)
+
+
+
+Add the generated jceks file to related hdfs folder in the destination
+                            cluster:
+
+hdfs dfs -mkdir /hbase-replication
+hdfs dfs -put /tmp/credentials.jceks /hbase-replication
+hdfs dfs -chown -R hbase:hbase /hbase-replication
+
+
+
+
+Copy the generated jceks file to any host of the source cluster.
+
+warningYou must copy the same jceks
+                                file to the source cluster instead of regenerating it.
+
+
+
+Add the copied jceks file to related hdfs folder in the source cluster
+                            (if source cluster is secured, you need hdfs kerberos credentials for
+                            destination cluster):
+
+hdfs dfs -mkdir /hbase-replication
+hdfs dfs -put /tmp/credentials.jceks /hbase-replication
+hdfs dfs -chown -R hbase:hbase /hbase-replication
+
+
+
+
+
+Set the hbase.security.replication.credential.provider.path
+                    property on the destination cluster using the HBase Service Advanced
+                        Configuration Snippet (Safety Valve) for hbase-site.xml
+                    property.
+For example, if the path to the jceks file is
+                        hdfs://ns1/hbase-replication/credentials.jceks, set the
+                    following configuration:<property>
+<name>hbase.security.replication.credential.provider.path</name>
+<value>cdprepjceks://hdfs@[***NAMESERVICE***]/hbase-replication/credentials.jceks</value>
+</property>
+warningYou have to customize the
+                        value of the
+                            hbase.security.replication.credential.provider.path
+                        property. You might need to replace this sample "ns1" value
+                        with the actual name service value in case of High Availability, or with the
+                        active NameNode address otherwise. 
+
+In the source cluster, enable replication for each table that you want to
+                    replicate:
+This can be done b setting the REPLICATION_SCOPE on the
+                    desired column families for that HBase table in the hbase
+                        shell.$ hbase shell
+alter 'my-table', {NAME=>'my-family', REPLICATION_SCOPE => '1'}If
+                        you do not know what column families exist in your HBase table, use the
+                            describe
+                        command:$ hbase shell
+describe ‘my-table’noteThe enable_table_replication command
+                        is not supported in this configuration.
+
+Set up the cloud services provider credentials for the source cluster using the
+                        core-site.xml HDFS configuration file.
+
+
+Find the core-site.xml HDFS configuration file:
+
+
+Cloudera Manager: Navigate to HDFS >  Configuration and find the Cluster-wide Advanced
+                                        Configuration Snipper (Safety Valve) for
+                                        core-site.xml property.
+Ambari: Navigate to HDFS >  CONFIGS >  ADVANCED and find the custom
+                                        core-site template.
+
+
+
+
+Add the following configuration:
+
+AWSABFS
+
+Configure the following properties on the source
+                                            cluster with the AWS keys and write permission to the
+                                            bucket: 
+fs.s3a.access.key
+fs.s3a.secret.key
+fs.s3a.endpoint
+For example,
+                                                  fs.s3a.endpoint="s3.eu-central-1.amazonaws.com"
+
+
+Configure your storage account access key by setting the
+                                                fs.azure.account.key.[***ACCOUNT
+                                                NAME***].blob.core.windows.net property to
+                                            the access
+                                            key:<property>  <name>fs.azure.account.key.[***ACCOUNT NAME***].blob.core.windows.net</name>
+<value>[***ACCOUNT NAME***]-ACCESS-KEY</value>
+</property>Access key can be obtained
+                                            from the Access keys in your storage account
+                                            settings.
+
+
+
+
+
+Restart the RegionServers and add the client configurations on the source
+                    cluster:
+
+
+Cloudera Manager: Click Restart stale
+                            services.
+Ambari: Click Restart all required.
+
+
+
+Use the ReplicationSetupTool tool on the source cluster to define the
+                    replication peer.
+Run this command as the hbase user. Additionally, use
+                    the same keystore path that you provided in Step 3. 
+sudo -u hbase hbase org.apache.hadoop.hbase.client.replication.ReplicationSetupTool -clusterKey "zk-host-1,zk-host-2,zk-host-3:2181:/hbase" -endpointImpl "org.apache.hadoop.hbase.replication.regionserver.CldrHBaseInterClusterReplicationEndpoint" -peerId 1 -credentialPath "cdprepjceks://hdfs@[***NAMESERVICE***]/hbase-replication/credentials.jceks" -replicationUser srv_hbase-replicationThis
+                        example uses sudo. However, you can use
+                            kinit if it is appropriate for your source cluster
+                        setup. The clusterKey parameter reflects the
+                        destination cluster's zookeeper quorum address. Here,
+                            zk-host-1, zk-host-2,
+                            zk-host-3 represent the destination cluster Zookeeper
+                        hostnames.NAMESERVICE is the source cluster
+                        nameservice for HA enabled cluster. It can also be the hostname of an active
+                        NameNode for a non-HA cluster.
+
+Disable the replication peer in the hbase shell.
+Disabling the peer before taking the snapshot ensures that incremental data
+                    written to your table is not lost while copying the HBase snapshot to
+                    COD.$./bin/hbase shell
+hbase> disable_peer '1'
+
+
+Take a snapshot on the source cluster.
+
+Cloudera Managerhbase shell
+In Cloudera Manager on the source cluster, select the
+                                    HBase service.
+Click Table Browser.
+Select a table.
+Click Take Snapshot.
+Specify the name of the snapshot and click Take
+                                    Snapshot.
+
+You can take the snapshot through the hbase
+                                shell:$ hbase shell
+hbase> snapshot 'myTable', 'myTableSnapshot-122112'
+
+
+
+Export the snapshot to the destination cluster using the ExportSnapshot
+                    tool.
+You must run the ExportSnapshot command as the hbase user or as the user that
+                    owns the files. The ExportSnapshot tool executes a MapReduce job similar to
+                        distcp to copy files to the other cluster. The tool works
+                    at the file-system level, so the HBase cluster can be offline, but ensure that
+                    the HDFS cluster is online.
+
+
+Navigate to Cloudera Management Console >  CDP Operational Database >  your Database or Environment.
+
+
+Copy the Cloud Storage Location.
+
+
+In the case of AWS, this is a s3a path:
+                                        s3a://bucket/path/hbase
+In the case of Azure blob storage (ABFS), this is an abfs path:
+                                        abfs://<storagename>/datalake/<datahub_name>/hbase
+
+
+
+
+Run the following command in the hbase shell on the source cluster to
+                            export a snapshot from the source cluster to the destination
+                            cluster:
+
+hbase org.apache.hadoop.hbase.snapshot.ExportSnapshot -snapshot [***SNAPSHOT NAME***] -copy-to [***DESTINATION***] -mappers 16
+
+Replace [***DESTINATION***] with the s3a or abfs path obtained in
+                                    step b.
+
+
+
+
+importantSnapshots must be enabled on the
+                        source and destination clusters. When you export a snapshot, the table's
+                        HFiles, logs, and the snapshot metadata are copied from the source cluster
+                        to the destination cluster. 
+
+                 It may be necessary to increase the value of the
+                        hbase.master.hfilecleaner.ttl property in the source
+                    cluster to work around known issues in HBase file cleaning due to known issues
+                    in these legacy products.
+            
+Verify that the snapshot exist in the COD database using the following
+                    command:
+
+$ hbase shell
+hbase> list_snapshots
+
+
+
+Restore the snapshot into an HBase table using the following command:
+
+$./bin/hbase shell
+hbase> restore_snapshot [***SNAPSHOT_NAME***]
+
+
+
+Enable the peer on the source cluster to begin replicating data:
+
+$./bin/hbase shell
+hbase> enable_peer '1'
+
+
+Optional: 
+Use the HashTable/CldrSyncTable tool to ensure that data is synchronized
+                    between your source and destination clusters.
+
+
+Run HashTable on the source cluster:
+
+hbase org.apache.hadoop.hbase.mapreduce.HashTable [***TABLE NAME***] [***HASH OUTPUT PATH***]
+hdfs dfs -ls -R [***HASH OUTPUT PATH***]
+
+Hashed indexes are generated on the source cluster.
+
+
+Run CldrSyncTable with the
+                                -cldr.cross.domain option on the source
+                            cluster:
+
+hbase org.apache.hadoop.hbase.mapreduce.CldrSyncTable --cldr.cross.domain --targetzkcluster=[***TARGET ZOOKEEPER QUORUM***]:[***TARGET ZOOKEEPER PORT***]:[***TARGET ZOOKEEPER ROOT FOR HBASE***]
+[***HASH OUTPUT PATH***] [***SOURCE TABLE NAME***] [***TARGET TABLE NAME ON THE TARGET CLUSTER***]
+
+Hash indexes are generated on the destination cluster and
+                            compared to the hash indexes generated on the source cluster. If the
+                            hash indexes are not identical, synchronization is run for that section
+                            of rows. 
+
+
+
+
+Parent topic: Cloudera Replication Plugin

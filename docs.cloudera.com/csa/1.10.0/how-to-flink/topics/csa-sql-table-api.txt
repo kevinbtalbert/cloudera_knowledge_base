@@ -1,0 +1,73 @@
+Flink SQL and Table APICloudera Docs
+Flink SQL and Table API
+In Cloudera Streaming Analytics, you can enhance your streaming application with
+        analytical queries using Table API or SQL API. These are integrated in a joint API and can
+        also be embedded into regular DataStream applications. The central concept of the joint API
+        is a Table that serves as the input and output of your streaming data queries.
+There are also two planners that translate Table/SQL queries to Flink jobs: the old
+            planner and the Blink planner. Cloudera Streaming Analytics only supports the Blink
+            planner for Table/SQL applications.
+Adding the following Maven dependency to the Flink configuration file allows you to use
+            the Table API with the Blink
+            planner.<dependency>
+   <groupId>org.apache.flink</groupId>
+   <artifactId>flink-table-api-java-bridge_2.12</artifactId>
+   <version>1.13.0-csa1.5.0.0</version>
+   <scope>provided</scope>
+</dependency>
+
+<dependency>
+   <groupId>org.apache.flink</groupId>
+   <artifactId>flink-table-planner-blink_2.12</artifactId>
+   <version>1.13.0-csa1.5.0.0</version>
+   <scope>provided</scope>
+</dependency>
+
+SQL programs in Flink follow a structure similar to regular DataStream applications:
+Create a StreamTableEnvironment with the Blink planner.
+Register catalogs and tables.
+Run the queries/updates.
+Run the StreamTableEnvironment.
+You can see an example of the structure
+            here:StreamExecutionEnvironment streamEnv = StreamExecutionEnvironment.getExecutionEnvironment();
+
+EnvironmentSettings tableSettings = EnvironmentSettings
+     .newInstance()
+     .useBlinkPlanner()
+     .build();
+
+StreamTableEnvironment tableEnv = StreamTableEnvironment
+     .create(streamEnv, tableSettings);
+
+
+tableEnv.sqlUpdate("CREATE TABLE ...");
+Table table = tableEnv.sqlQuery("SELECT ... FROM ...");
+
+DataStream<Row> stream = tableEnv.toAppendStream(table, Row.class);
+stream.print();
+
+tableEnv.execute("Print");
+
+The Table API exposes different flavors of TableEnvironment to the end
+            users that cover different feature sets. To ensure smooth interaction between other
+            DataStream applications, CSA only supports using
+            StreamTableEnvironment.
+StreamTableEnvironment wraps a regular
+                StreamExecutionEnvironment. This allows you to seamlessly go from
+            streams to tables and back within the same pipeline.
+You can create StreamTableEnvironment with the following code
+            entry:StreamExecutionEnvironment streamEnv = ...
+EnvironmentSettings tableSettings = EnvironmentSettings
+     .newInstance()
+     .useBlinkPlanner()
+     .build();
+
+StreamTableEnvironment tableEnv = StreamTableEnvironment
+     .create(streamEnv, tableSettings);
+
+When combining regular DataStream and Table/SQL applications, make sure to always call
+            the .execute command on the StreamTableEnvironment
+            instead of the regular StreamExecutionEnvironment to ensure correct
+            execution.
+
+SQL and Table API supported featuresThe following SQL and Table API features are supported in Cloudera Streaming     Analytics.DataStream API interoperabilityThe DataStream API interoperability offers you new ways to build your Flink streaming   application logic as you can convert the DataStreams to Tables, and the Tables back to   Datastreams. This means that you can run SQL queries on your DataStreams. You can also convert the   result back to other streams, or insert them into one of the supported table sinks.SQL catalogs for FlinkCloudera Streaming Analytics supports Hive, Kudu and Schema Registry catalogs to provide     metadata for the stored data in a database or other external systems. You can choose the SQL     catalogs based on your Flink application design.SQL Statements in FlinkYou can use the CREATE / ALTER / INSERT / DROP statements to modify objects in the   chosen catalog. The statements are executed with the sqlUpdate() method of the   TableEnvironment.SQL Queries in FlinkA Table can be used for subsequent SQL and Table API queries, to be converted into a         DataSet or DataStream, and to be written to a TableSink. You need to specify the SELECT         queries with the sqlQuery() method of the TableEnvironment to return the result of the         SELECT query as a Table.

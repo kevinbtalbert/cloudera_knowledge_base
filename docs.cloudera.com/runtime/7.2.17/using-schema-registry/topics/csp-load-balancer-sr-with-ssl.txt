@@ -1,0 +1,56 @@
+Configurations required to use load balancer with SSL enabledCloudera Docs
+Configurations required to use load balancer with SSL enabled
+Learn how to use a load balancer in front of Schema Registry instances in an environment
+    where SSL is enabled.
+
+
+When SSL is enabled in your environment, the clients automatically check the
+          SSL certificate of the Schema Registry servers and compare it with where they connected.
+          This is called hostname verification and it fails because the clients connect to the load
+          balancer host, but the Schema Registry server SSL certificate contains the Schema Registry
+          server related host FQDN. To make the load-balancing work with forwarded requests, you can
+          have multiple options to choose from:
+You can modify the server certificate and add a SAN (Subject Alternative
+                Name) certificate including the load balancer host. This is the best option
+              because it ensures that hostname verification only passes if the original FQDN or the
+              load balancer host is used; otherwise it fails.
+If changing the certificates is a big effort, you can disable hostname verification
+              on the Schema Registry client side. The Schema Registry client holds all SSL related
+              properties in a map that contains the schema.registry.client.ssl key
+              in the properties. In this map, it is possible to set an entry with the
+                hostnameVerifierClass key. The value of this key points to a class
+              that implements the Java specific HostnameVerifier interface. An
+              implementation to allow every hostname during hostname verification is shown in the
+              following
+              example:public static class HostnameVerificationDisabled implements HostnameVerifier {
+
+ @Override
+ public boolean verify(String hostname, SSLSession session) {
+   // Allowing everything is the same as disabling hostname verification.
+   return true;
+ }
+}
+
+
+
+An example setting of this property is as
+      follows:// Create map for all client properties
+HashMap<String, String> clientProperties = new HashMap<>();
+
+// Create SSL related map
+HashMap<String, String> sslProperties = new HashMap<>();
+
+// Set hostname verifier in SSL properties
+sslProperties.put("hostnameVerifierClass", HostnameVerificationDisabled.class.getName());
+
+// Set other SSL related properties
+sslProperties.put(...) ;
+
+// Set SSL map on client properties map
+clientProperties.put(“schema.registry.client.ssl”, sslProperties);
+
+importantThis solution is less secure, because it disables
+        an SSL client-side defending mechanism. So, Cloudera recommends to use it carefully. 
+
+
+Parent topic: Load balancer in front of Schema Registry instances

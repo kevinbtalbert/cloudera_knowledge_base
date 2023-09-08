@@ -1,0 +1,74 @@
+Deploy HBase replicationCloudera Docs
+Deploy HBase replication
+Once you have source and destination clusters, you can enable and configure HBase
+        replication to use it as your data import method.
+
+
+important You need to run this as the HBase superuser, usually called
+                    "hbase". To run replication-related HBase commands, you must have HBase user
+                    permissions. If ZooKeeper uses Kerberos, configure HBase Shell to authenticate
+                    to ZooKeeper using Kerberos before attempting to run replication-related
+                    commands. No replication-related ACLs are available at this time.
+
+
+
+Configure and start the source and destination clusters.
+
+Create tables with the same names and column families on both the source and
+                    destination clusters, so that the destination cluster knows where to store data
+                    it receives. All hosts in the source and destination clusters have to be
+                    reachable to each other. see Create empty table on the destination
+                        cluster.
+
+On the source cluster, enable replication in Cloudera Manager, or by setting
+                        hbase.replication to true in
+                        hbase-site.xml.
+
+Obtain Kerberos credentials as the HBase principal. Substitute your
+                        fully.qualified.domain.name and realm in the following
+                    command:
+
+kinit -k -t /etc/hbase/conf/hbase.keytab 
+hbase/fully.qualified.domain.name@YOUR-REALM.COM
+
+
+On the source cluster, in HBase Shell, add the destination cluster as a peer,
+                    using the add_peer command. 
+
+add_peer 'ID', 'CLUSTER_KEY'
+To compose the CLUSTER_KEY, use the following template:
+hbase.zookeeper.quorum:hbase.zookeeper.property.clientPort:zookeeper.znode.parent
+For
+                        example:host1.com,host2.com,host3.com:2181:/hbase
+
+
+On the source cluster, configure each column family to be replicated by setting
+                    its REPLICATION_SCOPE to 1, using commands such as the
+                    following in HBase Shell:
+
+hbase> disable 'example_table'
+hbase> alter 'example_table', {NAME => 'example_family', REPLICATION_SCOPE => '1'}
+hbase> enable 'example_table'
+
+
+Verify that replication is occurring by examining the logs on the source cluster for messages such as the following.
+
+Considering 1 rs, with ratio 0.1
+Getting 1 rs from peer cluster # 0
+Choosing peer 192.0.2.49:62020
+
+
+To verify the validity of replicated data, use the included
+                        VerifyReplication MapReduce job on the source cluster,
+                    providing it with the ID of the replication peer and table name to verify. Other
+                    options are available, such as a time range or specific families to
+                    verify.
+The command has the following
+                    form:hbase org.apache.hadoop.hbase.mapreduce.replication.VerifyReplication [--starttime=timestamp1] [--stoptime=timestamp] [--families=comma separated list of families] <peerId> <tablename>
+The VerifyReplication command prints
+                        GOODROWS and
+                        BADROWS counters to indicate rows that did and
+                    did not replicate correctly. 
+
+
+Related informationReplication requirementsCreate empty table on the destination clusterReplication across three or more clustersWhen configuring replication among three or more clusters, Cloudera recommends to enable       KEEP_DELETED_CELLS on column families in the destination cluster, where       REPLICATION_SCOPE=1 in the source cluster.Enable replication on a specific tableYou can enable HBase replication for a specific table on the source         cluster.Parent topic: Using HBase replication

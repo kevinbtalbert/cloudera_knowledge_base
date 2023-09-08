@@ -1,0 +1,90 @@
+Add the MaaS Stellar Function to the Sensor ConfigurationCloudera Docs
+Add the MaaS Stellar
+    Function to the Sensor Configuration
+After deploying a model, you need to add the Stellar function for MaaS to the
+    configuration file for the sensor on which you want to run the model. Edit the sensor configuration at
+            $METRON_HOME/config/zookeeper/parsers/$PARSER.json to include a new
+          FieldTransformation to indicate a threat alert based on the model.    
+
+{
+  "parserClassName": "org.apache.metron.parsers.GrokParser",
+  "sensorTopic": "squid",
+  "parserConfig": {
+    "grokPath": "/patterns/squid",
+    "patternLabel": "SQUID_DELIMITED",
+    "timestampField": "timestamp"
+  },
+  "fieldTransformations" : [
+    {
+      "transformation" : "STELLAR"
+    ,"output" : [ "full_hostname", "domain_without_subdomains", "is_malicious", "is_alert" ]
+    ,"config" : {
+      "full_hostname" : "URL_TO_HOST(url)"
+      ,"domain_without_subdomains" : "DOMAIN_REMOVE_SUBDOMAINS(full_hostname)"
+      ,"is_malicious" : "MAP_GET('is_malicious', MAAS_MODEL_APPLY(MAAS_GET_ENDPOINT('dga'), {'host' : domain_without_subdomains}))"
+      ,"is_alert" : "if is_malicious == 'malicious' then 'true' else null"
+                }
+    }
+                           ]
+}
+
+where
+
+
+transformation
+
+Enter 'STELLAR' to indicate this is a Stellar field transformation.
+
+output
+
+The information the transformation will output. This typically contains
+                    full_host, domain_without_subdomains,
+                    is_malicious, and is_alert.
+
+full_hostname
+
+The domain component of the "url" field.
+
+domain_without_subdomains
+
+The domain of the "url" field without subdomains.
+
+is_malicious
+
+The output of the "mock_dga" model as deployed earlier. In this case, it will be
+                  "malicious" or "legit", because those are the values that our model returns.
+
+is_alert
+
+Set to "true" if and only if the model indicates the hostname is malicious.
+
+
+ Edit the sensor enrichment configuration at
+            $METRON_HOME/config/zookeeper/parsers/PARSER.json to adjust the threat
+          triage level of risk based on the model output:  
+
+{
+  "index": "$PARSER_NAME",
+  "batchSize": 1,
+  "enrichment" : {
+    "fieldMap": {}
+  },
+  "threatIntel" : {
+    "fieldMap":{},
+    "triageConfig" : {
+      "riskLevelRules" : {
+        "is_malicious == 'malicious'" : 100
+      },
+      "aggregator" : "MAX"
+    }
+  }
+}
+
+ Upload the new configurations to $METRON_HOME/bin/zk_load_configs.sh --mode
+            PUSH -i $METRON_HOME/config/zookeeper -$ZOOKEEPER_HOST:2181. 
+ If this is a new sensor and it does not have a Kafka topic associated with it, then we must
+          create a new sensor topic in Kafka.  
+
+/usr/hdp/current/kafka-broker/bin/kafka-topics.sh --zookeeper $ZOOKEEPER_HOST:2181 --create --topic $PARSER_NAME --partitions 1 --replication-factor 1
+
+Parent topic: Creating Models Overview

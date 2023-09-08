@@ -1,0 +1,284 @@
+Run the DataFlow function in serverless mode in AWS LambdaCloudera Docs
+Run the DataFlow function in serverless mode in AWS Lambda
+Now that you have developed the NiFi flow and tested locally, registered it as DataFlow
+    function in Cloudera DataFlow service, you are ready to run the DataFlow function in serverless
+    mode using AWS Lambda. For this, you will need to create, configure, test and deploy the
+    function in AWS Lambda.
+Parent topic: Telemetry tutorial steps
+1. Create the DataFlow function
+You can use the AWS CLI to create and configure the DataFlow function in AWS
+      Lambda.
+
+Create the AWS IAM Role required to create the lambda function.
+
+
+When Lambda executes a function, it requires an execution role that grants the
+                function permission to access AWS services and resources. Lambda assumes the role
+                when the DataFlow function is invoked. Assign the most limited permissions/policies
+                for the function to execute.
+
+
+Download the trust-policy.json file.
+
+
+Using the below AWS CLI command, create a role called
+                  NiFi_Function_Quickstart_Lambda_Role that the Lambda service will assume. 
+The role will be attached to an AWS managed role that provides the limited
+                permissions for the function to
+                execute.aws iam create-role --role-name NiFi_Function_Quickstart_Lambda_Role --assume-role-policy-document file://trust-policy.json
+
+aws iam attach-role-policy --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole --role-name NiFi_Function_Quickstart_Lambda_Role
+
+
+
+These two commands will create the following IAM role. Copy and save the Role ARN
+                which you will need to create the function.
+
+
+
+
+
+
+
+
+Create the DataFlow function in Lambda.
+
+
+Download the DataFlow Function Definition JSON
+                file.
+
+
+This file has the full definition required to create the DataFlow function
+                    including function, code, environment variable and security configuration.
+The environment variables in this file contain the info for Lambda to fetch
+                    the function definition from the DataFlow Catalog as well as the function’s
+                    application parameters.
+
+
+
+
+Update the following properties in the definition file:
+
+
+
+DF_ACCESS_KEY – The access key created for the CDP service
+                      account
+
+
+DF_PRIVATE_KEY – The private key created for the CDP service
+                      account
+
+
+FLOW_CRN – The CRN value you copied from the DataFlow Catalog page
+                      after uploading the function
+
+
+aws_access_key_id – The AWS access key that has permissions to
+                      access (read/write) the S3 bucket you created in the prerequisite section
+
+
+aws_access_key_password – The AWS access key password that has
+                      permissions to access (read/write) the S3 bucket you created in the
+                      prerequisite section
+
+
+s3_bucket – The name of the bucket you created
+
+
+s3_region – The bucket's region
+
+
+S3Bucket – The name of the bucket that you uploaded the binaries
+                      ZIP file that you downloaded from the Cloudera DataFlow Functions page
+
+
+S3Key – The key to the binaries ZIP file in S3.
+For example, if you uploaded the ZIP to S3 with this URI
+                        s3://dataflowfunctionsquickstart/libs/naaf-aws-lambda-1.0.0-SNAPSHOT-bin.zip,
+                      the key would be
+                        libs/naaf-aws-lambda-1.0.0-SNAPSHOT-bin.zip
+
+
+Role – The ARN of the role created in the previous step
+
+
+noteIn the definition file, there is a parameter named
+                  NEXUS_URL. This parameter defines the location from where NARs will be downloaded
+                  when your function is instantiated. 
+If you have designed your NiFi flow in a Cloudera Flow Management
+                      environment, you need to remove the parameter from the definition file.
+If you have designed your NiFi flow using an Apache NiFi environment as
+                      instructed before, you should keep this parameter.
+
+
+
+
+Run the following command to create a function called NiFi_Function_Quickstart
+                (if the FunctionName property was not modified):
+
+aws lambda create-function --cli-input-json file://NiFi_Function_Quickstart-definition.json
+
+
+
+
+View the Lambda function in AWS Console.
+
+
+On the AWS console, navigate to the Lambda service and click the function called
+                NiFi_Function_Quickstart (if the FunctionName property was not modified).
+You can see the following under the Code tab of the
+                  function:
+
+
+
+
+If you click the Configuration tab, you can see all the
+                configured parameters required to run the function under Environment
+                  variables.
+
+
+
+
+
+
+
+
+
+
+
+
+
+2. Test the DataFlow function
+With the function created and fully configured, you can test the function with a test
+      trigger event before configuring the real trigger in the Lambda service.
+
+Create a Test Event.
+Click the Test tab, select Create New
+              Event, and configure the following:
+
+Provide a name for the test: NiFi_Function_Quickstart.
+
+
+Copy the contents from the sampleTriggerEvent and paste it into the
+                  Event JSON field.
+
+
+Replace the bucket name with the one you created.
+
+
+Click Save.
+
+
+
+
+
+Execute the Test Event.
+
+
+Reset data for the test to run by deleting the folders under
+                  <<your_bucket>>/processed which was created after the
+                test run on your  local NiFi instance.
+
+
+Click Test.
+The initial run of the test is a cold start which will take a few minutes
+                because it requires additional binaries to be downloaded from Nexus. Subsequent runs
+                should be faster. If the run is successful, the logs should look like
+                    this:
+
+
+
+
+Validate that the processed Parquet files are under the following
+                directories:
+
+
+<<your_bucket>>/processed/truck-geo-events
+<<your_bucket>>/processed/truck-speed-events
+
+
+
+
+
+
+
+
+
+
+
+3. Create S3 trigger for the DataFlow function
+With the DataFlow function fully configured in Lambda and tested using a sample
+      trigger event, you can now create a S3 trigger for the DataFlow function.
+
+Select the function that you created and click Add Trigger in
+            the Function overview section.
+
+Select S3 as the trigger source and configure the following:
+
+
+
+Bucket – Select the bucket you created
+
+
+Event type – All object create events
+
+
+Prefix – truck-telemetry-raw/
+
+
+Click the checkbox to acknowledge recursive invocation
+
+
+
+
+
+
+
+Click Add.
+
+With the trigger created, when any new telemetry file lands in
+              <<your_bucket>>/truck-telemetry-raw, AWS Lambda will
+            execute the DataFlow function.
+With the trigger created, when any new telemetry file lands in
+              <<your_bucket>>/truck-telemetry-raw, AWS Lambda will
+            execute the DataFlow function.
+
+You can test this by uploading the sample telemetry file into
+              <<your_bucket>>/truck-telemetry-raw.
+
+ It will generate a trigger event that spins up the DataFlow function which results
+              in the processed files landing in
+                <<your_bucket>>/processed/truck-geo-events and
+                <<your_bucket>>/processed/truck-speed-events.
+
+
+
+
+
+
+
+
+4. Monitor the DataFlow function
+As more telemetry files are added to the landing S3 folder, you can view the metrics
+      and logs of the serverless DataFlow Functions in the AWS Lambda monitoring view.
+
+If you want to view metrics on all the function invocations, go to the
+              Monitor tab and select the Metrics
+            sub-tab.
+
+
+
+
+
+
+If you want to view all the DataFlow function logs for each function invocation,
+            check out the Logs sub-tab under the
+              Monitor tab.
+
+
+
+
+
+
+
+

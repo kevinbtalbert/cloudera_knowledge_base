@@ -1,0 +1,149 @@
+REFRESH statementCloudera Docs
+REFRESH statement
+The REFRESH statement reloads the metadata for the table from the
+    metastore database and does an incremental reload of the file and block metadata from the HDFS
+    NameNode. REFRESH is used to avoid inconsistencies between Impala and external
+    metadata sources, namely Hive Metastore (HMS) and NameNodes.
+      The REFRESH statement is only required if you load data from outside of
+      Impala. Updated metadata, as a result of running REFRESH, is broadcast to
+      all Impala coordinators.
+    
+Syntax:
+REFRESH [db_name.]table_name [PARTITION (key_col1=val1 [, key_col2=val2...])]
+
+Usage notes:
+
+      The table name is a required parameter, and the table must already exist and be known to
+      Impala.
+    
+      Only the metadata for the specified table is reloaded.
+    
+      Use the REFRESH statement to load the latest metastore metadata for a
+      particular table after one of the following scenarios happens outside of Impala:
+    
+ Deleting, adding, or modifying files.  For example, after loading
+          new data files into the HDFS data directory for the table, appending
+          to an existing HDFS file, inserting data from Hive via
+            INSERT or LOAD DATA. 
+
+
+        Deleting, adding, or modifying partitions.
+        
+          For example, after issuing ALTER TABLE or other table-modifying SQL
+          statement in Hive
+        
+
+note
+ In Impala 2.3 and higher, the ALTER TABLE
+              table_name RECOVER PARTITIONS statement maybe a faster
+          alternative to REFRESH in some scenarios such as when you are only adding
+          new partition directories through Hive or manual HDFS operations however the
+            REFRESH query will NOT detect the new partitions unless the new
+          partitions are in HMS already. You must be aware of the following limitations before you
+          choose between REFRESH and ALTER TABLE.
+
+
+REFRESH does not detect new partition directories that are added by
+            HDFS. 
+
+RECOVER PARTITIONS does not detect changes in already existing
+            partitions. 
+
+RECOVER PARTITIONS can cause performance issues if SYNC_DDL=1.
+          
+
+
+INVALIDATE METADATA and REFRESH are
+        counterparts:
+      
+
+INVALIDATE METADATA is an asynchronous operations
+            that simply discards the loaded metadata from the catalog and
+            coordinator caches. After that operation, the catalog and all the
+            Impala coordinators only know about the existence of databases and
+            tables and nothing more. Metadata loading for tables is triggered by
+            any subsequent queries.
+          
+
+REFRESH reloads the metadata synchronously.
+              REFRESH is more lightweight than doing a full
+            metadata load after a table has been invalidated.
+              REFRESH cannot detect changes in block locations
+            triggered by operations like HDFS balancer, hence causing remote
+            reads during query execution with negative performance implications.
+          
+
+
+Refreshing a single partition:
+ In Impala 2.7 and higher, the REFRESH statement can apply to
+        a single partition at a time, rather than the whole table. Include the optional
+          PARTITION (partition_spec) clause and specify values
+        for each of the partition key columns. 
+      The following rules apply:
+      
+
+          The PARTITION clause of the REFRESH statement must
+          include all the partition key columns.
+        
+
+          The order of the partition key columns does not have to match the column order in the
+          table.
+        
+
+          Specifying a nonexistent partition does not cause an error.
+        
+
+          The partition can be one that Impala created and is already aware of, or a new
+          partition created through Hive.
+        
+
+
+      The following examples demonstrates the above rules.
+    
+-- Partition doesn't exist.
+REFRESH p2 PARTITION (y=0, z=3);
+REFRESH p2 PARTITION (y=0, z=-1)
+
+-- Key columns specified in a different order than the table definition.
+REFRESH p2 PARTITION (z=1, y=0)
+
+-- Incomplete partition spec causes an error.
+REFRESH p2 PARTITION (y=0)
+ERROR: AnalysisException: Items in partition spec must exactly match the partition columns in the table definition: default.p2 (1 vs 2)
+
+
+Related impala-shell options:
+
+      Due to the expense of reloading the metadata for all tables, the
+      impala-shell -r option is not recommended.
+    
+HDFS considerations:
+ All HDFS and Ranger permissions and privilege requirements
+        are the same whether you refresh the entire table or a single partition. 
+      The REFRESH statement checks HDFS permissions of the underlying data
+      files and directories, caching this information so that a statement can be cancelled
+      immediately if for example the impala user does not have permission to
+      write to the data directory for the table. Impala reports any lack of write permissions as
+      an INFO message in the log file.
+    
+      If you change HDFS permissions to make data readable or writeable by the Impala user,
+      issue another REFRESH to make Impala aware of the change.
+    Kudu considerations:By default, much of the metadata
+        for Kudu tables is handled by the underlying storage layer. Kudu tables
+        have less reliance on the Metastore database, and require less metadata
+        caching on the Impala side. For example, information about partitions in
+        Kudu tables is managed by Kudu, and Impala does not cache any block
+        locality metadata for Kudu tables. If the Kudu service is not integrated
+        with the Hive Metastore, Impala will manage Kudu table metadata in the
+        Hive Metastore.
+        The REFRESH and INVALIDATE METADATA
+        statements are needed less frequently for Kudu tables than for
+        HDFS-backed tables. Neither statement is needed when data is
+        added to, removed, or updated in a Kudu table, even if the changes
+        are made directly to Kudu through a client program using the Kudu API.
+        Run REFRESH table_name or
+        INVALIDATE METADATA table_name
+        for a Kudu table only after making a change to the Kudu table schema,
+        such as adding or dropping a column.
+      
+Parent topic: Impala SQL statements

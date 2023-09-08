@@ -1,0 +1,44 @@
+Azure NetApp Files Management with the CLICloudera Docs
+Azure NetApp Files Management with the CLI
+You can manage the NetApp Files setup using the CLI. This can be helpful for automating
+  setup and teardown of workspaces as ML project needs change.
+Create an Azure NetApp Files account
+The following code sample creates an Azure NetApp Files account.
+ az netappfiles account create \ --account-name my-anf-account \ --resource-group
+    my-cdp-resource-group \ --location westus2 
+
+Create a capacity pool
+A capacity pool is a storage container for volumes, which are accessed directly by CML. The
+    minimum size for an Azure NetApp Files capacity pool is 4 TiB 
+ MINIMUM_POOL_SIZE=4 # 4 TiB is the minimum az netappfiles pool create \
+    --account-name my-anf-account \ --pool-name my-anf-pool \ --resource-group my-cdp-resource-group
+    \ --service-level Standard \ --location westus2 \ --size ${MINIMUM_POOL_SIZE} 
+
+Create a volume
+Create one or more volumes in the capacity pool. The "Usage threshold" is referred to as the
+    "quota" in the Azure web portal. It is measured in GiB. The volume must support the NFSv3
+    protocol (which is the default).
+ az netappfiles volume create \ --account-name my-anf-account \ --pool-name
+    my-anf-account \ --volume-name my-anf-volume \ --resource-group my-cdp-resource-group \
+    --location westus2 \ --file-path my-anf-volume \ --usage-threshold 1000 \ --vnet my-cdp-vnet \
+    --subnet my-anf-subnet \ --service-level Standard 
+The mount path for this volume, or a dedicated, empty subdirectory inside that volume, must be
+    provided for the "Existing NFS" field when provisioning CML workspaces. It can be found in the
+    "Mount Instructions" blade of the volume in the Azure portal.
+Since each capacity pool has a large minimum, and each volume requires a dedicated subnet,
+    users may wish to have a single volume that is shared between workspaces. This can be managed by
+    having a VM that has the Azure volume mounted (instructions for doing this are also in the
+    "Mount Instructions" blade of the volume in the Azure portal). This VM can then be used to
+    quickly manage directories for individual workspaces on a single, shared volume. For
+    instance:
+
+    USER=      # username for accessing management VM
+    VM=        # IP address or hostname for accessing management VM
+    VOLUME=    # NFS volume name
+    WORKSPACE= # CML workspace name (or other unique directory name)
+    ssh ${USER}@${VM} "sudo mkdir ${VOLUME}/${WORKSPACE}; sudo chown 8536:8536 ${VOLUME}/${WORKSPACE}"
+    # ...
+    ssh ${USER}@${VM} "sudo rm -r ${VOLUME}/${WORKSPACE}"
+   
+
+

@@ -1,0 +1,124 @@
+Hive-HDFS ACL Sync ReferenceCloudera Docs
+Hive-HDFS ACL Sync Reference
+This topic provides reference information for Hive-HDFS ACL Sync. 
+Debugging common issues
+
+
+
+To reload Ranger RMS mapping from scratch, perform the following steps. 
+
+
+Stop Ranger RMS.
+Log in to the Ranger RMS database and run delete from
+                              x_rms_mapping_provider; to remove the only row from this
+                           table.
+Start Ranger RMS.
+
+
+
+
+
+
+RMS tables
+The following tables are used by Ranger RMS to persist mappings: 
+
+
+
+X_rms_mapping_provider
+
+
+X_rms_notification
+
+
+X_rms_resource_mapping
+
+
+X_rms_service_resource
+
+
+
+
+Advanced configurations
+HDFS plugin side configurations
+
+ranger.plugin.hdfs.mapping.hive.authorize.with.only.chained.policies
+true: Enforce strict Sentry semantics.
+false: If there is no applicable Hive policy, let HDFS
+                     determine access.
+Default setting: true
+
+ranger.plugin.hdfs.accesstype.mapping.read
+A comma-separated list of hive access types that HDFS "read" maps to. 
+Default setting: select
+
+ranger.plugin.hdfs.accesstype.mapping.write
+A comma-separated list of hive access types that HDFS "write" maps to. 
+Default setting: update,alter
+
+ranger.plugin.hdfs.accesstype.mapping.execute
+A comma-separated list of hive access types that HDFS "execute" maps to. 
+Default setting: _any
+
+ranger.plugin.hdfs.mapping.source.download.interval
+
+The time in milliseconds between mappings download requests from the HDFS
+                        Ranger plugin to RMS.
+
+
+Default setting: 30 seconds
+By default, the RMS plugin checks for new mapping downloads every 30
+                        seconds, based on this configuration. If you have mapping data (found in the
+                           hdfs_cm_hive_resource_mapping.json file) of
+                        approximately 360MB file size; then performing this operation every 30
+                        seconds could cause an excessive load on the NameNode. After enabling
+                        performance logs, we can observe that saveToCache takes 11
+                        seconds and loadFromCache operations take 7 seconds to
+                        complete. The cacheing process takes approximately 18~19 seconds to
+                        complete, as shown in the following example performance logs:
+
+DEBUG org.apache.ranger.perf.resourcemapping.init: [PERF] RangerMappingRefresher.loadFromCache(serviceName=cm_hive): 7449
+DEBUG org.apache.ranger.perf.resourcemapping.init: [PERF] RangerMappingRefresher.saveToCache(serviceName=cm_hive): 11787
+
+In this case, you should adjust the frequency of download RMS mappings to at
+                        least 18*2= 36 seconds. A more conservative value =  45 seconds. In this
+                        way, you can tune RMS configurations to optimize performance in the NameNode
+                        plugin.
+
+
+
+Hive service configuration
+
+ranger.plugin.audit.excluder.users
+This configuration, added in the Hive service-configs, lists the users whose
+                     access to Hive or Hive Metastore does not generate audit records. There may be
+                     a large number of audit records created when "rangerrms" makes requests to the
+                     Hive Metastore when downloading Hive table data. By adding the "rangerrms" user
+                     to the comma-separated list of users in this configuration, such audit records
+                     will not be generated.
+
+
+RMS side configurations
+Note that changes to any of these requires that RMS is stopped, all rows are deleted
+            from RMS database table "x_rms_mapping_provider" and RMS is restarted. On restart, RMS
+            downloads complete table data from RMS, which may take a significant amount of time
+            depending on the number of tables in HMS.
+
+ranger-rms.HMS.source.service.name
+The Ranger HDFS service name (default: cm_hdfs).
+
+ranger-rms.HMS.target.service.name
+The Ranger Hive service name (default: cm_hive).
+
+ranger-rms.HMS.map.managed.tables
+true – Track managed and external tables. 
+false – Track only external tables. 
+Default setting: false
+
+ranger-rms.polling.notifications.frequency.ms
+The time in milliseconds between polls from RMS to HMS for changes to
+                     tables.
+Default setting: 30 seconds
+
+
+
+

@@ -1,0 +1,88 @@
+Configuring SSL/TLS certificate exchange between two Cloudera Manager instancesCloudera Docs
+Configuring SSL/TLS certificate exchange between two Cloudera Manager instances
+You must manually set up an SSL/TLS certificate exchange between two Cloudera Manager
+        instances that manage source and target cluster respectively. Replication Manager uses this
+        information to set up the peers for secure data replication.
+
+importantReplication Manager supports Cloudera
+                Manager high availability functionality only after you manually configure the
+                SSL/TLS certificate exchange.
+When the source Cloudera Manager is configured for high availability and is
+                Auto-TLS enabled, the certificate exchange is initiated from the source cluster to
+                the target cluster where the certificate is exported from the load balancer node of
+                the source cluster.
+noteThe following sample commands use the
+                    open-jdk-11 java version. Use the java version that you
+                use in CDP clusters in these commands.
+
+
+List the contents of the keystore file located in the source cluster Cloudera
+                    Manager.
+
+/usr/lib/jvm/java-openjdk-11/bin/keytool -list -keystore /var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_truststore.jks -storepass [***password***]
+tipThe global truststore password is
+                        available in the /etc/hadoop/conf/ssl-client.xml
+                        file.
+
+
+Export the certificate contents to the cert.txt
+                    file.
+
+/usr/java/default/bin/keytool -exportcert -keystore /var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_truststore.jks -alias cmrootca-0 -file ./cert.txt -storepass [***truststore_pass***]
+
+
+
+Copy the cert.txt file to all the hosts of the target
+                    cluster Cloudera Manager securely.
+
+$ mv cert.txt othercert.txt
+$ scp -i [***PEM file***] othercert.txt root@[***host_ip***]:/home/
+
+
+Import the certificate into the keystore file on all the hosts of the target
+                    cluster Cloudera Manager.
+
+/usr/java/default/bin/keytool -importcert -noprompt -v -trustcacerts -keystore /var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_truststore.jks -alias cmrootca-1 -file ./othercert.txt --storepass [***truststore_password***]
+
+
+Run steps 1 and 2 in the target cluster Cloudera Manager, and then copy the
+                        cert.txt file to all the hosts in the source cluster
+                    Cloudera Manager securely, and import the certificate into the keystore file on
+                    all the hosts of the source cluster Cloudera Manager (steps 3 and 4).
+
+Perform this step only for Ozone replication policies.
+Import the S3G CA certificate from the cluster to the local JDK path using the
+                    following commands:
+
+
+Run the following command on all the nodes of the source cluster:
+keytool -importkeystore -destkeystore
+                                    [***jdk_cacerts_location***] -srckeystore
+                                    [***cm-auto-global_truststore.jks_location***]
+                                -srcalias [***cm_alias***]For example,
+                                keytool -importkeystore -destkeystore /usr/java/default/lib/security/cacerts -srckeystore /var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_truststore.jks -srcalias cmrootca-0
+
+
+Run the following commands on all the nodes of the target
+                            cluster:
+keytool -importkeystore -destkeystore
+                                    [***jdk_cacerts_location***]
+                                    -srckeystore
+                                    [***cm-auto-global_truststore.jks_location***]
+                                -srcalias [***cm_alias_0***]keytool -importkeystore -destkeystore
+                                        [***jdk_cacerts_location***] -srckeystore
+                                        [***cm-auto-global_truststore.jks_location***]
+                                    -srcalias
+                                    [***cm_alias_1***] For
+                                example, keytool -importkeystore -destkeystore /usr/java/default/lib/security/cacerts -srckeystore /var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_truststore.jks -srcalias cmrootca-0
+keytool -importkeystore -destkeystore /usr/java/default/lib/security/cacerts -srckeystore /var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_truststore.jks -srcalias cmrootca-1
+
+
+
+tipYou can use the
+                            -deststorepass option if you do not know the JDK
+                        trust store password.
+
+
+
+Parent topic: Prepare to replicate using replication policies

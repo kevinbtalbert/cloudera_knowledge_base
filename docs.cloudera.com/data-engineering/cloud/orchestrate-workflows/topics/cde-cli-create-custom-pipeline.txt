@@ -1,0 +1,51 @@
+Creating an Airflow pipeline with custom files using CDE CLI [technical preview]Cloudera Docs
+Creating an Airflow pipeline with custom files using CDE CLI [technical preview]
+By creating a pipeline in CDE using the CLI, you can add custom files that are
+        available for tasks.
+        This is a technical preview. 
+This
+            feature is available in CDE 1.19 and above in new Virtual Cluster installations
+            only.
+        
+
+For use
+                cases
+                where custom files need to be accessed within an Airflow task, you need to first
+                upload the custom files to a CDE resource, and then specify it in the job creation
+                parameter using the --airflow-file-mount-<n>-resource option.
+                These files are available only to the jobs in which they are linked.
+
+
+Run the following commands to upload the custom files to a CDE resource, and
+                    then create the job: 
+
+cde resource create --name my_pipeline_resource
+cde resource upload --name my_pipeline_resource --local-path my_pipeline_dag.py
+
+cde resource create --name my_file_resource
+cde resource upload --name my_file_resource --local-path my_file.conf
+
+cde job create --name my_pipeline --type airflow --dag-file my_pipeline_dag.py --mount-1-resource my_pipeline_resource --airflow-file-mount-1-resource my_file_resource
+
+
+
+The files can be reached in Airflow DAGs with the
+            following pattern: /app/mount/<resource_name or
+                resource_alias>/<file_name>, like in the following
+            example: read_conf = BashOperator(
+    	task_id=read_conf,
+    	bash_command=”cat /app/mount/my_file_resource/my_file.conf”
+	)noteIt is possible to change the mount path by
+                specifying the --airflow-file-mount-N-prefix my_custom_prefix
+                option in the job creation command, like in the following
+                example:cde job create --name my_pipeline --type airflow --dag-file my_pipeline_dag.py --mount-1-resource my_pipeline_resource --airflow-file-mount-1-resource my_file_resource --airflow-file-mount-1-prefix my_custom_prefixIn this case, the file is available at: read_conf = BashOperator(
+    	task_id=read_conf,
+    	bash_command=”cat /app/mount/my_custom_prefix/my_file.conf”
+	)
+noteAs a best practice, Cloudera recommends to use the same
+                    resource name because it is simpler to follow the DAG without having to look at
+                    the job definition. Also, it is possible to use “/” as a value to mount to
+                    /app/mount if there is only one Airflow file mounted in the job definition;
+                    however, this is not recommended.
+
+Related informationUsing the Cloudera Data Engineering CLIParent topic: Creating a pipeline using the CDE CLI

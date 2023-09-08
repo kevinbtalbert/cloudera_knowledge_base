@@ -1,0 +1,66 @@
+Tracking model metrics without deploying a modelCloudera Docs
+Tracking model metrics without deploying a model
+Cloudera recommends that you develop and test model metrics in a workbench session
+    before actually deploying the model. This workflow avoids the need to rebuild and redeploy a
+    model to test every change.
+Metrics tracked in this way are stored in a local, in-memory datastore instead of the metrics
+      database, and are forgotten when the session exits. You can access these metrics in the same
+      session using the regular metrics API in the cdsw.py file.
+The following example demonstrates how to track metrics locally within a session, and use the
+        read_metrics function to read the metrics in the same session by querying
+      by the time window.
+To try this feature in the local development mode, use the following files from the Python
+      template project:
+
+use_model_metrics.py
+
+
+predict_with_metrics.py
+
+
+The predict function from the predict_with_metrics.py file shown in the
+      following example is similar to the function with the same name in the
+        predict.py file. It takes input and returns output, and can be deployed as
+      a model. But unlike the function in the predict.py file, the predict function
+      from the predict_with_metrics.py file tracks mathematical metrics. These
+      metrics can include information such as input, output, feature values, convergence metrics,
+      and error estimates. In this simple example, only input and output are tracked. The function
+      is equipped to track metrics by applying the decorator
+      cdsw.model_metrics.
+
+@cdsw.model_metrics
+def predict(args):
+  # Track the input.
+  cdsw.track_metric("input", args)
+
+  # If this model involved features, ie transformations of the
+  # raw input, they could be tracked as well.
+  # cdsw.track_metric("feature_vars", {"a":1,"b":23})
+
+  petal_length = float(args.get('petal_length'))
+  result = model.predict([[petal_length]])
+
+  # Track the output.
+  cdsw.track_metric("predict_result", result[0][0])
+  return result[0][0]
+
+
+You can directly call this function in a workbench session, as shown in the following
+   example:predict(
+{"petal_length": 3}
+)
+You can fetch the metrics from the local, in-memory datastore by using the regular
+      metrics API. To fetch the metrics, set the dev keyword argument to
+        True in the use_model_metrics.py file. You can query the
+      metrics by model, model build, or model deployment using the variables
+        cdsw.dev_model_crn and cdsw.dev_model_build_crn or
+        cdsw.dev_model_deploy_crn respectively.
+For
+   example:end_timestamp_ms=int(round(time.time() * 1000))
+cdsw.read_metrics(model_deployment_crn=cdsw.dev_model_deployment_crn,
+start_timestamp_ms=0,
+end_timestamp_ms=end_timestamp_ms,
+dev=True)
+where CRN denotes Cloudera Resource Name, which is a unique identifier from CDP, analogous to
+   Amazon's ARN.
+

@@ -1,0 +1,118 @@
+Configuring LDAP usersCloudera Docs
+Configuring LDAP users
+You must complete the following manual steps to prepare the cluster for each user that
+    needs to submit jobs. Perform
+    these steps for each user that needs to submit jobs to the virtual
+    cluster.
+In Cloudera Data Engineering (CDE), jobs are associated with virtual
+      clusters. Before you can create a job, you must create a virtual cluster that can run it.
+      For more information, see Creating virtual clusters.
+
+If you already downloaded the utility script and uploaded it to an
+          ECS or HDFS gateway cluster host as documented in Creating virtual clusters, you
+          can skip to step 8.
+
+Download cde-utils.sh to your local
+          machine.
+
+Create a directory to store the files, and change to that
+          directory:
+mkdir -p /tmp/cde-1.3.4 && cd /tmp/cde-1.3.4
+
+
+
+Embedded Container Service (ECS)
+Copy the extracted utility script (cde-utils.sh) to one of the
+            Embedded Container Service (ECS) cluster hosts. To identify the ECS cluster hosts:
+Log in to the Cloudera Manager web interface.
+Go to Clusters > Experience Cluster > ECS > Hosts.
+Select one of the listed hosts, and copy the script to that host.
+
+Red Hat OpenShift Container Platform (OCP)
+Copy the extracted utility script (cde-utils.sh) and the OpenShift
+              kubeconfig file to one of the HDFS service gateway hosts, and install
+            the kubectl utility:
+Log in to the Cloudera Manager web interface.
+Go to Clusters > Base Cluster > HDFS > Instances.
+Select one of the Gateway hosts, and copy the script to that
+              host.
+Copy the OCP kubeconfig file to the same host.
+On that host, install the kubectl utility following the instructions in the Kubernetes documentation.
+
+
+On the cluster host that you copied the script to, set the script
+          permissions to be
+          executable:
+chmod +x /path/to/cde-utils.sh
+
+Identify the virtual cluster endpoint:
+
+
+In the Cloudera Manager web UI, go to the
+            Experiences page, and then click
+            Open CDP Private Cloud Experiences.
+Click the Data Engineering tile.
+Select the CDE service containing the virtual cluster you want
+            to activate.
+Click 
+Cluster Details.
+Click JOBS API URL to copy the URL to
+            your clipboard.
+Paste the URL into a text editor to identify the endpoint host.
+            For example, the URL is similar to the
+            following:https://dfdj6kgx.cde-2cdxw5x5.ecs-demo.example.com/dex/api/v1The
+              endpoint host is
+              dfdj6kgx.cde-2cdxw5x5.ecs-demo.example.com.
+
+
+
+On the ECS or HDFS gateway host, create a filename containing the
+          user principal, and generate a keytab. If you do not have the
+          ktutil utility, you might need to install the
+          krb5-workstation package. The following example
+          commands assume the user principal is
+          psherman@EXAMPLE.COM
+
+Create a file named
+            <username>.principal (for
+            example, psherman.principal) containing the user
+            principal:psherman@EXAMPLE.COM
+Generate a keytab named <username>.keytab for
+              the user using ktutil:sudo ktutil
+
+ktutil:  addent -password -p psherman@EXAMPLE.COM -k 1 -e aes256-cts
+Password for psherman@EXAMPLE.COM:  
+ktutil:  addent -password -p psherman@EXAMPLE.COM -k 2 -e aes128-cts
+Password for psherman@EXAMPLE.COM: 
+ktutil:  wkt psherman.keytab
+ktutil:  q
+
+
+Validate the keytab using klist and
+          kinit:
+        klist -ekt psherman.keytab 
+Keytab name: FILE:psherman.keytab
+KVNO Timestamp           Principal
+---- ------------------- ------------------------------------------------------
+   1 08/01/2021 10:29:47 psherman@EXAMPLE.COM (aes256-cts-hmac-sha1-96) 
+   1 08/01/2021 10:29:47 psherman@EXAMPLE.COM (aes128-cts-hmac-sha1-96) 
+          
+kinit -kt psherman.keytab psherman@EXAMPLE.COMMake
+          sure that the keytab is valid before continuing. If the
+          kinit command fails, the user will not be able to
+          run jobs in the virtual cluster. After verifying that the
+          kinit command succeeds, you can destroy the
+          Kerberos ticket by running kdestroy.
+
+Use the cde-utils.sh script to copy the user keytab to the virtual
+          cluster hosts:
+./cde-utils.sh init-user-in-virtual-cluster -h <endpoint_host> -u <user> -p <principal_file> -k <keytab_file>For
+          example, using the psherman user, for the
+            dfdj6kgx.cde-2cdxw5x5.ecs-demo.example.com endpoint
+          host:./cde-utils.sh init-user-in-virtual-cluster -h dfdj6kgx.cde-2cdxw5x5.ecs-demo.example.com -u psherman -p psherman.principal -k psherman.keytab
+
+Repeat these steps for all users that need to submit jobs to the
+          virtual cluster.
+
+
+Parent topic: Configure users to create jobs

@@ -1,0 +1,159 @@
+Onboarding CDP users and groups for Azure cloud storage (No RAZ)Cloudera Docs
+Onboarding CDP users and groups for Azure cloud storage (No RAZ)
+The minimal setup defined earlier spins up a CDP environment and Data Lake with no end
+    user access to cloud storage. Adding users and groups to a CDP environment involves ensuring
+    that they are properly mapped to managed identities to access cloud storage.
+noteIf you are using Fine-grained access control, you should onboard your
+      users using Ranger instead of using IDBroker mappings. Adding IDBroker mappings is disabled
+      for RAZ-enabled environments.
+In general, to have new users or groups onboarded, you need to have the following pre-created
+      in Azure:
+
+First, you need to create two more containers within the storage account
+            (mydatalake) created earlier, one for data engineers (for
+        example, dataeng) and one for data scientists (for example,
+            datascience). 
+Next, you need to create two more managed identities, one for data engineers (for example,
+            data-eng-mi) and one for data scientists (for example,
+            data-eng-mi) and assign the Storage Blob Data Owner role
+        on the scope of one these two nearly created containers. The
+          data-eng-mi managed identity will need the Storage Blob Data
+          Owner role on the scope of the dataeng container and the
+            data-science-mi managed identity will need the Storage Blob
+          Data Owner role on the scope of the datascience container.
+Finally, you also need to grant the Data Lake Admin managed identity created
+        earlier the Storage Blob Data Owner role on the scope of these two newly created
+        containers. 
+
+The final goal is to have the following that builds on the minimal setup presented earlier. 
+The first diagram illustrates the scenario where Backup Location Base is in the same
+      location as the Logs Location Base:
+
+
+
+The second diagram illustrates the scenario where Backup Location Base and Logs
+        Location Base are separate:
+
+
+
+The following documentation provides detailed steps for how to create this setup. The steps
+      involve: 
+Creating additional containers
+Crating additional managed identities 
+Creating mappings in CDP 
+Updating the Data Lake Admin managed identity 
+
+
+Parent topic: ADLS Gen2 and managed identities for logs, backups, and data storage
+Creating additional containers
+Within the ADLS Gen 2 storage account (mydatalake) created earlier,
+  create two more containers (dataeng and
+  datascience).
+To create a file system, perform the following steps:
+
+ On Azure Portal, navigate to Storage Accounts > your newly created storage account
+    > Containers > +Container.
+Provide a name for your container and click OK. 
+
+Repeat these steps to create both containers. 
+
+
+Creating additional managed identities
+After creating the two additional container, create two additional managed identities,
+    one for data engineers (data-eng-mi) and one data scientists
+    (data-science-mi).
+To create the two new managed identities, perform the following steps: 
+
+On Azure Portal, navigate to Managed Identities.
+Click +Add. 
+Specify managed identity name and select the resource group that you created earlier.
+
+Repeat these steps to create each of the two managed identities. Once you’ve created these
+      managed identities, assign roles with specific scopes (limited to one of the two containers,
+      dataeng or datascience respectively) to these identities as follows: 
+
+Navigate to Storage accounts > your storage account > Containers >
+        your container > Access Control (IAM). 
+Click +Add > Add role assignment. 
+Under Add role assignment: 
+Under Role, select Storage Blob Data Owner.
+Under Assign access to, select User assigned managed identity.
+Under Select, select the managed identity. 
+Click Save. 
+
+
+After performing these steps for each of the two managed identities, you should have the
+      required managed identities created and their roles assigned on the correct scope. 
+
+
+Adding CDP user/group to managed identity mappings
+After creating the two additional managed identities, one for data engineers
+   (data-eng-mi) and one data scientists (data-science-mi), map
+  them to specific user/group in CDP. 
+noteIf you are using Fine-grained access control, you should onboard your
+      users using Ranger instead of using IDBroker mappings. Adding IDBroker mappings is disabled
+      for RAZ-enabled environments.
+note
+If a user is mapped to multiple roles via group membership, the specific role to be used
+        needs to be provided at runtime. If the user is mapped directly to a role, the direct mapping
+        takes precedence over mapping via group membership. For information on how to specify the
+        role, refer to Specifying a group when user belongs to multiple
+          groups. 
+
+Required role: DataSteward, EnvironmentAdmin, or Owner 
+Steps
+CDP UICDP CLI
+
+
+The option to add/modify these mappings is available from the Management Console under
+              Environments > click on an environment > Actions > Manage Access > IDBroker
+                Mappings > Edit.
+Under Current Mappings, click Edit.
+Click + to display a new field for adding a mapping.
+Provide the following:
+The User or Group dropdown is pre-populated with CDP users and groups. Select
+                the user or group that you would like to map.
+Under Role, specify the resource ID of a managed identity (copied from Azure
+                Portal). You should select your data-eng-mi here.
+
+Repeat the previous two steps to add additional mapping for the
+              data-science-mi. 
+Click Save and Sync.
+
+
+
+If you would like to create the mappings via CDP CLI, you can: 
+
+Use the cdp environments get-id-broker-mappings command to obtain your
+            current mappings. 
+Use the cdp environments set-id-broker-mappings command to set
+            additional mappings. The only way to use this command is to:
+Pass all the current mappings
+Add the new mappings 
+
+Next, sync IDBroker mappings. For
+            example:cdp environments sync-id-broker-mappings --environment-name demo3
+Finally, check the sync status. For
+            example:cdp environments get-id-broker-mappings-sync-status --environment-name demo3
+
+
+
+
+Updating access for the Data Lake Admin managed identity
+Grant the Data Lake Admin identity created earlier the Storage Blob Data Owner role on
+  the scope of the two newly created containers.
+Perform the following steps for both dataeng or datascience
+   containers to grant the Data Lake Admin managed identity access to them: 
+
+Navigate to Storage accounts > your storage account > Containers >
+    your container > Access Control (IAM). 
+Click +Add > Add role assignment. 
+Under Add role assignment: 
+Under Role, select Storage Blob Data Owner.
+Under Assign access to, select User assigned managed identity.
+Under Select, select the Data Lake Admin Identity created earlier. 
+Click Save. 
+
+
+Repeat these steps to provide Data Lake admin with access to both containers.
+

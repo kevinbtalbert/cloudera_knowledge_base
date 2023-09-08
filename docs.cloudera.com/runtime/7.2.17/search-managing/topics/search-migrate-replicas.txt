@@ -1,0 +1,96 @@
+Migrating Solr replicasCloudera Docs
+Migrating Solr replicas
+When you replace a host, migrating replicas from that host to the new host, instead of
+    depending on failure recovery, can help ensure optimal performance.
+
+Where possible, the Solr service routes requests to the proper host. Both
+          ADDREPLICA and DELETEREPLICA Collections API calls
+        can be sent to any host in the cluster.
+
+For adding replicas, the node parameter ensures the new replica is
+          created on the intended host. If no host is specified, Solr selects a host with relatively
+          fewer replicas.
+ For deleting replicas, the request is routed to the host that hosts the replica to be
+          deleted.
+
+Adding replicas can be resource intensive. For best results, add replicas when the system
+        is not under heavy load. For example, do not add replicas when heavy indexing is occurring
+        or when MapReduceIndexerTool jobs are running.
+Cloudera recommends using API calls to create and unload cores. Do not use the Cloudera
+        Manager Admin Console or the Solr Admin UI for these tasks.
+This procedure uses the following names:
+Host names:
+Origin: solr01.example.com.
+Destination: solr02.example.com.
+
+Collection name: email
+Replicas:
+The original replica email_shard1_replica1, which is on
+                  solr01.example.com.
+The new replica email_shard1_replica2, which will be on
+                  solr02.example.com.
+
+
+Optional: 
+If you want to add a replica to a particular node, review the contents of the
+            live_nodes directory on ZooKeeper to find all nodes available to host
+          replicas. Open the Solr Administration User interface, click Cloud > Tree > live_nodes. 
+The Solr Administration User Interface, including live_nodes,
+            appears.
+
+noteInformation about Solr nodes can also be found in
+              clusterstate.json, but that file only lists nodes currently hosting
+            replicas. Nodes running Solr but not currently hosting replicas are not listed in the
+              clusterstate.json file.
+Add the new replica on solr02.example.com using the
+          ADDREPLICA API
+        call.
+http://solr01.example.com:8983/solr/admin/collections?action=ADDREPLICA&collection=email&shard=shard1&node=solr02.example.com:8983_solr
+Verify that the replica creation succeeds and moves from recovery state to
+            ACTIVE. 
+You can check the replica status in the Cloud view, which can be found at a URL
+          similar to: http://solr02.example.com:8983/solr/#/~cloud.noteDo not
+            delete the original replica until the new one is in the ACTIVE
+            state. When the newly added replica is listed as ACTIVE, the
+            index has been fully replicated to the newly added replica. The total time to replicate
+            an index varies according to factors such as network bandwidth and the size of the
+            index. Replication times on the scale of hours are not uncommon and do not necessarily
+            indicate a problem.You can use the details command to get an XML
+              document that contains information about replication progress. Use
+                curl or a browser to access a URI similar
+              to:http://solr02.example.com:8983/solr/email_shard1_replica2/replication?command=details
+
+Accessing this URI returns an XML document that contains content about replication
+            progress. A snippet of the XML content might appear as follows:
+...
+<str name="numFilesDownloaded">126</str>
+<str name="replication StartTime">Tue Jan 21 14:34:43 PST 2014</str>
+<str name="timeElapsed">457s</str>
+<str name="currentFile">4xt_Lucene41_0.pos</str>
+<str name="currentFileSize">975.17 MB</str>
+<str name="currentFileSizeDownloaded">545 MB</str>
+<str name="currentFileSizePercent">55.0</str>
+<str name="bytesDownloaded">8.16 GB</str>
+<str name="totalPercent">73.0</str>
+<str name="timeRemaining">166s</str>
+<str name="downloadSpeed">18.29 MB</str>
+...
+
+Use the CLUSTERSTATUS API call to retrieve information about the cluster,
+          including current cluster
+          status:
+http://solr01.example.com:8983/solr/admin/collections?action=clusterstatus&wt=json&indent=true
+Review the returned information to find the correct replica to remove. An example of
+            the JSON file might appear as follows:
+
+
+
+Delete the old replica on solr01.example.com server using the
+            DELETEREPLICA API call:
+
+http://solr01.example.com:8983/solr/admin/collections?action=DELETEREPLICA&collection=email&shard=shard1&replica=core_node2
+
+
+The DELETEREPLICA call removes the datadir.
+
+Related informationCollections API in Apache Solr Reference Guide

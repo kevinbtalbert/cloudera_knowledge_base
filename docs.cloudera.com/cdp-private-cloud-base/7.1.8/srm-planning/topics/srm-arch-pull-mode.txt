@@ -1,0 +1,68 @@
+Streams Replication Manager recommended deployment architectureCloudera Docs
+Streams Replication Manager recommended deployment architecture
+Learn about pull mode, which is  the Cloudera recommended deployment architecture for
+    Streams Replication Manager.
+While Streams Replication Manager (SRM) can be deployed in many different ways, the Cloudera
+      recommended setup is pull mode. Pull mode refers to an SRM deployment where data replication
+      happens by pulling data from remote source clusters, rather than pushing data into remote
+      target clusters. An SRM deployment that is in pull mode conforms to the following: 
+A unique SRM installation is deployed on all clusters that host a target Kafka
+            cluster.In other words, each target Kafka cluster in the deployment has a co-located
+            SRM installation.
+SRM Drivers only execute replications that target their co-located Kafka cluster.
+SRM Services only target their co-located Kafka cluster.
+
+The reason why pull mode is recommended is because this is the deployment type that was found
+      to provide the highest amount of resilience against various timeout and network instability
+      issues. For example:
+
+SRM Drivers run Connect workers which are coordinating through the target cluster of the
+        replication flow. This means that Connect workers are more closely tied to the target
+        cluster than the source cluster. Having the SRM Drivers and the target Kafka cluster closely
+        located to each other minimizes group membership and rebalance timeout issues. Additionally,
+        this also minimizes the network instability on the producer side of the SRM Drivers which
+        reduces data duplication in the target cluster.
+SRM Services also coordinate through the target cluster. This makes them more sensitive to
+        timeout and network partition issues tied to the target cluster. In addition, the SRM
+        Service reads from and writes to the target Kafka through the Kafka Streams application.
+        Having the SRM Services and the target Kafka clusters closely located to each other can
+        minimize timeout and network partition issues. Additionally, for Kafka clusters in the
+        cloud, hosting the SRM Service in the same data center as the Kafka cluster can help keep
+        cloud costs to a minimum. 
+In a situation where there is a network partition, or one of the clusters in the
+        replication is unavailable, it is preferable to let the target cluster pull the data when
+        the connection is finally established, rather than the source cluster trying to push data
+        indefinitely.
+
+Pull mode deployment example
+noteThe following simple example does not go into the detail regarding the exact
+        configuration steps required to set up SRM or your clusters. It is meant to provide you with
+        a general overview of how a pull mode deployment looks like. For configuration how to
+        documentation see, How
+            to > Streaming > Configuring Streams Replication
+            Manager in the Cloudera Runtime documentation.
+Consider a simple deployment that has three clusters. Cluster A, B, and C. Each of them has
+        a Kafka cluster. 
+
+To achieve a pull mode deployment, you must deploy SRM (both Service and Driver) on all
+        three clusters. The Services and Drivers must target their co-located Kafka cluster. 
+To be more precise, in the case of Driver targets, what you must ensure is that each source
+        cluster is targeted by at least a single Driver. This is required so that a heartbeats topic
+        is created in that cluster. This is ensured in the this example because each Kafka has a
+        co-located Driver targeting it. However, if you have a unidirectional replication setup,
+        where the source Kafka cluster does not have a co-located SRM installation, you must ensure
+        that one of your Drivers is targeting that Kafka cluster. 
+
+Once setup is complete, you can start configuring your replications. For example, assume
+        that you want to have data replicated from Cluster B and C to cluster A. In this case, you
+        need to enable two separate replications, B->A and C->A. To achieve pull mode, the two
+        replications must be executed by SRM Driver B. 
+
+Any number of replications can be set up between the clusters, but you must always ensure
+        that each Driver is only executing the replications targeting their co-located cluster. For
+        example, assume that in addition to the replications set up previously, you also want to set
+        up replication to Cluster B from Cluster A and Cluster C. In this case, the deployment would
+        changes as follows.
+
+
+

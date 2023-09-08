@@ -1,0 +1,67 @@
+Upsert a rowCloudera Docs
+Upsert a row
+The UPSERT command acts as a
+      combination of the INSERT and UPDATE statements.
+  For
+         each row processed by the UPSERT
+            statement:
+ If another row already exists with the same set of primary key
+               values, the other columns are updated to match the values from the row being
+               'UPSERTed'. 
+ If there is no row with the same set of primary key values, the
+               row is created, the same as if the INSERT statement was used. 
+
+
+UPSERT Example
+
+            The following example demonstrates how the UPSERT statement works.
+            We start by creating two tables, foo1 and foo2.
+CREATE TABLE foo1 (
+ id INT PRIMARY KEY,
+ col1 STRING, 
+ col2 STRING
+) 
+PARTITION BY HASH(id) PARTITIONS 3 
+STORED AS KUDU;
+CREATE TABLE foo2 (
+ id INT PRIMARY KEY,
+ col1 STRING, 
+ col2 STRING
+) 
+PARTITION BY HASH(id) PARTITIONS 3 
+STORED AS KUDU;
+
+
+            Populate foo1 and foo2 using the following
+            INSERT statements. For foo2, we leave column
+            col2 with NULL values to be upserted later:
+INSERT INTO foo1 VALUES (1, "hi", "alice");
+INSERT INTO foo2 select id, col1, NULL from foo1;
+
+
+            The contents of foo2 will be:
+SELECT * FROM foo2;
+...
++----+------+------+
+| id | col1 | col2 |
++----+------+------+
+| 1  | hi   | NULL |
++----+------+------+
+Fetched 1 row(s) in 0.15s
+
+
+            Now use the UPSERT command to now replace the NULL values in foo2
+            with the actual values from foo1.
+UPSERT INTO foo2 (id, col2) select id, col2 from foo1;
+SELECT * FROM foo2;
+...
++----+------+-------+
+| id | col1 | col2  |
++----+------+-------+
+| 1  | hi   | alice |
++----+------+-------+
+Fetched 1 row(s) in 0.15s
+
+
+
+Parent topic: Using Impala to query Kudu tables

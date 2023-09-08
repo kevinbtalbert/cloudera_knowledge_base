@@ -1,0 +1,105 @@
+Remove PREFIX_TREE data block encodingCloudera Docs
+Remove PREFIX_TREE data block encoding
+Before upgrading to CDP Private Cloud Base, you must ensure
+        that you have transitioned all the data to a supported encoding type.
+
+
+If your cluster is Kerberized, ensure that you run the
+                            kinit command as a hbase user before running the
+                        pre-upgrade commands.
+Ensure you have valid Kerberos credentials. You can list the Kerberos
+                        credentials using the klist command, and you can obtain
+                        credentials using the kinit command.
+
+
+importantEnsure that you complete all the pre-upgrade steps listed in
+                    Preparing HBase for upgrade if you have Apache HBase installed in
+                your existing HDP cluster.
+
+
+Use the hbase pre-upgrade validate-dbe command to identify HFiles
+                using the PREFIX_TREE data block encoding.importantIn HDP, you could
+                    use the PREFIX_TREE data block encoding as an unsupported option. But,
+                    PREFIX_TREE is completely removed in CDP Private Cloud Base. Before upgrading, ensure that you have transitioned your HFiles to a
+                    supported data encoding type.
+
+
+Run the hbase pre-upgrade validate-dbe command on the cluster
+                    that has the HDP intermediate bits.
+
+For example, if you are using the HDP 7.1.2.0-96 intermediate bits, you must
+                        run the following
+                        command:/usr/hdp/7.1.2.0-96/hbase/bin/hbase pre-upgrade validate-dbe
+The commands check whether your table or snapshots use the PREFIX_TREE data
+                        block encoding. This command does not take much time to run because it
+                        validates only the table-level descriptors. 
+
+If the HFiles do not use PREFIX_TREE data block encoding, the following
+                    message is displayed:
+The used Data Block Encodings are compatible with HBase 2.0.
+If you see this message, your data block encodings are compatible, and
+                        you do not have to do any more steps.If an HFile uses the PREFIX_TREE
+                        data block encoding, a similar error message to the following is
+                        displayed:2018-07-13 09:58:32,028 WARN  [main] tool.DataBlockEncodingValidator: Incompatible DataBlockEncoding for table: t, cf: f, encoding: PREFIX_TREEIf
+                        you see this error message, continue to Step 2 and fix all your PREFIX_TREE
+                        encoded tables. 
+
+Fix your PREFIX_TREE encoded tables using the old installation.
+
+You can change the Data Block Encoding type to PREFIX, DIFF, or
+                        FAST_DIFF in your source cluster. 
+For example, if your validation output reported column family
+                            f of table t is invalid. Its Data
+                        Block Encoding type is changed to FAST_DIFF:
+hbase> alter 't', { NAME => 'f', DATA_BLOCK_ENCODING => 'FAST_DIFF' }
+
+
+
+Run the following command on the cluster that has the HDP intermediate
+                            bits. 
+
+hbase pre-upgrade validate-hfile
+
+noteThis command checks every HFile (including snapshots) to
+                                    ensure none of the HFile have PREFIX_TREE data block encoding.
+                                    It opens every HFile, so this operation can take a long
+                                    time.
+
+
+If there is no HFile with PREFIX_TREE encoding, a confirmation message
+                            similar to the following is
+                                displayed:Checked n HFiles, none of them are corrupted. 
+There are no incompatible HFiles.If
+                                you have an HFile with PREFIX_TREE encoding, an error message
+                                similar to the following is
+                                displayed:INFO  [main] tool.HFileContentValidator: Corrupted file: hdfs://example.com:8020/hbase/data/default/t/72ea7f7d625ee30f959897d1a3e2c350/prefix/7e6b3d73263c4851bf2b8590a9b3791e
+2018-06-05 16:20:47,383 INFO  [main] tool.HFileContentValidator: Corrupted file: hdfs://example.com:8020/hbase/archive/data/default/t/56be41796340b757eb7fff1eb5e2a905/f/29c641ae91c34fc3bee881f45436b6d1If
+                                the error message is displayed, go to the next step. If you don't
+                                see an error, skip to Validate HFile. 
+
+
+Get the table name from the output. Our example output showed the
+                                /hbase/data/default/t/… file path, which means
+                            that the HFile belongs to the t table which is in the
+                            default namespace.
+
+
+Rewrite the HFiles by running major compaction in the old installation
+                            using this command.
+
+hbase > major_compact 't'
+
+When the major compaction is complete, the original invalid
+                            HFile is automatically removed.
+
+
+Run the hbase pre-upgrade validate-hfile command again
+                            to confirm if all the HFiles are rewritten in the new encoding
+                            format.
+
+
+
+
+Validate HFile
+
+Parent topic: Preparing HBase for upgrade

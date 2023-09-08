@@ -1,0 +1,75 @@
+How to Configure a MapReduce Job to Access S3 with an HDFS CredstoreCloudera Docs
+How to Configure a MapReduce Job to Access S3 with an HDFS Credstore
+Configure your MapReduce jobs to read and write to Amazon S3 using a custom password
+    for an HDFS Credstore.
+Copy the contents of the /etc/hadoop/conf directory to a local
+          working directory on the host where you will submit the MapReduce job. Use the
+            --dereference option when copying the file so that symlinks are
+          correctly resolved. For example:
+cp -r --dereference /etc/hadoop/conf ~/my_custom_config_directory
+Change the permissions of the directory so that only you have access:
+chmod go-wrx -R my_custom_config_directory/
+
+
+If you see the following message, you can ignore
+            it:cp: cannot open `/etc/hadoop/conf/container-executor.cfg' for reading: Permission denied
+
+Add the following to the copy of the core-site.xml file in the
+          working directory:
+<property>
+  <name>hadoop.security.credential.provider.path</name>
+  <value>jceks://hdfs/user/username/awscreds.jceks</value>
+</property>
+
+Specify a custom Credstore by running the following command on the client
+          host:
+export HADOOP_CREDSTORE_PASSWORD=your_custom_keystore_password
+
+In the working directory, edit the mapred-site.xml file:
+Add the following properties:
+<property>
+  <name>yarn.app.mapreduce.am.env</name>
+  <value>HADOOP_CREDSTORE_PASSWORD=your_custom_keystore_password</value>
+</property>
+
+<property>
+  <name>mapred.child.env</name>
+  <value>HADOOP_CREDSTORE_PASSWORD=your_custom_keystore_password</value>
+</property>
+
+
+Add yarn.app.mapreduce.am.env and
+                mapred.child.env to the comma-separated list of values of the
+                mapreduce.job.redacted-properties property. For example (new values
+              shown bold):
+<property>
+  <name>mapreduce.job.redacted-properties</name>
+  <value>fs.s3a.access.key,fs.s3a.secret.key,yarn.app.mapreduce.am.env,mapred.child.env</value>
+</property>
+
+
+Set the environment variable to point to your working directory:
+export HADOOP_CONF_DIR=~/path_to_working_directory
+Create the Credstore by running the following commands:
+hadoop credential create fs.s3a.access.key
+hadoop credential create fs.s3a.secret.key
+
+You will be prompted to enter the access key and secret
+        key.List the credentials to make sure they were created correctly by running the
+          following command:
+hadoop credential list
+Submit your job. For example: 
+
+lshdfs dfs -ls s3a://S3_Bucket/
+
+distcphadoop distcp hdfs_path s3a://S3_Bucket/S3_path
+teragen (package-based
+              installations)hadoop jar /usr/lib/hadoop-mapreduce/hadoop-mapreduce-examples.jar teragen 100 s3a://S3_Bucket/teragen_test
+
+teragen (parcel-based
+              installations)hadoop jar /opt/cloudera/parcels/CDH/lib/hadoop-mapreduce/hadoop-mapreduce-examples.jar teragen 100 s3a://S3_Bucket/teragen_test
+
+
+
+
+Parent topic: Accessing Storage Using Amazon S3

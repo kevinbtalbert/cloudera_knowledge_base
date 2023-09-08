@@ -1,0 +1,176 @@
+Backing up before an upgradeCloudera Docs
+Backing up before an upgrade
+The Data Hub upgrade is an in-place upgrade and the data on attached volumes will be
+    retained. The following section outlines data stored in the Data Hub clusters by different
+    services. To prepare for a worst-case scenario where the cluster can't be restored, retain the
+    data in these clusters. Also take note of any cluster configurations updated through Cloudera
+    Manager.
+Service configurations in Cloudera Manager
+
+
+Any service configurations that you have updated since the cluster creation. Typically
+            these can be found by selecting the “Non-default values” filter on the
+              Configuration menu in CM.
+
+
+
+Custom drivers
+Take a backup of any custom drivers for services running on Data Hub. An OS upgrade will
+        delete the root volume and you will not be able to recover the driver if a backup is not
+        taken.
+
+Data Engineering clusters
+The underlying data is in cloud storage. However, the following data is specific to each
+        Data Hub cluster:
+
+Oozie - workflow and coordinator definitions
+Hue - saved queries
+Hive UDFs and Spark applications
+Oozie custom sharelibs
+
+A script is available for backing up and restoring the Oozie and Hue databases in clusters
+        created with the Data Engineering and Data Engineering HA templates. Execute the commands
+        from the Cloudera Manager node. Run the following:
+sudo su
+chmod +x /srv/salt/postgresql/disaster_recovery/scripts/backup_and_restore_dh.sh
+Then, for backup run:
+/srv/salt/postgresql/disaster_recovery/scripts/backup_and_resto
+re_dh.sh -b <s3 or abfs path> <database names>
+For example:
+/srv/salt/postgresql/disaster_recovery/scripts/backup_and_resto
+re_dh.sh -b s3a://my/test/path oozie hue
+For restoring after an upgrade,
+        run:/srv/salt/postgresql/disaster_recovery/scripts/backup_and_resto
+re_dh.sh -r <s3 or abfs path> <database names>
+For example:
+/srv/salt/postgresql/disaster_recovery/scripts/backup_and_resto
+re_dh.sh -r s3a://my/test/path oozie hue
+
+Streams Messaging clusters
+Data stored on volumes:
+
+Zookeeper: /hadoopfs/fs1/zookeeper (only on the first attached volume)
+Kafka: /hadoopfs/fsN/kafka (for on all attached volumes, N stands for volume index)
+
+Data stored in database:
+
+Schema Registry schemas
+
+Data stored in S3/ADLS:
+
+Schema Registry serde jars
+
+A script is available for backing up and restoring the Schema_registry and SMM databases in
+        clusters created with the Streams Messaging Light Duty and Streams Messaging Heavy Duty
+        templates. Run the following:
+sudo su
+chmod +x /srv/salt/postgresql/disaster_recovery/scripts/backup_and_restore_dh.sh
+Then, for backup run:
+/srv/salt/postgresql/disaster_recovery/scripts/backup_and_resto
+re_dh.sh -b <s3 or abfs path> <database names>
+For example:
+/srv/salt/postgresql/disaster_recovery/scripts/backup_and_resto
+re_dh.sh -b s3a://my/test/path smm schema_registry
+For restoring after an upgrade,
+        run:/srv/salt/postgresql/disaster_recovery/scripts/backup_and_resto
+re_dh.sh -r <s3 or abfs path> <database names>
+For example:
+/srv/salt/postgresql/disaster_recovery/scripts/backup_and_resto
+re_dh.sh -r s3a://my/test/path smm schema_registry
+
+Flow Management clusters
+Verify that you have committed all of your flows, then backup the following
+        files/directories into your S3 backup location:
+
+
+nifi.properties - on any NiFi node, run: ps -ef | grep
+              nifi.properties
+This will indicate the path to the file. For example:
+-Dnifi.properties.file.path=/var/run/cloudera-scm-agent/process/1546335400-nifi-NIFI_NODE/nifi.properties
+
+
+bootstrap.conf - on any NiFi node, run: ps -ef | grep
+              bootstrap.conf
+This will indicate the path to the file. For example:
+-Dorg.apache.nifi.bootstrap.config.file=/var/run/cloudera-scm-agent/process/1546335400-nifi-NIFI_NODE/bootstrap.conf
+
+
+Zookeeper data for /nifi znode. From a NiFi node:
+
+/opt/cloudera/parcels/CFM-<CFMversion>/TOOLKIT/bin/zk-migrator.sh -r -z <zk node>:2181/nifi
+          -f /tmp/zk-data.json
+
+If a Zookeeper node is co-located with NiFi (light duty template, it’s possible to use
+            localhost:2181), then back up the created zk-data.json file.
+
+
+NiFi Registry data. The versioned flows are stored in an external database
+            provisioned in your cloud provider. Perform a backup of this database following the
+            instructions of your cloud provider and restore the backup in the new database.
+
+/hadoopfs/fs4/working-dir/ (for the NiFi nodes) - without the
+          ‘work’ directory inside it. This directory contains, for example, the local state
+          directory as well as the flow.xml.gz which represents the flow
+            definitions.noteOn Cloudera Data Platform versions lower than
+            7.2.10, this directory is located in
+            /var/lib/nifi/working-dir.
+/hadoop/fs1/working-dir/ (for the Management node).noteOn Cloudera Data Platform versions lower than 7.2.10, this
+            directory is located in
+          /var/lib/nifiregistry/working-dir.
+Any other “custom” directory, for example directories where client configs and JDBC
+          driver are located.
+
+
+Data Discovery & Exploration clusters
+Complete the following steps to backup DDE clusters:
+
+Assign the datalake-admin-bucket policy to RANGER_AUDIT_ROLE.
+Create a subfolder for this Data Hub inside your S3 backup location.
+Log in to Data Hub gateway node.
+kinit with the proper user keytab if needed.
+Follow this backup guide, with these exceptions:
+
+Use solrctl --get-solrxmlto get the solr.xml
+                file.
+Edit it by changing your backup repository solr.hdfs.home
+                parameter (see image) to your backup location (for example:
+                  s3a://datalake-bucket/backup/solr).
+User solrctl --put-solrxml to publish your edited solr.xml.
+Restart Solr.
+
+
+You do not need to launch the prepare-backup command; instead
+              launch create-snapshot and export-snapshot for each
+              collection.
+For export-snapshot, specify your destination as
+                s3a://[your backup location]/[your data hub
+                subfolder] (for example:
+                s3a://datalake-bucket/backup/solr).
+Verify on the YARN history server that all of the executions succeeded. If not,
+              troubleshoot and relaunch any export-snapshot commands that
+              failed.
+
+
+
+Operational Database clusters
+Complete the following steps to backup Operational Database clusters:
+
+Create a subfolder for this Data Hub inside of your S3 backup location.
+Ensure snapshots are enabled on Cloudera Manager.
+          They are enabled by default.
+Log in to Data Hub gateway node.
+kinit with the proper user keytab if needed.
+Launch hbase shell.
+Issue the snapshot command for each of the tables that you want to back
+          up (for example: snapshot ‘mytable’, ‘mytable-snapshot’)
+Exit hbase shell.
+Launch ExportSnapshot command for each of the snapshots you created,
+          for example:
+          hbase org.apache.hadoop.hbase.snapshot.ExportSnapshot -snapshot mytable-snapshot -copy-to
+        s3a://datalake-bucket/backup/hbase -mappers 10
+Verify on the YARN history server that all of the executions succeeded. If not,
+          troubleshoot and relaunch any ExportSnapshot commands that failed.
+
+
+
+Parent topic: Upgrading Data Hubs

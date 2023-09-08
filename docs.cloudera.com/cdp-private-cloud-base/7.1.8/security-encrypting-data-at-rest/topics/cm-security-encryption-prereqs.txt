@@ -1,0 +1,189 @@
+Data at Rest Encryption RequirementsCloudera Docs
+Data at Rest Encryption Requirements
+Encryption comprises several components, each with its own requirements.Overview
+Data at rest encryption protection can be applied at a number of levels within Hadoop:
+
+
+OS filesystem-level
+Network-level
+HDFS-level (protects both data at rest and in transit)
+
+
+For more information on the components, concepts, and architecture for encrypting data at
+      rest, see "Encrypting Data at Rest".
+
+Product Compatibility Matrix
+See "Product Compatibility Matrix for Cloudera Navigator Encryption" for the
+        individual compatibility matrices for each Cloudera Navigator encryption component.
+
+Entropy Requirements
+Cryptographic operations require entropy to ensure randomness.
+You can check the available entropy on a Linux system by running the following
+        command:cat /proc/sys/kernel/random/entropy_avail
+The output displays the entropy currently available. Check the entropy several times to
+        determine the state of the entropy pool on the system. If the entropy is consistently low
+        (500 or less), you must increase it by installing rng-tools and starting
+        the rngd service.
+noteDue to a recent Linux kernel change the 'entropy_avail' reported by the kernel will always be
+          256. This will lead to erroneous alerts being issued if you changed the default settings
+          for 'Host Entropy Thresholds'. These values will need to be changed to reflect the 256
+          value for 'entropy_avail'.
+For RHEL 7, run the following
+        commands:sudo yum install rng-tools
+cp /usr/lib/systemd/system/rngd.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl start rngd
+systemctl enable rngd
+Make sure that the hosts running Key Trustee Server, Ranger KMS, and Navigator Encrypt have
+        sufficient entropy to perform cryptographic operations.
+
+Key Trustee Server Requirements
+Recommended Hardware and Supported Distributions
+Key Trustee Server must be installed on a dedicated server or virtual machine (VM) that is
+        not used for any other purpose. The backing PostgreSQL database must be installed on the
+        same host as the Key Trustee Server, and must not be shared with any other services. For
+        high availability, the active and passive Key Trustee Servers must not share physical
+        resources. See "Resource Planning for Data at Rest Encryption" for more
+        information.
+The recommended minimum hardware specifications are as follows:
+
+Processor: 1 GHz 64-bit quad core
+Memory: 8 GB RAM
+Storage: 20 GB on moderate- to high-performance disk drives
+
+For information on the supported Linux distributions, see "Product Compatibility Matrix for Cloudera Navigator Encryption".
+Cloudera Manager Requirements
+Installing and managing Key Trustee Server using Cloudera Manager requires Cloudera Manager
+        5.4.0 and higher. Key Trustee Server does not require Cloudera Navigator Audit Server or
+        Metadata Server.
+umask Requirements
+Key Trustee Server installation requires the default umask of
+          0022.
+Network Requirements
+For new Key Trustee Server installations (5.4.0 and higher) and migrated upgrades (see
+        "Cloudera Enterprise Upgrade Guide"> for
+        more information), Key Trustee Server requires the following TCP ports to be opened for
+        inbound traffic:
+
+11371Clients connect to this port over HTTPS.
+11381 (PostgreSQL)The passive Key Trustee Server connects to this port for database
+            replication.
+
+For upgrades that are not migrated to the CherryPy web server, the pre-upgrade port
+        settings are preserved:
+
+80Clients connect to this port over HTTP to obtain the Key Trustee Server public
+            key.
+443 (HTTPS)Clients connect to this port over HTTPS.
+5432 (PostgreSQL)The passive Key Trustee Server connects to this port for database
+            replication.
+
+TLS Certificate Requirements
+To ensure secure network traffic, Cloudera recommends obtaining Transport Layer Security
+        (TLS) certificates specific to the hostname of your Key Trustee Server. To obtain the
+        certificate, generate a Certificate Signing Request (CSR) for the fully qualified domain
+        name (FQDN) of the Key Trustee Server host. The CSR must be signed by a trusted Certificate
+        Authority (CA). After the certificate has been verified and signed by the CA, the Key
+        Trustee Server TLS configuration requires:
+
+The CA-signed certificate
+The private key used to generate the original CSR
+The intermediate certificate/chain file (provided by the CA)
+
+Cloudera recommends not using self-signed certificates. If you use self-signed
+        certificates, you must use the --skip-ssl-check parameter when registering
+        Navigator Encrypt with the Key Trustee Server. This skips TLS hostname validation, which
+        safeguards against certain network-level attacks. For more information regarding insecure
+        mode, see "Registering Cloudera Navigator Encrypt with Key Trustee Server>Registration
+        Options".
+
+Ranger KMS Requirements
+Recommended Hardware and Supported Distributions
+The recommended minimum hardware specifications are as follows:
+
+Processor: 1 GHz 64-bit quad core
+Memory: 8 GB RAM
+Storage: 20 GB on moderate- to high-performance disk drives
+
+For information on the supported Linux distributions, see "Product Compatibility Matrix for Cloudera Navigator Encryption".
+The Ranger KMS workload is CPU-intensive. Cloudera recommends using machines with
+        capabilities equivalent to your NameNode hosts, with Intel CPUs that support AES-NI for
+        optimum performance. Also, Cloudera strongly recommends that you enable TLS for both the
+        HDFS and the Ranger services to prevent the passage of plain text key material between the
+        KMS and HDFS data nodes.
+Key HSM Requirements
+The following are prerequisites for installing Navigator Key HSM:
+
+Oracle Java Runtime Environment (JRE) 7 or higher with Java Cryptography Extension (JCE)
+          Unlimited Strength Jurisdiction Policy Files:
+JCE for Java SE 7
+JCE for Java SE 8
+
+A supported Linux distribution. See "Product Compatibility Matrix for Cloudera Navigator Encryption".
+A supported HSM device:
+SafeNet Luna
+HSM firmware version: 6.2.1
+HSM software version: 5.2.3-1
+
+SafeNet KeySecure
+HSM firmware version: 6.2.1
+HSM software version: 8.0.1
+
+Thales nSolo, nConnect
+HSM firmware version: 11.4.0
+Client software version: 2.28.9cam136
+
+
+Key Trustee Server 3.8 or higherimportantYou must install Key HSM on the
+            same host as Key Trustee Server.
+
+Root access is required to install Navigator Key HSM.
+
+Navigator Encrypt Requirements
+Operating System Requirements
+
+For supported Linux distributions, see "Product Compatibility Matrix for Cloudera Navigator Encryption".
+
+Supported command-line interpreters:
+
+sh (Bourne)
+bash (Bash)
+dash (Debian)
+
+noteNavigator Encrypt does not support installation or use in
+          chroot environments.
+Network Requirements
+For new Navigator Key Trustee Server (5.4.0 and higher) installations, Navigator Encrypt
+        initiates TCP traffic over port 11371 (HTTPS) to the Key Trustee Server. 
+For upgrades and Key Trustee Server versions lower than 5.4.0, Navigator Encrypt initiates
+        TCP traffic over ports 80 (HTTP) and 443 (HTTPS) to the Navigator Key Trustee Server.
+Internet Access
+You must have an active connection to the Internet to download many package dependencies,
+        unless you have internal repositories or mirrors containing the dependent packages.
+Maintenance Window
+Data is not accessible during the encryption process. Plan for system downtime during
+        installation and configuration.
+Administrative Access
+To enforce a high level of security, all Navigator Encrypt commands require administrative
+        (root) access (including installation and configuration). If you do not have administrative
+        privileges on your server, contact your system administrator before proceeding.
+Package Dependencies
+Navigator Encrypt requires these packages, which are resolved by your distribution package
+        manager during installation:
+
+dkms
+keyutils
+ecryptfs-utils
+libkeytrustee
+navencrypt-kernel-module
+openssl
+lsof
+gcc
+cryptsetup
+
+These packages may have other dependencies that are also resolved by your package manager.
+        Installation works with gcc, gcc3, and
+          gcc4.
+
+Related informationProduct Compatibility Matrix for Cloudera Navigator
+                            EncryptionEncrypting Data at RestResource Planning for Data at Rest Encryption

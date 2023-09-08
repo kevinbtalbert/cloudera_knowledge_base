@@ -1,0 +1,61 @@
+Range-specific hash schemas example: Using impala-shellCloudera Docs
+Range-specific hash schemas example: Using impala-shell
+Review examples of using impala-shell to create and alter Kudu tables with
+    range-specific hash schemas.
+
+The following is a few examples of creating a new table with custom hash schemas for some
+        of its range partitions.
+The table-wide hash schema for table t1 has two hash dimensions (hash bucketing
+        by the ‘id’ and the ‘name’ columns independently):
+CREATE TABLE t1 (id INT, name STRING, PRIMARY KEY(id, name))
+PARTITION BY HASH(id) PARTITIONS 3 HASH(name) PARTITIONS 4
+RANGE (id)
+(
+    // hash partition by “id” and “name” as in the table-wide hash schema,
+    // but customize the number of hash buckets in each dimension 
+    PARTITION 15 <= VALUES < 20 HASH(id) PARTITIONS 5 HASH(name) PARTITIONS 3,
+    // this range has the table-wide hash schema
+    PARTITION 20 <= VALUES < 25
+)
+
+The table-wide hash schema for table t2 has one hash dimension (hash bucketing by the
+        ‘name’ column):
+CREATE TABLE t2 (id INT, name STRING, PRIMARY KEY(id, name))
+PARTITION BY HASH(name) PARTITIONS 3
+RANGE (id)
+(
+    // hash partition by “name” but use custom number of hash buckets
+    PARTITION  5 <= VALUES < 10 HASH(name) PARTITIONS 5,
+
+    // hash partition by “id”
+    PARTITION 10 <= VALUES < 15 HASH(id) PARTITIONS 2,
+
+    // hash partition by “id” and “name”
+    PARTITION 15 <= VALUES < 20 HASH(id, name) PARTITIONS 8,
+
+    // this range has the same schema as the range [15, 20) above:
+    // hash partition by the primary key (i.e. by (id, name) pair) into 8 buckets
+    PARTITION 20 <= VALUES < 25 PARTITIONS 8,
+
+    // using the table-wide hash schema if no override is specified
+    PARTITION 25 <= VALUES < 30
+)
+
+The following are examples of adding new range partitions with custom hash schemas to a
+        table that already exists:
+// t2: add new range partition by “id”, hashed by “id” and “name” together
+ALTER TABLE t2 ADD RANGE PARTITION -5 <= VALUES < 0 HASH PARTITIONS 10;
+
+// t1: add new range partition by “id”, additionally hashed by “id” and “name” separately
+// (defaults to the table-wide hash schema since no range-specific hash schema specified)
+ALTER TABLE t1 ADD RANGE PARTITION 25 <= VALUES < 30
+
+// t2: add new range partition by “id”, additionally hashed by “name”
+ALTER TABLE t2 ADD RANGE PARTITION 30 <= VALUES < 40 HASH(name) PARTITIONS 5;
+
+// t1: add new range partition by “id”, additionally hashed by “id” and “name” separately
+ALTER TABLE t1 ADD RANGE PARTITION 40 <= VALUES < 50 HASH(id) PARTITIONS 10, HASH(name) PARTITIONS 5;
+
+
+
+Parent topic: Managing Kudu tables with range-specific hash schemas

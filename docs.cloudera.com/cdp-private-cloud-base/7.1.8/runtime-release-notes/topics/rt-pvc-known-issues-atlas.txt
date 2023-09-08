@@ -1,0 +1,471 @@
+Known Issues in Apache AtlasCloudera Docs
+Known Issues in Apache Atlas
+Learn about the known issues in Atlas, the impact or changes to the functionality, and
+    the workaround. 
+
+
+CDPD-43058: Entities created through Hook do not get consumed by Atlas and are specifically observed while running the HDFS Lineage script.
+Once the process to run the hdfs-lineage.sh
+          script is completed, it is seen that in a few instances the entity is not created in
+          Atlas. This scenario is observed on an intermittent basis and few entities are not viewed
+          in Atlas. In the case where this issue is observed, the publishing of messages to Kafka
+          topics consumes more than three seconds.
+This additional time consumption could be because of:
+        
+Logging into Kerberos took more time to complete
+Connecting to Kafka topic took more than three seconds
+
+The Async message processing
+          (atlas.notification.hook.asynchronous) must be disabled. You must manually set this
+            flag in /etc/atlas/conf/atlas-application.properties to
+              false.
+
+
+
+CDPD-50239: The 'ATLAS_ENTITY_AUDIT_EVENTS' table increases its
+          size considerably causing the disk space to shrink to a larger extent. 
+There are certain columns of the tables that are not
+          configured to remove the old data that can cause disk to run out of space. For more
+          information, see the section Audit enhancements in the mainline Atlas
+          documentation for 7.1.8 version.
+
+
+CDPD-29307: Atlas creates incomplete Kafka client entities that
+          are postfixed with the metadata namespace.
+None.
+
+
+CDPD-19358: "IsIndexable"and "isOptional" value of a typedef's attribute is modified post migration.
+None.
+
+
+CDPD-22799: Apache Atlas displays 503 service unavailable on transparent proxy setup.
+In the following file
+            /opt/cloudera/parcels/CDH-<%version%>/lib/atlas/server/webapp/atlas/WEB-INF/web.xml
+          delete DOCTYPE tag, and replace web-app tag with following:
+            <web-app xmlns="http://java.sun.com/xml/ns/javaee"
+            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+            xsi:schemaLocation="http://java.sun.com/xml/ns/javaee
+            http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd" version="2.5">
+
+
+OPSAPS-58348: The user name HTTP is not found in Atlas logs
+You must disable the Atlas metrics configuration from Cloudera Manager UI.
+
+
+CDPD-19996: Atlas AWS S3 metadata extractor fails when High Availability is configured for IDBroker.
+If you have the HA configured for IDBroker, ensure that your cluster has only one IDBroker address in core-site.xml. If your cluster has two IDBroker addresses in core-site.xml, remove one of them, and the extractor must be able to retrieve the token from IDBroker.
+
+
+CDPD-5542: AWS S3 Bulk and Incremental Extraction is currently not supported on 7.1.5.
+ None.
+
+
+CDPD-17355: Atlas AWS extraction issue due to KeyError: 'entities'.
+AWS S3 extraction does not happen as the extractor.sh is missing from the host.
+ None.
+
+
+CDPD-14877:
+In the Ozone Atlas integration, only the Spark-Atlas connector is failing.
+Running the Spark query through the Ozone path, an incomplete entity is created.
+
+
+CDPD-12668: Navigator Spark lineage can fail to render in Atlas
+As part of content conversion from Navigator to Atlas, the
+          conversion of some spark applications created a cyclic lineage
+          reference in Atlas, which the Atlas UI fails to render. The cases
+          occur when a Spark application uses data from a table and updates the
+          same table. 
+ None.
+
+
+CDPD-11941: Table creation events missed when multiple tables are
+          created in the same Hive command
+When multiple Hive tables are created in the same database in a
+          single command, the Atlas audit log for the database may not capture
+          all the table creation events. When there is a delay between creation
+          commands, audits are created as expected. 
+ None.
+
+
+CDPD-11940: Database audit record misses table delete
+When a hive_table entity is created, the Atlas audit list for the
+          parent database includes an update audit. However, at this time, the
+          database does not show an audit when the table is deleted. 
+ None.
+
+
+CDPD-11790: Simultaneous events on the Kafka topic queue can produce
+          duplicate Atlas entities
+In normal operation, Atlas receives metadata to create entities from
+          multiple services on the same or separate Kafka topics. In some
+          instances, such as for Spark jobs, metadata to create a table entity
+          in Atlas is triggered from two separate messages: one for the Spark
+          operation and a second for the table metadata from HMS. If the process
+          metadata arrives before the table metadata, Atlas creates a temporary
+          entity for any tables that are not already in Atlas and reconciles the
+          temporary entity with the HMS metadata when the table metadata
+          arrives.
+However, in some cases such as when Spark SQL queries with the
+            write.saveAsTable function, Atlas does not
+          reconcile the temporary and final table metadata, resulting in two
+          entities with the same qualified name and no lineage linking the table
+          to the process entity. 
+This issue is not seen for other lineage queries from spark:
+          create table default.xx3 as select * from default.xx2
+insert into yy2 select * from yy
+insert overwrite table ww2 select * from ww1
+Another case where this behavior may occur is when many REST API
+          requests are sent at the same time. 
+ None.
+
+
+CDPD-11692: Navigator table creation time not converted to
+          Atlas
+In converting content from Navigator to Atlas, the create time for
+          Hive tables is not moved to Atlas. 
+ None.
+
+
+CDPD-11338: Cluster names with upper case letters may appear in
+          lower case in some process names
+Atlas records the cluster name as lower case in
+            qualifiedNames for some process names. The result
+          is that the cluster name may appear in lower case for some processes
+          (insert overwrite table) while it appears in upper case for other
+          queries (ctas) performed on the same cluster. 
+ None.
+
+
+CDPD-10576: Deleted Business Metadata attributes appear in Search
+          Suggestions
+Atlas search suggestions continue to show Business Metadata
+          attributes even if the attributes have been deleted. 
+ None.
+
+
+CDPD-10574: Suggestion order doesn't match search weights
+At this time, the order of search suggestions does not honor the
+          search weight for attributes.
+ None.
+
+
+CDPD-9095: Duplicate audits for renaming Hive tables
+Renaming a Hive table results in duplicate ENTITY_UPDATE events in
+          the corresponding Atlas entity audits, both for the table and for its
+          columns. 
+ None.
+
+
+CDPD-7982: HBase bridge stops at HBase table with deleted column
+          family
+Bridge importing metadata from HBase fails when it encounters an
+          HBase table for which a column family was previously dropped. The
+          error indicates:
+          Metadata service API org.apache.atlas.AtlasClientV2$API_V2@58112bc4 failed with status 404 (Not Found) Response Body 
+({""errorCode"":""ATLAS-404-00-007"",""errorMessage"":""Invalid instance creation/updation parameters passed : 
+hbase_column_family.table: mandatory attribute value missing in type hbase_column_family""}) 
+ None.
+
+
+CDPD-7781: TLS certificates not validated on Firefox
+Atlas is not checking for valid TLS certificates when the UI is
+          opened in FireFox browsers. 
+ None.
+
+
+CDPD-6675: Irregular qualifiedName format for Azure storage
+The qualifiedName for hdfs_path entities created
+          from Azure blog locations (ABFS) doesn't have the clusterName appended
+          to it as do hdfs_path entities in other location
+          types. 
+ None.
+
+
+CDPD-5933, CDPD-5931: Unexpected Search Results When Using Regular
+          Expressions in Basic Searches on Classifications
+When you include a regular expression or wildcard in the search
+          criteria for a classification in the Basic Search, the results may
+          differ unexpectedly from when full classification names are included.
+          For example, the Exclude sub-classifications
+          option is respected when using a full classification name as the
+          search criteria; when using part of the classification name and the
+          wildcard (*) with Exclude sub-classifications
+          turned off, entities marked with sub-classifications are not included
+          in the results. Other instances of unexpected results include
+          case-sensitivity.
+ None.
+
+
+CDPD-4762: Spark metadata order may affect lineage
+Atlas may record unexpected lineage relationships when metadata
+          collection from the Spark Atlas Connector occurs out of sequence from
+          metadata collection from HMS. For example, if an ALTER TABLE operation
+          in Spark changing a table name and is reported to Atlas before HMS has
+          processed the change, Atlas may not show the correct lineage
+          relationships to the altered table. 
+ None.
+
+
+CDPD-4545: Searches for Qualified Names with "@" doesn't fetch the
+          correct results
+When searching Atlas qualifiedName values that include an "at"
+          character (@), Atlas does not return the expected results or generate
+          appropriate search suggestions. 
+ Consider leaving out the portion of the search
+          string that includes the @ sign, using the wildcard character *
+          instead.
+
+
+CDPD-3208: Table alias values are not found in search
+When table names are changed, Atlas keeps the old name of the table
+          in a list of aliases. These values are not included in the search
+          index in this release, so after a table name is changed, searching on
+          the old table name will not return the entity for the table.
+ None.
+
+
+CDPD-3160: Hive lineage missing for INSERT OVERWRITE queries
+Lineage is not generated for Hive INSERT OVERWRITE queries on
+          partitioned tables. Lineage is generated as expected for CTAS queries
+          from partitioned tables.
+ None.
+
+
+CDPD-3125: Logging out of Atlas does not manage the external
+          authentication
+At this time, Atlas does not communicate a log-out event with the
+          external authentication management, Apache Knox. When you log out of
+          Atlas, you can still open the instance of Atlas from the same web
+          browser without re-authentication. 
+ To prevent access to Atlas after logging out,
+          close all browser windows and exit the browser.
+
+
+CDPD-1892: Ranking of top results in free-text search not
+          intuitive
+The Free-text search feature ranks results based on which attributes
+          match the search criteria. The attribute ranking is evolving and
+          therefore the choice of top results may not be intuitive in this
+          release.
+ If you don't find what you need in the top 5
+          results, use the full results or refine the search.
+
+
+ CDPD-1884: Free text search in Atlas is case sensitive
+The free text search bar in the top of the screen allows you to
+          search across entity types and through all text attributes for all
+          entities. The search shows the top 5 results that match the search
+          terms at any place in the text (*term* logic). It also shows
+          suggestions that match the search terms that begin with the term
+          (term* logic). However, in this release, the search results are
+          case-sensitive.
+ If you don't see the results you expect, repeat
+          the search changing the case of the search terms.
+
+
+CDPD-1823: Queries with ? wildcard return unexpected results
+DSL queries in Advanced Search return incorrect results when the
+          query text includes a question mark (?) wildcard character. This
+          problem occurs in environments where trusted proxy for Knox is
+          enabled, which is always the case for CDP.
+ None.
+
+
+CDPD-1664: Guest users are redirected incorrectly
+Authenticated users logging in to Atlas are redirected to the CDP
+          Knox-based login page. However, if a guest user (without Atlas
+          privileges) attempts to log in to Atlas, the user is redirected
+          instead to the Atlas login page. 
+ To avoid this problem, open the Atlas Dashboard
+          in a private or incognito browser window.
+
+
+CDPD-922: IsUnique relationship attribute not honored
+The Atlas model includes the ability to ensure that an attribute can
+          be set to a specific value in only one relationship entity across the
+          cluster metadata. For example, if you wanted to add metadata tags to
+          relationships that you wanted to make sure were unique in the system,
+          you could design the relationship attribute with the property
+          "IsUnique" equal true. However, in this release, the IsUnique
+          attribute is not enforced.
+ None.
+
+
+OPSAPS-58720: Atlas HBase hook not enabled post migration to
+          CDH
+Using the AM2CM tool for HDP-2 to CDP-7, post-migration, you must
+          manually enable the Atlas HBase hook.
+
+
+OPSAPS-58784: HMS hook is not enabled by default
+Using the AM2CM tool for HDP-2 to CDP-7, post-migration, you must
+          manually enable the Atlas HMS hook.
+
+CDPD-23776: When a HBase table is dropped, the relationship between the table and
+          namespace is displayed as ACTIVE
+When the HBase table is disabled and dropped, the table status is marked DELETED but the
+          relationship status between table and namespace is still ACTIVE. 
+CDPD-23587: hbase_namespace owner is updated to user who creates the HBase table
+Owner of the HBase namespace must not be modified based on users' who create the table
+          under it. 
+CDPD-22484: DML statements like "insert" and "delete" are captured by Atlas
+Extra audits are generated by Atlas for DML statements on tables like insert and delete
+          values on the table. 
+CDPD-27390: [Entity Audits] 'Propagated Classification Added' timestamp is < 'Entity
+          Created' timestamp
+The 'Propagated Classification Added' timestamp is < 'Entity
+          Created' timestamp. This is invalid since the classification is propagated once the entity
+          is created.
+CDPD-28026: [Atlas: Debug Metrics] Debug metrics is empty on cluster with Custom
+          Principal
+Debug metrics is fetched 30 seconds after an operation is performed. Later, there are no
+          debug metrics available.
+CDPD-39427: [HDFS Lineage]: When the input is a directory in case of
+          put/copyfromLocal/cp/mv commands, lineage is not created even though the script succeeds. 
+
+When Source is a directory and target is a directory which is already present in Atlas,
+            the command succeeds and inserts the data in the desired location, but lineage is not
+            created.
+
+DOCS-13759: Tag Propagation stops after a certain depth while the lineage is being
+          extended 
+
+When a tag is added to an entity at timestamp T1, the entities along the lineage to
+            which the tag must be propagated is calculated at T1. Before tag propagation completes,
+            if the lineage is extended, tag does not propagate to the entities in the extended
+            lineage.
+
+DOCS-13760: System Attributes search, __classificationNames: Search with parent tag
+          doesn't return entities associated to its children tags 
+
+System attribute search with __classificationNames = parent_tag returns entities
+            associated to parent_tag only not not entities associated to its children tag.
+
+Workaround: Instead of using system attribute, employ the basic search attribute
+            "classification" which lists entities associated with inherited
+          classifications.
+CDPD-39576: [Hive import version 2] While importing with Hive import V2, exceptions are
+          seen in the logs for successful imports 
+
+
+Disabled Hive hook
+Created a database
+Called the import v2 API by passing -o to
+                import-hive.sh
+
+The above step will create the ZIP file and also import the data 
+
+Though the import is successful, errors are seen in the logs.
+
+CDPD-39599: [Hive import v2] When importing table with large columns using the version
+          V2, java.net.SocketTimeoutException is thrown and import fails
+
+The import Hive version 2 faces the timeout issue. The import data takes more time at
+            Atlas server and the configuration timeout at client is lesser than the total time taken
+            by server import (Although the import operation at server is successful).
+
+CDPD-41142: When a Kafka console consumer group is run, more than one update audits are
+          seen
+
+After running the console consumer with a consumer group, verify the consumer group
+            entity created, along with the metrics and notifications for the consumer group and
+            topic. The expected result would be: one ENTITY_CREATE audit and one
+              ENTITY_UPDATE audit. But more than one ENTITY_UPDATE
+            audits are seen.
+
+CDPD-40165: Two audits are created for SPARK CTAS table
+
+When following Spark queries are fired:
+spark.sql("create table table1(id int)")
+spark.sql("create table table2 as select * from table1")
+HMS sends "ENTITY_CREATE" and
+            "ENTITY_FULL_UPDATE_V2". 
+
+
+The extra ENTITY_FULL_UPDATE_V2 message received from HMS is sent as
+            part of ALTERTABLE_ADDCOLS event from the HMS Hook side. This behaviour
+            is observed only when the queries are run from Spark SQL and not when run from the same
+            queries from Beeline.
+
+CDPD-39197: Debug metrics returns empty data
+
+When debug metrics is enabled and some operations are performed, the response is
+            empty.
+
+CDPD-36495: Updating legacyAttribute from False to True resets the initially created
+          relationshipAttributes values
+Creating types, entities, and relationship with is_legacy_attribute
+          initially set to FalseLater, update the relationshipDef to have
+              is_legacy_attribute to TrueFor the entities that were created
+            before updating the is_legacy_attribute to True,
+              relationshipAttributes value is reset.
+CDPD-35818: Basic search with tag filter provides approximateCount as -1 when there is
+          no match and is 0 otherwise 
+
+When the following search operations are performed:
+Faceted search with both tag filter and entity filter
+The observed approximateCount is -1.
+Here both entity filter and tag filter are present and when there is no match the
+            response received is -1.
+Faceted search with only entity filter
+Performing a basic search provides an approximate value of 0 when there is no match
+Faceted search with only tag filter
+Whenever there is tag filter in the query and there is no entity match, the
+              approximateCount is -1 and if the tag
+            filter is not available, the response approximateCount is
+              0
+
+CDPD-13466: Bulk create/update entity POST API does not create / update authorised
+          entities 
+
+The bulk API fails with 403 error if some  belong to entities on which user is
+              unauthorized and other GUIDs belong to entities on which user is
+              authorized.
+
+CDPD-22744: Bulk entity DELETE API does not delete authorised entities 
+
+Bulk entity DELETE API does not delete authorised entities when the list of authorised
+            and unauthorised entities list is passed.
+
+CDPD-31728: For database creation, there are two update audits instead of one create and
+          one update 
+
+The behavior is inconsistent. The order of the published messages is as such that first
+            HMS message (Entity Create Event) is created and later HS2 message (Entity Update
+            Event). Atlas received messages from Hive hook in reverse order which is first the HS2
+            message and later HMS.
+
+CDPD-29409: Hive import: Suggestion suggests entity which is deleted 
+
+Suggestions suggests tables of database, which is a deleted entity.
+
+CDPD-25152: Tag propagation through deferred actions consumes additional time as
+          compared to default flow
+
+The additional time might be due to the small overhead added to create / update task
+            vertex and which run it in the background. This also depends on number of tasks queued
+            to be executed in tasks.
+
+CDPD-42954: Zepplin notebook fails after enabling Atlas-HDFS hook
+
+The zeppelin notebooks are failing with errors after enabling Atlas-HDFS hook in the
+            CDP cluster. 
+When the below properties are set for atlas-client.properties in
+            Cloudera Manager: 
+atlas.jaas.KafkaClient.option.keyTab
+atlas.jaas.KafkaClient.option.principal
+ Along with adding the properties in
+              /etc/atlas/conf/atlas-application.properties, Cloudera Manager also
+            adds these properties to atlas-application.properties for other
+            services (like Spark).
+ Adding these properties interferes with the normal flow of the services (like
+            Spark)
+
+Workaround: To enable HDFS lineage feature, instead of setting these properties
+          through CM,user can manually add the properties directly in
+            /etc/atlas/conf/atlas-application.properties
+
+
+Parent topic: Known issues in Cloudera Runtime 7.1.8

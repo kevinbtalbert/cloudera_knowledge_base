@@ -1,0 +1,134 @@
+Running Spark with Yarn on the CDP base clusterCloudera Docs
+Running Spark with Yarn on the CDP base cluster
+The primary supported way to run Spark workloads on Cloudera Machine Learning uses Spark
+  on Kubernetes. This is different from Cloudera Data Science Workbench, with uses Spark on Yarn to
+  run Spark workloads.
+For users who are migrating projects from CDSW to CML, or who have existing Yarn workloads, CML
+   Private Cloud offers a way to run those Spark on Yarn workloads on the CDP base cluster. This is
+   sometimes called "Spark pushdown." This allows the Spark workloads to run without needing to
+   modify them to run on Kubernetes.
+The CML Admin must enable this mode for a CML workspace, and each CML workload must enable this
+   mode to run Spark workloads in the attached CDP base cluster.
+When this mode is enabled, each newly launched CML workload has port forwarding rules set up in
+   Kubernetes. Additionally, Spark configurations are set in the CML session to allow Spark
+   applications launched in the CML session to run in client mode with Executors in Yarn in the
+   attached base cluster.
+Prerequisites
+Support
+
+In CML, Spark on Yarn Pushdown workloads are only supported with ML Runtimes.
+
+General requirements
+
+Spark pushdown functionality only works with CDE 1.17 Runtime Addons.
+Yarn Service configured and running in your CDP Base Cluster
+Spark On Yarn service configured and running in your CDP Base Cluster
+The CDP Base Cluster must have access to the Spark drivers that run on Data Service Hosts
+     running CML workloads, these are launched on a set of randomized ports in the range:
+     30000-32768
+
+PySpark requirements
+
+Python must be installed on all CDP Base Cluster YARN Node Manager nodes which should match
+     the Python version of the selected ML Runtime (i.e. 3.7 or 3.8)
+The python binary available on Yarn Node Manager nodes must be specified in the
+     PYSPARK_PYTHON environment variable 
+As an example for 3.7, one could specify the environment variable like this for the CML
+       project with Spark Pushdown enabled:
+       "PYSPARK_PYTHON": "/usr/local/bin/python3.7"
+PYSPARK_PYTHON - The location of python in executors running in Yarn Nodes 
+Note: In CML PYSPARK_PYTHON is by default set to /usr/local/bin/python3
+This should be changed to the appropriate location in Yarn Nodes
+
+PYSPARK_DRIVER_PYTHON = The location of python in the driver running in a CML session
+        Note: For CML runtimes PYSPARK_DRIVER_PYTHON is set to /usr/local/bin/python3
+
+
+
+Enabling Spark on the base cluster
+Spark can be enabled on the base cluster both site-wide and project-specific.
+
+Site Administration > Settings Select Allow users to enable Spark Pushdown
+       Configuration for Projects.
+A project-specific setting to enable spark pushdown for all newly launched workloads in the
+     project. Each project that intends to use the CDP Base Cluster Yarn for spark workloads must
+     enable this setting. In Project Settings, select Settings > Enable Spark Pushdown.
+
+
+Spark Application Dependencies
+Due to the unique running mode of Spark on Yarn in CML, how dependencies are handled differ
+    greatly from running the same jobs while on the base cluster.
+To determine which dependencies are required on the cluster, you must understand that Spark
+    code applications run in Spark executor processes distributed throughout the cluster. If the
+    Python code you are running uses any third-party libraries, Spark executors require access to
+    those libraries when they run on remote executors.
+Refer to the following Spark configurations to determine how dependencies can be made
+    available to executors.
+Jars:
+
+spark.yarn.jars 
+By default, this is unset in a CML Project Spark Pushdown project to ensure that all spark
+       jars loaded from the CML Spark Runtime Addon is made available to yarn executors.
+This configuration should not be overridden within your CML projects. Consider using
+       spark.yarn.dist.jars to indicate external references to jars.
+(Add note about added transfer time at beginning of workloads)
+
+spark.yarn.dist.jars
+This is not configured by CML.
+
+
+Python: 
+spark.submit.pyFiles 
+By default, this is set to /opt/spark/python/lib/*.zip to ensure that the pyspark and
+        py4j zips included in CML Spark Runtime Addons are available to executors.
+(Can be overridden, keeping original)
+
+
+Extra files: 
+spark.yarn.dist.archives - This is not configured by CML.
+spark.yarn.dist.files - This is not configured by CML.
+
+
+User-Specified Spark Application Configurations
+
+
+spark-defaults.conf
+Multiple Spark configuration sources are appended to a single file for Spark Pushdown in CML
+    PVC. This occurs in the following order (lower has higher precedence as the contents of
+    /etc/spark/conf/spark-defaults.conf are loaded from top-down):
+
+Base Cluster Spark spark-defaults.conf Defaults and Safety valves are included here 
+CML system-specific configurations injection
+CML Project spark-defaults.conf
+
+Check the contents of /etc/spark/conf/spark-defaults.conf inside the CML Session for the final
+    configuration used by the spark driver.
+
+CML-Injected Spark Application Configurations
+There are a number of Spark Configurations which are applied by CML in order to enable or
+    simplify Spark on Basecluster Yarn workloads.
+warningDo not to override these settings in your project spark-defaults.conf: 
+spark.driver.host
+spark.driver.port
+spark.blockmanager.port
+
+
+Spark Environment Variables
+Multiple environment variable sources are considered when setting up the CML session which
+    will run the interactive spark driver.
+For spark-env.sh
+
+Base Cluster Spark spark-env.sh
+     Defaults and Safety valves are included here
+    
+CML system-specific spark envs overriding
+
+For CML Session Environment
+
+Contents of constructed spark-env.sh (see above)
+Workspace env vars
+Project env vars
+User env vars
+
+
+

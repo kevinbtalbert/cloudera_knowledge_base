@@ -1,0 +1,114 @@
+Upgrading PostgreSQL 9.6 before EOLCloudera Docs
+Upgrading PostgreSQL 9.6 before EOL
+You need to plan for the end-of-life (EOL) of PostgresSQL 9.6, announced by Amazon.
+        As an AWS environment user, you need to check the version of PostgreSQL you use for Cloudera
+        Data Warehouse environments. If your database version is still PostgreSQL 9.6, you need to
+        upgrade to PostgreSQL 11.12. 
+ AWS has published the an announcement regarding the imminent PostgreSQL upgrade. 
+
+You can initiate an upgrade of your database instance — either immediately or
+                during your next maintenance window — to the Cloudera-recommended version of
+                PostgreSQL 11.12 using the AWS Management Console or the AWS Command Line Interface.
+                Follow the procedure below to perform the upgrade.The upgrade process shuts
+                down the database instance, performs the upgrade, and restarts the database
+                instance. The database instance may be restarted multiple times during the upgrade
+                process. While major version upgrades typically complete within the standard
+                maintenance window, the duration of the upgrade depends on the number of objects
+                within the database. To estimate the time required, take a snapshot of your database
+                and test the upgrade. 
+
+
+Go to the AWS Management Console > Amazon RDS > Databases.
+
+
+Check the version of
+                    PostgreSQL used in your environment, and if it is 9.6.6, go to the next step to start the upgrade process. 
+
+In CDP, go to your environment, and in a Database Catalog for that environment,
+                    create a Virtual Warehouse or use an existing one.
+
+Run some basic queries in Hive or Impala to see if your PostgreSQL 9.6.6 is alive and well.
+show tables;
+use default;
+show tables;
+create table tbl1(col1 string, col2 string);
+show tables;
+describe tbl1;
+create table tbl2 as (select * from tbl1);
+describe tbl2;
+insert into table tbl1 values ("Hello", "World");
+select * from tbl1;            
+
+Go to the AWS Management Console > Amazon RDS > Databases. Select DB Engine version 10.16 to upgrade Amazon RDS to 10.16.
+Amazon prevents a direct upgrade to 11.x unless you are on PostgreSQL 9.6.20 or higher.
+                
+
+In CDP, rerun the basic queries in your Virtual Warehouse, and if all goes well, proceed to the next step.
+
+Look for errors, such as those shown below, in the metastore log.
+Errors in the metastore might look something like this:
+                    <14>1 2021-07-31T00:52:38.223Z metastore-0.metastore-service.warehouse-1627669911-vl6x.svc.cluster.local metastore 1 0b245ec4-8419-4968-94bc-ee122960b1aa [mdc@18060
+class="txn.TxnHandler" level="INFO" thread="pool-9-thread-200"] Non-retryable error in enqueueLockWithRetry(LockRequest(component:[LockComponent(type:SHARED_READ, level:
+DB, dbname:default, operationType:NO_TXN, isDynamicPartitionWrite:false)], txnid:79, user:hive, hostname:hiveserver2-0.hiveserver2-service.compute-1627670377-mbqx.svc.
+cluster.local, agentInfo:hive_20210731005238_4aa14bf0-4e46-448d-b6c7-cdc3ca4ec863, zeroWaitReadEnabled:false)) : Batch entry 0 INSERT INTO "HIVE_LOCKS" ( "HL_LOCK_EXT_ID",
+"HL_LOCK_INT_ID", "HL_TXNID", "HL_DB", "HL_TABLE", "HL_PARTITION", "HL_LOCK_STATE", "HL_LOCK_TYPE", "HL_LAST_HEARTBEAT", "HL_USER", "HL_HOST", "HL_AGENT_INFO") VALUES
+(4561258935320160815, 1, 79, 'default', NULL, NULL, 'w', 'r', 0, 'hive', 'hiveserver2-0.hiveserver2-service.compute-1627670377-mbqx.svc.cluster.local',
+'hive_20210731005238_4aa14bf0-4e46-448d-b6c7-cdc3ca4ec863') was aborted: ERROR: index "hl_txnid_index" has wrong hash version^M  Hint: Please REINDEX it.  Call
+getNextException to see other errors in the batch. (SQLState=XX002, ErrorCode=0)           
+
+Connect to the HiveServer pod or metastore pod, and using psql, connect to the
+                    RDS instance.
+For example,
+                    psql -h env-kg.us-west-2.rds.amazonaws.com --u hive --d postgres
+Login using the hostname from the AWS console. The postgres database password
+                    is stored in JCEKS file which is mounted using a secret volume inside the
+                    HiveServer pod or metastore pod. Note the namespace of pod and obtain the password.
+
+
+
+
+
+Parent topic: Upgrades
+Validate the upgrade to PostgreSQL 10.16
+You need to connect to the postgres 10.16 database, and validate the upgrade. 
+
+Connect to the PostgreSQL 10.16 database using the namespace of the pod and the password you obtained in the last procedure.
+                    
+
+On the Postgres command line, look at all the databases.
+For example, type \l. 
+
+
+
+Fix any problematic indexes. Go to a database in your metastore named something like 
+For example, go to a database in your metastore named
+                        warehouse-1629221321-pf2h-metastore. \c warehouse-1629221321-pf2h-metastore                                                  
+
+
+
+
+Run the REINDEX command.
+
+REINDEX INDEX hl_txnid_index;
+
+
+In CDP, rerun the basic queries in your Virtual Warehouse, and if all goes
+                        well, proceed to the next step.
+
+Upgrade the Amazon RDS version of PostgreSQL to 11.12, and rerun the basic
+                        queries.
+
+
+
+
+Upgrade to PostgreSQL 11.12
+
+
+Go to the AWS Management Console > Amazon RDS > Databases, and upgrade the Amazon RDS version to PostgreSQL 11.12.
+                    
+
+Rerun the basic queries in your Virtual Warehouse to validate the upgrade.
+                    
+
+
+

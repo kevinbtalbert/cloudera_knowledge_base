@@ -1,0 +1,130 @@
+Run the Threat Intelligence LoaderCloudera Docs
+Run the Threat Intelligence Loader
+
+noteThere is a special configuration parameter to the Extractor config that is only considered
+      during this loader:
+ inputFormatHander 
+This specifies how to consider the data. The two implementations are
+              BY_LINE and
+              org.apache.metron.dataloads.extractor.inputformat.WholeFileFormat. 
+The default is BY_LINE, which makes sense for a list of CSVs where
+            each line indicates a unit of information which can be imported. However, if you are
+            importing a set of STIX documents, then you want each document to be considered as input
+            to the Extractor.
+
+Now that you have defined the threat intel source, threat intel extractor, and threat
+    intel mapping configuration, you must run the loader to move the data from the enrichment source
+    to the CCP enrichment store (HBase) and store the enrichment configuration in
+      ZooKeeper.
+ Log into $HOST_WITH_ENRICHMENT_TAG as root and navigate to
+            $METRON_HOME/config.
+
+Use the loader to move the enrichment source to the enrichment store in
+          ZooKeeper:
+
+$METRON_HOME/bin/flatfile_loader.sh -n threatintel_config.json -i domainblocklist_ref.csv -t threatintel -c t -e threatintel_extractor_config.json
+
+
+This command modifies the Squid enrichment config in ZooKeeper to include the threat
+          intel enrichment.
+The parameters for the utility are as follows:
+
+
+-b,--batchSize <SIZE>
+The batch size to use for HBase puts
+-c,--hbase)cf <CF>
+HBase column family to ingest the data into. This must be column family
+                  t.
+-e,--extractor_config <JSON_FILE>
+JSON Document describing the extractor for this input data source
+-h,--help
+Generate Help screen
+-i,--input <FILE>
+The CSV File to load
+-l,--log4j <FILE>
+The log4j properties file to load
+-m,--import_mode <MODE>
+The Import mode to use: LOCAL,MR.Default: LOCAL
+-n,--enrichment_config <JSON_FILE>
+JSON Document describing the enrichment configuration details. This is used to
+                associate an enrichment type with a field type in ZooKeeper.
+-p,--threads <NUM_THREADS> 
+The number of threads to use when extracting data. The default is the number of
+                cores of your machine.
+-q,--quiet
+Do not update progress
+-t,--hbase_table <TABLE>
+HBase table to ingest the data into.
+
+
+The data is populated into an HBase table called enrichment.
+
+Verify that the logs were properly ingested into HBase:
+
+hbase shell
+scan 'threatintel'
+
+
+ Verify that the ZooKeeper enrichment tag was properly populated: 
+
+$METRON_HOME/bin/zk_load_configs.sh -m DUMP -z $ZOOKEEPER_HOST:2181
+
+You should see a configuration for the Squid sensor something like the
+          following:
+
+{
+  "index" : "squid",
+  "batchSize" : 1,
+  "enrichment" : {
+    "fieldMap" : {
+      "hbaseThreatintel" : [ "ip_src_addr" ]
+    },
+    "fieldToTypeMap" : {
+      "ip_src_addr" : [ "user" ]
+    },
+    "config" : { }
+  },
+  "enrichment" : {
+    "fieldMap" : { },
+    "fieldToTypeMap" : { },
+    "config" : { },
+    "triageConfig" : {
+      "riskLevelRules" : { },
+      "aggregator" : "MAX",
+      "aggregationConfig" : { }
+    }
+  },
+  "configuration" : { }
+}
+
+
+Generate some data by using the Squid client to execute requests:
+
+
+Use ssh to access the host for Squid.
+
+
+Start Squid and navigate to /var/log/squid:
+
+ssh <Nifi Host>
+                
+sudo su -
+systemctl start squid
+cd /var/log/squid
+tail -f access.log
+
+
+
+Generate some data by entering the following:
+
+squidclient http://www.cnn.com
+
+
+
+
+ Generate some data by using the Squid client to execute http requests:
+
+squidclient http://www.actdhaka.com
+
+
+Parent topic: Bulk Loading CSV Threat Intelligence Information

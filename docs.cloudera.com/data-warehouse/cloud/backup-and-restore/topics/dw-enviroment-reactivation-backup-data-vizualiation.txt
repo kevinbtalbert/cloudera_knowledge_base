@@ -1,0 +1,62 @@
+Backing up Data Visualization applicationsCloudera Docs
+Backing up Data Visualization applications
+You can use kubectl or k9s to back up Data Visualization (DataViz) applications in an
+        AWS environment.
+To keep the charts and dashboards that you created, you must save and restore Data
+            Visualization data. If you did not make changes to the environment for Data
+                Visualization, skip these steps; otherwise, perform these steps on each of your Data
+                Visualization applications because each Data Visualization uses a separate
+                database.
+
+
+Data Vizualization must use the DataLake Postgres instance for storing its
+                    metadata. 
+
+
+
+Find the necessary information, such as database name, host, port, user, and
+                    password.
+
+$ kubectl get secrets/pg-db-secret -o=jsonpath={.data.'\.pgpass'} -n viz-1680129861-kbtr | base64 -D
+
+
+postgres-service:5432:metastore:hive:ZufGC6Dmh03N1iW042uTosZtr4XvCtJIYPQ==
+
+
+Use kubectl or k9s to access the Hue container in the targeted CDW environment
+                    (need KUBECONFIG setup), and find the namespace for Hue and for DataViz. 
+
+$ kubectl get pods --all-namespaces --field-selector metadata.name=huebackend-0
+
+$ kubectl get pods --all-namespaces --field-selector metadata.name=viz-webapp-0
+
+
+If you are running multiple DataViz instances, make a note of the DataViz
+                        namespaces and their user-provided friendly names from the CDW UI. On the
+                        new cluster, the namespace names will change, so it’s important to know
+                        where to load the corresponding DataViz deployment.
+
+
+Select one of the Hue namespaces and shell into the container.
+
+$ kubectl exec -it huebackend-0 -n <virtual warehouse ID> -c hue -- /bin/bash
+
+
+Get the dump using the code below by providing a DataViz namespace. All DataViz
+                    databases can be backed up from this container. If you have multiple namespaces,
+                    make a note of the friendly DataViz name pairs.
+pg_dump -U hive -h postgres-service -W -F t
+                        <DataViz namespace>_vizdb >
+                        ./viz_pg_dump.tar
+If you have multiple DataViz instances running, backup all databases in this
+                    step. It is important to use a naming convention that will allow you to identify
+                    which database back-up contains the contents of the corresponding DataViz
+                    database. This is needed, as the namespace names will be different on the new
+                    cluster.
+
+Copy the dump file to your local machine. 
+For
+                    example:kubectl cp <virtual warehouse ID>/huebackend-0:/opt/hive/viz_pg_dump.tar ~/Downloads/logs/viz_pg_dump.tar -c hue
+
+
+Parent topic: Backing up the environment

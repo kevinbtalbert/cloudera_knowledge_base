@@ -1,0 +1,406 @@
+Cloudera Manager 7.7.1 Cumulative hotfix 4Cloudera Docs
+Cloudera Manager 7.7.1 Cumulative hotfix 4
+Know more about the Cloudera Manager 7.7.1 cumulative hotfixes 4.
+This cumulative hotfix was released on February 23, 2023.
+
+noteContact Cloudera Support for questions related to any specific
+        hotfixes.
+
+Following are the Common Vulnerabilities and Exposures (CVE)'s that are fixed in the Cloudera
+      Manager 7.7.1 CHF4 (version: 7.7.1-38008529) release:
+CVE-2022-41966
+
+Following known issues and their corresponding workarounds are shipped for Cloudera Manager
+      7.7.1 CHF4 (version: 7.7.1-38008529):
+
+
+
+CDPD-49716
+Unable to access the Hue UI on a Knox-enabled
+                cluster.
+Before you access the Hue UI on a Knox-enabled
+                cluster, ensure that you add the hostname of the Knox Gateway and Hue Load Balancer
+                hostname in the trusted origin and as a Knox Proxy host. For more information, see
+                  Integrate with Knox.
+
+
+
+
+Following are the list of fixed issues that were shipped for Cloudera Manager 7.7.1 CHF4
+      (version: 7.7.1-38008529)
+
+
+
+OPSAPS-66197
+Snapshot diff-based (incremental) HDFS to HDFS
+                replication might corrupt destination directory structure when:
+there is a source side HDFS move/rename operation.
+the (move/rename) target on the replication destination is an existing
+                    unexpected directory.
+OPSAPS-63724 introduced an optional workaround where the target-side
+                  directory creations are ignored. When a colliding source-side move is expected
+                  both workarounds are recommended to be activated.
+Workaround:
+Set the HDFS service core-site.xml advanced configuration snippet (also called
+                    safety valve) (on the destination side)
+                    "com.cloudera.enterprise.distcp.overwrite-merge-existing-rename-targets.enabled"
+                    to "true". (Note that enabling the workaround in OPSAPS-63724 uses a different
+                    advanced configuration snippet).
+In an incremental replication run, check the stderr log of the last "Trigger a
+                    HDFS replication job on one of the available HDFS roles." step and make sure
+                    that the INFO distcp.DistCpSync: Overwrite merge of already existing
+                      move targets is enabled message is displayed. 
+
+Usage notes:
+When there is a conflicting replicated source side move/rename operation where
+                    - on the destination side - the target exists, there will be a merge
+                    attempt:
+When the source side moved path is a directory and the conflicting destination
+                    side path is also a directory their contents will be merged.
+When the destination side conflicting path is a file it will be overwritten by
+                    the replicated move.
+When the source side moved path is a file the destination side conflicting
+                    path will be overwritten by the replicated move.
+In case of other failures replication is expected to fall back to bootstrap
+                    (full file listing) run.
+Details of merge activity (when there is a conflicting path) is logged in
+                  the same stderr log with messages containing INFO
+                    distcp.DistCpSync$OverwriteMergeRenameBehavior.
+
+
+
+
+
+
+OPSAPS-66160: Upgraded XStream
+                version
+The XStream version is upgraded to 1.4.20 version to
+                fix CVE-2022-41966 issue.
+
+
+
+
+
+
+OPSAPS-65958
+After a Hive ACID replication policy is deleted, the
+                database in the replication policy cannot be deleted from the source cluster. This
+                issue is fixed.
+
+
+
+
+
+
+OPSAPS-65870: Log4J 1.2.17 replaced with
+                Reload4J
+In this release, Cloudera has replaced all Apache
+                Log4j 1.2.x logging libraries included with Cloudera Manager 7.7.1 Cumulative hotfix
+                3 with equivalent Reload4j libraries.
+
+
+
+
+
+
+OPSAPS-65733
+The following issues are fixed:
+Import script incorrectly returns "0" for an unsuccessful import
+                    operation.
+Dry run import of Ranger policies fails.
+Import operation fails because of deadlock.
+
+
+
+
+
+
+
+OPSAPS-64925
+You could configure the
+                  numListstatusThreads parameter, that specifies the number
+                of threads to be used for fetching the file statuses, only through CLI and not
+                during the HDFS replication policy creation process. This issue is fixed.
+ You can now configure this parameter during HDFS
+                replication policy creation using the Advanced > File listing threads field.
+
+
+
+
+
+
+OPSAPS-63930
+By default, snapshot diff-based (incremental) HDFS -
+                HDFS replication uses a temp directory, created in the parent of replication
+                destination directory to synchronize source-side rename and delete operations:
+                deleted and renamed paths are first moved into this temporary directory, then the
+                renamed ones will be moved to their target followed by the deletion of this
+                temporary directory (thus deleting the paths scheduled to be deleted). Note that
+                OPSAPS-63759 provides an optional behavior to execute individual deletes without
+                these moves.This behavior of incremental replication leads to failure and
+                  fallback to bootstrap (full file listing) replication when the replication process
+                  can not create this temporary directory (due to restrictive HDFS permissions) or
+                  when the replication destination contains one or more HDFS encryption zones
+                  (because HDFS moves can not cross encryption zone boundary).This optional
+                  workaround solves these problems by executing rename operations in-place when
+                  possible, otherwise using the best possible temporary rename operations without
+                  the need of the above mentioned common temporary directory. Note that this
+                  workaround can be considered as a superset of OPSAPS-63759. That is when both are
+                  enabled, the current one is applied.
+Activating this workaround:
+Set HDFS service core-site.xml advanced configuration snippet (on
+                    the destination side)
+                    "com.cloudera.enterprise.distcp.direct-rename-and-delete.enabled" to
+                    "true".
+In an incremental replication run, check the stderr log of the last
+                    "Trigger a HDFS replication job on one of the available HDFS roles." step, and
+                    make sure the INFO distcp.DistCpSync: Will use direct rename and delete
+                      (for non cloud target) when using snapshot diff based sync. Temp directory
+                      creation on the target will be skipped. message is displayed.
+
+Adjusting delete logging: By default, every 100000 direct
+                delete operations executed by this workaround are logged. This is useful for
+                following the synchronization of large source side deletes. This default interval
+                can be overridden by setting the
+                "com.cloudera.enterprise.distcp.direct-delete.log-interval" advanced configuration
+                snippet to an integer value greater than 0. Note that this advanced configuration
+                snippet is shared with a workaround in OPSAPS-63759.
+Usage notes:  There can be conflicting source side renames
+                and rename - delete interactions when their destination side replay need to use
+                temporary renames (for example, a name swap between two paths using three renames).
+                For these cases, the temporary rename destination will typically be next to the
+                final rename destination (will share the same parent path) avoiding both above
+                mentioned failure scenarios. Such temporary renames will be logged during execution
+                  like:distcp.DistCpSync: Executing a temp rename: /test-repl-target/test-repl-source/file2 -> /test-repl-target/test-repl-source/file2748016654After
+                  execution, the number of operations will also be logged
+                  like:INFO distcp.DistCpSync: Synced 0 through-tmp/cloud rename(s) and 0 through-tmp delete(s) to target.
+INFO distcp.DistCpSync: Synced 2 direct delete(s) to target.
+INFO distcp.DistCpSync: Synced 2 direct rename(s) to target.
+INFO distcp.DistCpSync: Used 2 additional temporary rename(s) during syncing.
+
+
+
+
+
+
+OPSAPS-63724
+By default, the snapshot diff-based (incremental)
+                HDFS - HDFS replication falls back to bootstrap (full file listing / FFL)
+                replication when there are unexpected target-side changes. By enabling this
+                workaround, certain target-side changes are tolerated by incremental replication
+                without falling back to FFL. Note that when source side HDFS moves are expected to
+                be synchronized the workaround mentioned in OPSAPS-66197 is recommended to be
+                activated.
+Activating this workaround:
+Set
+                    "com.cloudera.enterprise.distcp.check-for-safe-to-merge-target-side-changes.enabled"
+                    to "true" in the "YARN Service Advanced Configuration Snippet (Safety Valve) for
+                    core-site.xml" on the destination side, and then restart the stale services /
+                    redeploy client configuration. (Note that enabling OPSAPS-66197 uses a different
+                    advanced configuration snippet).
+In an incremental replication run, check the stderr log of the first "Run
+                    Pre-Filelisting Check" and make sure the INFO
+                      distcp.PreCopyListingCheck: Check for safe to ignore (merge) target side
+                      changes is enabled. message appears.
+
+Usage notes:
+When a safe-to-ignore target change is found, "Run Pre-Filelisting Check"
+                    prints the following messages to its stderr
+                    log:INFO util.DistCpUtils: There are changes on target, falling back to regular distcp
+NFO distcp.PreCopyListingCheck: The changes on target are safe to ignore.
+INFO distcp.PreCopyListingCheck: Note that it is up to the downstream processing steps if it falls back to full file listing or continue with snapshot diff execution
+INFO distcp.PreCopyListingCheck: Changes to target: true
+INFO distcp.PreCopyListingCheck: Changes to target are safe to ignore: true
+
+When target changes are not found safe-to-ignore, then the details about the
+                    reason appears in the
+                    messages:INFO distcp.PreCopyListingCheck: Changes to target: true
+INFO distcp.PreCopyListingCheck: Changes to target are safe to ignore: false
+
+
+Allowed changes:The following destination side
+                  changes (snapshot diff entries) are considered safe-to-ignore when this workaround
+                  is enabled:
+Additions ( + ): only if they are empty directories or contain only
+                      directories, all present on the source as directory.
+Deletions ( - ): only the source side path also missing.
+Modifications (M): must have an immediate, allowed ( + ) or ( - ) child
+                      path.
+
+
+
+
+
+
+
+OPSAPS-63571
+Sometimes, entries reported by the HDFS snapshot-diff
+                report for deleted directories appear as modified. This might raise an
+                FileNotFoundException error. In this scenario, you can configure the
+                "com.cloudera.enterprise.distcp.hdfs-snapshot-diff-cleanup.enabled" advanced
+                configuration snippet to address these unexpected entries.
+
+
+
+
+
+
+OPSAPS-63529
+The "deleteLatestSourceSnapshotOnJobFailure" HDFS
+                policy property could be accessed only using CLI. You can now configure this
+                parameter during HDFS replication policy creation using the Advanced > Restart replication using non-incremental (bootstrap) replication on
+                    replication failure field.
+
+
+
+
+
+
+OPSAPS-63362
+Hive ACID replication policies failed if the source
+                and target clusters have the same HDFS nameservice. This issue is fixed.
+
+
+
+
+
+
+OPSAPS-63031
+To provide a custom YARN queue for the Replication
+                Metrics Getter command, the administrator can now specify the
+                  HIVE_REPL_METRICS_TEZQUEUE_NAME =  [***custom yarn queue
+                    name***] key-value pair in the "Hive Replication
+                Environment Advanced Configuration Snippet (Safety Valve)" for the Hive_on_tez
+                  service.On the next run, the replication metrics command uses the
+                  custom yarn queue for its execution.
+
+
+
+
+
+
+OPSAPS-63030
+The “Hive replication metrics getter” process failed
+                for some Hive ACID replication policies because the TLS parameters were repeated in
+                the JDBC URL. This issue is fixed.
+
+
+
+
+
+
+OPSAPS-62612
+The fix for this issue ensures that Replication
+                Manager shows a warning message if there are any Hive ACID tables in the chosen
+                database when you choose an external-tables-only database for a Hive external table
+                replication policy.
+
+
+
+
+
+
+OPSAPS-62886
+When there are a large number of replication
+                policies, the Cloudera Manager > Replication Manager  > Replication Policies page takes a long time to load. This issue is fixed.
+
+
+
+
+
+
+OPSAPS-63262
+The “Hive on Tez Replication Metrics Getter” commands
+                failed when there were long messages in the replication_metrics table. This issue is
+                fixed.
+
+
+
+
+
+
+OPSAPS-65419: Hosts page takes too long to
+                load on large clusters
+
+The All Hosts page sometimes takes more than 10 seconds
+                  and is very slow when Cloudera Manager manages a very large cluster such as about
+                  a hundred hosts. This performance problem is fixed now by reducing the number of
+                  SQLs made to the database. The page load time is now reduced dramatically.
+
+
+
+
+
+
+
+OPSAPS-63077: Fix
+                commissioning/recommissioning NodeManager failure in YARN
+
+When the yarn.scheduler.configuration.store.class property is set to zk and YARN
+                  Queue Manager is not installed and enabled in a cluster every YARN node
+                  decommission causes an exception. With this fix, no refreshQueues command is
+                  called when ZooKeeper configuration store is used, but YARN Queue Manager is
+                  not.
+
+
+
+
+
+
+
+OPSAPS-65242
+Fixed an issue where an Event Server cleanup did not
+                work properly and now it works as intended, uses less CPU and keeps the events
+                within the requested limits.
+
+
+
+
+
+
+OPSAPS-66022
+When a Hive ACID replication policy run is skipped,
+                the replication policy status incorrectly shows Failed or
+                  Error. This issue is fixed.
+
+
+
+
+The repositories for Cloudera Manager 7.7.1-CHF4 are listed in the following table:
+Table 1. Cloudera Manager 7.7.1-CHF4
+
+Repository Type
+Repository Location
+
+
+
+RHEL 8 Compatible
+Repository:https://username:password@archive.cloudera.com/p/cm7/patch/7.7.1-38008529/redhat8/yumRepository
+                    File:https://username:password@archive.cloudera.com/p/cm7/patch/7.7.1-38008529/redhat8/yum/cloudera-manager.repo
+
+
+RHEL 7 Compatible
+Repository:https://username:password@archive.cloudera.com/p/cm7/patch/7.7.1-38008529/redhat7/yumRepository
+                    File:https://username:password@archive.cloudera.com/p/cm7/patch/7.7.1-38008529/redhat7/yum/cloudera-manager.repo
+
+
+SLES 12
+Repository:https://username:password@archive.cloudera.com/p/cm7/patch/7.7.1-38008529/sles12/yumRepository
+                    File:https://username:password@archive.cloudera.com/p/cm7/patch/7.7.1-38008529/sles12/yum/cloudera-manager.repo
+
+
+Ubuntu 20
+Repository:https://username:password@archive.cloudera.com/p/cm7/patch/7.7.1-38008529/ubuntu2004/aptRepository
+                    file:https://username:password@archive.cloudera.com/p/cm7/patch/7.7.1-38008529/ubuntu2004/apt/cloudera-manager.list
+
+
+Ubuntu 18
+Repository:https://username:password@archive.cloudera.com/p/cm7/patch/7.7.1-38008529/ubuntu1804/aptRepository
+                    file:https://username:password@archive.cloudera.com/p/cm7/patch/7.7.1-38008529/ubuntu1804/apt/cloudera-manager.list
+
+
+
+
+ 
+
+Parent topic: Cumulative hotfixes

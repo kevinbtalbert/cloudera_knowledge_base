@@ -1,0 +1,167 @@
+Key concepts about ACID ingest patternsCloudera Docs
+Key concepts about ACID ingest patterns
+There are many variations to the ACID ingest patterns discussed earlier. The main
+   points are:
+Using an ACID ingest pattern, the system manages file compactions in an atomic manner. 
+Do not force your ingest patterns on the consumer through artificial partition strategies. 
+If you need to maintain the source, use the sweep pattern. Consumers access the final table. 
+Minimize repeated reads of inefficient datasets. 
+The following enhanced policies help protect sensitive data at a column or row level versus
+   giving consumers file access to all data:
+
+Column masking and row filtering
+Removes sensitive data from unauthorized users.
+Prevents derivative datasets and loss of control.
+
+Geographic policies
+Adds control depending on where you are.
+
+After giving a consumer access to the file system, there is no way to protect the sensitive
+   parts of the data.Treat managed, ACID tables as tables, not as files. Use column masking and row filtering to
+   restrict access to sensitive data. Hive operations go through HiveServer (HS2). All policies are
+   managed around the table context. All operations on managed tables run as the
+    hive user on service, who is analagous to the oracle user who
+   is the user accessing an Oracle system. With delineation and enforcement of ACID tables, ACID tables become a single source of truth
+   (SSOT). You can control file spillage, and provide theft protection by limiting user access. The
+   file system audits are not always available for non-ACID tables in non-HDFS or ozone stores. If
+   you have data in S3, for example, allow users go through Hive but do not give them access to S3,
+   then you can obtain an audit trail.
+Modified ACID table location
+Hive 3 does not allow you to specify a location when creating a
+    table. Hive 3 does not allow LOCATION declarations in the CREATE TABLE statement for the
+    following reasons. 
+Managed table file locations have stronger security requirements in Hive 3 than in Hive 1
+      and 2.
+Hive 3 ensures the location matches policies that manage the space. 
+If the default locations of the Hive warehouse do not suit your use case, for example, if
+    you have multiple TDE zones or you like to control where you put things, you can override the
+    warehouse location setting in the Hive metastore. You set a MANAGEDLOCATION database property, and then new
+    tables you create are stored in this managed location. To see the managed location, you use a
+    DESCRIBE DATABASE query.
+ You might need a custom Hive 3 warehouse directory location to meet the following
+    requirements: 
+Multi-tenant requirements
+Transparent data encryption (TDE) requirements
+The default warehouse location is controlled by the
+     hive.metastore.warehouse.dir property in the Hive metastore. Key points about
+    the Hive 3 warehouse directory are: 
+Set the MANAGEDLOCATION property of the database using CREATE TABLE OR ALTER TABLE.
+Check the property value using DESCRIBE DATABASE.
+Ensure access to your new file system location for the hive service user.
+For transparent data encryption (TDE):
+Ensure that the hive service account has key access.
+Use an alternate warehouse location.
+
+Protects data at rest if the file should fall into the wrong hands.
+
+
+
+Accessing Hive ACID tables from Spark
+Spark interaction with ACID tables is not natively supported. When deciding if Spark users need
+    access to ACID tables, or not, determine your data priorities and the risk of exposing the data.
+    If your security concerns outweigh ease of access, ACID tables are a viable choice for use with
+    Spark. You can protect parts of the database that Spark users access. 
+Spark users cannot just run sparksql code on ACID tables. For governance reasons, users must
+    go through the Hive Warehouse Connector (HWC) and make code changes to
+    access the non-native ACID tables. You need to consider the options for accessing the non-native
+    tables and the impact of GDPR (General Data Protection Regulation) to determine if using ACID
+    tables for Spark users works for you, or not. 
+Hive 3 on the Cloudera Data Platform does not support storage-based authorization (SBA). The
+    default Hive doas property is false, and results
+    in code changes. These changes are mandatory to secure your data. Using old patterns that
+    required insert overwrites can cause data loss and slow Hive process. If you continue to use
+    these pattern with ACID, Hive will be slow. Hive 3 operations are atomic and require backend
+    housekeeping. When you use acid table,s you have to give up some part of the system to manage
+    them with compaction. How much of your resources are needed for compaction depends on how
+    extensively you use ACID tables. 
+ACID has limitations, such as writing a thousand INSERT statements containing one record. Such
+    inserts cause problems. Hive ACID is not an online transaction processing (OLTP) system, but it
+    can you can build a better and cleaner data pipeline with Hive ACID, and it can perform
+    well.
+
+Audits, lineage, and enforcement
+By applying policies to Hive ACID tables your Hive database can be a single source of truth
+    for users. File spillage, loss, and theft is protected by restricting user access to the file system database and
+    tables using Ranger.
+
+Views and materialized views
+A materialized view is a database object that holds a query
+    result you can use to speed up the execution of a query workload. Materialized views require
+    ACID tables.
+In the following example, you select a row ID, perform an aggregate function, and group by
+    consumer:
+SELECT consumer_id, agg_function FROM detail_table GROUP BY consumer_id;
+The aggregate function is costly, depending on how the cost of scanning the table, how big the
+    table is, and so on. The aggregation is calculated each and every time you run that query. 
+Suppose you use a view. VIEW wraps the SELECT syntax. The view reference replaces the select,
+    and is compiled by Hive in the Directed Acyclic Graph (DAG). A view might appear easier to use
+    and consume, but is no better, or is worse, performance-wise than a materialized view. There is
+    only a development advantage in using a view over a materialized view. 
+Suppose you use a materialized view of Select with the same aggregations. The materialized
+    view can be updated or maintained in the background on a occasional
+    basis. If you run aggregates on a frequent basis, the materialized view might save significant
+    time. You create a materialized view that matches the first aggregate function in the table.
+    When a user issues a query that includes the aggregation against the table again, the Hive Cost
+    Based Optimizer (CBO) checks that the materialized view is up-to-date with that aggregation,
+     rewrites the query if out-of-date, and uses the
+    previously generated results instead of reading the entire table again.
+Advantages of materialized views are:
+The speed of repeated dashboard-like queries improve.
+Query results are pre-built.
+Queries are optimized by the CBO:
+Query plans use materialized views if possible
+Reduces data Processing
+Quicker response times
+Fewer resources required
+
+
+
+Query results cache
+If you use ACID tables, repeated queries can be resolved by the query results cache. Query results caching works only on
+    ACID tables because Hive needs to completely manage the tables to do the caching. Hive knows
+    whether the ACID tables changed or not, so when you issue the query again, Hive just pulls the
+    result without further computation. Hive doesn't need to run the query again. If you have a
+    dashboard, perhaps the first dashboard that runs the query will cache the data for the next hour
+    until the dashboard needs to be updated. User queries pull the results from the cache, and save
+    all of that compute time and resources.
+You can configure Hive to manage a certain amount of space for
+    the query result cache. 
+The query results cache identifies an asymmetric tree of the query DAG identical to a query
+    that was run before and stored on the cluster. No changes to tables occurs during query results
+    caching. 
+Results are cached and presented without execution to the user for:
+Repetitous queries 
+Queries the have not changed since results cache was built
+
+
+Summary of Hive ACID considerations
+Key things to keep in mind when moving to Hive transactional/ACID tables are:
+
+Hive is not an online transactional processing (OLTP).
+Micro-batching works best; avoid single inserts. 
+Setup the compactor.
+Scale the resources to compact.
+Resource requirements depend on:
+
+Data volume
+
+
+Frequency of data change
+
+
+Number of tables/partitions to compact 
+
+
+The thresholds set to trigger compactions 
+
+
+The frequency of the compactor checks 
+
+
+
+One of your main considerations in whether or not to use a Hive ACID table is who is going to
+    query the table. Hive has native support for ACID tables and CDP has a security system in place
+    to protect the data.
+
+
+Parent topic: Migrating Hive workloads to ACID

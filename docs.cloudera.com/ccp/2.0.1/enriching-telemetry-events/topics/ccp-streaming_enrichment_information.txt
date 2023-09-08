@@ -1,0 +1,126 @@
+Stream Enrichment InformationCloudera Docs
+Stream Enrichment
+      Information
+Streaming enrichment information is useful when you need enrichment information in
+      real time. This type of information is most useful in real time as opposed to waiting for a
+      bulk load of the enrichment information. You incorporate streaming intelligence feeds slightly
+      differently than when you use bulk loading. The enrichment information resides in its own
+      parser topology instead of in an extraction configuration file. The parser file defines the
+      input structure and how that data is used in enrichment. Streaming information goes to Apache
+      HBase rather than to Apache Kafka, so you must configure the writer by using both the
+         writerClassName and simple HBase enrichment writer (shew)
+      parameters. Define a parser topology in $METRON_HOME/zookeeper/parsers/user.json:  
+
+touch $METRON_HOME/config/zookeeper/parsers/user.json
+
+ Populate the file with the parser topology definition.
+For example, the following commands associate IP addresses with user names for the
+               Squid information.
+
+{
+ "parserClassName" : "org.apache.metron.parsers.csv.CSVParser"
+ ,"writerClassName" : "org.apache.metron.enrichment.writer.SimpleHbaseEnrichmentWriter"
+ ,"sensorTopic":"user"
+ ,"parserConfig":
+ {
+    "shew.table" : "enrichment"
+   ,"shew.cf" : "t"
+   ,"shew.keyColumns" : "ip"
+   ,"shew.enrichmentType" : "user"
+   ,"columns" : {
+      "user" : 0
+     ,"ip" : 1
+                }
+ }
+}
+
+
+
+parserClassName
+
+The parser name.
+
+writerClassName
+
+The writer destination. For streaming parsers, the destination is
+                              SimpleHbaseEnrichmentWriter.
+
+sensorTopic
+
+Name of the sensor topic.
+
+shew.table
+
+The simple HBase enrichment writer (shew) table to which you want to
+                           write.
+
+shew.cf
+
+The simple HBase enrichment writer (shew) column family.
+
+shew.keyColumns
+
+The simple HBase enrichment writer (shew) key.
+
+shew.enrichmentType
+
+The simple HBase enrichment writer (shew) enrichment type.
+
+columns
+
+The CSV parser information. In this example, the user name and IP
+                           address.
+
+
+
+This file fully defines the input structure and how that data can be used in
+               enrichment.
+ Push the configuration file to Apache ZooKeeper:  
+
+
+Create a Kafka topic sized to manage your estimated data flow:
+
+/usr/hdp/current/kafka-broker/bin/kafka-topics.sh --create --zookeeper $ZOOKEEPER_HOST:2181 --replication-factor 1 --partitions 1 --topic user
+
+Push the configuration file to ZooKeeper:
+
+$METRON_HOME/bin/zk_load_configs.sh -m PUSH -z $ZOOKEEPER_HOST:2181 -i $METRON_HOME/zookeeper
+
+
+ Start the user parser topology:   
+
+$METRON_HOME/bin/start_parser_topology.sh -s user -z $ZOOKEEPER_HOST:2181 -k $KAKFA_HOST:6667
+
+The parser topology listens for data streaming in and pushes the data to HBase.
+               Data is flowing into the HBase table, but you must ensure that the enrichment
+               topology can be used to enrich the data flowing past. Edit the new data source enrichment configuration at
+                  $METRON_HOME/config/zookeeper/enrichments/squid to associate the
+                  ip_src_addr with the user name:  
+
+{
+  "enrichment" : {
+    "fieldMap" : {
+      "hbaseEnrichment" : [ "ip_src_addr" ]
+    },
+    "fieldToTypeMap" : {
+      "ip_src_addr" : [ "user" ]
+    },
+    "config" : { }
+  },
+  "threatIntel" : {
+    "fieldMap" : { },
+    "fieldToTypeMap" : { },
+    "config" : { },
+    "triageConfig" : {
+      "riskLevelRules" : { },
+      "aggregator" : "MAX",
+      "aggregationConfig" : { }
+    }
+  },
+  "configuration" : { }
+}
+ Push the new data source enrichment configuration to ZooKeeper:  
+
+$METRON_HOME/bin/zk_load_configs.sh -m PUSH -z $ZOOKEEPER_HOST:2181 -i $METRON_HOME/zookeeper
+
+Parent topic: Enrichment Overview

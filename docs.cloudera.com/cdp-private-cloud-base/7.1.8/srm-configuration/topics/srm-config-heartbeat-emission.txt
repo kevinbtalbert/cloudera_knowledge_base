@@ -1,0 +1,99 @@
+Configuring SRM Driver heartbeat emissionCloudera Docs
+Configuring SRM Driver heartbeat emission
+The Streams Replication Manager (SRM) Driver spins up a Kafka Connect worker for each
+    possible replication in your deployment. However, some of these workers created for disabled
+    replications might be unnecessary. Unnecessary workers can be deactivated by configuring
+    heartbeat emission. This can help with minimizing unnecessary performance overhead.
+
+At startup the SRM Driver creates a Kafka Connect worker for each possible replication
+        based on the cluster aliases you have configured. This means that a Connect worker is
+        created not only for the replications that you specifically enable, but also for the ones
+        that are disabled. The difference between an enabled and disabled replication is that for
+        disabled replications not all possible connectors are set up. For disabled replications only
+        the MirrorHeartbeatConnector is created which is responsible for heartbeat emission. For
+        more information on Connect workers and connector instances created by the SRM Driver, see
+          Streams Replication Manager Architecture.
+In certain scenarios, some of the Connect workers set up for a disabled replication are
+        unnecessary. In such a case, you can configure SRM to not create these Connect workers and
+        to fully deactivate unutilized replications. This can be done by disabling heartbeat
+        emission for these replications. If heartbeat emission is disabled, the Connect worker and
+        MirrorHeartbeatConnector are not created. As a result, the replication associated with that
+        worker is fully deactivated. This can help in minimizing the performance overhead caused by
+        unnecessary Connect workers.
+Heartbeat emission is configured with the emit.heartbeats.enabled
+        property. This property can be set on a global as well as replication specific level. On a
+        global level, heartbeat emission can be turned on and off using the Enable
+          Heartbeats Cloudera Manager property. On a replication level, configuration is
+        done by adding emit.heartbeats.enabled to Streams Replication
+          Manager's Replication Configs with a replication prefix. For example,
+          A->B.emit.heartbeats.enabled=true.
+Which disabled replications are unnecessary differs from deployment to deployment. To
+        operate correctly, SRM requires that all clusters that act as a source have a heartbeats
+        topic. The heartbeats topic is created by Connect workers that target the cluster. This
+        means that at minimum, each source cluster must be targeted by at least a single enabled or
+        disabled replication. All other disabled replications can be fully deactivated. 
+For example, assume that you have three clusters, A, B, and C. The SRM Driver is targeting
+        all three clusters. Because the SRM Driver spins up a Connect worker for each possible
+        replication, the following Connect workers are created:
+B->A
+C->A
+A->B
+C->B
+A->C
+B->C
+
+Now, assume that the enabled replications, the ones that replicate data, are A->B, B->C,
+        and C->A. This means that all three clusters act as sources. Therefore, heartbeat emission
+        must be enabled in at least a single replication that is targeting the clusters. All other
+        replications can be fully deactivated. In this example, the enabled replications A->B, B->C,
+        and C->A target one of the clusters each. As a result, these replications take care of
+        heartbeating. Out of all replications, the following can be deactivated: 
+B->A
+C->B
+A->C
+This can be achieved by for example enabling heartbeat emission on a global level with
+          Enable Heartbeats and adding the following entries to
+          Streams Replication Manager's Replication Configs:
+        B->A.emit.heartbeats.enabled=false
+C->B.emit.heartbeats.enabled=false
+A->C.emit.heartbeats.enabled=false
+
+Consider another example. Assume that you have the same setup, but the enabled replications
+        are A->B and B->C. Cluster A acts as a source but is not targeted by any enabled
+        replication. In a case like this, you can only fully deactivate replications C->B and A->C.
+        One of the replications targeting cluster A (B->A or C->A) must remain disabled and cannot
+        be deactivated. Otherwise, a heartbeats topic will not be created in cluster A. 
+This can be achieved by for example enabling heartbeat emission on a global level with
+          Enable Heartbeats and adding the following entries to
+          Streams Replication Manager's Replication
+        Configs:C->B.emit.heartbeats.enabled=false
+A->C.emit.heartbeats.enabled=false
+B->A.emit.heartbeats.enabled=false
+In
+        this example, replication B->A was fully deactivated (heartbeat emission disabled) and
+        replication C->A was left disabled. Although replication C->A is disabled, it is still
+        actively emitting heartbeats as a result of Enable Heartbeats being
+        enabled.
+
+In Cloudera Manager, select the Streams Replication Manager Service.Go to Configuration.Configure heartbeat emission for your replications.You have two
+          options. You can enable heartbeat emission on a global level and disable it for the
+          required replications, or disable heartbeat emission on a global level and enable it for
+          the required replications. Enable globally and disable per replicationDisable globally and enable per replication
+Find and enable the Enable Heartbeats property.
+Find and configure the Streams Replication Manager's Replication
+                  Configs property.Add the emit.heartbeats.enabled
+                  property with a correct replication prefix. For
+                  example:A->B.emit.heartbeats.enabled=falseRepeat this step
+                  for all replications that you want to disable heartbeat emission for.
+
+Find and disable the Enable Heartbeats property 
+Find and configure the Streams Replication Manager's Replication
+                  Configs property.Add the emit.heartbeats.enabled
+                  property with correct replication prefix. For
+                  example:A->B.emit.heartbeats.enabled=trueRepeat this step
+                  for all replications that you want to enable heartbeat emission for.
+Click Save Changes.Restart Streams Replication Manager.
+Heartbeat emission is configured. Unnecessary replications are
+      fully deactivated.
+
+Related informationStreams Replication Manager Architecture

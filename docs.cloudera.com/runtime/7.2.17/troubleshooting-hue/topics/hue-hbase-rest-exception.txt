@@ -1,0 +1,128 @@
+Fixing authentication issues between HBase and HueCloudera Docs
+Fixing authentication issues between HBase and Hue
+An HBase feature improvement to the Thrift Server (HBASE-19852) may cause
+        authentication issues between HBase and Hue, and you may see the following error while
+        accessing the HBase tables from Hue: “Failed to authenticate to HBase Thrift Server,
+            check authentication configurations.”
+You may also see the following error in the Hue logs:
+                “RestException: Unable to authenticate <Response [401]>”. To fix
+            this issue, update the HBase configurations using Cloudera Manager.
+
+Log in to Cloudera Manager as an Administrator.
+
+Go to Clusters > HBase service > Instances and note the hostname of the host on which the HBase Thrift
+                    Server is running.
+If multiple Thrift Servers are configured, then find the one that Hue is
+                    configured to use.
+
+Go to Configuration > HBase Thrift Server Advanced Configuration Snippet (Safety Valve)
+                            for hbase-site.xml and add the following properties:
+
+
+
+Field
+Property
+
+
+
+Name
+hbase.thrift.spnego.principal
+
+
+Value
+HTTP/[***HOSTNAME-FROM-STEP2***]@REALMSubstitute
+                                                @REALM with the actual Kerberos
+                                            realm.
+
+
+Name
+hbase.thrift.spnego.keytab.file
+
+
+Value
+hbase.keytab
+
+
+
+
+Select the following options to enable the properties:
+
+
+Enable HBase Thrift Http Server
+Enable HBase Thrift Proxy Users
+
+
+
+Deselect the following properties:
+
+
+Enable HBase Thrift Server Compact Protocol
+Enable HBase Thrift Server Framed Transport
+
+
+Optional: 
+If you have not enabled SSL on your cluster, but if you have Kerberized your
+                    cluster, then add the following HBase configurations, without which you may
+                    encounter a NullPointerException error while starting the HBase
+                    Thrift Server:
+
+
+Add the following properties in the HBase Client Advanced
+                                Configuration Snippet (Safety Valve) for hbase-site.xml
+                            field:
+
+
+
+Field
+Property
+
+
+
+Name
+hbase.thrift.ssl.enabled
+
+
+Value
+false
+
+
+
+
+
+Add the following properties in the HBase Thrift Server
+                                Advanced Configuration Snippet (Safety Valve) for
+                                hbase-site.xml field:
+
+
+
+Field
+Property
+
+
+
+Name
+hbase.thrift.ssl.enabled
+
+
+Value
+false
+
+
+
+
+
+
+Click Save Changes.
+
+Go to Clusters > Hue service > Configuration > Hue Service Advanced Configuration Snippet (Safety Valve) for
+                            hue_safety_valve.ini and add the following lines:
+
+[hbase]
+thrift_transport=buffered
+
+
+Click Save Changes.
+
+Restart the HBase and Hue services to apply stale configurations.
+
+

@@ -1,0 +1,109 @@
+Performing a Data Hub OS upgradeCloudera Docs
+Performing a Data Hub OS upgrade
+Perform a Data Hub OS upgrade to update the OS and VM packages to those available in
+    the latest pre-warmed image.
+
+Required role: DatahubAdmin or Owner over the Data Hub
+
+
+Before performing any OS upgrade, make sure there is no data belonging to NiFi or NiFi
+        Registry on the root disk of the VM (this is the case for any version before CDP
+        7.2.10).
+If you have NiFi or NiFi Registry data on the root disk, run the commands below to move the
+        data to the right location prior to performing the upgrade. Before executing these scripts,
+        stop  the NiFi and NiFi Registry services.
+
+On the NiFi nodes:
+When upgrading from CDP 7.2.9 or lower versions
+hadoopDirectory=/hadoopfs/$(ls /hadoopfs/ | sort | tail -n 1)
+mkdir $hadoopDirectory/working-dir
+cp -R /var/lib/nifi/* $hadoopDirectory/working-dir
+echo "nifi.working.directory should be set to $hadoopDirectory/working-dir"latest_nifi_conf_directory=$(find /run/cloudera-scm-agent/process -name nifi\.properties | sort | tail -n 1)
+latest_nifi_conf_directory=${latest_nifi_conf_directory%nifi.properties}
+echo "Latest nifi conf directory used to copy files before migration: $latest_nifi_conf_directory"mkdir -p $hadoopDirectory/working-dir/config_backup
+chmod 755 $hadoopDirectory/working-dir/config_backup
+cp $latest_nifi_conf_directory/nifi.properties $hadoopDirectory/working-dir/config_backup
+cp $latest_nifi_conf_directory/bootstrap.conf $hadoopDirectory/working-dir/config_backup
+chown nifi:nifi -R $hadoopDirectory/working-dir
+After the bash script executes, update the nifi.working.directory
+          configuration value with what the script returns.
+To set nifi.working.directory, perform the following steps:
+
+Open the Cloudera Manager UI.
+Go to the NiFi service.
+Select the Configuration tab.
+Search for nifi.working.directory.
+Set the new value and click Save.
+
+noteWhen upgrading from CDP 7.2.10 or higher, no manual steps are
+          required.
+
+
+On the management node (where NiFi Registry is):
+hadoopDirectory=/hadoopfs/$(ls /hadoopfs/ | sort | tail -n 1)
+mkdir $hadoopDirectory/working-dir
+cp -R /var/lib/nifiregistry/* $hadoopDirectory/working-dir
+chown nifiregistry:nifiregistry -R $hadoopDirectory/working-dir
+echo "nifi.registry.working.directory should be set to
+$hadoopDirectory/working-dir"
+
+After the bash script executes, update the
+            nifi.registry.working.directory configuration value with what the
+          script returns.
+To set nifi.registry.working.directory, perform the following
+          steps:
+
+Open the Cloudera Manager UI.
+Go to the NiFi service.
+Select the Configuration tab.
+Search for nifi.registry.working.directory.
+Set the new value and click Save.
+
+
+After the new configuration values are set on the NiFi and the management nodes, start the
+        services.
+importantDuring an OS upgrade, any data on the root volume (parcels, service
+        logs, custom software) will be lost.
+
+
+In the left-hand menu of CDP, click Data Hubs and then select
+          the Data Hub to upgrade.Scroll to the bottom of the Data Hub details page and select the
+            Upgrade tab.From the drop-down menu, select the Target Runtime Version.
+          An OS upgrade is indicated by the text “OS Upgrade only” next to the target version.
+
+
+Click Upgrade.Monitor the upgrade progress using the Data Hub Event History
+          tab.
+
+If you upgraded from CDP 7.2.9 or a lower version, perform the following tasks on the NiFi
+        UI as post-upgrade steps when NiFi is available and running.
+
+Open the NiFi UI.
+Select Controller Settings from the Global
+            Menu available in the top-right corner of the NiFi UI.
+Go to the Management Controller Services tab of the
+            NiFi Settings dialog.
+Edit the Default Reporting Task SSL Context Service.
+Disable the running controller service by using the  button.
+Modify the Keystore Filename value to point to the new nifi
+              working directory. Use
+                /hadoopfs/fs4/working-dir/cm-auto-host_keystore.jks instead of
+                /var/lib/nifi/cm-auto-host_keystore.jks.
+Click APPLY.
+
+Enable the Default Reporting Task SSL Context Service using the
+             button.
+Go to the Reporting Tasks tab.
+Edit the Default Atlas Reporting Task by clicking the  button.
+Modify the Atlas Configuration Directory to point to the new
+              nifi working directory. Use /hadoopfs/fs4/working-dir/ instead of
+                /var/lib/nifi/.
+Modify the Kerberos Keytab to point to the new nifi working
+              directory. Use /hadoopfs/fs4/working-dir/nifi.keytab instead of
+                /var/lib/nifi/nifi.keytab.
+Click APPLY.
+
+
+
+
+Parent topic: Upgrading Data Hubs

@@ -1,0 +1,131 @@
+Bringing your own private DNSCloudera Docs
+Bringing your own private DNS
+Review this documentation if you are planning to use a private endpoint for Azure
+  Postgres with your own private DNS.
+
+
+Parent topic: Private endpoint for Azure Postgres
+Requirements and limitations
+The following limitations apply when using your own private DNS:
+
+
+
+Only Azure’s private DNS zone is supported. Using an on-prem DNS is not
+      supported.
+
+
+Private endpoints can only be used with a single customer-provided resource group.
+      They cannot be used with CDP-created multiple resource groups. When creating an environment
+      from the UI, the “Create Private Endpoints” option is disabled if you select the option for
+      CDP to create multiple resource groups. If using CDP CLI, a validation error appears if this
+      option is used with CDP creating multiple resource groups.
+
+
+You can only use private endpoints with your own private DNS zone if you specify
+      an existing VNet for the environment. If you chose CDP to create your network and enable
+      private endpoints, then CDP is going to manage the private DNS zone for you.
+
+
+The private DNS zone provided to CDP must have the name
+       “privatelink.postgres.database.azure.com“. Furthermore, it must be in a subscription
+      that is accessible to the service principal used by the CDP app-based credential; That is, the
+      subscription where the private DNS zone is created must be in the same tenant where the
+      service principal is located.
+
+
+
+
+
+Prerequisites
+When bringing your own private DNS, you should meet the following
+  prerequisites:
+Disable private endpoint network policies
+Only subnets that have private endpoint network policies turned off are eligible for
+    private endpoint creation, because network security groups (NSG) are not supported for private
+    endpoints.
+You can use the following Azure CLI command to disable private endpoint network
+    policies for a certain subnet:
+
+az network vnet subnet update \
+  --name <subnet-name> \
+  --resource-group <resource-group-name> \
+  --vnet-name <vnet-name> \
+  --disable-private-endpoint-network-policies true
+
+For example: 
+az network vnet subnet update \
+  --name default-2 \
+  --resource-group my-cdp-rg \
+  --vnet-name my-azure-vnet \
+  --disable-private-endpoint-network-policies true
+
+Create a private DNS zone and link it to your VNet
+If you choose to provide your own Azure private DNS zone then you should: 
+
+
+Create a private DNS zone with the name
+       “privatelink.postgres.database.azure.com“ in any subscription accessible to the
+      service principal used by the CDP app-based credential; That is, the subscription where the
+      private DNS zone is created must be in the same tenant where the service principal is
+      located.
+To create a private DNS zone, you can use the following Azure CLI command:
+            az network private-dns zone create \    
+    --name privatelink.postgres.database.azure.com \
+    --resource-group <YOUR_DNS_RESOURCE_GROUP> \
+    --subscription <YOUR_SUBSCRIPTION_FOR_DNS>
+
+
+Link it to the VNet that you are planning to use for the CDP environment.
+You can do this using the following Azure CLI
+            command:az network private-dns link vnet create \
+    --name <DESIRED_LINK_NAME> \
+    --resource-group <YOUR_VNET_RESOURCE_GROUP> \
+    --zone-name privatelink.postgres.database.azure.com \
+    --virtual-network <YOUR_VNET_RESOURCE_ID> \
+    --subscription <YOUR_VNET_SUBSCRIPTION> 
+
+
+
+Ensure that CDP has adequate permissions
+Ensure that the role that you are using for the Azure credential has the permissions
+    mentioned in Role definition 2: Allows CDP to access and use only a single
+      existing resource group and create private endpoints.
+Additionally, if your DNS zone is outside of the single resource group that you are
+    planning to provide to CDP, the following additional permissions are required for the service
+    principal to be able to discover, validate, and use the DNS zone (add and remove A records).
+    These additional permissions need to be included in a separate role definition and assigned
+    separately. 
+The placeholders in bold must be replaced with actual values:
+
+
+{SUBSCRIPTION-ID} - The ID of the subscription where the DNS zone is located.
+
+
+{RESOURCE-GROUP-NAME} - The name of the resource group where the DNS zone is
+      located.
+
+
+{
+    "Name": "Cloudera Management Console Azure Operator for Using Private DNS Zones",
+    "IsCustom": true,
+    "Description": "Can list, validate and use private DNS zones",
+    "Actions": [
+      "Microsoft.Network/privateEndpoints/privateDnsZoneGroups/read",
+      "Microsoft.Network/privateEndpoints/privateDnsZoneGroups/write",
+      "Microsoft.Network/privateDnsZones/join/action",
+      "Microsoft.Network/privateDnsZones/read",
+      "Microsoft.Network/privateDnsZones/virtualNetworkLinks/read"
+    ],
+    "NotActions": [],
+    "DataActions": [
+    ],
+    "NotDataActions": [],
+    "AssignableScopes": [
+      "/subscriptions/{SUBSCRIPTION-ID}/resourcegroups/{RESOURCE-GROUP-NAME}"
+    ]
+  }
+
+
+
+Related informationManage network policies for private endpointsQuickstart: Create an Azure private DNS zone using the Azure
+                     portal

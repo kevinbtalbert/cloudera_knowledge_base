@@ -1,0 +1,74 @@
+Kerberos authentication using the ticket cacheCloudera Docs
+Kerberos authentication using the ticket cache
+You can configure Kerberos authentication using a ticket cache. To do so, you
+        authenticate with Kerberos to acquire a valid Kerberos ticket. Then you connect to Kafka
+        authenticating with the Kerberos ticket.
+You must have produced data to a Kafka topic and consumed
+            data from the Kafka topic.
+
+Create a file called client-kerberos.properties with the
+                    following content:
+
+security.protocol=SASL_SSL
+sasl.mechanism=GSSAPI
+sasl.kerberos.service.name=kafka
+ssl.truststore.location=/var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_truststore.jks
+sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required useTicketCache=true;
+
+
+Before connecting to Kafka, you need to authenticate successfully with Kerberos
+                    to acquire a valid Kerberos ticket. You can use kinit for that.
+                    Run the following commands, replacing srv_kafka-client with
+                    your Machine User name. When prompted for the password, provide the Workload
+                    Password that you had set.
+
+kdestroy
+
+kinit srv_kafka-client
+
+
+If the command is successful, you should have a valid ticket in your ticket
+                    cache, as shown by the following klist command:
+
+$ klist
+Ticket cache: FILE:/tmp/krb5cc_1501600556
+Default principal: srv_kafka-client@XYZ.SITE
+
+Valid starting       Expires              Service principal
+05/07/2020 03:10:58  05/08/2020 03:10:52  krbtgt/XYZ.SITE@XYZ.SITE
+	renew until 05/14/2020 03:10:52
+If the command is not successful, your ticket cache should be empty, as shown
+                        in the following example:
+$ klist
+klist: No credentials cache found (filename: /tmp/krb5cc_1501600556)
+
+
+After you have a valid ticket in the ticket cache you can run the following
+                    commands to connect to Kafka, authenticating with the Kerberos ticket.
+
+BROKER_HOST=$(hostname -f)
+
+kafka-console-consumer \
+  --bootstrap-server $BROKER_HOST:9093 \
+  --consumer.config client-kerberos.properties \
+  --topic machine-data \
+  --group machine-data-$RANDOM \
+  --from-beginning
+You should see the contents of the machine-data topic as
+                        follows:
+Hello, Kafka!
+
+
+After testing, destroy the ticket in your ticket cache:
+
+kdestroy
+
+If you try to run the kafka-console-consumer command again,
+                    without the ticket, you see authentication errors like the following
+                    example:Caused by: javax.security.auth.login.LoginException: 
+Could not login: the client is being asked for a password, but the Kafka client code does not 
+currently support obtaining a password from the user. not available to garner  authentication 
+information from the user
+
+
+Parent topic: Use Kerberos authentication

@@ -1,0 +1,58 @@
+Sizing estimation based on network and disk message throughputCloudera Docs
+Sizing estimation based on network and disk message throughput
+Learn how to estimate the size of your cluster based on network and disk throughput
+    requirements. 
+There are many variables that go into determining the correct hardware footprint for a Kafka
+      cluster. The most accurate way to model your use case is to simulate the load you expect on
+      your own hardware. You can do this using the load generation tools that ship with Kafka,
+        kafka-producer-perf-test and kafka-consumer-perf-test. 
+However, if you want to size a cluster without simulation, a very simple rule could be to
+      size the cluster based on the amount of disk-space required (which can be computed from the
+      estimated rate at which you get data times the required data retention period).
+A slightly more sophisticated estimation can be done based on network and disk throughput
+      requirements. To make this estimation, let's plan for a use case with the following
+      characteristics:
+
+W - MB/sec of data that will be written 
+R - Replication factor 
+C - Number of consumer groups, that is the number of readers for each
+        write 
+
+Kafka is mostly limited by the disk and network throughput.
+The volume of writing expected is W * R (that is, each replica writes each
+      message). Data is read by replicas as part of the internal cluster replication and also by
+      consumers. Because every replicas but the master read each write, the read volume of
+      replication is (R-1) * W. In addition each of the C
+      consumers reads each write, so there will be a read volume of C * W. This
+      gives the following:
+
+Writes: W * R
+Reads: (R+C- 1) * W
+
+However, note that reads may actually be cached, in which case no actual disk I/O happens. We
+      can model the effect of caching fairly easily. If the cluster has M MB of
+      memory, then a write rate of W MB/second allows M/(W * R)
+      seconds of writes to be cached. So a server with 32 GB of memory taking writes at 50 MB/second
+      serves roughly the last 10 minutes of data from cache. Readers may fall out of cache for a
+      variety of reasons—a slow consumer or a failed server that recovers and needs to catch up. An
+      easy way to model this is to assume a number of lagging readers you to budget for. To model
+      this, let’s call the number of lagging readers L. A very pessimistic
+      assumption would be that L = R + C -1, that is that all consumers are lagging
+      all the time. A more realistic assumption might be to assume no more than two consumers are
+      lagging at any given time. 
+Based on this, we can calculate our cluster-wide I/O requirements:
+
+Disk Throughput (Read + Write): W * R + L * W
+Network Read Throughput: (R + C -1) * W
+Network Write Throughput: W * R
+
+A single server provides a given disk throughput as well as network throughput. For example,
+      if you have a 1 Gigabit Ethernet card with full duplex, then that would give 125 MB/sec read
+      and 125 MB/sec write; likewise 6 7200 SATA drives might give roughly 300 MB/sec read + write
+      throughput. Once we know the total requirements, as well as what is provided by one machine,
+      you can divide to get the total number of machines needed. This gives a machine count running
+      at maximum capacity, assuming no overhead for network protocols, as well as perfect balance of
+      data and load. Since there is protocol overhead as well as imbalance, you want to have at
+      least 2x this ideal capacity to ensure sufficient capacity.
+
+Related informationkafka-*-perf-testParent topic: Cluster sizing

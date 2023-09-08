@@ -1,0 +1,46 @@
+Use SparkCloudera Docs
+Use Spark
+You can write data to HBase from Apache Spark using def
+            saveAsHadoopDataset(conf: JobConf): Unit.
+This example is adapted from a post on the spark-users mailing
+            list.// Note: mapred package is used, instead of the
+                    // mapreduce package which contains new hadoop APIs.
+                    
+                    import org.apache.hadoop.hbase.mapred.TableOutputFormat
+                    import org.apache.hadoop.hbase.client
+                    // ... some other settings
+                    
+                    val conf = HBaseConfiguration.create()
+                    
+                    // general hbase settings
+                    conf.set("hbase.rootdir",
+                    "hdfs://" + nameNodeURL + ":" + hdfsPort + "/hbase")
+                    conf.setBoolean("hbase.cluster.distributed", true)
+                    conf.set("hbase.zookeeper.quorum", hostname)
+                    conf.setInt("hbase.client.scanner.caching", 10000)
+                    // ... some other settings
+                    
+                    val jobConfig: JobConf = new JobConf(conf, this.getClass)
+                    
+                    // Note:  TableOutputFormat is used as deprecated code
+                    // because JobConf is an old hadoop API
+                    jobConfig.setOutputFormat(classOf[TableOutputFormat])
+                    jobConfig.set(TableOutputFormat.OUTPUT_TABLE, outputTable)
+Next, provide the mapping between how the data looks in Spark and how
+            it should look in HBase. The following example assumes that your HBase
+            table has two column families, col_1 and col_2, and that your data is
+            formatted in sets of three in Spark, like (row_key, col_1,
+            col_2).def convert(triple: (Int, Int, Int)) = {
+                val p = new Put(Bytes.toBytes(triple._1))
+                p.add(Bytes.toBytes("cf"),
+                Bytes.toBytes("col_1"),
+                Bytes.toBytes(triple._2))
+                p.add(Bytes.toBytes("cf"),
+                Bytes.toBytes("col_2"),
+                Bytes.toBytes(triple._3))
+                (new ImmutableBytesWritable, p)
+                }
+To write the data from Spark to HBase, you might
+            use:new PairRDDFunctions(localData.map(convert)).saveAsHadoopDataset(jobConfig)
+
+Parent topic: Importing data into HBase

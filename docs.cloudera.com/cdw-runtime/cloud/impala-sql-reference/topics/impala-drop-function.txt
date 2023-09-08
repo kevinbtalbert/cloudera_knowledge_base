@@ -1,0 +1,81 @@
+DROP FUNCTION statementCloudera Docs
+DROP FUNCTION statement
+The DROP FUNCTION statement removes a user-defined function (UDF), so
+    that it is not available for execution during Impala SELECT or
+      INSERT operations.
+Syntax:
+
+      To drop C++ UDFs and UDAs:
+    DROP [AGGREGATE] FUNCTION [IF EXISTS] [db_name.]function_name(type[, type...])note
+ The preceding syntax, which includes the function
+          signature, also applies to Java UDFs that were created using the corresponding
+            CREATE FUNCTION syntax that includes the argument and return types.
+          After upgrading to Impala 2.5 or higher, consider re-creating all Java UDFs with the
+            CREATE FUNCTION syntax that does not include the function signature.
+          Java UDFs created this way are now persisted in the metastore database and do not need to
+          be re-created after an Impala restart. 
+
+      To drop Java UDFs (created using the CREATE FUNCTION syntax with no function signature):
+    DROP FUNCTION [IF EXISTS] [db_name.]function_name
+Statement type: DDL
+      
+Usage notes:
+
+      Because the same function name could be overloaded with different argument signatures, you specify the
+      argument types to identify the exact function to drop.
+    
+Restrictions:
+ In Impala 2.5 and higher, Impala
+        UDFs and UDAs written in C++ are persisted in the metastore database. Java UDFs are also
+        persisted, if they were created with the new CREATE FUNCTION syntax for
+        Java UDFs, where the Java function argument and return types are omitted. Java-based UDFs
+        created with the old CREATE FUNCTION syntax do not persist across restarts
+        because they are held in the memory of the catalogd daemon. Until you
+        re-create such Java UDFs using the new CREATE FUNCTION syntax, you must
+        reload those Java-based UDFs by running the original CREATE FUNCTION
+        statements again each time you restart the catalogd daemon. Prior to
+        Impala 2.5 the requirement to reload functions after a restart applied to both C++ and Java
+        functions. 
+Cancellation: Cannot be cancelled.
+      
+HDFS permissions:
+
+      The user ID that the impalad daemon runs under,
+      typically the impala user, does not need any
+      particular HDFS permissions to perform this statement.
+      All read and write operations are on the metastore database,
+      not HDFS files and directories.
+    
+Examples:
+ The following example shows how to drop Java functions created
+        with the signatureless CREATE FUNCTION syntax in Impala 2.5 and higher.
+        Issuing DROP FUNCTION function_name removes all the
+        overloaded functions under that name. See the CREATE FUNCTION statement for a
+        longer example showing how to set up such functions in the first place.
+create function my_func location '/user/impala/udfs/udf-examples-cdh570.jar'
+  symbol='com.cloudera.impala.TestUdf';
+
+show functions;
++-------------+---------------------------------------+-------------+---------------+
+| return type | signature                             | binary type | is persistent |
++-------------+---------------------------------------+-------------+---------------+
+| BIGINT      | my_func(BIGINT)                       | JAVA        | true          |
+| BOOLEAN     | my_func(BOOLEAN)                      | JAVA        | true          |
+| BOOLEAN     | my_func(BOOLEAN, BOOLEAN)             | JAVA        | true          |
+...
+| BIGINT      | testudf(BIGINT)                       | JAVA        | true          |
+| BOOLEAN     | testudf(BOOLEAN)                      | JAVA        | true          |
+| BOOLEAN     | testudf(BOOLEAN, BOOLEAN)             | JAVA        | true          |
+...
+
+drop function my_func;
+show functions;
++-------------+---------------------------------------+-------------+---------------+
+| return type | signature                             | binary type | is persistent |
++-------------+---------------------------------------+-------------+---------------+
+| BIGINT      | testudf(BIGINT)                       | JAVA        | true          |
+| BOOLEAN     | testudf(BOOLEAN)                      | JAVA        | true          |
+| BOOLEAN     | testudf(BOOLEAN, BOOLEAN)             | JAVA        | true          |
+...
+
+Related informationCREATE FUNCTION statementParent topic: Impala SQL statements

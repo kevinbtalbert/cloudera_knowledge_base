@@ -1,0 +1,62 @@
+Connect workersCloudera Docs
+Connect workers
+Learn about the Connect workers created by the Streams Replication Manager
+    Driver.
+The Streams Replication Manager Driver role (SRM Driver) wraps multiple Connect workers in
+      its process. Each Connect worker corresponds to a possible replication. At startup, if a
+      target is specified for the replication in the Streams Replication Manager Driver
+        Target Cluster property, a Connect worker is created for each possible cluster
+      pair based on the aliases present in Streams Replication Manager Cluster
+        alias. This means that by default for each possible replication, there is a
+      running Connect worker, regardless of whether the replication is enabled. For enabled
+      replications, the Connect worker creates and manages all three Connectors
+      (MirrorSourceConnector, MirrorCheckpointConnector, and MirrorHeartbeatConnector). For disabled
+      replications, the Connect worker only creates and manages a MirrorHeartbeatConnector. The
+      MirrorHeartbeatConnector is spun up to ensure that the heartbeats topic is created on all
+      clusters which might be the source of a replication. 
+In certain scenarios however, some of the Connect workers set up for disabled replications
+      are unnecessary. In such a case, you can configure SRM to fully deactivate disabled
+      replications that are unutilized. This can be done by disabling heartbeat emission for these
+      replications. If heartbeat emission is disabled, the Connect worker and
+      MirrorHeartbeatConnector are not created. As a result, the replication associated with that
+      worker is fully deactivated. This can help in minimizing the performance overhead caused by
+      unnecessary Connect workers. For more information on how disable heartbeat emission, see
+        Configuring SRM Driver heartbeat emission.
+The Connect workers always coordinate using the target Kafka cluster. They join a Connect
+      group which is dedicated to a specific replication. This means that even when there are
+      multiple replications targeting the same cluster, the replications are managed and
+      load-balanced separately, through dedicated Connect groups.
+
+Connect internal topics
+SRM creates a separate Connect cluster as well as three internal Kafka topics for each
+        replication. The internal topics are used by the Connect clusters to store their state.
+        These internal topics are all located in the target cluster of the replication. The topic
+        names reference the source cluster alias. 
+
+The three internal topics are as follows:
+mm2-configs.[***SOURCE ALIAS***].internalStores
+              the Connector and Task configurations. Expected to be a single partition topic with
+                cleanup.policy=compact. The records of the topic are generated
+              based on SRM's configuration at startup. Losing the data does not cause issues for SRM
+              after the service is restarted.
+mm2-offsets.[***SOURCE ALIAS***].internalStores
+              the committed source offsets of SRM. SRM uses this internal topic to track its
+              progress in the replication of the source topic. Expected to be a multi-partition
+              topic with cleanup.policy=compact. The records of the topic are
+              crucial for tracking the state of replication. Losing the data causes SRM to restart
+              the replication of source topics, which leads to data duplication in the target
+              cluster.
+mm2-status.[***SOURCE ALIAS***].internalStores
+              the current status of Connectors and Tasks. Expected to be a multi-partition topic
+              with cleanup.policy=compact. The records of the topic are created for
+              monitoring purposes and do not affect replication. Losing the data does not cause
+              issues for SRM after the service is restarted.
+All three internal topics are created by SRM at startup with the expected
+        configurations. Cloudera does not recommend reconfiguring or deleting these topics manually.
+        Doing so can cause issues with replication, which might result in data loss. However, if the
+        topics are created with an incorrect configuration, manual reconfiguration is required. In a
+        case like this, SRM must be stopped, and the topic properties must be updated with correct
+        values. Updating topic properties can be done with the kafka-configs tool. 
+
+
+Related informationkafka-configsConfiguring SRM Driver heartbeat emissionParent topic: Streams Replication Manager Driver

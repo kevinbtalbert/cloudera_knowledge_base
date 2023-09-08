@@ -1,0 +1,566 @@
+General known issues with Cloudera Data EngineeringCloudera Docs
+General known issues with Cloudera Data Engineering
+Learn about the general known issues with the Cloudera Data
+    Engineering (CDE) service on public clouds, the impact or changes to the
+    functionality, and the workaround.
+
+
+DEX-9939: Tier 2 Node groups are created with the same size as
+          Tier 1 node groups during service creation. They cannot be edited during service edit
+If a service is created with 1 as the minimum on-demand scale limit, two nodes will run
+          for Tier 1 and Tier 2. Even if a service is edited with the minimum reduced to 0, the Tier
+          2 node will still run. This will be fixed in the CDE 1.20 release.
+You must manually edit the node group parameters from the
+          AWS or Azure console. First, locate the log titled "Started provisioning a managed
+          cluster, provisionerID: liftie-xxxxxxxx" and locate the Liftie ID for the cluster so that
+          you can continue with the steps below. 
+In AWS:
+
+
+Log in to the AWS Management Console.
+Navigate to EC2 >  Auto Scaling
+              groups.
+Find <liftie-id>-spt2-<hash>-NodeGroup and click on the
+              name to open the Instance Group Details page.
+Under Group Details, click Edit.
+Update Maximum capacity from 5 to 10, and click
+                Update.
+Repeat the steps above to update the Maximum capacity of the
+                <liftie-id>-cmp2-5<hash>-NodeGroup from 2 to 5. The
+              Cluster Autoscaler implements the changes and the issue will resolve. The number of
+              simultaneously running jobs will increase.
+
+
+In Azure:
+Navigate to the Kubernetes Service Details > Log page.
+Navigate to the Node Pools page, and locate the Node Pool starting with
+                cmp2.
+Click on Scale Node pools and edit the capacity.
+
+
+
+
+
+DEX-9852: FreeIPA certificate mismatch issues for new Spark 3.3
+          Virtual Clusters
+In CDE 1.19, when creating a new Virtual Cluster based on Spark 3.3, and submitting any
+          job in the pods, the following error occurs: "start TGT gen failed for user : rpc error:
+          code = Unavailable desc = Operation not allowed while app is in recovery state."
+Manually copy over the certificate from the FreeIPA
+          server.
+
+
+
+
+DEX-10147: Grafana issue for virtual clusters with the same
+          name
+In CDE 1.19, when you have two different CDE services with the same name under the same environment, and you click the Grafana charts for the second CDE service, metrics for the Virtual Cluster in the first CDE service will display.
+After you have upgraded CDE, you must verify other things in the upgraded CDE cluster except the data shown in Grafana. Once you have verified everything in the new upgraded CDE service, the old CDE service should be deleted and the Grafana issue will be fixed.
+
+
+
+DEX-9932: Name length causes Pod creation error for CDE
+          Sessions
+In CDE 1.19, the K8s pod name has a limitation of 63 Characters, and CDE Sessions has a
+          name length of 56 maximum characters.
+Create a CDE Session with a name of less than 56 characters
+          to avoid the pod creation error.
+
+
+
+
+DEX-9895: CDE Virtual Cluster API response displays default Spark version as 2.4.7
+In CDE 1.19, the Spark version 3.2.3 is the expected default in a CDE Spark Virtual Cluster, but Spark 2.4.7 displays instead. This issue will be fixed in CDE 1.20.
+        
+
+
+
+
+DEX-9112: VC deployment frequently fails when deployed through the CDP CLI
+In CDE 1.19, when a Virtual Cluster is deployed using the CDP CLI, it fails frequently as the pods fail to start. However, creating a Virtual cluster using the UI is successful.
+Ensure that you are using proper units to --memory-requests in "cdp de" CLI, for example "--memory-requests 10Gi".
+
+
+
+
+DEX-9790: Single tab Session support for Virtual Cluster
+          selection
+In CDE 1.19, the Virtual Cluster selection in the Jobs, Resources, Runs, and Sessions page is not preserved if the user attempts to open CDE in another browser tab/window. 
+When you open CDE in another tab, you must re-select the Virtual Cluster that you want to use in the new tab.
+        
+
+
+
+
+DEX-10044: Handle adding tier 2 auto scaling groups during in-place upgrades
+Since auto scaling groups (ASGs) are not added or updated during the upgrade, the tier 2
+          ASGs are not created. This resulted in pods that were unable to be scheduled. This error
+          applies to services created in CDE 1.18 and then upgraded to 1.19.
+Create a new CDE service as this issue won't be seen on a new CDE 1.19 service because
+          this error applies only to upgraded clusters.
+
+
+
+
+DEX-10107: Spark 3.3 in CDE 1.19 has a limitation of characters for job names
+Jobs with longer names over 23 characters can fail in Spark 3.3 with the following
+          exception: 23-05-14 10:14:16 ERROR ExecutorPodsSnapshotsStoreImpl: Going to stop
+            due to IllegalArgumentException java.lang.IllegalArgumentException: '$JOB_NAME' in
+            spark.kubernetes.executor.podNamePrefix is invalid. must conform https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names
+            and the value length <= 47Change the name of the job:
+            
+Clone the job with a new name using the CDE UI, CLI, or API.
+Set the app name in the job itself:conf.setAppName("Custom Job
+                Name").
+
+
+
+
+
+DEX-10055: Interacting with a killed session
+When you interact with a long-running killed Spark session, the session might become
+          unresponsive. Refrain from interacting with the long-running killed session. This will be
+          fixed in a future release of CDE.
+
+
+
+
+DEX-9879: Infinite while loops not working in CDE Sessions
+If an infinite while loop is submitted as a statement, the session will be stuck
+          infinitely. This means that new sessions can't be sent and the Session stays in a busy
+          state. Sample input:while(True) {
+  print("hello")
+} 
+
+
+Copy and use the DEX_API that can be found on the Virtual Cluster details page to
+              cancel the statement: POST
+                $DEX_API/sessions/{session-name}/statements/{statement-id}/cancel. The
+              Statement ID can be found by running the cde sessions statements
+              command from the CDE CLI.
+Kill the Session and create a new one.
+
+
+
+
+
+
+DEX-9898: CDE CLI input reads break after interacting with a Session
+After interacting with a Session through the sessions interact command,
+          input to the CDE CLI on the terminal breaks. In this example below, ^M displays instead of
+          proceeding:> cde session interact --name sparkid-test-6
+WARN: Plaintext or insecure TLS connection requested, take care before continuing. Continue? yes/no [no]: yes^M 
+Open a new terminal and type your CDE commands.
+
+
+
+
+DEX-9881: Multi-line command error for Spark-Scala Session types
+          in the CDE CLI
+In CDE 1.19, Multi-line input into a Scala session on the CDE CLI will not work as
+          expected, in some cases. The CLI interaction will throw an error before reading the
+          complete input. Sample input:scala> type
+     |  
+Use the UI to interact with Scala sessions. A newline is expected
+          in the above situation. In CDE 1.19, only unbalanced brackets will generate a new line. In
+          CDE 1.20, all valid Scala newline conditions will be handled:
+          scala> customFunc(
+     | (
+     | )
+     | )
+     | 
+
+
+
+DEX-9756: Unable to run large raw Scala jobs
+Scala code with more than 2000 lines could result in an error.
+To avoid the error, increase the stack size. For example,
+            "spark.driver.extraJavaOptions=-Xss4M",
+            "spark.driver.extraJavaOptions=-Xss8M", and so forth.
+
+
+
+
+DEX-8679: Job fails with permission denied on a RAZ
+          environment
+When running a job that has access to files is longer than the delegation token renewal
+          time on a RAZ-enabled CDP environment, the job will fail with the following
+          error:Failed to acquire a SAS token for get-status on /.../words.txt due to org.apache.hadoop.security.AccessControlException: Permission denied.
+
+
+
+
+DEX-8769: The table entity type on Atlas is spar_tables instead of hive_tables on Spark3
+          Virtual Clusters
+Tables that are created using a Spark3 Virtual Cluster on an AWS setup will have
+          spark_tables type instead of hive_tables on Atlas Entities.
+On a Spark3 Virtual Cluster, enableHiveSupport() must be
+          called in the following way: spark =
+            SparkSession.builder.enableHiveSupport().getOrCreate()  You may also use
+          Spark2 in lieu of Spark3 as this issue does not occur in Spark2. 
+
+
+
+
+DEX-8774: Job and run cloning is not fully supported in CDE 1.17
+          through 1.18.1
+Currently, cloning job and runs are not supported in CDE 1.17 through 1.18.1.
+Clone jobs and run operations by navigating to the
+            Administration page, clicking View Jobs on
+          the respective Virtual Cluster.
+
+
+
+DEX-3706: The CDE home page not displaying for some users
+The CDE home page will not display Virtual Clusters or a Quick Action bar if the user is part of hundreds of user groups or subgrooups.
+The user must access the Administration page and open the Virtual Cluster of choice to perform all Job-related actions.
+        This issue will be fixed in CDE 1.18.1
+
+
+DEX-8515: The Spark History Server user interface is not visible in CDE
+During job execution in CDE 1.18, the Spark History Server user interface is not
+          visible. This error will be fixed in CDE 1.18.1.
+
+
+
+
+DEX-6163: Error message with Spark 3.2 and CDE
+For CDE 1.16 through 1.18, if you experience an error message, "Service account may have
+          been revoked" with Spark 3.2 and CDE, note that this is not the core issue despite what
+          the error message states. Look for other exceptions as it is a harmless error and only
+          displays after a job fails due to another reason. The error message displays as part
+          of the shutdown process. This issue will be fixed in CDE 1.18.1.
+
+
+
+
+DEX-7653: Updating Airflow Job/Dag file throws a 404 error
+A 404 error occurs when you update an Airflow Job/Dag file with a modified DAG ID or
+          name when you initiate the following steps:
+Create an Airflow job using a Simple Dag file. Use the Create
+                Only option.
+Edit the Airflow Job and delete the existing DAG file.
+Upload the same DAG file with a modified DAG ID and Name from it's content.
+Choose a different Resource Folder.
+Use the Update and Run option.The 404 error occurs.To avoid this issue,
+                ensure that you do not modify the DAG ID in step 3. If you must change your DAG ID
+                in the dag file, then create a new file.This issue will be fixed in CDE
+                1.18.1.
+
+
+
+
+
+DEX-8283: False Positive Status is appearing for the Raw Scala Syntax issue
+Raw Scala jobs that fail due to syntax errors are reported as succeeded by CDE as
+          displayed in this
+          example:spark.range(3)..show() 
+
+The job will fail with the following error and will be logged in the driver stdout
+          log:/opt/spark/optional-lib/exec_invalid.scala:3: error: identifier expected but '.' found.
+    spark.range(3)..show()
+                   ^ 
+This issue will be fixed in CDE 1.18.1.
+
+
+
+
+DEX-8281: Raw Scala Scripts fail due to the use of the case class
+Implicit conversions which involve implicit Encoders for case classes, that are usually
+          supported by importing spark.implicits._, don't work in Raw Scala jobs in CDE. These
+          include converting Scala objects, including RDD Dataset DataFrame, and Columns. For
+          example, the following operations will fail on
+          CDE:import org.apache.spark.sql.Encoders
+import spark.implicits._
+case class Case(foo:String, bar:String)
+
+// 1: an attempt to obtain schema via the implicit encoder for case class fails
+val encoderSchema = Encoders.product[Case].schema
+encoderSchema.printTreeString()
+
+// 2: an attempt to convert RDD[Case] to DataFrame fails
+val caseDF = sc
+	.parallelize(1 to 3)
+	.map(i => Case(f"$i", "bar"))
+	.toDF
+
+// 3: an attempt to convert DataFrame to Dataset[Case] fails
+val caseDS = spark
+	.read
+	.json(List("""{"foo":"1","bar":"2"}""").toDS)
+	.as[Case]
+
+Whereas conversions that involve implicit encoders for primitive types are
+          supported:val ds = Seq("I am a Dataset").toDS
+val df = Seq("I am a DataFrame").toDF
+Notice that List, Row,
+            StructField, and createDataFrame are used below
+          instead of case class and
+          .toDF():val bankRowRDD = bankText.map(s => s.split(";")).filter(s => s(0) != "\"age\"").map(
+  s => Row(
+    s(0).toInt,
+    s(1).replaceAll("\"", ""),
+    s(2).replaceAll("\"", ""),
+    s(3).replaceAll("\"", ""),
+    s(5).replaceAll("\"", "").toInt
+  )
+)
+
+val bankSchema = List(
+  StructField("age", IntegerType, true),
+  StructField("job", StringType, true),
+  StructField("marital", StringType, true),
+  StructField("education", StringType, true),
+  StructField("balance", IntegerType, true)
+)
+
+val bank = spark.createDataFrame(
+  bankRowRDD,
+  StructType(bankSchema)
+)
+
+
+bank.registerTempTable("bank")
+
+
+
+
+ DEX-7001: When Airflow jobs are run, the privileges of the user
+          who created the job is applied and not the user who submitted the job
+If you have an Airflow job (created by User A) that contains Spark
+          jobs, and the Airflow job is run by another user (User B), the Spark jobs are run as User
+          A instead of the user who ran it. Regardless of who submits the Airflow job, the Airflow
+          job is run with the user privileges of the user who created the job. This causes issues
+          when the job submitter has lesser privileges than the job owner who has higher privileges.
+          We recommend that the Spark and Airflow jobs must be created and run by the same user.
+        
+
+
+
+
+CDPD-40396 Iceberg migration fails on partitioned Hive table created by Spark without
+          location
+Iceberg provides a migrate procedure to migrate a Parquet/ORC/Avro Hive
+          table to Iceberg. If the table was created using Spark and the location is not specified,
+          and is partitioned, the migration fails. 
+If you are using Data Lake 7.2.15.2 or higher, the above
+          known-issue will not occur. Otherwise, you’ll need to unset the default table property of
+          'TRANSLATED_TO_EXTERNAL' from 'true' by completing the following:
+Run ‘ALTER TABLE ... UNSET TBLPROPERTIES ('TRANSLATED_TO_EXTERNAL') to unset the
+              property.
+Run the migrate procedure.
+
+
+
+
+
+DEX-5857 Persist job owner across CDE backup restores
+Currently, the user who runs the cde backup restore command
+            has permissions, by default, to run the Jobs. This may cause CDE jobs to fail if the
+            workload user differs from the user who runs the Jobs on Source CDE Service where the
+            backup was performed. This failure is due to the Workload User having different
+            privileges as the user who is expected to run the job.
+        
+Ensure that the cde job restore command is performed by the same user who is running the CDE Jobs in the Source CDE Cluster where the backup was performed. Additionally, you can ensure the User running the Restore has the same set of Permission as the User running the Job in Source CDE Cluster where the Backup was performed.
+        
+
+
+
+
+DEX-7483 User interface bug for in-place upgrade (Tech Preview)
+The user interface incorrectly states that the Data Lake version 7.2.15 and above is
+          required. The correct minimum version is 7.2.14.
+
+
+
+
+DEX-6873 Kubernetes 1.21 will fail service account token renewal
+          after 90 days
+Cloudera Data Engineering (CDE) on AWS running version CDE 1.14
+          through 1.16 using Kubernetes 1.21 will observe failed jobs after 90 days of service
+          uptime.
+Restart specific components to force regenerate the token
+          using one of the following options:
+
+Option 1) Using kubectl:
+
+
+Setup kubectl for CDE.
+Delete calico-node
+                pods.kubectl delete pods --selector k8s-app=calico-node --namespace kube-system
+Delete Livy pods for all Virtual
+                  Clusters.kubectl delete pods --selector app.kubernetes.io/name=livy --all-namespacesIf
+                  for some reason only one Livy pod needs to be fixed: 
+
+Find the virtual cluster ID through the UI under Cluster
+                        Details.
+Delete Livy pod:
+                      export VC_ID=<VC ID>
+kubectl delete pods --selector app.kubernetes.io/name=livy --namespace ${​VC_ID}
+
+
+
+
+Option 2) Using K8s dashboard
+
+
+
+On the Service Details page copy the RESOURCE
+                SCHEDULER link. 
+Replace yunikorn part with the
+                dashboard and open the resulting link in the browser. 
+In the top left corner find the namespaces dropdown and choose All
+                namespaces. 
+Search for calico-node. 
+For each pod in the Pods table click the
+                Delete option from the hamburger menu. 
+Search for livy. 
+For each pod in the Pods table click the
+                Delete option from the hamburger menu. 
+If for some reason only one Livy pod needs to be fixed, find the Virtual Cluster ID
+              through the UI under Cluster Details and only delete the pod
+              with the name starting with  Virtual Cluster ID. 
+
+
+
+
+DEX-7286 In place upgrade (Technical Preview) issue: Certificate
+          expired showing error in browser
+Certificates failure after an in-place upgrade from 1.14.
+Start the certificate upgrade:
+
+Get cluster ID
+
+
+Navigate to the Cloudera Data Engineering Overview page by
+                clicking the Data Engineering tile in the Cloudera
+                  Data Platform (CDP) management console.
+Edit device details.
+Copy cluster ID filed into click board.
+ In a terminal set the CID environment variable to this
+                value.export CID=cluster-1234abcd
+
+
+Get session token
+
+
+Navigate to the Cloudera Data Engineering Overview page by
+                clicking the Data Engineering tile in the Cloudera
+                  Data Platform (CDP) management console.
+ Right click and select Inspect
+ Click the Application tab.4. Click
+                    Cookies and select the URL of the console.5.
+                  Select cdp-session-token.6. Double click the
+                  displayed cookie value and right click and select
+                  Copy.7. Open a terminal
+                  screen.export CST=<Paste value of cookie here>
+
+
+Force TLS certificate update
+
+curl -b cdp-session-token=${CST}  -X 'PATCH' -H 'Content-Type: application/json' -d '{"status_update":"renewTLSCerts"}' 'https://<URL OF CONSOLE>/dex/api/v1/cluster/$CID'
+
+
+
+
+DEX-7051 EnvironmentPriviledgedUser role cannot be used with CDE
+The role EnvironmentPriviledgedUser cannot currently be used by a user
+          if a user wants to access CDE. If a user has this role, then this user will not be able to
+          interact with CDE as an "access denied" would occur.
+Cloudera recommends to not use or assign the EnvironmentPrivilegedUser
+          role for accessing CDE.
+
+
+CDPD-40396 Iceberg migration fails on partitioned Hive table created by Spark without
+          location
+Iceberg provides a migrate procedure for migrating a Parquet/ORC/Avro Hive table to
+          Iceberg. If the table was created using Spark without specifying location and is
+          partitioned, the migration fails.
+ By default, the table has a TRANSLATED_TO_EXTERNAL property and that
+            is set to true. Unset this property by running ALTER TABLE ...
+              UNSET TBLPROPERTIES ('TRANSLATED_TO_EXTERNAL')  and then run the
+              migrate procedure. 
+
+
+Strict DAG declaration in Airflow 2.2.5
+CDE 1.16 introduces Airflow 2.2.5 which is now stricter about DAG declaration than the
+          previously supported Airflow version in CDE. In Airflow 2.2.5, DAG timezone should be a
+            pendulum.tz.Timezone, not datetime.timezone.utc. 
+If you upgrade to CDE 1.16, make sure that you have updated your
+            DAGs according to the Airflow documentation, otherwise your DAGs will
+            not be able to be created in CDE and the restore process will not be able to restore
+            these DAGs.Example of valid
+            DAG:import pendulum 
+dag = DAG("my_tz_dag", start_date=pendulum.datetime(2016, 1, 1, tz="Europe/Amsterdam")) 
+op = DummyOperator(task_id="dummy", dag=dag)Example of invalid
+          DAG:from datetime import timezone
+from dateutil import parser
+dag = DAG("my_tz_dag", start_date=parser.isoparse('2020-11-11T20:20:04.268Z').replace(tzinfo=timezone.utc)) 
+op = DummyOperator(task_id="dummy", dag=dag)
+
+
+COMPX-5494: Yunikorn recovery intermittently deletes existing placeholders
+On recovery, Yunikorn may intermittently delete placeholder pods. After recovery, there
+          may be remaining placeholder pods. This may cause unexpected behavior during
+          rescheduling.
+There is no workaround for this issue. To avoid any unexpected behavior, Cloudera
+            suggests removing all the placeholders manually before restarting the
+          scheduler.
+
+
+DWX-8257: CDW Airflow Operator does not support SSO
+
+Although Virtual Warehouse (VW) in Cloudera Data Warehouse (CDW) supports SSO, this is
+            incompatible with the CDE Airflow service as, for the time being, the Airflow CDW
+            Operator only supports workload username/password authentication. 
+
+Disable SSO in the VW.
+
+
+COMPX-7085: Scheduler crashes due to Out Of Memory (OOM) error in case of clusters with
+          more than 200 nodes
+
+Resource requirement of the YuniKorn scheduler pod depends on cluster size, that is,
+            the number of nodes and the number of pods. Currently, the scheduler is configured with
+            a memory limit of 2Gi. When running on a cluster that has more than 200 nodes, the
+            memory limit of 2Gi may not be enough. This can cause the scheduler to crash because of
+            OOM.
+
+
+importantThis change requires K8s cluster access.
+            Increase resource requests and limits for the scheduler. Edit the YuniKorn
+            scheduler deployment to increase the memory limit to 16Gi. For
+          example:resources: 
+  limits: 
+    cpu: "4"
+    memory: 16Gi
+ requests: 
+    cpu: "2"
+    memory: 8Gi
+
+
+COMPX-6949: Stuck jobs prevent cluster scale down
+
+Because of hanging jobs, the cluster is unable to scale down even when there are no
+            ongoing activities. This may happen when some unexpected node removal occurs, causing
+            some pods to be stuck in Pending state. These pending pods prevent the cluster from
+            downscaling.
+
+Terminate the jobs manually.
+
+
+DEX-3997: Python jobs using virtual environment fail with import error
+Running a Python job that uses a virtual environment resource fails with an import
+          error, such as:
+
+Traceback (most recent call last):
+  File "/tmp/spark-826a7833-e995-43d2-bedf-6c9dbd215b76/app.py", line 3, in <module>
+    from insurance.beneficiary import BeneficiaryData
+ModuleNotFoundError: No module named 'insurance'
+
+Do not set the spark.pyspark.driver.python
+          configuration parameter when using a Python virtual environment resource in a job.
+
+
+
+Parent topic: Known issues and limitations in Cloudera Data Engineering Public Cloud

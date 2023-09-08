@@ -1,0 +1,89 @@
+Configuring kerberized clusters for replicationCloudera Docs
+Configuring kerberized clusters for replication
+To replicate data between CDP Private Cloud Base 7.1.8 or higher clusters using
+        Kerberos authentication, you must ensure the required ports are open and the clusters are
+        configured as required.
+
+Open the port used for the Kerberos KDC Server and KRB5 services on all the
+                    hosts on the destination cluster. By default, this is port 88.
+
+Use one of the following configurations to ensure that the realm names do not
+                    create conflicts while running replication jobs:
+
+
+If the clusters do not use the same KDC (Kerberos Key
+                            Distribution Center), Cloudera recommends that you use different realm
+                            names for each cluster.
+You can use the same realm name if the clusters use the same
+                            KDC or different KDCs that are part of a unified realm, for example
+                            where one KDC is the master and the other is a worker KDC.note
+
+If you have multiple clusters that are used to segregate
+                                        production and non-production environments, this
+                                        configuration might result in principals that have equal
+                                        permissions in both environments. Make sure that permissions
+                                        are set appropriately for each type of environment.
+Replication fails if the source and destination clusters are
+                                        in the same realm but do not use the same KDC or the KDCs
+                                        are not part of a unified realm.
+
+
+
+
+
+Configure the following steps on the source and destination clusters so that
+                    Replication Manager can replicate data across clusters in two different realms
+                    to set up trust between those clusters:
+
+
+On the hosts in the destination cluster, ensure
+                            that the krb5.conf file (typically located at the
+                                /etc/kbr5.conf location) on each host has the
+                            following information:
+KDC information for the source cluster's
+                                    Kerberos realm. For
+                                    example:
+[realms]
+SRC.EXAMPLE.COM = {
+    kdc = kdc01.src.example.com:88
+    admin_server = kdc01.example.com:749
+    default_domain = src.example.com
+}
+DST.EXAMPLE.COM = {
+    kdc = kdc01.dst.example.com:88
+    admin_server = kdc01.dst.example.com:749
+    default_domain = dst.example.com
+}
+Realm mapping for the source cluster domain in the
+                                        [domain_realm] section. For
+                                    example:[domain_realm]
+.dst.example.com = DST.EXAMPLE.COM
+dst.example.com = DST.EXAMPLE.COM
+.src.example.com = SRC.EXAMPLE.COM
+
+noteIf you have a scenario where the
+                                hostname(s) are inconsistent, ensure that all those hosts are
+                                covered in a similar manner as seen in the domain_realm
+                                section in the Cloudera Manager > Host > All Hosts section.
+On the destination cluster, perform the following steps:
+Search for the Trusted Kerberos
+                                        Realms property on the HDFS service > Configuration tab.
+Enter the source cluster realm name, and click
+                                        Save Changes.
+Search for the Domain Name(s)
+                                    field in the Administration > Settings section.
+Enter the domain or host names you want to map to the
+                                    destination cluster KDC. Add as many entries as you need. The
+                                        entries in this property are used to generate the
+                                            domain_realm section in the
+                                            krb5.conf file.
+Click Save Changes.
+Remove domain_realm entries in
+                                    the Advanced Configuration Snippet (Safety Valve) for
+                                        remaining krb5.conf property.
+
+
+
+
+
+Parent topic: Replication between clusters using Kerberos authentication

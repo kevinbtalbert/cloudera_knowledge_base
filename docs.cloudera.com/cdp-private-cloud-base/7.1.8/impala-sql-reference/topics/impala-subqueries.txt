@@ -1,0 +1,210 @@
+Subqueries in Impala SELECT statementsCloudera Docs
+Subqueries in Impala SELECT statements
+A subquery is a query that is nested within another query. Subqueries let
+    queries on one table dynamically adapt based on the contents of another table. This technique
+    provides great flexibility and expressive power for SQL queries. A subquery can return a result set for use in the FROM or WITH
+        clauses, or with operators such as IN or EXISTS. 
+      A scalar subquery produces a result set with a single row containing a single column, typically
+      produced by an aggregation function such as MAX() or SUM(). This single
+      result value can be substituted in scalar contexts such as arguments to comparison operators. If the result
+      set is empty, the value of the scalar subquery is NULL. For example, the following query
+      finds the maximum value of T2.Y and then substitutes that value into the
+      WHERE clause of the outer block that queries T1:
+    SELECT x FROM t1 WHERE x > (SELECT MAX(y) FROM t2);
+
+Uncorrelated subqueries do not refer to any tables from the outer block of the query. The same
+      value or set of values produced by the subquery is used when evaluating each row from the outer query block.
+      In this example, the subquery returns an arbitrary number of values from T2.Y, and each
+      value of T1.X is tested for membership in that same set of values:
+    SELECT x FROM t1 WHERE x IN (SELECT y FROM t2);
+
+
+Uncorrelated subqueries are now supported in the SELECT list statement.
+    
+Example:
+This query returns a row for every sale, along with the corresponding employee information.
+
+      SELECT EmpID, EmpName, sum(SaleAmount) as EmpSales,
+      sum(SaleAmount) / (SELECT sum(SaleAmount) FROM Sales) as PortionOfTotalSales
+      FROM Employee
+      JOIN Sales on Employee.EmpID = Sales.EmpID GROUP BY EmpID, EmpName; 
+    
+ In this example, the subquery “(SELECT sum(SaleAmount) FROM Sales)” is an uncorrelated
+        subquery that's evaluated separately and returns the sum across all sales, not grouped by
+        any Employee details.
+Then the first and second sum(saleAmount) will be the total of all sales for that employment.
+Impala also supports Uncorrelated subqueries in the HAVING clause.
+Example:
+This query finds all the departments with the average salary greater than the average salary across all departments.
+
+      SELECT dept_id, avg(salary) FROM employees GROUP BY dept_id HAVING
+      avg(salary) > (SELECT avg(salary) FROM employees);
+    
+
+Correlated subqueries compare one or more values from the outer query block to values referenced
+      in the WHERE clause of the subquery. Each row evaluated by the outer WHERE
+      clause can be evaluated using a different set of values. These kinds of subqueries are restricted in the
+      kinds of comparisons they can do between columns of the inner and outer tables. (See the following
+      Restrictions item.)
+    
+      For example, the following query finds all the employees with salaries that are higher than average for their
+      department. The subquery potentially computes a different AVG() value for each employee.
+    SELECT employee_name, employee_id FROM employees one WHERE
+  salary > (SELECT avg(salary) FROM employees two WHERE one.dept_id = two.dept_id);
+
+Syntax:
+
+Subquery in the FROM clause:
+SELECT select_list FROM table_ref [, table_ref ...]
+
+table_ref ::= table_name | (select_statement)
+
+Subqueries in WHERE clause:
+WHERE value comparison_operator (scalar_select_statement)
+WHERE value [NOT] IN (select_statement)
+WHERE [NOT] EXISTS (correlated_select_statement)
+WHERE NOT EXISTS (correlated_select_statement)
+
+comparison_operator is a numeric comparison such as =,
+      <=, !=, and so on, or a string comparison operator such as
+      LIKE or REGEXP.
+    
+      Although you can use non-equality comparison operators such as < or
+      >=, the subquery must include at least one equality comparison between the columns of the
+      inner and outer query blocks.
+    
+      All syntax is available for both correlated and uncorrelated queries, except that the NOT
+      EXISTS clause cannot be used with an uncorrelated subquery.
+    
+      Impala subqueries can be nested arbitrarily deep.
+    
+Standards compliance: Introduced in
+      SQL:1999.
+    
+Examples:
+
+      This example illustrates how subqueries can be used in the FROM clause to organize the table
+      names, column names, and column values by producing intermediate result sets, especially for join queries.
+    SELECT avg(t1.x), max(t2.y) FROM
+  (SELECT id, cast(a AS DECIMAL(10,5)) AS x FROM raw_data WHERE a BETWEEN 0 AND 100) AS t1
+  JOIN
+  (SELECT id, length(s) AS y FROM raw_data WHERE s LIKE 'A%') AS t2;
+  USING (id);
+
+      These examples show how a query can test for the existence of values in a separate table using the
+      EXISTS() operator with a subquery.
+
+    
+      The following examples show how a value can be compared against a set of values returned by a subquery.
+    SELECT count(x) FROM t1 WHERE EXISTS(SELECT 1 FROM t2 WHERE t1.x = t2.y * 10);
+
+SELECT x FROM t1 WHERE x IN (SELECT y FROM t2 WHERE state = 'CA');
+
+      The following examples demonstrate scalar subqueries. When a subquery is known to return a single value, you
+      can substitute it where you would normally put a constant value.
+    SELECT x FROM t1 WHERE y = (SELECT max(z) FROM t2);
+SELECT x FROM t1 WHERE y > (SELECT count(z) FROM t2);
+
+Usage notes:
+
+      If the same table is referenced in both the outer and inner query blocks, construct a table alias in the
+      outer query block and use a fully qualified name to distinguish the inner and outer table references:
+    SELECT * FROM t1 one WHERE id IN (SELECT parent FROM t1 two WHERE t1.parent = t2.id);
+
+        The STRAIGHT_JOIN hint affects the join order of table references in the query
+        block containing the hint. It does not affect the join order of nested queries, such as views,
+        inline views, or WHERE-clause subqueries. To use this hint for performance
+        tuning of complex queries, apply the hint to all query blocks that need a fixed join order.
+      
+Internal details:
+
+      Internally, subqueries involving IN, NOT IN, EXISTS, or
+      NOT EXISTS clauses are rewritten into join queries. Depending on the syntax, the subquery
+      might be rewritten to an outer join, semi join, cross join, or anti join.
+    
+      A query is processed differently depending on whether the subquery calls any aggregation functions. There are
+      correlated and uncorrelated forms, with and without calls to aggregation functions. Each of these four
+      categories is rewritten differently.
+    
+Column statistics considerations:
+ Because queries that include correlated and uncorrelated subqueries in the
+          WHERE clause are written into join queries, to achieve best performance,
+        follow the same guidelines for running the COMPUTE STATS statement as you
+        do for tables involved in regular join queries. Run the COMPUTE STATS
+        statement for each associated tables after loading or substantially changing the data in
+        that table.
+Restrictions:
+
+      The initial Impala support for nested subqueries addresses the most common use cases. Some restrictions
+      remain:
+    
+
+
+          Although you can use subqueries in a query involving UNION or UNION ALL
+          in Impala 2.1.0 and higher, currently you cannot construct a union of two subqueries (for example, in the
+          argument of an IN or EXISTS operator).
+        
+
+
+
+          Subqueries returning scalar values cannot be used with the operators ANY or
+          ALL. (Impala does not currently have a SOME operator, but if it did,
+          the same restriction would apply.)
+        
+
+
+
+          For the EXISTS and NOT EXISTS clauses, any subquery comparing values
+          from the outer query block to another table must use at least one equality comparison, not exclusively
+          other kinds of comparisons such as less than, greater than, BETWEEN, or
+          !=.
+        
+
+
+
+
+ Expressions inside a subquery, for example in the WHERE clause, can use
+              OR conjunctions but the OR conjunction cannot be combined with more
+            than one subquery. 
+
+
+ Scalar subqueries are only supported in numeric contexts.
+
+
+
+
+          You cannot use subqueries with the CASE function to generate the comparison value, the
+          values to be compared against, or the return value.
+        
+
+Only uncorrelated subqueries are supported in the filter condition for the
+              HAVING clause. Similarly only a SELECT uncorrelated
+            scalar subquery is supported.
+
+
+          You must use a fully qualified name
+          (table_name.column_name or
+          database_name.table_name.column_name)
+          when referring to any column from the outer query block within a subquery.
+        
+
+
+
+        The TABLESAMPLE clause of the SELECT
+        statement does not apply to a table reference derived from a view, a subquery,
+        or anything other than a real base table. This clause only works for tables
+        backed by HDFS or HDFS-like data files, therefore it does not apply to Kudu or
+        HBase tables.
+      
+
+
+Complex type considerations:
+ For the complex types (ARRAY, STRUCT, and
+          MAP) available in Impala 2.3 and higher, the join queries that
+          unpack complex type columns often use correlated subqueries in the
+          FROM clause. For example, if the first table in the join clause is
+          CUSTOMER, the second join clause might have a subquery that selects from
+        the column CUSTOMER.C_ORDERS, which is an ARRAY. The
+        subquery re-evaluates the ARRAY elements corresponding to each row from the
+          CUSTOMER table.
+Related informationUsing subqueries with complex typesTable and column statisticsParent topic: SELECT statement

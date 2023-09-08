@@ -1,0 +1,129 @@
+Step 12: Complete Post-Upgrade steps for upgrades to CDP Private Cloud BaseCloudera Docs
+Step 12: Complete Post-Upgrade steps for upgrades to CDP Private Cloud Base
+Steps to perform after upgrading a cluster.
+
+
+
+Loading Filters ...
+
+
+7.7.1 7.6.7 7.6.1
+          7.5.1 7.4.4 7.3.1 7.2.4 7.1.4 7.1.3 7.1.2 7.1.1 7.0.3 6.3.4 6.3.3
+          6.3.1 6.3.0 6.2.1 6.2.0 6.1.1 6.1.0 6.0.1 6.0.0
+
+6.3.4 6.3.3 6.3.2 6.3.1 6.3.0
+          6.2.1 6.2.0 6.1.1 6.1.0 6.0.2 6.0.1
+7.1.8 7.1.7.1000 7.1.7 7.1.6 7.1.5
+          7.1.4 7.1.3 7.1.2 7.1.1 
+7.1.7.2000
+7.7.1 7.6.7 7.6.1 7.5.1 7.4.4 7.4.3 7.3.1 7.2.4 7.1.4 7.1.3 7.1.2 7.1.1
+        
+
+Several components require additional steps after you complete the upgrade to CDP Private Cloud Base:
+HBase See Apache HBase post-upgrade
+            tasks
+Apache Hive See Hive Post-Upgrade
+            Tasks.
+Kafka 
+Remove the following properties from the Kafka Broker Advanced
+                Configuration Snippet (Safety Valve) for kafka.properties configuration
+              property. 
+inter.broker.protocol.version
+log.message.format.version
+
+Save your changes. 
+Perform a rolling restart:
+Select the Kafka service.
+Click Actions > Rolling Restart.
+In the pop-up dialog box, select the options you want and click
+                    Rolling Restart.
+Click Close once the command has finished. 
+
+
+Kudu See Upgrade Notes for Apache Kudu 1.15 / CDP 7.1
+Stream
+            Messaging Manager See Configure SMM to monitor SRM replications
+YARN 
+Scheduler: If you are using Fair
+              Scheduler, you must migrate to Capacity Scheduler during the upgrade process, and once
+              the upgrade is finished you need to manually fine tune it. For more information, see
+                Manual configuration of scheduler properties.
+Considering logical processors in the
+                calculation: The
+                yarn.nodemanager.resource.count-logical-processors-as-cores
+              property was not present in CDH 5. In Cloudera Runtime 7.1.1 (and in CDH 6), it is set
+              to false by default, meaning that YARN does not consider logical
+              processors in the calculation which can result in a performance degradatio if Linux
+              Container Executor and CGroups are enabled. The extent of such degradation depends on
+              the CPU manufacturer. To solve this issue, do the following:
+In Cloudera Manager, navigate to YARN > Configuration.
+Find the YARN Service Advanced Configuration Snippet (Safety Valve)
+                    for yarn-site.xml property.
+Add the following
+                    configuration:yarn.nodemanager.resource.count-logical-processors-as-cores=trueUsing
+                    this configuration snippet ensures that all nodes that need the configuration
+                    receive it. This also ensures different NodeManager groups are consistently
+                    configured.
+Restart the NodeManager.
+
+
+NodeManager recovery: The default
+              value of the yarn.nodemanager.recovery.enabled property is
+                true. However, if in you source cluster you used safety-valves to
+              set this property to false it will stay false after
+              upgrading from CDH 6 to CDP. Cloudera recommends to have this feature enabled and set
+              the yarn.nodemanager.recovery.enabled property to
+                true.
+Log aggregation:: In order to see
+              the history of applications that were launched before upgrade, do the following:
+In Cloudera Manager, navigate to YARN >  Configuration >  Category: Log aggreation.
+See the following
+                  configurations:yarn.log-aggregation.TFile.remote-app-log-dir-suffix=logs
+yarn.log-aggregation.IFile.remote-app-log-dir-suffix=logs-ifile
+
+Maximum capacity: Set
+              the yarn.scheduler.capacity.<queuepath>.user-limit-factor to a
+              value that is greater than 1. This configuration will help to grow the queue usage
+              beyond its configured capacity till its maximum capacity configured.
+
+Ranger PluginsThe following Ranger
+            plugins are not enabled by default after the upgrade. If these services are
+            configured in the cluster, you will need to manually enable the plugins in order for
+            them to use Ranger:
+HBase
+Kudu
+Solr
+YARN: If you want to enable the Ranger YARN plugin, you have to migrate the ACLs
+                manually. For more information, see Configure a resource-based policy:
+                YARN.
+YARN
+The following Ranger plugins are enabled after an upgrade:
+Atlas
+HDFS
+Hive
+Hive on Tez
+Impala
+Kafka
+important For every service in your cluster,
+              you should verify that Ranger is enabled. You should also create a plugin audit
+              directory for every service on the cluster as follows:
+To enable a Ranger plugin for each service, from Cloudera Manager > Service Name > Configuration > Ranger Service tick Ranger-1.
+To collect Ranger audit logs for each service in a unique directory, from Cloudera Manager > Service Name > Actions click Create <ServiceName> Plugin Audit
+                    Directory. 
+After making any configuration changes, remember to save changes, restart the
+                service and respond to (restart) any stale configurations.
+ZooKeeper
+Ensure, that QuorumSSL (Secure ZooKeeper) is enabled only if QuorumSASL (Server to
+            server SASL authentication) is also enabled. Note, that QuorumSSL is enabled by default
+            if AutoTLS is enabled. If QuorumSSL is enabled without QuorumSASL, then the ZooKeeper
+            cluster can be slow to start due to some known ZooKeeper limitations. 
+Sentry – See Importing Sentry privileges into Ranger policies. importantIf
+            HDFS ACL sync is enabled (hdfs_sentry_sync_enable=true) on the CDH cluster, then you
+            must install Ranger RMS to support the same functionality.
+For more information about Ranger RMS, see Ranger Hive-HDFS ACL Sync Overview. 
+For steps to install Ranger RMS, see Installing Ranger RMS. 
+
+Impala – See Apache Impala changes in CDP
+
+
+Parent topic: Upgrading a CDH 6 Cluster

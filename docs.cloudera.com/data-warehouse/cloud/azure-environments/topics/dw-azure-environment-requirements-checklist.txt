@@ -1,0 +1,118 @@
+Azure environments requirements checklistCloudera Docs
+Azure environments requirements checklist
+To successfully activate Azure environments with Cloudera Data Warehouse (CDW) service, make
+   sure your environment meets the requirements listed in this topic.
+1. Specific networking requirements
+importantCloudera recommends activating CDW service and Cloudera Machine Learning
+        (CML) service workloads on different subnets to maximize performance.
+
+
+Make sure Azure VNet subnets are large enough to support the CDW load
+When an Azure environment is activated for CDW service, an Azure Kubernetes Service
+            (AKS) cluster is provisioned in your subscription. The AKS cluster uses the Azure Container Networking Interface (CNI) plug-in for
+            Kubernetes. This plug-in assigns IP addresses for every pod running inside the
+            Kubernetes cluster. By default, the maximum number of pods per node is 30. This means
+            that you need approximately 3,200 IP addresses for a 99-node cluster. If you activate an
+            environment for CDW service, make sure that the subnets are large enough on the Azure
+            VNet for the CDW load. Cloudera recommends using a CIDR/21 subnet or larger.
+The following IP address ranges are defined as part of the AKS cluster creation
+              process:
+10.20.0.0/16
+172.17.0.1/16
+
+Make sure these ranges do not overlap with your VNET address ranges.
+If you want to activate CDW on a very small subnet, kubenet networking is recommended.
+            CDW provisions a kubenet-enabled AKS cluster instead of using the Azure CNI plugin for
+            kubenet networking.
+
+
+Configure service endpoints on CDW subnets
+You must configure service endpoints on the subnets used for the CDW service. This
+            ensures that the network traffic between CDW components and Azure services remain on the
+            Microsoft Azure backbone network. Microsoft.Storage and
+              Microsoft.SQL must be registered; otherwise, the CDW service does not
+            start on existing Azure VNets. noteIf you have used only Data Hub in your CDP
+              environment, you must check and possibly configure connections to additional outbound
+              destinations for Cloudera Data Warehouse (CDW). For more information, see Azure Outbound Network Access Destinations and
+              Virtual Network service endpoints in the Azure
+            documentation.
+
+
+Firewall exceptions for Azure AKS
+If you need to restrict egress traffic in Azure, reserve a limited number of ports and
+            addresses for cluster maintenance tasks including cluster provisioning. See Control egress traffic for cluster nodes in Azure
+              Kubernetes Service (AKS) to prepare your Azure environment for AKS
+            deployment.
+For maintenance, Cloudera recommends putting the Azure portal URLs on the allowlist of
+            your firewall or proxy server. For more information, see Allow the Azure portal URLs on your firewall or proxy
+              server.
+
+
+
+2. Use only app-based credentials
+For the Data Warehouse service, you must use only an app-based credential, which requires the
+         Contributor role to create a new service principal. For more information about
+        creating an app-based credential for the environment you want to use for the Data Warehouse
+        service, see Create an app-based credential. If you need to
+        change your environment credential, see Change environment's credential.
+
+3. Obtain permissions
+For environments that you plan to use for the Data Warehouse service, generally you need to
+        ensure that the application you create in Azure has the built-in Contributor Azure role at the resource group level.
+        For more information, see the description of app-based credentials in Credential options on Azure in the Management
+        Console documentation. importantAlternatively, you can use minimum permissions.
+
+4. Created Azure app must have access to the storage account used during environment
+      registration
+Ensure that the application, which the Azure app-based credentials are attached to, have
+        access to the ADLS Gen2 storage location you specify  in Step 6 when you register an Azure environment topic. For information
+        about storage accounts for Azure environments, see ADLS Gen2 and managed identities and 
+        Minimal setup for cloud storage. 
+
+5. AKS cluster credential
+During the environment activation process, you must provide the resource ID of a
+        user-assigned managed identity to create the Azure Kubernetes cluster resource. This crucial
+        identity allows for impersonation of the AKS cluster. To ensure this functionality, you must
+        assign the appropriate permissions to the identity resource. Cloudera
+        strongly recommends assigning the same permissions as those assigned to the app-based
+        credentials
+To affirm that your resources, such as managed identities, virtual networks, and so on, are
+        accessible, verify that you have assigned the appropriate permissions to any separate
+        resource groups where they reside.
+For more information about managed identities, see "AKS managed identities".
+
+6. List of required resources for Azure environments
+There is no cross-regional support for Cloudera Data Warehouse service. Azure environments
+        used for the Data Warehouse service must have the following resources available in
+        the specific Azure region where the environment is registered: 
+
+Azure Kubernetes Service (AKS)
+Azure Database for PostgreSQL
+Azure Data Lake Storage Gen2
+Virtual machine scale sets
+Ev3 series VM
+Dsv3-series VM
+Availability zones for AKS (optional) importantTo enable the Availability zones for AKS option
+            when activating the environment for the Cloudera Data Warehouse service, make sure your
+            region supports Azure Availability.
+
+
+
+7. Azure subscription should be in a similar region as the resources
+Ensure that your Azure subscription is in close proximity to the region where your resources
+        are deployed and are governed by the same regulatory laws. The Azure region requirements says, "CDP requires that
+        the ADLS Gen2 storage location provided during environment registration must be in the same
+        region as the region selected for the environment." For more information, see Azure geographies.
+
+8. Support for third party k8s components
+To minimize the IP address usage of the AKS clusters, Cloudera currently creates the
+        Kubernetes (k8s) compute node pools with a “maxpods” settings of 15. This setting specifies
+        the maximum number of pods that can run on a node. By default, Azure deploys several key
+        components to every k8s cluster to provide infrastructure services. The number of components
+        can vary based on the enabled services in your Azure subscription. Generally it takes 6-8
+        pods to host these infrastructure services inside the AKS clusters. Additionally Cloudera
+        deploys 1-2 other pods to host Cloudera compute resources.
+If you want to deploy services to the AKS cluster, make sure you do not exceed the maxpods
+        limits of the cluster.
+
+

@@ -1,0 +1,199 @@
+Using Text Data FilesCloudera Docs
+Using Text Data Files
+Impala supports using text files as the storage format for input
+    and output. Text files are a convenient format to use for interchange with
+    other applications or scripts that produce or read delimited text files,
+    such as CSV or TSV with commas or tabs for delimiters.
+ Text files are flexible in their column definitions. For example, a text
+      file could have more fields than the Impala table, and those extra fields
+      are ignored during queries. Or it could have fewer fields than the Impala
+      table, and those missing fields are treated as NULL
+      values in queries. 
+You could have fields that were treated as numbers or timestamps in a
+      table, then use ALTER TABLE ... REPLACE COLUMNS to switch
+      them to strings, or the reverse. 
+Creating Text Tables You
+        can create tables with specific separator characters to import text
+        files in familiar formats such as CSV, TSV, or pipe-separated with the
+          FIELDS TERMINATED BY clause preceded by the
+          ROW FORMAT DELIMITED clause. For
+        example:
+      
+        CREATE TABLE tsv(id INT, s STRING, n INT, t TIMESTAMP, b BOOLEAN)
+        ROW FORMAT DELIMITED
+        FIELDS TERMINATED BY '\t' STORED AS TEXTFILE;
+      
+ You can specify a delimiter character
+          '\0' to use the ASCII 0
+          (nul) character for text tables.You can also use
+      these tables to produce output data files, by copying data into them
+      through the INSERT ... SELECT syntax and then extracting
+      the data files from the Impala data directory. The data files created
+        by any INSERT statements uses the Ctrl-A character (hex
+        01) as a separator between each column value.  Issue a
+          DESCRIBE FORMATTED table_name
+        statement to see the details of how each table is represented internally
+        in Impala. 
+Complex type considerations: Although you can create tables in
+        this file format using the complex types (ARRAY,
+          STRUCT, and MAP), currently, Impala
+        cannot query these types in text tables. 
+Data Files for Text Tables
+ When Impala queries a table with data in text format, it consults all
+        the data files in the data directory for that table, with some
+        exceptions: 
+
+
+ Impala ignores any hidden files, that is, files whose names start
+            with a dot or an underscore. 
+
+
+ Impala queries ignore files with
+            extensions commonly used for temporary work files by Hadoop tools.
+            Any files with extensions .tmp or
+              .copying are not considered part of the Impala
+            table. The suffix matching is case-insensitive, so for example
+            Impala ignores both .copying and
+              .COPYING suffixes. 
+
+
+ Impala uses suffixes to recognize when text data files are
+            compressed text. For Impala to recognize the compressed text files,
+            they must have the appropriate file extension corresponding to the
+            compression codec, either .bz2,
+            .gz, .snappy, or .zst, .deflate. The extensions
+            can be in uppercase or lowercase. 
+
+ Otherwise, the file names are not significant. When you put files
+          into an HDFS directory through ETL jobs, or point Impala to an
+          existing HDFS directory with the CREATE EXTERNAL
+            TABLE statement, or move data files under external control
+          with the LOAD DATA statement, Impala preserves the
+          original filenames. 
+
+ An INSERT ... SELECT statement produces one data file
+        from each node that processes the SELECT part of the
+        statement. An INSERT ... VALUES statement produces a
+        separate data file for each statement; because Impala is more efficient
+        querying a small number of huge files than a large number of tiny files,
+        the INSERT ... VALUES syntax is not recommended for
+        loading a substantial volume of data. If you find yourself with a table
+        that is inefficient due to too many small data files, reorganize the
+        data into a few large files by doing INSERT ... SELECT
+        to transfer the data to a new table. 
+ Do not surround string values with quotation marks in text data files
+        that you construct. If you need to include the separator character
+        inside a field value, for example to put a string value with a comma
+        inside a CSV-format data file, specify an escape character on the
+          CREATE TABLE statement with the ESCAPED
+          BY clause, and insert that character immediately before any
+        separator characters that need escaping. 
+
+Special values within text data files:
+
+
+
+ Impala recognizes the literal strings inf for
+            infinity and nan for Not a Number, for
+              FLOAT and DOUBLE columns. 
+
+
+ Impala recognizes the literal string \N to
+            represent NULL. When using Sqoop, specify the
+            options --null-non-string and
+              --null-string to ensure all NULL
+            values are represented correctly in the Sqoop output files.
+              \N needs to be escaped as in the below example: 
+--null-string '\\N' --null-non-string '\\N'
+
+
+By default, Sqoop writes NULL values using the
+            string null, which causes a conversion error when
+            such rows are evaluated by Impala. (A workaround for existing tables
+            and data files is to change the table properties through
+              ALTER TABLE name SET
+              TBLPROPERTIES("serialization.null.format"="null").) 
+
+Impala can optionally skip an arbitrary number of header lines from
+          text input files on HDFS based on the
+            skip.header.line.count value in the
+            TBLPROPERTIES field of the table metadata.
+
+
+Loading Data into Text Tables
+ To load an existing text file into an Impala text table, use the
+          LOAD DATA statement and specify the path of the file
+        in HDFS. That file is moved into the appropriate Impala data directory. 
+ To load multiple existing text files into an Impala text table, use
+        the LOAD DATA statement and specify the HDFS path of
+        the directory containing the files. All non-hidden files are moved into
+        the appropriate Impala data directory. 
+ Use the DESCRIBE FORMATTED statement to see the HDFS
+        directory where the data files are stored, then use Linux commands such
+        as hdfs dfs -ls hdfs_directory and
+          hdfs dfs -cat hdfs_file to display
+        the contents of an Impala-created text file. 
+ When you create a text file for use with an Impala text table, specify
+          \N to represent a NULL value. 
+ If a text file has fewer fields than the columns in the corresponding
+        Impala table, all the corresponding columns are set to
+          NULL when the data in that file is read by an Impala
+        query. 
+ If a text file has more fields than the columns in the corresponding
+        Impala table, the extra fields are ignored when the data in that file is
+        read by an Impala query. 
+ You can also use manual HDFS operations such as hdfs dfs
+          -put or hdfs dfs -cp to put data files in
+        the data directory for an Impala table. When you copy or move new data
+        files into the HDFS directory for the Impala table, issue a
+          REFRESH table_name statement in
+          impala-shell before issuing the next query against
+        that table, to make Impala recognize the newly added files. 
+
+Query Performance for Text Tables
+ Data stored in text format is relatively bulky, and not as efficient
+        to query as binary formats such as Parquet. For the tables used in your
+        most performance-critical queries, look into using more efficient
+        alternate file formats. 
+ For frequently queried data, you might load the original text data files into one Impala
+        table, then use an INSERT statement to transfer the data to another table
+        that uses the Parquet file format. The data is converted automatically as it is stored in
+        the destination table.
+For more compact data. consider using text data compressed in the gzip, bzip2, or Snappy
+        formats. However, these compressed formats are not splittable so there is less
+        opportunity for Impala to parallelize queries on them. You also have the choice to convert
+        the data to Parquet using an INSERT ... SELECT statement to copy the
+        original data into a Parquet table.
+
+
+
+
+ 
+
+Using bzip2, deflate, gzip, Snappy-Compressed, or zstd Text Files
+ Impala supports using text data files that employ bzip2, deflate, gzip, Snappy, or zstd
+        compression. These compression types are primarily for convenience within an existing ETL
+        pipeline rather than maximum performance. Although it requires less I/O to read compressed
+        text than the equivalent uncompressed text, files compressed by these codecs are not
+          splittable and therefore cannot take full advantage of the Impala parallel query
+        capability. Impala can read compressed text files written by Hive. 
+ As each Snappy-compressed file is processed, the node doing the work reads the entire file
+        into memory and then decompresses it. Therefore, the node must have enough memory to hold
+        both the compressed and uncompressed data from the text file. The memory required to hold
+        the uncompressed data is difficult to estimate in advance, potentially causing problems on
+        systems with low memory limits or with resource management enabled. This
+          memory overhead is reduced for bzip2-, deflate-, gzip-, and zstd-compressed text files. The
+          compressed data is decompressed as it is read, rather than all at once.
+
+ To create a table to hold compressed text, create a text table with no special compression
+        options. Specify the delimiter and escape character if required, using the ROW
+          FORMAT clause. 
+ Because Impala can query compressed text files but currently cannot
+        write them, produce the compressed text files outside Impala and use the
+          LOAD DATA statement, manual HDFS commands to move
+        them to the appropriate Impala data directory. (Or, you can use
+          CREATE EXTERNAL TABLE and point the
+          LOCATION attribute at a directory containing existing
+        compressed text files.) 
+
+

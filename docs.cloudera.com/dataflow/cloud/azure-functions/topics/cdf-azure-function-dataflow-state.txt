@@ -1,0 +1,88 @@
+Data flow stateCloudera Docs
+Data flow state
+
+
+By default, if your data flow contains any stateful processors (for example,
+        ListSFTP), this state will automatically be stored in a Cosmos database called
+          nifi_state, though this name can be set using the
+          COSMOSDB_STATE_DATABASE environment variable. To integrate with Cosmos
+        DB, some additional steps are required. If you do not perform these steps, the data flow
+        will still run, but the state will not be preserved.
+
+
+In the Azure console, navigate to the Cosmos DB service.
+
+
+Click Create.
+
+
+Click Create under Core (SQL) -
+              Recommended.
+
+
+Select your Resource Group, and enter an account name.
+
+
+All other configurations are optional, and may be different depending on your
+            use case. While provisioned throughput is supported, it is recommended to select
+              Serverless. 
+
+
+Click Review + Create and check the function
+            details.
+
+
+Click Create.
+
+
+In your Function App, go to the Identity blade, and
+            note the Object (principal) ID, for the following steps.
+
+
+Click the Cloud Shell icon in the upper right and
+            follow any initial prompts that may set up the web-based cloud shell for you.
+
+
+Run the following commands in the cloud shell:
+resourceGroup=<your resource group>
+accountName=<your CosmosDB account name>
+principalId=<your Function App Object principal ID from above>
+az cosmosdb sql role assignment create --account-name $accountName \
+  --resource-group $resourceGroup --scope "/" \
+  --principal-id $principalId --role-definition-id 00000000-0000-0000-0000-000000000001
+az cosmosdb sql role assignment create --account-name $accountName \
+  --resource-group $resourceGroup --scope "/" \
+  --principal-id $principalId --role-definition-id 00000000-0000-0000-0000-000000000002
+
+
+
+On the Overview blade, click the Add
+              Container.
+
+
+Specify the database and container IDs.
+If you use nifi_state for both, the
+              COSMOSDB_STATE_DATABASE and COSMOSDB_STATE_CONTAINER
+            Application Settings are not needed.
+
+
+Specify /id for the Partition Key and click
+              OK.
+
+
+In your Function App Configuration, add an Application Setting called
+              COSMOSDB_ENDPOINT with the Cosmos DB URI (from the
+              Overview page).
+If you specified any other database or container name than
+              nifi_state, you will need to specify the
+              COSMOSDB_STATE_DATABASE and COSMOSDB_STATE_CONTAINER
+            Application Settings, respectively.
+
+
+The Cosmos DB state provider can be disabled even if your data flow contains stateful
+        processors by setting the DISABLE_STATE_PROVIDER Application Setting to
+          true.
+warningThis will cause processor state to be lost between
+        function executions.
+
+

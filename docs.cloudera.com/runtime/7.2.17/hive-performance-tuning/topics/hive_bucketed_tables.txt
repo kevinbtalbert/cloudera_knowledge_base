@@ -1,0 +1,46 @@
+Bucketed tables in HiveCloudera Docs
+Bucketed tables in Hive
+  
+If you migrated data from earlier Apache Hive versions to Hive 3, you might need to
+  handle bucketed tables that impact performance.
+ Review how CDP simplifies handling buckets. You learn about best practices for handling dynamic capabilities.
+You can divide tables or partitions into buckets, which are stored in the following ways:
+As files in the directory for the table.
+As directories of partitions if the table is partitioned.
+Specifying buckets in Hive 3 tables is not necessary. In CDP, Hive 3 buckets data
+   implicitly, and does not require a user key or user-provided bucket number as earlier versions
+   (ACID V1) did. For example:
+V1:
+   CREATE TABLE hello_acid (load_date date, key int, value int)
+CLUSTERED BY(key) INTO 3 BUCKETS
+STORED AS ORC TBLPROPERTIES ('transactional'='true');
+V2:CREATE TABLE hello_acid_v2 (load_date date, key int, value int);
+Performance of ACID V2 tables is on a par with non-ACID tables using buckets. ACID V2 tables
+   are compatible with native cloud storage. 
+A common challenge related to using buckets in tables migrated from earlier versions is
+   maintaining query performance while the workload or data scales up or down. For example, you
+   could have an environment that operates smoothly using 16 buckets to support 1000 users, but a
+   spike in the number of users to 100,000 for a day or two creates problems if you do not promptly
+   tune the buckets and partitions. Tuning the buckets is complicated by the fact that after you
+   have constructed a table with buckets, the entire table containing the bucketed data must be
+   reloaded to reduce, add, or eliminate buckets.
+In CDP, you only need to deal with the buckets of the biggest table. If workload demands change
+   rapidly, the buckets of the smaller tables dynamically change to complete table JOINs.
+Bucket configurations
+You can enable buckets as follows: 
+SET hive.tez.bucket.pruning=true
+When you load data into tables that are both partitioned and bucketed, set the hive.optimize.sort.dynamic.partition property to optimize the process:
+ SET hive.optimize.sort.dynamic.partition=true
+If you have 20 buckets on user_id data, the following query returns only the data associated with user_id = 1: SELECT * FROM tab WHERE user_id = 1;
+To best leverage the dynamic capability of table buckets, adopt the following practices:
+  
+
+Use a single key for the buckets of the largest table. 
+Usually, you need to bucket the main table by the biggest dimension table. For example, the sales table might be bucketed by customer and not by merchandise item or store. However, in this scenario, the sales table is sorted by item and store. 
+    
+Normally, do not bucket and sort on the same column. 
+A table that has more bucket files than the number of rows is an indication that you should reconsider how the table is bucketed.
+    
+
+
+

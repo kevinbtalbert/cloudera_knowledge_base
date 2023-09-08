@@ -1,0 +1,245 @@
+How To Obtain and Deploy Keys and Certificates for TLS/SSLCloudera Docs
+How To Obtain and Deploy Keys and Certificates for TLS/SSL
+
+Cloudera recommends obtaining certificates from one of the trusted public certificate
+      authorities (CA) such as Symantec or Comodo for TLS/SSL encryption for the cluster. This How
+      To provides a brief overview of the tools used to create the various artifacts followed by the
+      steps in the process. Plan ahead to allow time to receive signed certificates from whichever
+      CA you use.
+noteAlways check with your selected public CA before creating
+     any CSRs and follow the CA-specific processes. 
+If your organization uses its own internal CA, follow your internal
+      process for creating and submitting the CSRs. 
+
+
+
+Tools Overview
+
+Java Keytool and OpenSSL are key management tools that let you create the security
+        artifacts needed for TLS/SSL. See How to Convert File Encodings (DER, JKS, PEM) for
+          TLS/SSL Certificates and Keys for more information beyond the two short overviews
+        below. 
+
+
+Java Keytool
+
+Oracle Java keytool is a utility included with the
+          Oracle JDK for creating and managing cryptographic keys and
+          certificates. During configuring the Cloudera Manager Cluster for
+          TLS/SSL, you create the private key pairs, keystore, certificate
+          signing requests, and create a truststore for specific use by the
+          cluster using this software tool, as detailed in the steps throughout
+          this guide.
+
+
+Java Keytool Requirements for Cloudera Manager TLS/SSL
+          Configuration
+
+For any steps using the Java Keytool, be sure to: 
+Use the Oracle Java keytool rather than tools
+                such as OpenJDK.
+Use the JDK downloaded from Oracle or the Cloudera-provided
+                Oracle JDK located in this default path on a Cloudera Manager
+                Server host:
+                /usr/java/jdk1.7.0_67-cloudera/bin/jre/lib/security
+Use the same version of the Java keytool for all steps. If the
+                host has multiple JDKs installed, set the PATH
+                variable so that the Oracle JDK is invoked first, as in this
+                example:
+                export JAVA_HOME=/usr/java/jdk1.7.0_67-cloudera
+export PATH=$JAVA_HOME/bin:$PATH
+Use the same password for the
+                  -keypass and -storepass in
+                any commands that invoke these two options. Cloudera Manager
+                requires the same password for a key and its keystore.
+
+
+
+
+
+OpenSSL
+
+OpenSSL is an open source cryptography and TLS/SSL toolkit that has been widely used
+          since its inception ~ 1999. Just as with Java Keytool, OpenSSL lets you create private
+          keys, certificate requests, and keystores, and it provides options for verifying
+          certificates. 
+Cloudera Manager Agent hosts act as clients of a Cloudera Manager Server host during RPC
+          client and server communications. The Agent hosts, Hue, Impala and other Python-based
+          services require PEM-formatted keys and certificates (PKCS #8), which is why the steps
+          below include converting some of the JKS artifacts using this tool. See How to Convert
+            File Encodings (DER, JKS, PEM) for TLS/SSL Certificates and Keys for more
+          information.
+
+
+
+
+Step 1: Create Directory for Security Artifacts
+
+Distributing the certificates, keys, truststore—in short, all security
+        artifacts used for TLS/SSL intra-cluster communications—is part of this
+        and some subsequent processes. To keep things organized, Cloudera
+        recommends that you create the directory and distribute and store
+        artifacts when you receive them, even though they may not be immediately
+        needed.
+The following table shows an example directory structure for the
+        security artifacts created in the steps in this and subsequent sections.
+        Use different names if you like, but for ease of deployment, use the
+        same directory names across all hosts in the cluster. 
+
+
+Example
+Description
+
+
+
+cmhost.sec.example.com
+FQDN of an example Cloudera Manager Server host.
+
+
+/opt/cloudera/security
+Base path for security-related files.
+
+
+/opt/cloudera/security/pki
+Path for all security artifacts associated with TLS/SSL,
+                including keys, keystores
+                (keystore.jks), CSR, and root- and
+                intermediate-CA certificates. 
+
+
+/usr/java/jdk1.7.0_67-cloudera/jre/lib/security/jssecacerts
+Path to the default alternative Java truststore on a
+                Cloudera Manager Server host system.
+
+
+
+
+On the Cloudera Manager Server host, create the
+              /opt/cloudera/security/pki directory:
+            sudo mkdir -p /opt/cloudera/security/pki
+This directory must be owned by
+              cloudera-scm:cloudera-scm and have its executable
+            bit set correctly so that Cloudera Manager can access the keystore
+            at
+            runtime:sudo chown -R cloudera-scm:cloudera-scm /opt/cloudera/security/jks
+umask 022
+cd /opt/cloudera/security/jks
+
+
+Directories and artifacts persist during system upgrades. For security
+        purposes, for any host you remove from a cluster, remove any directories
+        you create and more importantly, remove any security artifacts (keys,
+        certificates, and so on) they may contain.
+
+
+
+Step 2: Create the Java Truststore
+
+On the Cloudera Manager Server host, copy the JDK cacerts
+        file to jssecacerts:
+
+        sudo cp $JAVA_HOME/jre/lib/security/cacerts $JAVA_HOME/jre/lib/security/jssecacerts
+
+If you do not have the $JAVA_HOME variable set,
+        replace it with the path to the Oracle JDK. For example, the default
+        path to the Java JDK on a Cloudera Manager Server host is:
+/usr/java/jdk1.7.0_67-cloudera/
+
+
+
+Step 3: Generate Server Key and CSR
+
+
+On the Cloudera Manager Server host, use the
+            keytool utility to generate a keypair and a
+          keystore named for the server. Replace the OU,
+            O, L, ST, and
+            C entries with the values for your organization
+          name, location, and country code (US, in the example):
+        
+          $ sudo keytool -genkeypair -alias $(hostname -f)-server -keyalg RSA -keystore \
+/opt/cloudera/security/pki/$(hostname -f)-server.jks -keysize 2048 -dname \
+"CN=$(hostname -f),OU=Dept,O=Example.com,L=City,ST=State,C=US" \
+-storepass password -keypass password -ext san=dns:$(hostname -f)
+          Use the same password for the key and its keystore
+            (-keypass and -storepass,
+          respectively): Cloudera Manager does not support using different
+          passwords for the key and keystore. 
+Generate a certificate signing request (CSR) for the public key
+          (contained in the keystore as a result of the command above). In this
+          command below, enter the password that you set for the key and the
+          keystore in the command
+          above:$ sudo keytool -certreq -alias $(hostname -f)-server \
+-keystore /opt/cloudera/security/pki/$(hostname -f)-server.jks \
+-file /opt/cloudera/security/pki/$(hostname -f)-server.csr -storepass password \
+-keypass password -ext san=dns:$(hostname -f) -ext EKU=serverAuth,clientAuth
+
+
+
+
+
+Step 4: Submit the CSR to the CA
+
+
+Submit the CSR file to your certificate authority using the process and
+          means required by the CA, for example, email or web submission. For
+          the certificate format, specify PEM (base64 ASCII) (see Step 5
+          below for an example of PEM formatted certificate heading and closing
+          structure).
+The public CA will request specific details from you, to verify that
+          you own the domain name contained in the CSR, before they issue the
+          certificate.
+When you receive the signed certificate from the CA, you can proceed
+          with Step 5.
+
+
+
+
+Step 5: Verify the Certificate
+
+From the public (or internal) CA, you receive the certificate for the
+        server signed by the CA and several other digital artifacts, including
+        root CA and possibly one (or more) intermediate CA certificates. Before
+        distributing these to the hosts, make sure the certificate is in PEM
+        format. A PEM formatted certificate file looks like this:
+        -----BEGIN CERTIFICATE-----
+<The encoded certificate is represented by multiple lines of exactly 64 characters, except
+for the last line, which can contain 64 characters or fewer.>
+-----END CERTIFICATE-----
+
+If your issued certificate is in binary (DER) format, convert it to PEM format before
+        continuing. See How to Convert File Encodings (DER, JKS, PEM) for TLS/SSL Certificates
+          and Keys for details. 
+To modify the truststore (jssecacerts) to explicitly trust certificates or certificate
+        chain (as you might for certificates signed by an internal CA), follow the steps in How
+          to Add Root and Intermediate CAs to Truststore for TLS/SSL.
+
+
+
+Step 6: Import the Certificate into the Keystore 
+
+Copy the signed certificate you receive from the CA to the Cloudera
+        Manager Server host. To identity the certificate's functionality,
+        include a suffix such as "-server.cert.pem" in the target name for the
+        copy command, as shown in this example:
+        cp cert-file-recd /opt/cloudera/security/pki/$(hostname -f)-server.cert.pem
+
+Import the certificate into the keystore.
+        $ sudo keytool -importcert -alias $(hostname -f)-server \
+-file /opt/cloudera/security/pki/$(hostname -f)-server.cert.pem \
+-keystore /opt/cloudera/security/pki/$(hostname -f)-server.jks
+Assuming the certificate was obtained from a public CA, you can
+        safely disregard this message about trust, and enter
+          yes to continue:
+        ... is not trusted. Install reply anyway? [no]:  yes
+
+You must see the following response confirming that the
+            certificate has been properly imported and can verify the private
+            key that it certifies.
+          Certificate reply was installed in keystore
+If you do not see this response, double-check all your steps up to this point: are you
+        working in the correct path? Do you have the proper certificate? and so on. Contact Cloudera
+        Support for
+        assistance.
+
+

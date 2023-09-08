@@ -1,0 +1,80 @@
+Optional: Use an Existing IPACloudera Docs
+Optional: Use an Existing IPA
+You can use an existing FreeIPA setup with Kerberos.
+To use an existing IPA KDC with Automated Kerberos Setup, you must prepare the
+                following: 
+All cluster hosts should be joined to the IPA domain and
+                            registered in DNS- If IPA is not configured to authoritatively
+                        manage DNS, explicitly configuring the private IP and corresponding fully
+                        qualified domain names of all hosts, in the /etc/hosts file on all the hosts
+                        is recommended. 
+If you do not plan on using Ambari to manage the krb5.conf
+                            file, ensure the following is set in each krb5.conf file in your
+                            cluster: default_ccache_name = /tmp/krb5cc_%{uid} -
+                        Redhat/Centos 7.x changed the default ticket cache to keyring, which is
+                        problematic for the hadoop components. 
+The Java Cryptography Extensions (JCE) have been setup on the
+                            Ambari Server host and all hosts in the cluster- If during
+                        installation you chose to use the Ambari provided JDK, this has already been
+                        done for you. If you configured a custom JDK, ensure the unlimited strength
+                        JCE policies are in place on all nodes. For more information, refer to
+                            “Install the JCE for Kerberos”.
+
+Please also note: 
+
+If you plan on leveraging this IPA to create trusts with other KDCs,
+                    please follow the FreeIPA “Considerations for Active Directory integration”
+                    to ensure your hosts use a non-overlapping DNS domain, with matching uppercase
+                    REALM. 
+Kerberos authentication allows maximum 3 seconds time discrepancy. Use
+                    of IPA’s NTP server or an external time management service is highly recommended
+                    for all cluster hosts, including the FreeIPA host.
+To avoid exposing the IPA admin account, consider creating a dedicated
+                    hadoopadmin account that is a member of the admins group, or has been added to a
+                    role with User & Service Administratration privileges. Remember to reset the
+                    initial temporary password for the account before use in Ambari. For more
+                    details on this process see the section below.
+
+
+Creating an IPA account for use with Ambari 
+Example creating hadoopadmin account with explicit
+                privileges# obtain valid ticket as IPA administrator
+kinit admin
+
+# create a new principal to be used for ambari kerberos administration
+ipa user-add hadoopadmin --first=Hadoop --last=Admin --password
+
+# create a role and and give it privilege to manage users and services
+ipa role-add hadoopadminrole
+ipa role-add-privilege hadoopadminrole --privileges="User Administrators" 
+ipa role-add-privilege hadoopadminrole --privileges="Service Administrators"
+
+# add the hadoopadmin user to the role
+ipa role-add-member hadoopadminrole --users=hadoopadmin
+
+# login once, or kinit, to reset the initial temporary password for the hadoopadmin account
+kinit hadoopadmin
+
+
+
+importantDo not install an Ambari Agent on the IPA host.
+
+IPA leverages the SPNEGO principal (HTTP/ipa.your.domain.com) for secure
+                            access to its Web UI component. Installing the Ambari Agent on the IPA
+                            host causes the kvno of SPNEGO principal to increase, which causes
+                            problems for IPA HTTP server. If you have already accidentally done this
+                            and IPA is not able to start, symlink IPA’s http keytab path
+                            (/var/lib/ipa/gssproxy/http.keytab) to
+                            /etc/security/keytabs/spnego.service.keytab and contact your IPA
+                            provider’s support.
+The /etc/krb5.conf file on the IPA host has some additional properties
+                            not captured in Ambari’s krb5.conf template. Since letting Ambari manage
+                            krb5.conf on the cluster hosts is recommended, making the IPA host a
+                            part of the cluster is problematic for the IPA services. If you had this
+                            option checked when the ambari agent was installed, and do not have a
+                            backup of the original krb5.conf, reference the “krb5.conf
+                                template” to restore immediate functionality.
+
+
+
+Parent topic: Enable Kerberos

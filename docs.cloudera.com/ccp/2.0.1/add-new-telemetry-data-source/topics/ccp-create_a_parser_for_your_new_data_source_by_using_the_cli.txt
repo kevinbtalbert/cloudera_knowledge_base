@@ -1,0 +1,373 @@
+Create a Parser for Your New Data Source by Using the CLICloudera Docs
+Create a Parser for Your New Data Source by Using the CLI
+As an alternative to using the CCP Management module to parse your new data source,
+      you can use the CLI. 
+
+ Determine the format of the new data source’s log entries, so you can parse them: 
+
+
+Use ssh to access the host for the new data source.
+
+
+Look at the different log files and determine which to parse:
+
+sudo su - 
+cd /var/log/$NEW_DATASOURCE 
+ls
+
+The file you want is typically the access.log, but your
+                     data source might use a different name.
+
+
+Generate entries for the log that needs to be parsed so that you can see the
+                     format of the entries:
+
+timestamp | time elapsed | remotehost | code/status | bytes | method | URL rfc931 peerstatus/peerhost | type
+
+
+
+
+ Create a Kafka topic for the new data source: 
+
+
+Log in to $KAFKA_HOST as root.
+
+
+Create a Kafka topic with the same name as the new data source:
+
+/usr/hdp/current/kafka-broker/bin/kafka-topics.sh 
+--zookeeper $ZOOKEEPER_HOST:2181 --create --topic $NEW_DATASOURCE 
+--partitions 1 --replication-factor 1
+
+
+
+Verify your new topic by listing the Kafka topics:
+
+/usr/hdp/current/kafka-broker/bin/kafka-topics.sh --zookeeper $ZOOKEEPER_HOST:2181 --list
+
+
+
+
+ Create a Grok statement file that defines the Grok expression for the log type you
+               identified in Step 1. 
+
+noteYou must include timestamp to ensure that
+                  the system uses the event time rather than the system time. For information about
+                  setting the grok parser to use the current year, see step 5c.
+
+Refer to the Grok documentation for additional details.
+
+ Save the Grok pattern and load it into Hadoop Distributed File System (HDFS) in a
+               named location: 
+
+
+Create a local file for the new data source:
+
+touch /tmp/$DATASOURCE
+
+
+
+Open $DATASOURCE and add the Grok pattern defined in Step 3: 
+
+vi /tmp/$DATASOURCE
+
+
+
+Put the $DATASOURCE file into the HDFS directory where Metron stores its Grok
+                     parsers.
+Existing Grok parsers that ship with CCP are staged under
+                        /apps/metron/patterns:
+
+su - hdfs 
+hadoop fs -rmr /apparserps/metron/patterns/$DATASOURCE 
+hdfs dfs -put /tmp/$DATASOURCE /apps/metron/patterns/
+
+
+
+
+Define a parser configuration for the Metron Parsing Topology. 
+
+
+As root, log into the host with CCP installed:
+
+ssh $CCP_HOST
+
+
+
+Create a $DATASOURCE parser configuration file at 
+                        $METRON_HOME/config/zookeeper/parsers/$DATASOURCE.json:
+
+{ 
+"parserClassName": "org.apache.metron.parsers.GrokParser",
+"filterClassName:": null,
+"writerClassName:": org.apache.metron,writer.kafka.KafkaWriter
+"sensorTopic": "$DATASOURCE",
+"readMetadata" : true,
+"mergeMetadata" : true,
+"rawMessageStrategy" : default
+"rawMessageStrategyConfig" : default
+"parserConfig": {   
+   "grokPath": "/apps/metron/patterns/$DATASOURCE", 
+   "patternLabel": "$DATASOURCE_DELIMITED", 
+   "timestampField": "timestamp" 
+}, 
+"fieldTransformations" : [ 
+   { 
+     "transformation" : "STELLAR" 
+     ,"output" : [ "full_hostname", "domain_without_subdomains" ] 
+     ,"config" : { 
+                  "full_hostname" : "URL_TO_HOST(url)" 
+                  ,"domain_without_subdomains" : 
+ "DOMAIN_REMOVE_SUBDOMAINS(full_hostname)" 
+                  } 
+    } 
+   ] 
+} 
+
+
+noteField transformations configuration is loaded dynamically from Zookeeper,
+                        so any updates pushed to Zookeeper will automatically be reflected in the
+                        parser without restarting it. parserConfig is provided one
+                        time at topology startup via a parser's configure() method.
+                        Any changes to the static parser config will require a restart.
+                        Storm-specific configuration settings, such as those above, are also static
+                        and require a topology restart.
+
+
+
+parserClassName
+
+The name of the parser's class in the .jar file.
+
+filterClassName
+The filter to use.
+This can be the fully qualified name of a class that implements the
+                                 org.apache.metron.parsers.interfaces.MessageFilter<JSONObject>
+                              interface. Message filters enable you to ignore a set of messages by
+                              using custom logic. The existing implementation is
+                                 STELLAR. The Stellar implementation enables you to
+                              apply a Stellar statement that returns a Boolean, which passes every
+                              message for which the statement returns true . The
+                              stellar statement is specified by the filter.query
+                              property in the parserConfig. For example, the
+                              following Stellar filter includes messages that contain a
+                                 field1 field:
+
+{
+    "filterClassName" : "STELLAR"
+   ,"parserConfig" : {
+    "filter.query" : "exists(field1)"
+    }
+   }
+
+writerClassName
+The class used to write messages after they have been parsed.
+                              Defaults to
+                                 org.apache.metron.writer.kafka.KafkaWriter.
+sensorTopic
+
+The Kafka topic on which the telemetry is being streamed. If the
+                                 topic is prefixed and suffixed by / then it is
+                                 assumed to be a regex and will match any topic matching the pattern
+                                 (for example, /bro.*/ matches
+                                    bro_cust0, bro_cust1 and
+                                    bro_cust2).
+
+readMetadata
+
+A Boolean indicating whether to read metadata and make it available
+                                 to field transformations (false by default).
+There are two types of metadata supported in CCP:
+
+Environmental metadata about the whole systemFor example, if
+                                       you have multiple Kafka topics being processed by one parser,
+                                       you might want to tag the messages with the Kafka
+                                    topic.
+Custom metadata from an individual telemetry source that you
+                                    might want to use within Metron
+
+
+mergeMetadata
+
+A Boolean indicating whether to merge metadata with the message
+                                    (false by default).
+If this property is set to true, then every
+                                 metadata field becomes part of the messages and, consequently, is
+                                 also available for field transformations.
+
+rawMesssageStrategy
+The strategy to use when reading the raw data and metadata.
+The following strategies are supported:
+DEFAULT
+Data is read directly from the kafka record value and
+                                       metadata, if any, is read from the kafka record key. This
+                                       strategy defaults to not reading metadata and not merging
+                                       metadata. This is the default strategy.
+ENVELOPE
+Data from kafka record value is presumed to be a JSON blob.
+                                       One of these fields must contain the raw data to pass to the
+                                       parser. All other fields should be considered metadata. The
+                                       field containing the raw data is specified in the
+                                       rawMessageStrategyConfig. Data held in the kafka key as well
+                                       as the non-data fields in the JSON blob passed into the kafka
+                                       value are considered metadata. Note that the exception to
+                                       this is that any original_string field is inherited from the
+                                       envelope data so that the original string contains the
+                                       envelope data. If you do not prefer this behavior, remove
+                                       this field from the envelope data.
+
+rawMessageStrategyConfig
+The raw message strategy configuration map.
+The following configurations are strategy dependent:
+DEFAULT
+metadataPrefix defines the key prefix for metadata (default
+                                       is metron.metadata).
+ENVELOPE
+metadataPrefix defines the key prefix for metadata (default
+                                       is metron.metadata)
+messageField defines the field from the envelope to use as
+                                       the data. All other fields are considered metadata.
+
+parserConfig
+
+A JSON map defining the parser implementation configuration.
+This parameter also includes batch sizing and timeout settings for
+                                 writer configuration. If you do not define these properties, the
+                                 system uses their default values. 
+
+grokPath - The path in HDFS (or in the Jar) to the grok
+                                    statement. By default attempts to load from HDFS, then falls
+                                    back to the classpath, and finally throws an exception if unable
+                                    to load a pattern.
+batchSize - Number of records to batch together before
+                                    sending to the writer. Default is 15.
+patternLabel - The name of the Grok statement that
+                                    defines the pattern of the Grok expression.
+timestampField - Use the timestamp
+                                    value to ensure that the system uses the event time rather than
+                                    the system time.
+
+
+
+
+    "parserConfig": {   
+   "grokPath": "/apps/metron/patterns/$DATASOURCE", 
+   "patternLabel": "$DATASOURCE_DELIMITED", 
+   "timestampField": "timestamp"
+   },
+   
+
+In addition, you can override settings for the kafka writer within
+                              the parserConfig file.
+fieldTransformations
+
+An array of complex objects representing the transformations to be
+                                 performed on the message generated from the parser before writing
+                                 to the Kafka topic.
+In this example, the Grok parser is designed to extract the URL,
+                                 but the only information that you need is the domain (or even the
+                                 domain without subdomains). To obtain this, you can use the Stellar
+                                 Field Transformation (under the fieldTransformations element). The
+                                 Stellar Field Transformation enables you to use the Stellar DSL
+                                 (Domain Specific Language) to define extra transformations to be
+                                 performed on the messages flowing through the topology.
+
+securityProtocol
+
+The security protocol to use for reading from kafka (this is a
+                                 string). This can be overridden on the command line and also
+                                 specified in the spout config via the security.protocol key. If
+                                 both are specified, then they are merged and the CLI will take
+                                 precedence. If multiple sensors are used, any non "PLAINTEXT" value
+                                 will be used.
+
+cacheConfig
+
+Cache config for stellar field transformations. This configures a
+                                 least frequently used cache. This is a map with the following keys.
+                                 If not explicitly configured (the default), then no cache will be
+                                 used.
+
+
+
+stellar.cache.maxSize - The maximum
+                                          number of elements in the cache. Default is to not use a
+                                          cache.
+stellar.cache.maxTimeRetain - The
+                                          maximum amount of time an element is kept in the cache (in
+                                          minutes). Default is to not use a cache.
+
+
+
+
+Example of a cache config to contain at max 20000 stellar expressions
+                              for at most 20 minutes:
+
+{
+  "cacheConfig" : {
+    "stellar.cache.maxSize" : 20000,
+    "stellar.cache.maxTimeRetain" : 20
+  }
+}
+
+
+
+
+
+If you want to set the grok parser to use the current year in its timestamp,
+                     add the following information to the transformations function in the
+                        datasource json file:
+
+"fieldTransformations" : [
+     {
+          "transformation" : "STELLAR"
+          ,"output" : [ "timestamp"]
+          ,"config" : {
+                    "timestamp”: “TO_EPOCH_TIMESTAMP(FORMAT(‘%s %d’, timestamp_str , YEAR()), ‘MMM dd HH:mm:ss:yyyy’)”
+
+For example, the datasource json file would change to:
+
+"fieldTransformations" : [
+     {
+          "transformation" : "STELLAR"
+          ,"output" : [ "full_hostname", "domain_without_subdomains" , "timestamp"]
+          ,"config" : {
+                    "full_hostname" : "URL_TO_HOST(url)"
+                    ,"domain_without_subdomains" :
+                    ,”timestamp”: “TO_EPOCH_TIMESTAMP(FORMAT(‘%s %d’, timestamp_str , YEAR()), ‘MMM dd HH:mm:ss:yyyy’)”
+ 
+"DOMAIN_REMOVE_SUBDOMAINS(full_hostname)"
+
+
+
+Use the following script to upload configurations to Apache ZooKeeper:
+
+$METRON_HOME/bin/zk_load_configs.sh --mode PUSH -i $METRON_HOME/config/zookeeper -z $ZOOKEEPER_HOST:2181
+
+
+
+
+ Deploy the new parser topology to the cluster: 
+If you want to deploy multiple parsers on one topology, refer to Creating
+                  Multiple Parsers on One Topology.
+
+
+Log in to the host that has Metron installed as root user.
+
+
+Deploy the new parser topology:
+
+$METRON_HOME/bin/start_parser_topology.sh -k $KAFKA_HOST:6667 -z $ZOOKEEPER_HOST:2181 -s $DATASOURCE
+
+
+
+Use the Apache Storm UI to verify that the new topology is listed and that it
+                     has no errors.
+
+
+This new data source processor topology ingests from the $DATASOURCE Kafka topic
+               that you created earlier and then parses the event with the CCP Grok framework using
+               the Grok pattern defined earlier. 
+
+
+Parent topic: Creating Parsers

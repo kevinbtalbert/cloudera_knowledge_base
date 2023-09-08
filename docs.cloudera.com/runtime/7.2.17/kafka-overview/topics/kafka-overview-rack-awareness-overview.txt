@@ -1,0 +1,142 @@
+Kafka rack awarenessCloudera Docs
+Kafka rack awareness
+Learn about Kafka rack awareness and multi-level rack awareness.
+Racks provide information about the physical location of a broker or a client. A Kafka
+      deployment can be made rack aware by configuring rack awareness for the Kafka brokers and
+      clients respectively. Enabling rack awareness can help in hardening your deployment, it
+      provides durability guarantees for your Kafka service, and significantly decreases the chances
+      of data loss
+noteAlthough the feature is called rack awareness, the term rack does not necessarily mean an
+      actual physical server rack. Instead, a rack from Kafka's perspective represents a physical
+      location or independent physical infrastructure. For example, in many production deployments,
+      the feature is used to specify the individual Data Centers that the brokers and clients are
+      running in. 
+
+
+Rack awareness for Kafka brokers
+Learn about Kafka broker rack awareness and how rack-aware Kafka brokers
+    behave.
+To avoid a single point of failure, instead of putting all brokers into the same rack, it is
+      considered a best practice to spread your Kafka brokers among racks. In cloud environments
+      Kafka brokers located in different availability zones or data centers are usually deployed in
+      different racks. Kafka brokers have built in support for this type of cluster topology and can
+      be configured to be aware of the racks they are in. 
+If you create, modify, or redistribute a topic in a rack-aware Kafka deployment, rack
+      awareness ensures that replicas of the same partition are spread across as many racks as
+      possible. This limits the risk of data loss if a complete rack fails. Replica assignment will
+      try to assign an equal number of leaders for each broker, therefore, it is advised to
+      configure an equal number of brokers for each rack to avoid uneven load of racks. 
+For example, assume you have a topic partition with 3 replicas and have the brokers
+      configured in 3 different racks. If rack awareness is enabled, Kafka will try to distribute
+      the replicas among the racks evenly in a round-robin fashion. In the case of this example,
+      this means that Kafka will ensure to spread all replicas among the 3 different racks,
+      significantly decreasing the chances of data loss in case of a rack failure.
+
+Multi-level rack awareness
+Standard rack awareness handles all racks as unique physical locations (for example, Data
+        Centers) that have identical importance. In some use cases, physical locations follow a
+        hierarchical system. For example, besides having multiple DCs, there can be (physical) racks
+        located inside those DCs. In a use case like this, the aim is not only to distribute the
+        replicas among the topmost racks (DCs), but among the second level racks as well (physical
+        racks).
+With standard rack awareness, this goal cannot be met. If you use the topmost level as the
+        broker rack IDs (for example, /DC1, /DC2, /DC3), you lose the subsequent levels of the
+        infrastructure. This means that no guarantees are provided for even replica distribution on
+        the second level. Notice how in the following example Rack 2 in each DC is unpopulated.
+You can use the full physical location as the broker rack IDs (for example, /DC1/R2,
+        /DC2/R5), but then the standard rack awareness feature handles all of the IDs as unique
+        locations that are on the same level. As a result, no guarantee is provided that Kafka
+        evenly distributes replicas on the top (DC) level. Notice how in the following example Data
+        Center 3 is unpopulated.To ensure that multi-level rack guarantees can be met, in addition to standard
+        rack awareness, Cloudera Kafka supports a multi-level rack aware mode. This mode of rack
+        awareness can be configured by specifying multi-level rack IDs and selecting a feature
+        toggle in Cloudera Manager. When enabled, Kafka takes into consideration all levels of the
+        hierarchy and ensures that replicas are spread evenly in the deployment.
+
+Cruise Control optimizations with multi-level rack awareness
+If Cruise Control is present in the cluster, and the Kafka brokers run with multi-level
+        rack awareness enabled, Cruise Control will replace all the standard rack aware goals in its
+        configuration with a multi-level rack-aware goal. This ensures that Cruise Control
+        optimizations do not violate the multi-level rack awareness guarantees. For more information
+        on how the goal works, see Setting capacity estimations and goals in the Cruise
+        Control documentation.
+
+
+Related informationSetting capacity estimations and goalsConfiguring rack awareness for Kafka brokersConfiguring multi-level rack awareness for brokers
+Rack awareness for Kafka consumers
+Learn about follower fetching, which can be used to make Kafka consumers rack
+    aware
+When a Kafka consumer tries to consume a topic partition, it fetches from the partition
+      leader by default. If the partition leader and the consumer are not in the same rack, fetching
+      generates significant cross-rack traffic, which has a number of disadvantages. For example, it
+      can generate high costs and lead to lower consumer bandwidth and throughput. 
+
+For this reason, it is possible to provide the client with rack information so that the
+      client fetches from the closest replica instead of the leader. If the configured closest
+      replica does not exist (there is no replica for the needed partition in the configured closest
+      rack), it uses the partition leader. This feature is called follower fetching and it can be
+      used to mitigate the costs generated by cross-rack traffic or increase consumer throughput. 
+noteDue to the nature of the Kafka protocol and high watermark propagation, consumers might
+      experience increased message latency when fetching from a replica compared to when they are
+      fetching from the leader.
+
+Follower fetching in multi-level deployments
+Follower fetching is also supported if multi-level rack awareness is enabled for the
+        brokers. When Kafka brokers are running in multi-level rack-aware mode, a multi-level
+        rack-aware ReplicaSelector is automatically installed. This selector ensures that if a
+        consumer that has a multi-level rack ID, the closest replica is selected from the
+        multi-level hierarchy.
+
+
+Related informationConfiguring rack awareness for Kafka consumersConfiguring multi-level rack awareness for consumers
+Rack awareness for Kafka producers
+Learn about rack awareness for Kafka producers.
+Compared to brokers or consumers, there are no producer specific rack-awareness features or
+      toggles that you can enable. However, in a deployment where rack awareness is an important
+      factor, you can make configuration changes so that producers make use of rack awareness and
+      have messages replicated to multiple racks. 
+Specifically, Cloudera recommends a configuration that ensures that the produced messages are
+      replicated to at least two different racks before the messages are considered to be
+      successful. This involves configuring acks to all in the
+      producer configuration and setting up min.insync.replicas for the topics in a
+      way that ensures a minimum of two racks get the message before the produce request is
+      considered successful.
+The configuration of the acks property is fixed. If you want to make your
+      producers rack aware, the property must be set to all no matter the cluster
+      topology or deployment.
+The exact value you set for min.insync.replicas on the other hand depends on
+      your cluster deployment. Specifically, the min.insync.replicas value you must
+      set will depend on the number of racks, brokers, and the replication factor of your topics.
+      Cloudera recommends that you exercise caution and review the following examples to better
+      understand configuration.
+For example, consider a Cloudera recommended deployment that has three racks with topic
+      replication set to 3. In a case like this, a min.insync.replicas setting of 2
+      ensures that you always have data written to at least two different racks even if one replica
+      is lagging.
+
+Understand however, that setting min.insync.replicas to 2 does not
+      universally work for all deployments and may not guarantee that you always have your produced
+      message in at least two racks. Configuration depends on the number of replicas, as well as the
+      number of racks and brokers. 
+If you have more replicas and brokers than racks, you will have at least two replicas in the
+      same rack. In a case like this, setting min.insync.replicas to 2 is not
+      sufficient, a partition might become unavailable under certain circumstances.
+For example, assume you have three racks with topic replication factor set to 4, meaning that
+      there are a total of four replicas. Additionally, assume that only two of the replicas are in
+      the in-sync replica set (ISR), the leader and one of the followers, and both are located in
+      the same rack. The other two replicas are lagging. Unclean leader election is disabled to
+      avoid data loss.
+
+When the leader and the in-sync follower (located in the same rack) successfully append a
+      produced message to the log, message production is considered successful. The leader does not
+      wait for acknowledgement from the lagging replicas. This is because acks=all
+      only guarantees that the leader waits for the replicas that are in the ISR (including itself).
+      This means that while the latest messages are available on two brokers, both are located on
+      the same rack. If the rack goes down at the same time or shortly after production is
+      successful, the partition will become unavailable as only the two lagging replicas remain,
+      which cannot become leaders.
+In cases like this, a correct value for min.insync.replicas would be 3
+      instead of 2 as three ISRs would guarantee that messages are produced to at least two
+      different racks.
+
+Related informationConfiguring rack awareness for Kafka producers

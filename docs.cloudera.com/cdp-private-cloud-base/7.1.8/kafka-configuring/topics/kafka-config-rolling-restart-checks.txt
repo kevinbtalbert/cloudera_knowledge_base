@@ -1,0 +1,115 @@
+Rolling restart checksCloudera Docs
+Rolling restart checks
+You can configure Cloudera Manager to perform a check on Kafka brokers during a rolling
+    restart. Using this check can ensure that Kafka brokers stay healthy after the rolling restart.
+    There are multiple types of checks available, each providing a different level of guarantee on
+    Kafka broker and cluster health.
+By default, during a rolling restart, Cloudera Manager only checks whether restarting a Kafka
+      broker has failed or succeeded. As a result of this behaviour, Kafka brokers might go into a
+      state where some of the topics and partitions become unreachable by the clients. For example,
+      by default Cloudera Manager might restart a broker while the previous broker is not fully
+      ready for operation. This can cause outages and corrupted log indexes. To avoid such issues,
+      you can configure Cloudera Manager to perform a more thorough check on the Kafka brokers
+      during a rolling restart. 
+Check types and configuration
+There are multiple checks available, each providing a different (higher) level of guarantee
+        on Kafka cluster and broker health. The type of check performed is configured with the
+          Cluster Health Guarantee During Rolling Restart property. The
+        property has four different settings, each setting corresponds to a different type of check.
+        The available settings and the check types that the settings correspond to are as follows:
+none
+This setting disables rolling restart checks. If this option is selected, no checks
+              are performed and no health guarantees are provided. This is the default setting.
+ready for request
+This setting ensures that when a broker is restarted, the restarted broker is
+              accepting and responding to requests made on its service port. The next broker is only
+              restarted after the previous broker is ready for requests.
+healthy partitions stay healthy
+
+This setting ensures that no partitions go into an under-min-isr state when a
+                broker is stopped. This is achieved by waiting before each broker is stopped so that
+                all other brokers can catch up with all replicas that are in an at-min-isr state.
+                Additionally, this setting ensures that the restarted broker is accepting and is
+                responding to requests made on its service port before restarting the next broker.
+                This setting ignores partitions which are already in an under-min-isr state.
+
+all partitions stay healthy
+
+This setting ensures that no partitions are in an under-min-isr or at-min-isr state
+                when a broker is stopped. This is achieved by waiting before each broker is stopped
+                so that all other brokers can catch up with all replicas that are in an at-min-isr
+                or under-min-isr state. Additionally, this setting ensures that the restarted broker
+                is accepting requests on its service port before the next broker is restarted.
+
+
+In addition to configuring and enabling these checks using Cluster Health
+          Guarantee During Rolling Restart, a number of other configuration properties
+        are also available that enable you to fine-tune the behaviour of the checks. For detailed
+        steps on how to enable and configure rolling restart checks, see Configuring rolling
+          restart checks.
+
+How checks are performed
+When Cloudera Manager executes a rolling restart check, it uses the
+          kafka-topics tool to gather information about the brokers, topics, and
+        partitions. The kafka-topics tool requires a valid client configuration
+        file to run. In the case of rolling restart checks, two configuration files are required.
+        One for the kafka-topics commands that are initiated before a broker is
+        stopped, and a separate one for the commands initiated after a broker is restarted. Cloudera
+        Manager automatically generates these client configuration files based on the configuration
+        of the Kafka service. These files can also be manually updated using advanced security
+        snippets.
+Using these files, Cloudera Manager executes kafka-topics commands on the
+        brokers. Based on the response from the tool, Cloudera Manager either waits for a specified
+        amount of time or continues with the rolling restart. 
+Depending on what type of check is configured, Cloudera Manager polls information with
+          kafka-topics at different points in time. As a result, the checks can be
+        categorised in two groups. Pre-checks and post-checks. If either healthy
+          partitions stay healthy or all partitions stay healthy
+        is selected, information is polled both before a broker is stopped (pre-check) and after a
+        broker is restarted (post-check). If the ready for request setting is
+        selected, information is only polled after a broker is restarted. 
+If a pre-check fails to find a proper state when a broker can be stopped, the check will
+        stop the entire rolling restart process. This can happen if the broker that is about to be
+        stopped still has at-min-isr or under-min-isr partitions after the configured timeout
+        interval is reached. Post-checks behave in a similar way. If the post-check fails to receive
+        validation (a correct exit code) within the specified timeout interval from the
+          kafka-topics command that the broker is ready for requests, the check
+        will stop the entire rolling restart process. In both of these cases the brokers are not
+        stopped or restarted. The rolling restart fails and the brokers continue to run. 
+noteConfiguring and using any type of check increases the time required for a rolling
+        restart. This is the result of Cloudera Manager waiting between restarting the brokers. The
+        timeout intervals however can be configured to a lower value if the rolling restart check
+        takes too much time to finish. Alternatively, if you are experiencing timeout related
+        rolling restart failures, you can also configure the timeout intervals to a higher
+        value.
+
+Advanced configuration
+There are two scenarios when additional configuration is required. These scenarios are as
+        follows: 
+Kafka brokers are configured to use a custom listeners
+If you configured your Kafka brokers with advanced configuration snippets to use
+              custom listeners (for example a custom host:port pair), you must manually update both
+              client configuration files that Cloudera Manager generates. This is required because
+              Cloudera Manager might not be able to automatically extract the information required
+              to establish a connection with the Kafka brokers when custom listeners are configured.
+              For more information, see Configuring the client configuration used for rolling
+                restart checks.
+A broker connectivity change is made after rolling restart checks are enabled
+
+A broker connectivity change is any type of change made to listeners,
+                bootstrap servers, ports, or security. If a change like this is made after rolling
+                restart checks are enabled, Cloudera Manager uses the newly set configuration to
+                generate the client configuration files. However, until a restart is executed, the
+                Kafka brokers still operate with the old configuration. As a result, Cloudera
+                Manager will run the kafka-topics tool with an invalid
+                configuration causing the check and the rolling restart to fail. In a case like
+                this, you must disable rolling restart checks until the Kafka brokers are restarted
+                at least once. This can be done by setting Cluster Health Guarantee
+                  During Rolling Restart to none. Following the
+                initial restart, the brokers will operate with the new configuration and you can
+                re-enable rolling restart checks. 
+
+
+
+
+Configuring rolling restart checksYou can configure Cloudera Manager to perform different types of checks on Kafka     brokers during a rolling restart. The type of check performed by Cloudera Manager is configured     with the Cluster Health Guarantee During Rolling Restart property. The     property has multiple settings, each setting corresponds to a different type of     check.Configuring the client configuration used for rolling restart checksCloudera Manager requires Kafka client configuration files to perform rolling restart     checks. These files are generated automatically. However, if your Kafka service has custom     listeners configured, you must manually update these client configuration files. Otherwise, the     rolling restart check might fail.

@@ -1,0 +1,76 @@
+Advanced partitioningCloudera Docs
+Advanced partitioning
+You can combine HASH and RANGE partitioning to create more complex partition
+  schemas. You can also specify zero or more HASH
+  definitions, followed by zero or one RANGE
+  definitions. Each schema definition can encompass one or more columns. While enumerating every
+  possible distribution schema is out of the scope of this topic, the following examples illustrate
+  some of the possibilities.
+PARTITION BY HASH and RANGE
+ Consider the basic PARTITION BY
+          HASH example above. If you often query for a range of sku values, you can optimize the example by
+        combining hash partitioning with range partitioning. 
+ The following example still creates 16 tablets, by first hashing the id
+        column into 4 partitions, and then applying range partitioning to split each partition into
+        four tablets, based upon the value of the sku string. At least four tablets (and possibly up to 16) can be written to in
+        parallel, and when you query for a contiguous range of sku values, there's a good chance you only need
+        to read a quarter of the tablets to fulfill the query. 
+By default, the entire primary key (id,
+          sku) will be hashed when you use PARTITION BY HASH. To hash on only part of the primary key, and use a range
+        partition on the rest, use the syntax demonstrated below.
+CREATE TABLE cust_behavior (
+  id BIGINT,
+  sku STRING,
+  salary STRING,
+  edu_level INT,
+  usergender STRING,
+  `group` STRING,
+  city STRING,
+  postcode STRING,
+  last_purchase_price FLOAT,
+  last_purchase_date BIGINT,
+  category STRING,
+  rating INT,
+  fulfilled_date BIGINT,
+  PRIMARY KEY (id, sku)
+)
+PARTITION BY HASH (id) PARTITIONS 4,
+RANGE (sku)
+(
+  PARTITION VALUES < 'g',
+  PARTITION 'g' <= VALUES < 'o',
+  PARTITION 'o' <= VALUES < 'u',
+  PARTITION 'u' <= VALUES
+)
+STORED AS KUDU;
+
+Multiple PARTITION BY HASH Definitions
+ Once again expanding on the example above, let's assume that the
+        pattern of incoming queries will be unpredictable, but you still want to ensure that writes
+        are spread across a large number of tablets. You can achieve maximum distribution across the
+        entire primary key by hashing on both primary key columns.
+        CREATE TABLE cust_behavior (
+  id BIGINT,
+  sku STRING,
+  salary STRING,
+  edu_level INT,
+  usergender STRING,
+  `group` STRING,
+  city STRING,
+  postcode STRING,
+  last_purchase_price FLOAT,
+  last_purchase_date BIGINT,
+  category STRING,
+  rating INT,
+  fulfilled_date BIGINT,
+  PRIMARY KEY (id, sku)
+)
+PARTITION BY HASH (id) PARTITIONS 4,
+             HASH (sku) PARTITIONS 4
+STORED AS KUDU;
+        The example creates 16 partitions. You could also use HASH (id, sku) PARTITIONS 16. However, a scan for
+          sku values would almost always impact all
+        16 partitions, rather than possibly being limited to 4. 
+
+
+Parent topic: Partitioning tables

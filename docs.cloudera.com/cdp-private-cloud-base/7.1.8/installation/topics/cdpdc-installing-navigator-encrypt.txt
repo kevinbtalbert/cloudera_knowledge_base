@@ -1,0 +1,368 @@
+Installing Cloudera Navigator EncryptCloudera Docs
+Installing Cloudera Navigator Encrypt
+Learn about installing Navigator Encrypt, setting up TLS certificates on a Navigator
+    Encrypt client, entropy requirements , and uninstalling and reinstalling NavEncrypt.
+See  Data at Rest Encryption Requirements for more
+        information about encryption and Navigator Encrypt requirements.
+
+
+
+importantBefore installing Cloudera Navigator Encrypt, see Encrypting Data at Rest and the Product Compatibility Matrix for Cloudera Navigator
+            Encryption for important considerations.
+
+
+
+Parent topic: Production Installation
+Setting Up an Internal Repository
+You must create an internal repository to install or upgrade Navigator Encrypt. For
+      instructions on creating internal repositories (including Cloudera Manager, CDH, and Cloudera
+      Navigator encryption components), see Configuring a Local Package Repository.
+
+
+Installing Navigator Encrypt (RHEL-Compatible)
+Learn how to install RHEL compatible Navigator Encrypt.
+
+noteFor details about supported Linux Operating Systems, refer to the Product Compatibility Matrix for Cloudera Navigator
+            Encryption.
+
+Install the Cloudera Repository.
+
+Add the internal repository you created. See Configuring Hosts to Use the Internal
+                Repository for more information.
+Import the GPG key by running the following
+              command:sudo rpm --import http://repo.example.com/path/to/gpg_gazzang.asc
+
+
+Install the EPEL Repository.
+
+Dependent packages are available through the Extra Packages for Enterprise Linux
+              (EPEL) repository. To install the EPEL repository, install the
+                epel-release package:
+Copy the URL for the
+                    epel-release-<version>.noarch file for
+                  RHEL 6 or RHEL 7 located in the How can I use these extra packages?
+                  section of the EPEL wiki page.
+Run the following commands to install the EPEL
+                    repository:sudo wget <epel_rpm_url>
+sudo yum install epel-release-<version>.noarch.rpmReplace
+                        <version> with the version number
+                    of the downloaded RPM (for example, 6-8).
+
+If the epel-release package is already installed, you see a message
+              similar to the
+              following:Examining /var/tmp/yum-root-jmZhL0/epel-release-6-8.noarch.rpm: epel-release-6-8.noarch
+/var/tmp/yum-root-jmZhL0/epel-release-6-8.noarch.rpm: does not update installed package.
+Error: Nothing to do
+
+Confirm that the EPEL repository is
+              installed:sudo yum repolist | grep -i epel
+
+
+Install Kernel Libraries.
+
+For Navigator Encrypt to run as a kernel module, you must download and install the
+              kernel development headers. Each kernel module is compiled specifically for the
+              underlying kernel version. Running as a kernel module allows Navigator Encrypt to
+              provide high performance and complete transparency to user-space applications.
+To determine your current kernel version, run uname -r.
+To install the development headers for your current kernel version,
+              run:sudo yum install kernel-headers-$(uname -r) kernel-devel-$(uname -r)
+For OL with the Unbreakable Enterprise Kernel (UEK),
+                run:sudo yum install kernel-uek-headers-$(uname -r) kernel-uek-devel-$(uname -r)noteFor
+                UEK3, you do not need to install kernel-uek-headers-*
+If yum cannot find these packages, it displays an error similar to
+              the following:Unable to locate package <packagename>.
+In this case, do one of the following to proceed:
+Find and install the kernel headers package by using a tool such as RPM Pbone
+                  .
+Upgrade your kernel to the latest version. If you upgrade the kernel, you must
+                  reboot after upgrading and select the kernel from the grub menu to make it
+                  active.
+
+
+
+(RHEL or CentOS Only) Manually Install dkms.
+
+Because of a broken dependency in all versions of RHEL or CentOS, you must manually
+              install the dkms
+              package:sudo yum install https://download-ib01.fedoraproject.org/pub/epel/7/aarch64/Packages/d/dkms-2.7.1-1.el7.noarch.rpm
+noteThis link is provided as an example for RHEL 7. For RHEL 8, the installer (typically yum) will find the dkms package automatically. 
+              If not found, here is one repo where you can find the dkms package for RHEL 8:
+              Repo-id            : epel
+Repo-name          : Extra Packages for Enterprise Linux 8 - x86_64 
+
+
+
+Install Navigator Encrypt.
+
+Install the Navigator Encrypt client using the yum package
+              manager:sudo yum install navencrypt
+If you attempt to install Navigator Encrypt with incorrect or missing kernel headers,
+              you see a message like the
+              following:Building navencryptfs 3.8.0 DKMS kernel module...
+
+#################### BUILDING ERROR ####################
+
+
+
+Creating symlink /var/lib/dkms/navencryptfs/3.8.0/source ->
+                 /usr/src/navencryptfs-3.8.0
+
+DKMS: add completed.
+Error! echo
+Your kernel headers for kernel 3.10.0-229.4.2.el7.x86_64 cannot be found at
+/lib/modules/3.10.0-229.4.2.el7.x86_64/build or /lib/modules/3.10.0-229.4.2.el7.x86_64/source.
+
+#################### BUILDING ERROR ####################
+
+Failed installation of navencryptfs 3.8.0 DKMS kernel module !
+To recover, see Navigator Encrypt Kernel Module Setup. 
+
+
+
+
+
+Installing Navigator Encrypt (SLES)
+Learn how to install SLES compatible Navigator Encrypt.
+
+Install the Cloudera Repository.
+
+Add the internal repository you created. See Configuring Hosts to Use the Internal
+                Repository for more information.
+Import the GPG key by running the following
+              command:sudo rpm --import http://repo.example.com/path/to/gpg_gazzang.asc
+
+
+Install NTP.
+
+The Network Time Protocol (NTP) service synchronizes system time. Cloudera recommends
+              using NTP to ensure that timestamps in system logs, cryptographic signatures, and
+              other auditable events are consistent across systems. Install and start NTP with the
+              following commands:
+
+SLES
+                11$ sudo zypper install ntp
+# /etc/init.d/ntp start
+SLES
+                12$ sudo zypper install ntp
+# service ntpd start
+
+
+
+Install the Kernel Module Package and Navigator Encrypt Client.
+
+Install the kernel module package (KMP) and Navigator Encrypt client with
+                zypper:
+sudo zypper install cloudera-navencryptfs-kmp-<kernel_flavor>
+sudo zypper install navencrypt
+Replace <kernel_flavor> with the kernel
+                flavor for your system. Navigator Encrypt supports the
+                default, xen, and ec2 kernel
+              flavors.
+
+
+Enable Unsupported Modules.
+Edit /etc/modprobe.d/unsupported-modules and set
+              allow_unsupported_modules to 1. For
+            example:#
+# Every kernel module has a flag 'supported'. If this flag is not set loading
+# this module will taint your kernel. You will not get much help with a kernel
+# problem if your kernel is marked as tainted. In this case you firstly have
+# to avoid loading of unsupported modules.
+#
+# Setting allow_unsupported_modules 1 enables loading of unsupported modules
+# by modprobe, setting allow_unsupported_modules 0 disables it. This can
+# be overridden using the --allow-unsupported-modules command line switch.
+allow_unsupported_modules 1
+
+(SLES 12 only) Run systemctl daemon-reload.
+
+Due to changes in SLES 12, you must run the following
+              command after installing Navigator Encrypt:
+sudo systemctl daemon-reload
+
+
+
+
+
+Installing Navigator Encrypt (Ubuntu)
+Learn how to install Ubuntu compatible Navigator Encrypt.
+
+Install the Cloudera Repository.
+
+Add the internal repository you created. See Configuring Hosts to Use the Internal
+                Repository for more information.
+echo "deb http://repo.example.com/path/to/ubuntu/stable $DISTRIB_CODENAME main" | sudo tee -a /etc/apt/sources.list
+Import the GPG key by running the following
+              command:wget -O - http://repo.example.com/path/to/gpg_gazzang.asc | apt-key add -
+Update the repository index with apt-get update.
+
+
+Install NTP.
+The Network Time Protocol (NTP) service synchronizes system time. Cloudera
+            recommends using NTP to ensure that timestamps in system logs, cryptographic signatures,
+            and other auditable events are consistent across systems. Install and start NTP with the
+            following
+            commands:sudo apt-get install ntp
+sudo /etc/init.d/ntp start
+
+Install Kernel Headers.
+Determine your kernel version by running uname -r, and install the
+            appropriate
+            headers:sudo apt-get install linux-headers-$(uname -r)
+
+Install the Navigator Encrypt Client.
+Install Navigator
+            Encrypt:sudo apt-get install navencrypt
+
+
+
+
+Post Installation
+These are the commands to be run post installation of Navigator Encrypt.
+
+To ensure that Navigator Encrypt and NTP start after a reboot, add them to the start
+          order with
+          chkconfig:sudo chkconfig --level 235 navencrypt-mount on
+sudo chkconfig --level 235 ntpd on
+
+
+
+
+Setting Up TLS for Navigator Encrypt Clients
+Transport Layer Security (TLS) certificates are used to secure communication with
+      Navigator Encrypt. Cloudera strongly recommends using certificates signed by a trusted
+      Certificate Authority (CA). 
+
+If the TLS certificate is signed by an unrecognized CA, such as an internal CA, then you
+          must add the root certificate to the host certificate truststore of each Navigator Encrypt
+          client. Be aware that Navigator Encrypt uses the operating system's truststore, which is
+          distinct from the JDK truststore used by Cloudera Manager.
+To set up TLS certificates on a Navigator Encrypt client:
+
+
+If not already installed, install the CA-certificates:
+
+yum install ca-certificates
+
+
+Enable the dynamic CA configuration feature:
+
+update-ca-trust enable
+
+
+Copy the root certificate into the host certificate truststore:
+
+cp /path/to/root.pem /etc/pki/ca-trust/source/anchors/
+
+
+Update the host certificate truststore:
+
+update-ca-trust
+
+
+Example:[root@navencrypt-1 ~]# service navencrypt-mount stop
+Stopping navencrypt directories
+ * Umounting /dev/nvtest/test1 ...                         [  OK  ]
+ * Umounting /dev/nvtest/test2 ...                         [  OK  ]
+ * Unloading module ...                                    [  OK  ]
+
+[root@navencrypt-1 ~]# update-ca-trust enable
+[root@navencrypt-1 ~]# cp dd-1.lab.usa.company.com.pem /etc/pki/ca-trust/source/anchors/
+[root@navencrypt-1 ~]# update-ca-trust
+
+[root@navencrypt-1 ~]# service navencrypt-mount start
+Starting navencrypt directories
+ * Mounting '/dev/nvtest/test1'                            [  OK  ]
+ * Mounting '/dev/nvtest/test2'   
+
+
+
+Entropy Requirements
+Many cryptographic operations, such as those used with TLS or HDFS encryption, require a
+      sufficient level of system entropy to ensure randomness; likewise, Navigator
+      Encrypt needs a source of random numbers to ensure good performance.
+
+ Hence, you need to make sure that the hosts running Navigator Encrypt (as well as Key Trustee Server, Key
+          Trustee KMS) and have sufficient entropy to perform cryptographic operations.
+You can check the available entropy on a Linux system by running the following
+          command:
+cat /proc/sys/kernel/random/entropy_avail             
+The output displays the entropy currently available. Check the entropy several times to
+          determine the state of the entropy pool on the system. If the entropy is consistently low
+          (500 or less), you must increase it by installing rng-tools version 4 or
+          higher, and starting the rngd service.
+
+
+
+Install rng_tools Using Package Manager
+Learn how to install rng_tools using Package Manager.
+
+If version 4 or higher of the rng-tools package is available from the
+            local package manager (yum), then install it directly from the package
+            manager. If the appropriate version of rng-tools is unavailable, see
+              Building rng-tools From Source.
+For RHEL 7, run the following commands:
+sudo yum install rng-tools
+cp /usr/lib/systemd/system/rngd.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl start rngd
+systemctl enable rngd
+
+
+
+
+Building rng-tools From Source
+If you are unable to install rng-tools using package manager, you can
+        build from source.
+
+noteIf your package manager only offers an older version (3.x or
+              earlier), then you must build from source.
+To install and start rngd and build from source:
+
+
+Download the source
+                code:sudo wget http://downloads.sourceforge.net/project/gkernel/rng-tools/4/rng-tools-4.tar.gz
+Extract the source
+                code:tar xvfz rng-tools-4.tar.gz
+Enter the rng-tools-4
+                directory:cd rng-tools-4
+Run ./configure
+Run make
+Run make install
+
+
+After you have installed rng-tools, start the rngd
+            daemon by running the following command as
+            root:sudo rngd --no-tpm=1 -o /dev/random
+For improved performance, Cloudera recommends configuring Navigator Encrypt to read
+            directly from /dev/random instead of /dev/urandom.
+To configure Navigator Encrypt to use /dev/random as an entropy
+            source, add --use-random to the navencrypt-prepare
+            command when you are setting up Navigator Encrypt.
+
+
+
+
+
+Uninstalling and Reinstalling Navigator Encrypt
+Learn how to uninstall and reinstall Navigator Encrypt.
+
+Uninstalling Navigator Encrypt
+For RHEL-compatible
+          OSes:sudo yum remove navencrypt
+sudo yum remove navencrypt-kernel-module
+These commands remove the software itself. On RHEL-compatible OSes, the
+            /etc/navencrypt directory is not removed as part of the uninstallation.
+          Remove it manually if required.
+Reinstalling Navigator Encrypt
+After uninstalling Navigator Encrypt, repeat the preceding installation instructions for
+          your distribution.
+When Navigator Encrypt is uninstalled, the configuration files and directories located in
+            /etc/navencrypt are not removed. Consequently, you do not need to use
+          the navencrypt register command during reinstallation. If you no longer
+          require the previous installation configuration information in the directory
+            /etc/navencrypt, you can remove its contents.
+
+
+

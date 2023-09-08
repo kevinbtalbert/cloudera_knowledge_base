@@ -1,0 +1,60 @@
+Azure load balancers in Cloudera Data WarehouseCloudera Docs
+Azure load balancers in Cloudera Data Warehouse
+Azure provides a public and a private (internal) load balancer to evenly distribute the
+  inbound traffic that arrives at the load balancer's front end to backend pool instances, such as
+  Azure virtual machine scale sets. By default, Azure Kubernetes Service (AKS) cluster uses the
+  Standard SKU for the load balancer.
+Depending on your network configuration, you can choose to use the public or the private
+   (internal) load balancer. If you have defined custom user-defined (static) routes (UDR) to route
+   the traffic to a firewall appliance in Azure or on-premises resources, then you can enable the
+   internal load balancer while activating an Azure environment for Cloudera Data Warehouse (CDW).
+   Otherwise, CDW uses the Standard public load balancer that is enabled by default when you
+   provision an AKS cluster.
+You enable the internal load balancer from the CDW UI when you activate the environment.
+   
+Using the public load balancer
+When you activate an Azure environment in CDP, you provision Azure cloud resources such as the
+        PostgreSQL database server and AKS cluster in your Microsoft Azure subscription. AKS
+        contains a number of Azure infrastructure resources, including virtual machine scale sets,
+        virtual networks, and managed disks. An AKS deployment contains a Standard public load
+        balancer by default, that provides inbound and outbound connections to the cluster executor
+        nodes.
+The public load balancer has two public IP addresses to handle inbound and outbound
+    connections. You can access  Hue, JDBC, or the Impala shell using the AKS endpoints
+    from the public internet. However, you can restrict access to the endpoints by defining an IP
+    trusted list while or after activating the environment.
+Also, the outbound connections towards CDP Control Plane and the image registry flows through
+    the public load balancer using the outbound public IP address.
+The following diagram shows the ingress and egress traffic when a public load balancer is
+     used:
+
+
+If you have defined custom UDRs to route the traffic to a firewall appliance in Azure or
+    on-premises resources, then you cannot access the load balancer endpoints from the internet.
+    Using a firewall with a UDR breaks the ingress setup due to asymmetric routing. In asymmetric
+    routing, a packet takes one path to the destination and takes another path when returning to the
+    source. The incoming load balancer traffic is received via its public IP address, but the return
+    path goes through the firewall's private IP address. Using an internal load balancer solves the
+    issue with asymmetric routing. The incoming packets arrive at the firewall's public IP address,
+    get translated to the load balancer's private IP address, and then return to the firewall's
+    private IP address using the same return path because the load balancer is deployed with a
+    private frontend IP address.
+
+Using the private (internal) load balancer
+Internal load balancers distribute traffic inside a virtual network. Internal load balancers
+    do not have a public IP address and cannot be reached from the public internet, even when you
+    have configured UDRs. An internal load balancer makes a Kubernetes service accessible only to
+    applications running in the same or peered Azure virtual network (VNET) as the Kubernetes
+    cluster, or applications running in on-premises networks that are connected using Azure
+    ExpressRoute circuits.
+The following diagram shows ingress and egress traffic when a private (internal) load balancer
+    is used:
+
+
+For outbound connections, a public load balancer having a public IP address is used. For
+    inbound connections, an internal load balancer having a private IP address is used. You cannot
+    access the AKS endpoints from the public internet. Even with firewall publishing rules, public
+    requests may fail due to certificate/DNS issues.
+
+
+Related informationEnabling internal load balancerEnabling internal load balancerTo use an internal load balancer for Cloudera Data Warehouse (CDW), you must select         the option to enable an internal load balancer while activating the Azure environment from         the CDW UI. Otherwise, CDW uses the Standard public load balancer that is enabled by default         when you provision an AKS cluster.

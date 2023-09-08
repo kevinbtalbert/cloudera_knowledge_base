@@ -1,0 +1,142 @@
+Troubleshooting replication policies between on-premises clustersCloudera Docs
+Troubleshooting replication policies between on-premises clusters
+The troubleshooting scenarios in this topic help you to troubleshoot the replication
+  policies that you create between on-premises clusters in Replication Manager.
+How can replication policy performance be optimized when there are a large number of files
+    to replicate?
+You can configure the heap size to 16 GB using the extra Java runtime option. To
+    accomplish this task, perform the following steps:
+Go to the Cloudera Manager > HDFS service > Configuration tab on the source cluster.
+Locate the HDFS Replication Environment Advanced Configuration Snippet (Safety
+       Valve) property.
+Enter the HADOOP_OPTS="-Xmx16G" key-value pair and save the
+      changes.
+Restart the HDFS service.
+Perform steps 1 through 4 on the target cluster Cloudera Manager.
+
+
+How can file replication tasks be equitably distributed to all mappers?
+The Replication Strategy option that you can configure during policy
+    creation takes care of file replication task distribution. By default, this option is set to
+     Dynamic; that is Replication Manager distributes the file replication
+    tasks in small sets to the mappers, and as each mapper completes its tasks, it dynamically
+    acquires and processes the next unallocated set of tasks. 
+However, you can configure it to Static. The file replication tasks
+    among the mappers are set upfront to achieve a uniform distribution based on the file sizes.
+
+How to determine the number of mappers and the bandwidth per mapper required for a
+    replication policy?
+Mappers in addition to copying files also perform several tasks which include
+    creating directories, preserving permissions and other metadata, calculating checksums, and
+    identifying files to skip for replication. The mappers might also get throttled by the network.
+    The following example describes a typical scenario and ways to resolve issues that might
+    arise.
+Example: A replication policy incrementally copies ~100K
+    new/modified files and skips ~10M files every few hours. You can optimize the policy performance
+    for on-premises to on-premises clusters by:
+Configuring the mappers based on the requirements using the Maximum Map
+       Slots option. By default, this option is set to 20. 
+Choose Skip Checksum Checks during policy creation since the number
+      of files that are skipped is high. This ensures that checksum checks are skipped on copied
+      files.
+Check the Throughput column for the replication policy on the
+       Replication Policies page for average throughput per mapper/file of all
+      the files written. You can use more mappers with less bandwidth per mapper, if required.
+      Configure Maximum Bandwidth to limit the bandwidth per mapper. By
+      default, this is set to 100 MB.
+
+
+Why should you consider creating multiple replication policies instead of one replication
+    policy?
+You must consider creating multiple replication policies instead of one replication
+    policy to replicate all the directories and files in a cluster because:
+the performance improves if you run multiple replication policies at once in parallel.
+reliability can be ensured even if a replication policy fails.
+you have the flexibility to run the replication policies with less resources and at
+      different intervals.
+
+
+How many replication policies can be run in parallel?
+You can run several replication policies in parallel depending on the following
+     factors:
+Number of available mappers
+Available network bandwidth
+Load on source and target NameNodes
+Read bandwidth on source DataNodes and write bandwidth of target DataNodes
+
+It is recommended that you go for the lower side of these limits so that the other
+    applications are also able to access these resources successfully. You can decide the number of
+    concurrent replications depending on the available number of mappers and network bandwidth. For
+    example, if you have a 10 GBps network, you might want to run five replication policies with 20
+    mappers each in parallel rather than one replication policy with 100 mappers and 100 MBps
+    bandwidth per mapper.
+You might want to monitor the write speed on the target cluster if the total
+    bandwidth is more than 100 GBps and you are utilizing all the available bandwidth for the
+    replication policy jobs. This is because the target DataNodes require 3x (or the configured
+    replication factor) write bandwidth for write operations.
+
+Why use the YARN resource pool for replication policy jobs?
+Replication Manager uses MapReduce or YARN framework for its replication jobs and
+    the jobs use 20 mappers and a maximum of 100 MB/s network bandwidth utilization by default. You
+    can change this based on the size of the clusters and total data or resources that you want to
+    assign to the replication policy jobs.
+It is recommended that you use a YARN resource pool to configure the percentage of
+    resources you want to assign to the replication jobs. This ensures that the replication policy
+    jobs do not consume more than the assigned percentage of resources. You can also configure
+    isolation of resources by specifying which users can use certain resources.
+To configure a new YARN resource pool, go to the Cloudera Manager > Clusters > YARN service > Resource Pools (Tab) > Configuration > Create Resource Pool tab.
+To use this resource pool in a replication policy, go to the Cloudera Manager > Replication Policies > Actions > Edit Configuration > Resources (Tab) > Scheduler Pool field and enter the YARN resource pool name.
+
+What happens to the replication policies when an active Cloudera Manager instance fails
+        over to the passive Cloudera Manager instance?
+During the time duration when Cloudera Manager fails over a passive instance, the
+        previously active Cloudera Manager instance is not up and the local temporary folder on the
+        previously active Cloudera Manager host) used by replication policies becomes inaccessible
+        for the currently active Cloudera Manager instance. Therefore, the replication policies that
+        have a Cloudera Manager peer associated to it (Hive external replication policies and HDFS
+        replication policies between on-premises to on-premises clusters) fail if they are initiated
+        during that time duration. Subsequent runs of the same policy in the absence of a failover
+        event eventually succeed.
+To avoid these issues, you can implement the solutions based on the following
+          scenarios:
+Controlled or planned Cloudera Manager failover - In this scenario, you can stop or
+            pause existing replication policy job run. You might want to postpone creating any
+            replication policies during the failover time duration.
+Unplanned failover - In this scenario, you can use one of the following methods:
+Re-run the failed replication policies. 
+Wait for the next planned replication policy run.
+Restore the replicated content to a previous snapshot and re-run the replication
+                policy.
+
+
+
+How to replicate Hive tables in HDFS to Ozone using Replication Manager?
+Replication Manager does not support replicating Hive tables and its metadata
+        directly into Ozone storage. You must replicate Hive metadata and data separately to
+        accomplish this task. 
+Perform the following steps to replicate the Hive tables in HDFS to Ozone:
+Add the source cluster as the peer to the target cluster on the Cloudera Manager > Replication > Peers page.
+Click Create Replication Policy > Hive ACID Table Replication Policyon the Cloudera Manager > Replication > Replication Policies page.
+Enter the details as required in the Create Hive ACID Table Replication
+              Policy wizard.importantEnsure that the
+              following options are configured:
+The General > Destination Staging Path is in
+                    ofs://[***serviceid***] format. 
+The Advanced  > Replicate HDFS files option is cleared.
+Replication Manager stores the replicated tables from the
+              source cluster relative to the Destination Staging Path. For
+              example, if the source table is hdfs://nn1/hive/student and the
+              destination staging path is ofs://ozone1/vol1/buck1/, then the
+              table is stored as ofs://ozone1/vol1/buck1/hive/student.
+Save and run the Hive external table replication policy.
+After the Hive external table replication policy job run completes, create an Ozone
+            replication policy to replicate the table data only if both the paths (source table and
+            destination table paths) are in Ozone. Alternatively, you can use Hadoop
+              DistCp jobs to replicate the table data. For example, the following sample code shows
+              the commands that you can use to run the Hadoop DistCp jobs to replicate table
+              data:sudo -u hdfs hadoop distcp -skipcrccheck
+hdfs://rsrc-1.rsrc.root.hwx.site/hive/student/*
+ofs://rdst-2.rdst.root.hwx.site/vol1/buck1/hive/student/
+
+
+

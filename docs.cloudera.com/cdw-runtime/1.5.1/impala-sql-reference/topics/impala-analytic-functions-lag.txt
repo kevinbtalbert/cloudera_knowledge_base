@@ -1,0 +1,82 @@
+LAGCloudera Docs
+LAG
+This function returns the value of an expression using column
+              values from a preceding row. You specify an integer offset, which
+              designates a row position some number of rows previous to the
+              current row. Any column references in the expression argument
+              refer to column values from that prior row. Typically, the table
+              contains a time sequence or numeric sequence column that clearly
+              distinguishes the ordering of the rows.
+
+
+Syntax:
+
+LAG (expr [, offset] [, default])
+  OVER ([partition_by_clause] order_by_clause)
+ The ORDER BY clause is required. The
+                PARTITION BY clause is optional. The window
+              clause is not allowed. 
+
+Usage notes:
+
+ Sometimes used an an alternative to doing a self-join. 
+
+Examples:
+
+ The following example uses the same stock data created in the
+                Window clause section. For each day, the query
+              prints the closing price alongside the previous day's closing
+              price. The first row for each stock symbol has no previous row, so
+              that LAG() value is NULL. 
+select stock_symbol, closing_date, closing_price,
+    lag(closing_price,1) over (partition by stock_symbol order by closing_date) as "yesterday closing"
+  from stock_ticker
+    order by closing_date;
++--------------+---------------------+---------------+-------------------+
+| stock_symbol | closing_date        | closing_price | yesterday closing |
++--------------+---------------------+---------------+-------------------+
+| JDR          | 2014-09-13 00:00:00 | 12.86         | NULL              |
+| JDR          | 2014-09-14 00:00:00 | 12.89         | 12.86             |
+| JDR          | 2014-09-15 00:00:00 | 12.94         | 12.89             |
+| JDR          | 2014-09-16 00:00:00 | 12.55         | 12.94             |
+| JDR          | 2014-09-17 00:00:00 | 14.03         | 12.55             |
+| JDR          | 2014-09-18 00:00:00 | 14.75         | 14.03             |
+| JDR          | 2014-09-19 00:00:00 | 13.98         | 14.75             |
++--------------+---------------------+---------------+-------------------+
+
+The following example does an arithmetic operation between the
+              current row and a value from the previous row, to produce a delta
+              value for each day. This example also demonstrates how
+                ORDER BY works independently in the different
+              parts of the query. The ORDER BY closing_date in
+              the OVER clause makes the query analyze the rows
+              in chronological order. Then the outer query block uses
+                ORDER BY closing_date DESC to present the
+              results with the most recent date first. 
+select stock_symbol, closing_date, closing_price,
+    cast(
+      closing_price - lag(closing_price,1) over
+        (partition by stock_symbol order by closing_date)
+      as decimal(8,2)
+    )
+    as "change from yesterday"
+  from stock_ticker
+    order by closing_date desc;
++--------------+---------------------+---------------+-----------------------+
+| stock_symbol | closing_date        | closing_price | change from yesterday |
++--------------+---------------------+---------------+-----------------------+
+| JDR          | 2014-09-19 00:00:00 | 13.98         | -0.76                 |
+| JDR          | 2014-09-18 00:00:00 | 14.75         | 0.72                  |
+| JDR          | 2014-09-17 00:00:00 | 14.03         | 1.47                  |
+| JDR          | 2014-09-16 00:00:00 | 12.55         | -0.38                 |
+| JDR          | 2014-09-15 00:00:00 | 12.94         | 0.04                  |
+| JDR          | 2014-09-14 00:00:00 | 12.89         | 0.03                  |
+| JDR          | 2014-09-13 00:00:00 | 12.86         | NULL                  |
++--------------+---------------------+---------------+-----------------------+
+
+
+Related information:
+
+ This function is the converse of the LEAD function. 
+
+

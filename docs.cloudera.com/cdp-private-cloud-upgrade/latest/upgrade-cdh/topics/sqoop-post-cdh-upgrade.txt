@@ -1,0 +1,128 @@
+Apache Sqoop ChangesCloudera Docs
+Apache Sqoop Changes
+ After upgrading from CDH to CDP, Sqoop action errors are not logged due to an change
+        in the log4j configuration. You must configure Oozie to log Sqoop action errors in the Oozie
+        launcher log.
+
+
+
+
+
+Before Upgrade to CDP
+The Sqoop action in an Oozie workflow log errors to the Oozie launcher log.
+                For example:
+                >>> Invoking Sqoop command line now >>>
+ 2021-01-11 09:58:21,438 [main] WARN  org.apache.sqoop.tool.SqoopTool  - $SQOOP_CONF_DIR has not been set in the environment. Cannot check for additional configuration.
+ 2021-01-11 09:58:21,489 [main] INFO  org.apache.sqoop.Sqoop  - Running Sqoop version: 1.4.7.7.1.5.0-257
+ 2021-01-11 09:58:21,503 [main] WARN  org.apache.sqoop.tool.BaseSqoopTool  - Setting your password on the command-line is insecure. Consider using -P instead.
+ 2021-01-11 09:58:21,516 [main] WARN  org.apache.sqoop.ConnFactory  - $SQOOP_CONF_DIR has not been set in the environment. Cannot check for additional configuration.
+...
+After Upgrade to CDP
+The Sqoop action in an Oozie workflow does not log errors to the Oozie
+                launcher log. For example:
+                >>> Invoking Sqoop command line now >>>
+09:39:49.715 [main] INFO  org.apache.hadoop.conf.Configuration.deprecation - mapred.jar is deprecated. Instead, use mapreduce.job.jar
+09:39:49.738 [main] INFO  org.apache.hadoop.conf.Configuration.deprecation - mapred.map.tasks is deprecated. Instead, use mapreduce.job.maps
+09:39:49.974 [main] INFO  org.apache.hadoop.mapreduce.JobResourceUploader - Disabling Erasure Coding for path: /user/cloudera/.staging/job_1609912545960_0013
+09:39:50.347 [main] INFO  org.apache.hadoop.mapreduce.JobSubmitter - Cleaning up the staging area /user/cloudera/.staging/job_1609912545960_0013 
+<<< Invocation of Sqoop command completed <<< 
+No child hadoop job is executed.
+Intercepting System.exit(1) 
+java.lang.reflect.InvocationTargetException
+at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)
+...           
+Action Required
+Configure the Sqoop action to use the log4j1 configuration for this Sqoop
+                action and the Hue workspace only.
+
+
+Create a log4j.properties file and upload it to the
+                        lib directory in the workflow.xml
+                    path inside HDFS.
+
+log4j.rootLogger=INFO , A
+log4j.logger.org.apache.sqoop=INFO, A
+log4j.additivity.org.apache.sqoop=false
+log4j.appender.A=org.apache.log4j.ConsoleAppender
+log4j.appender.A.layout=org.apache.log4j.PatternLayout
+log4j.appender.A.layout.ConversionPattern=%d [%t] %-5p %c %x - %m%n
+log4j.logger.org.apache.sqoop=INFO, A              
+
+
+In the workflow.xml file or in the Sqoop action in Hue
+                    interface, configure the Sqoop action to use the
+                        log4j.properties file by configuring
+                        SqoopAction > Properties > yarn.app.mapreduce.am.admin-command-opts:
+                        Dlog4j.configuration=log4j.properties. 
+
+
+Parent topic: CDH 5 to CDP Private Cloud Base post-upgrade transition steps
+Check Parquet writer implementation property
+You might need to set the Parquet writer implementation property to
+                hadoop. In releases before CDP 7.1.6/Cloudera Manager 7.3.1, the
+            Parquet writer implementation property (parquetjob.configurator.implementation) default
+            was not
+hadoop.
+If you upgraded to a CDP release earlier than CDP 7.1.6, change the default value of the Parquet writer implementation property to hadoop.
+            Making this change prevents encountering the following error when using the Sqoop client:
+                Post upgrade sqoop failed with the error "Invalid Parquet job configurator implementation is set: kite. Supported values are: [HADOOP]" , 
+
+In Cloudera Manager, click Clusters > Sqoop 1 Client > Configuration, and search for Parquet writer implementation.
+
+Change the value to hadoop.
+
+
+
+
+
+
+
+
+
+Configure a Sqoop Action globally and for all Hue workspaces
+
+
+In Cloudera Manager, click Clusters > Oozie-1 > Configuration, and search for Oozie Server Advanced
+                            Configuration.
+
+
+Scroll down, locate the Oozie Server Advanced Configuration
+                            Snippet (Safety Valve) for oozie-site.xml, and click
+                            +.
+
+
+Add the following property name and value.
+
+<property>
+  <name>oozie.service.HadoopAccessorService.action.configurations</name>
+  <value>*=/var/lib/oozie/action-conf</value>
+</property>                    
+
+
+Login to the server running the Oozie service as root and run the following commands.
+
+mkdir -p /var/lib/oozie/action-conf
+chown -R oozie:oozie /var/lib/oozie                   
+
+
+Create a sqoop.xml file that configures the
+                            yarn.app.mapreduce.am.admin-command-opts
+                        property.
+
+<configuration>
+<property>
+<name>yarn.app.mapreduce.am.admin-command-opts</name>
+<value>-Dlog4j.configuration=log4j.properties</value>
+</property>
+</configuration>
+
+
+Copy the file to /var/lib/oozie/action-conf and ensure
+                        it is owned by oozie:oozie.
+
+Copy the log4j.properties file to Oozie shared lib
+                            /user/oozie/share/lib/lib_<timestamp>/sqoop and
+                        restart Oozie service. 
+
+
+

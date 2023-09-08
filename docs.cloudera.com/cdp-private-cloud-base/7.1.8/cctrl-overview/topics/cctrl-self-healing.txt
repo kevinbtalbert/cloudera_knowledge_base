@@ -1,0 +1,62 @@
+How Cruise Control self-healing worksCloudera Docs
+How Cruise Control self-healing works
+The Anomaly detector is responsible for the self-healing feature of Cruise Control. When
+  self-healing is enabled in Cruise Control, the detected anomalies can trigger the attempt to
+  automatically fix certain types of failure such as broker failure, disk failure, goal violations
+  and other anomalies.
+
+Broker failures
+The anomaly is detected when a non-empty broker crashes or when a broker is removed from a
+     cluster. This results in offline replicas and under-replicated partitions.
+When the broker failure is detected, Cruise Control receives an internal notification. If
+     self-healing for this anomaly type is enabled, Cruise Control will trigger an operation to move
+     all the offline replicas to other healthy brokers in the cluster. Because brokers can be
+     removed in general during cluster management, the anomaly detector provides a configurable
+     period of time before the notifier is triggered and the self-healing process starts.
+If a broker disappears from a cluster at a timestamp specified as T, the detector will start
+     a countdown. If the broker did not rejoin the cluster within the
+      broker.failure.alert.threshold.ms since the specified T, the broker is
+     defined as dead and an alert is triggered. Within the defined time of
+      broker.failure.self.healing.threshold.ms, the self-healing process is
+     activated and the failed broker is decommissioned.
+
+
+Goal violations
+The anomaly is detected when an optimization goal is violated.
+When an optimization goal is violated, Cruise Control receives an internal notification. If
+     self-healing for this anomaly type is enabled, Cruise Control will proactively attempt to
+     address the goal violation by automatically analyzing the workload, and executing optimization
+     proposals.
+You need to configure the anomaly.detection.goals property if you enable
+     self-healing for goal violations to choose which type of goal violations should be considered.
+     By default, the following goals are set for anomaly.detection.goals:
+com.linkedin.kafka.cruisecontrol.analyzer.goals.RackAwareGoal
+com.linkedin.kafka.cruisecontrol.analyzer.goals.ReplicaCapacityGoal
+com.linkedin.kafka.cruisecontrol.analyzer.goals.DiskCapacityGoal
+
+
+
+Disk failure
+The anomaly is detected when one of the non-empty disks dies.
+
+noteThis is the only anomaly that is related to Kafka broker running on a JBOD disk.
+
+When a disk fails, Cruise Control will send out a notification. If self-healing for this
+     anomaly type is enabled, Cruise Control will trigger an operation to move all the offline
+     replicas by replicating alive replicas to other healthy brokers in the cluster.
+Slow broker
+The anomaly is detected when based on the configured thresholds, a broker is identified as a
+     slow broker.
+Within the Metric anomaly, you can set the threshold to identify slow brokers. In case a
+     broker is identified as slow, the broker will be decommissioned or demoted based on the
+     configuration you set for the remove.slow.broker. The
+      remove.slow.broker configuration can be set to true, this means the slow
+     broker will be removed. When setting the remove.slow.broker configuration to
+     false, the slow broker will be demoted.For more information about configuring the slow
+      broker finder, see the official Cruise Control documentation.
+Topic replication factor
+The anomaly is detected when a topic partition does not have the desired replication
+     factor.
+The topic partition will be reconfigured to match the desired replication factor.
+
+

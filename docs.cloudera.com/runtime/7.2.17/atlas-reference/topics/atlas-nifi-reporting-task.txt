@@ -1,0 +1,79 @@
+How the reporting task runs in a NiFi clusterCloudera Docs
+How the reporting task runs in a NiFi cluster
+When the reporting task runs in a NiFi cluster, the following tasks are executed only
+        by the primary node:
+
+
+Create NiFi Atlas types in the Atlas type system.
+
+
+Maintain NiFi flow structure and metadata in Atlas both which consists
+                    of NiFi component entities such as 'nifi_flow', 'nifi_flow_path', and
+                    'nifi_input(output)_port'.
+
+
+Every node (including primary node) analyzes NiFi provenance events stored in a
+            provenance event repository, to create lineage between 'nifi_flow_path' and other
+            dataset (for example: Hive tables and HDFS path).
+NiFi Atlas TypesThe reporting
+                task creates the following NiFi specific types in Atlas Type system if these type
+                definitions are not found.Green boxes represent sub-types of
+                dataset and blue ones are sub-types of Process. Gray lines represent entity
+                ownership. Red lines represent lineage.
+
+Nifi_flow: Represents a NiFi data flow. As shown in the
+                diagram, nifi_flow owns other nifi_component types. This owning relationship is
+                defined by Atlas 'owned' constraint so that when a 'nifi_flow' entity is removed,
+                all owned NiFi component entities are removed in a cascading manner.When the
+                reporting task runs, it analyzes and traverses the entire flow structure, and
+                creates NiFi component entities in Atlas. During later runs, it compares the current
+                flow structure with the one stored in Atlas to figure out if any changes have been
+                made since the last time the flow was reported. The reporting task updates NiFi
+                component entities in Atlas if needed.NiFi components that are removed from a
+                NiFi flow also get deleted from Atlas. However those entities can be seen in Atlas
+                search results or lineage graphs because Atlas uses 'Soft Delete' by default.
+Attributes:
+qualifiedName: Root ProcessGroup ID@namespace (For example,
+                            86420a14-2fab-3e1e-4331-fb6ab42f58e0@ns1)
+name: Name of the Root ProcessGroup.
+url: URL of the NiFi instance. This can be specified using the
+                            reporting task 'NiFi URL for Atlas' property.
+
+Nifi_flow_path: Part of a NiFi data flow containing one or
+            more processing NiFi components such as Processors and RemoteGroupPorts. The reporting
+            task divides a NiFi flow into multiple flow paths. 
+Attributes:
+qualifiedName: The first NiFi component Id in a path@namespace
+                            (for example: 529e6722-9b49-3b66-9c94-00da9863ca2d@ns1)
+name: NiFi component names within a path are concatenated (for
+                            example: GenerateFlowFile, PutFile, LogAttribute)
+url: A deep link to the first NiFi component in corresponding
+                            NiFi UI
+
+nifi_input/output_port: Represents a RootGroupPort which can
+            be accessed by RemoteProcessGroup through Site-to-Site protocol.
+Attributes:
+qualifiedName: Port ID@namespace (for example:
+                            3f6d405e-6e3d-38c9-c5af-ce158f8e593d@ns1)
+name: Name of the Port.
+
+Nifi_data: Represents unknown datasets created by
+                CREATE/SEND/RECEIVE NiFi provenance events that do not have a particular provenance
+                event analyzer.
+Attributes:
+qualifiedName: ID of a Processor which generated the provenance
+                            event@namespace (for example:
+                            db8bb12c-5cd3-3011-c971-579f460ebedf@ns1)
+name: Name of the Processor.
+
+Nifi_queue: An internal dataset of NiFi flows which
+                connects nifi_flow_paths. Atlas lineage graph requires a dataset in between Process
+                entities.
+Attributes:
+qualifiedName: ID of the first Processor in the destination
+                            nifi_flow_path.
+name: Name of the Processor.
+
+
+
+Parent topic: NiFi metadata collection

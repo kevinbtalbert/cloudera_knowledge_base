@@ -1,0 +1,59 @@
+Preventing SparkSQL incompatibilityCloudera Docs
+Preventing SparkSQL incompatibility
+You need to be aware of two SparkSQL incompatibilities and how to work around these
+        problems. The upgrade process converted all CDH Hive tables to external tables, however, if
+        you moved managed, non-ACID tables preventing conversion to external tables, these are not
+        compatible with native SparkSQL. Also, you might encounter a problem reading Hive 2 external
+        ORC tables from Spark.
+Related informationHive Warehouse Connector for accessing Apache Spark dataHive-17275SPARK-28098Parent topic: Migrating Spark Apps
+Managed, non-ACID table problem
+
+Consider using either one of the following options:
+Convert ACID tables to external tables after the CDP upgrade.
+Use the Hive Warehouse Connector.
+ Follow these steps to create a new external table using Hive 3 and migrate the
+            data from the managed table to the new table. 
+
+Run the SHOW CREATE TABLE statement on the original table to get the full definition of the table.
+SHOW CREATE TABLE <tablename>;
+
+Rename the managed table to *_old.
+
+Migrate data from *_old to <new> external table using the original name in
+                    the historical, or the default, location
+                        (/warehouse/tablespace/external/hive/<?>.db/<tablename>).
+
+CREATE EXTERNAL TABLE new_t AS SELECT * FROM old_t;
+
+
+
+
+
+Reading a Hive external table in ORC from Spark
+
+ Unlike the Hive ORC reader, which supports recursive directory reads, the Spark
+                native ORC reader does not support recursive directory reads of Hive tables. Reading
+                Hive 2.x tables is a problem under both of the following circumstances:
+You created the table using Hive CTAS (create table as select). 
+One of more selected tables included UNION ALL.
+
+When creating a table under these circumstances, subdirectories are
+                 named /1 /2 /3. Subdirectories do not include the HIVE_UNION_SUBDIR_ prefix
+             as Hive 3-created tables do. You cannot read these tables from Spark if the
+             tables are in ORC format.
+
+                 The following workaround configures Spark to overcome this problem.
+             
+
+
+If you already started the Spark shell, quit the shell.
+You cannot perform workaround configuration for the session if
+                    the session is already started.
+
+Start the Spark shell with convertMetastoreOrc disabled. 
+For
+                        example:spark-shell ...
+--conf spark.sql.hive.convertMetastoreOrc=false
+
+
+

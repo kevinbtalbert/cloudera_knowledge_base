@@ -1,0 +1,39 @@
+Simple .NET consumer exampleCloudera Docs
+Simple .NET consumer example
+Review this example code to learn how you can create a simple .NET consumer. This
+    consumer is capable of consuming around 50000 messages every second in development environment. 
+var config = new ConsumerConfig
+{
+    BootstrapServers = "broker:9092",
+    GroupId = "simple-dotnet-consumer",
+    AutoOffsetReset = AutoOffsetReset.Earliest,
+    EnablePartitionEof = true
+};
+using var consumer = new ConsumerBuilder<string, string>(config)
+    .SetErrorHandler((_, e) => Console.WriteLine($"Error: {e.Reason}"))
+    .Build();
+
+consumer.Subscribe(new List<string>() {"topic"});
+var start = DateTime.Now;
+long messageCounter = 0;
+try
+{
+    while (!(Console.KeyAvailable && Console.ReadKey().Key == ConsoleKey.Q))
+    {
+        var result = consumer.Consume(TimeSpan.FromMilliseconds(100));
+        if (result == null) { continue; }
+        if (result.IsPartitionEOF) { break; }
+
+        ++messageCounter;
+        if (messageCounter % 1024 == 0) { Console.WriteLine($"Received message key: \"{result.Message.Key}\" value: {result.Message.Value}"); }
+    }
+} catch (OperationCanceledException) {}
+
+consumer.Close();  // commit offset and unsubscribe
+
+var elapsed = DateTime.Now - start;
+Console.WriteLine("average throughput: {0:N3} msg/sec, {1} messages over {2:N3} sec", messageCounter / elapsed.TotalSeconds, messageCounter, elapsed.TotalSeconds);
+
+
+
+Parent topic: .Net client examples

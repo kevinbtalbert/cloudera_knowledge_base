@@ -1,0 +1,82 @@
+Basic partitioningCloudera Docs
+Basic partitioning
+In basic partitioning, you can either partition by range, or partition by
+    hash.
+PARTITION BY RANGE
+ You can specify range partitions for one or more primary key columns.
+        Range partitioning in Kudu allows splitting a table based on specific values or ranges of
+        values of the chosen partition keys. This allows you to balance parallelism in writes with
+        scan efficiency. 
+ For instance, if you have a table that has the columns state, name, and purchase_count, and
+        you partition the table by state, it will
+        create 50 tablets, one for each US state. 
+CREATE TABLE customers (
+  state STRING,
+  name STRING,
+  purchase_count int,
+  PRIMARY KEY (state, name)
+)
+PARTITION BY RANGE (state)
+(
+  PARTITION VALUE = 'al',
+  PARTITION VALUE = 'ak',
+  PARTITION VALUE = 'ar',
+  ...
+  ...
+  PARTITION VALUE = 'wv',
+  PARTITION VALUE = 'wy'
+)
+STORED AS KUDU;
+
+
+PARTITION BY HASH
+ Instead of distributing by an explicit range, or in combination with
+        range distribution, you can distribute into a specific number of partitions by hash. You
+        specify the primary key columns you want to partition by, and the number of partitions you
+        want to use. Rows are distributed by hashing the specified key columns. Assuming that the
+        values being hashed do not themselves exhibit significant skew, this will serve to
+        distribute the data evenly across all partitions. 
+ You can specify multiple definitions, and you can specify definitions
+        which use compound primary keys. However, one column cannot be mentioned in multiple hash
+        definitions. Consider two columns, a and
+          b: 
+
+HASH(a), HASH(b) -- will succeed 
+
+HASH(a,b) -- will succeed 
+
+HASH(a), HASH(a,b) -- will fail 
+
+
+note
+PARTITION BY HASH with no column specified
+        is a shortcut to create the desired number of partitions by hashing all primary key columns. 
+ Hash partitioning is a reasonable approach if primary key values are
+        evenly distributed in their domain and no data skew is apparent, such as timestamps or
+        serial IDs. 
+ The following example creates 16 tablets by hashing the id column. A maximum of 16 tablets can be written
+        to in parallel. In this example, a query for a range of sku values is likely to need to read from all 16
+        tablets, so this may not be the optimum schema for this table. See the Advanced
+          partinioning section for an extended example.
+        CREATE TABLE cust_behavior (
+  id BIGINT,
+  sku STRING,
+  salary STRING,
+  edu_level INT,
+  usergender STRING,
+  `group` STRING,
+  city STRING,
+  postcode STRING,
+  last_purchase_price FLOAT,
+  last_purchase_date BIGINT,
+  category STRING,
+  rating INT,
+  fulfilled_date BIGINT,
+  PRIMARY KEY (id, sku)
+)
+PARTITION BY HASH PARTITIONS 16
+STORED AS KUDU;
+
+
+
+Related informationAdvanced partitioningParent topic: Partitioning tables

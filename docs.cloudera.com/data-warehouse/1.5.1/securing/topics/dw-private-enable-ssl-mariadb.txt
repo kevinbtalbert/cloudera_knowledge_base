@@ -1,0 +1,137 @@
+Configuring MariaDB database to use SSL for Data WarehouseCloudera Docs
+Configuring MariaDB database to use SSL for Data Warehouse
+SSL encrypts the connection between the MariaDB server and the Hive MetaStore (HMS)
+        on the base cluster. You must enable SSL for the MariaDB database before setting up the CDP
+        Private Cloud Data Services.
+
+SSH into the MariaDB database host.
+
+Start the MariaDB server:
+
+service mysqld start
+
+
+Establish an encrypted connection with the client:
+
+mysql -p --ssl=true
+
+
+Verify whether SSL is enabled on MariaDB by running the following
+                    command:
+
+mysql> show global variables like '%ssl%';
+
+If SSL is enabled, you see the value of have_ssl equal to
+                        YES, as follows. Otherwise, you see the value of
+                        have_ssl equal to
+                    DISABLED:+---------------+----------+
+| Variable_name | Value    |
++---------------+----------+
+| have_openssl  | YES      |
+| have_ssl      | YES      |
+| ...           | ...      | 
+If SSL is enabled, then skip to step 11.
+
+Create a certificate authority by running the following commands:
+
+mkdir /etc/my.cnf.d/ssl/
+cd /etc/my.cnf.d/ssl/  
+openssl genrsa 2048 > ca-key.pem
+
+
+Create a certificate for the server using the CA certificate generated earlier
+                    by running the following command:
+
+openssl req -new -x509 -nodes -days 365000 -key ca-key.pem -out ca-cert.pem
+openssl req -newkey rsa:2048 -days 365 -nodes -keyout server-key.pem -out server-req.pem
+openssl rsa -in server-key.pem -out server-key.pem
+
+
+Create a certificate for the clients using the same CA certificate by running
+                    the following command:
+
+openssl x509 -req -in server-req.pem -days 365 -CA ca-cert.pem -CAkey ca-key.pem -set_serial 01 -out server-cert.pem
+
+
+Add the following lines in the /etc/my.cnf.d/server.cnf
+                    file under the [mysqld] section:
+
+ssl-ca=/etc/my.cnf.d/ssl/ca-cert.pem
+ssl-cert=/etc/my.cnf.d/ssl/server-cert.pem
+ssl-key=/etc/my.cnf.d/ssl/server-key.pem
+bind-address=*
+
+You can view the content of the server.cnf file by running
+                    the following command:
+                    vim /etc/my.cnf.d/server.cnf
+
+Restart the MariaDB server:
+
+service mysqld restart
+
+
+Check the SSL status by running the following commands:
+
+mysql -p --ssl=true
+> SHOW VARIABLES LIKE '%ssl%';
+> status
+
+Sample output:
+                    > SHOW VARIABLES LIKE '%ssl%';
++---------------------+-----------------------------------+
+| Variable_name       | Value                             |
++---------------------+-----------------------------------+
+| have_openssl        | YES                               |
+| have_ssl            | YES                               |
+| ssl_ca              | /etc/my.cnf.d/ssl/ca-cert.pem     |
+| ssl_capath          |                                   |
+| ssl_cert            | /etc/my.cnf.d/ssl/server-cert.pem |
+| ssl_cipher          |                                   |
+| ssl_crl             |                                   |
+| ssl_crlpath         |                                   |
+| ssl_key             | /etc/my.cnf.d/ssl/server-key.pem  |
+| version_ssl_library | OpenSSL 1.0.2k-fips  26 Jan 2017  |
++---------------------+-----------------------------------+
+
+> status
+SSL:			Cipher in use is DHE-RSA-AES256-GCM-SHA384
+
+View the contents of the ssl-client.xml file by running the
+                    following commands:
+
+export SSL_CLIENT=/etc/hadoop/conf/ssl-client.xml
+cat $SSL_CLIENT
+
+
+Obtain the truststore's location and password by running the following
+                    commands:
+
+export TRUSTSTORE_LOCATION=$(xmllint --xpath "//configuration/property[name='ssl.client.truststore.location']/value/text()" $SSL_CLIENT)
+
+
+export TRUSTSTORE_PASSWORD=$(xmllint --xpath "//configuration/property[name='ssl.client.truststore.password']/value/text()" $SSL_CLIENT)
+
+
+Verify the contents of the truststore by running the following command:
+
+/usr/java/default/bin/keytool -list -rfc -keystore $TRUSTSTORE_LOCATION -storetype JKS -storepass $TRUSTSTORE_PASSWORD
+
+
+Import the MariaDB root certificate by running the following command:
+
+/usr/java/default/bin/keytool -importcert -alias mariadb -file /etc/my.cnf.d/ssl/ca-cert.pem -keystore $TRUSTSTORE_LOCATION -storetype jks -noprompt -storepass $TRUSTSTORE_PASSWORD
+
+
+Verify the contents of the truststore again by running the following
+                    command:
+
+/usr/java/default/bin/keytool -list -rfc -keystore $TRUSTSTORE_LOCATION -storetype JKS -storepass $TRUSTSTORE_PASSWORD
+
+
+When you install CDP Private Cloud Data Services after
+            adding the MariaDB root CA to the Cloudera Manager truststore, the installer propogates
+            the MariaDB root CA from the Cloudera Manager truststore to CDP Private Cloud. HMS in
+            the default Database Catalog can now connect to the MariaDB server on the base cluster
+            using an SSL-encrypted connection.
+
+Parent topic: How to enable SSL for MariaDB, MySQL, and Oracle databases

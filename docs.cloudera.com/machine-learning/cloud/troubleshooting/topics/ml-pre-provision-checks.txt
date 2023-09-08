@@ -1,0 +1,574 @@
+Preflight ChecksCloudera Docs
+Preflight Checks
+Part of provisioning and managing a Kubernetes cluster in the cloud is ensuring that
+  your account and your environment is properly configured before beginning. The Cloudera Data
+  Platform (CDP) automatically runs a series of preflight checks which can help in determining if
+  there is a problem before creating new resources or adjusting existing ones.
+When creating a brand new cluster, preflight validation checks are used to ensure that the
+   resources you are requesting as well as your environment are ready and configured correctly. For
+   existing clusters, many of the infrastructure validations are skipped since they are not needed
+   anymore. Instead, the validations which concern the resources being adjusted are executed.
+Results
+The result of running a collection of preflight checks is represented as a single aggregated
+    value that lets you know whether it is safe to proceed with your actions. Each individual
+    validation which was run is included in the response.
+A preflight validation contains information concerning what it was checking for and what the
+    result of that check was. For example, this is a very simple check to ensure that the type of
+    node pool image is valid in the region:
+
+Name
+Instance type
+
+Description
+
+Instance groups must have an instance type that exists in the region in which they will be
+       created. For EKS, there is additional verification for EKS support and usage class.
+
+
+Category
+
+COMMON
+
+
+Status
+
+FAILED
+
+
+Message
+
+The instance type validation failed.
+
+
+Detailed Message
+
+Instance type validation failed for Standard_B2s1 in
+        westus2. Check to ensure that this instance type is valid in that
+       region.
+
+
+Duration
+
+659 ms
+
+
+
+PASSED
+The validation successfully passed all criteria.
+WARNING
+The validation was either unable to fully check all of its criteria or it found a potential
+      issue which could affect the success of the operation. This type of failure will not stop a
+      cluster from being created or modified, but it does require further investigation.
+SKIPPED
+The validation was skipped because it does not apply to the current request. This can
+      happen for many reasons, such as using a cloud provider that is not applicable to the
+      preflight check.
+FAILED
+The validation failed its expected criteria and provisioning or updating of a cluster
+      cannot proceed. In this case, there’s an identified problem that needs resolution before
+      continuing.
+
+
+List of Preflight Checks
+Node / Agent Pools
+The following preflight validation checks pertain to the node / agent instance groups which
+    are created to launch new nodes inside of the Kubernetes cluster.
+
+Name
+Description
+Cloud
+Type
+
+
+Instance Count
+
+
+The number of nodes in each instance group must not exceed a predefined
+       threshold.
+Remediation: Change the requested size of an instance group to be within the
+       boundaries specified by the error message.
+
+
+All
+
+
+Create
+Update
+
+
+
+Group Count
+
+
+The number of distinct node/agent pool groups must not exceed a predefined
+       threshold.
+Remediation: Change the number of distinct instance groups to be within the
+       boundaries specified by the error message.
+
+
+All
+
+
+Create
+Update
+
+
+
+Instance Naming
+
+
+The name of each instance group is restricted by cloud providers. There are
+       differences in the size and characters allowed by each provider.
+Remediation: Change the name of the instance group to conform to the cloud
+       provider’s requirements. This could include changing the overall length of the name or only
+       using certain approved characters. 
+
+
+All
+
+
+Create
+Update
+
+
+
+Instance Type
+
+
+Instance image types are not universal across all regions. Some providers further
+       restrict this to service level, and whether they can be used for Kubernetes.
+Remediation: Choose a different region or service type for the desired instance
+       type. If this is not possible, then a different instance type must be chosen.
+
+
+All
+
+
+Create
+Update
+
+
+
+Kubernetes Version
+
+
+Each cloud provider supports different versions of Kubernetes. CDP has also only
+       been certified to work with particular versions.
+Remediation: Choose a different version of Kubernetes that is supported by
+       your cloud provider in the region you are deploying in.
+https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html
+
+
+All
+
+
+Create
+
+
+
+Placement Rules
+
+
+Some instance types are not allowed to be grouped within a single availability
+       zone. 
+Remediation: Remove the restriction on single availability zone, or choose a
+       different instance type.
+
+AWS
+
+Create
+Update
+
+
+Infrastructure
+The following preflight validation checks pertain to Cloudera’s control plane infrastructure
+    and your specific account within that control plane.
+
+Name
+Description
+Cloud
+Type
+
+
+Restricted IAM Policies
+
+
+If your account is trying to provision with restricted IAM policies, then it
+       needs to have those policies defined before deploying the cluster.
+Remediation: Check Cloudera’s documentation on restricted IAM policies to ensure
+       that you have the correctly named policies defined and are accessible.
+
+
+AWS
+
+
+Create
+
+
+
+Proxy Connectivity
+
+
+When provisioning a private cluster, your environment must have the cluster proxy
+       enabled and it must be healthy.
+Remediation: Create a new environment which has the cluster proxy service
+       enabled or check that your existing FreeIPA Virtual Machine is running and healthy.
+https://docs.cloudera.com/management-console/test/connection-to-private-subnets/topics/mc-ccm-overview.html
+
+
+All
+
+
+Create
+Update
+
+
+
+Data Lake Connectivity
+
+
+A healthy data lake with a functioning FreeIPA DNS server is required in order to
+       provision a new cluster.
+Remediation: Check to ensure that the FreeIPA DNS server is running and
+       healthy inside of your network.
+https://docs.cloudera.com/management-console/cloud/data-lakes/topics/mc-data-lake.html
+https://docs.cloudera.com/management-console/cloud/identity-management/topics/mc-identity-management.html
+
+
+All
+
+
+Create
+
+
+Networking
+The following preflight validation checks pertain to specific network configurations inside of
+    the cloud provider.
+
+Name
+Description
+Cloud
+Type
+
+
+Shared VPC
+
+
+When a Virtual Private Cloud is shared between multiple subscriptions, access to
+       modify this VPC needs to be granted.
+Remediation: Check the permission for which roles can make modifications
+       to the VPC
+https://docs.aws.amazon.com/vpc/latest/userguide/vpc-sharing.html
+https://docs.cloudera.com/cdp-public-cloud/cloud/requirements-aws/topics/mc-aws-req-vpc.html
+
+
+AWS
+
+
+Create
+
+
+
+Subnet Availability Zone
+
+
+All subnets which are part of the environment must be located in at least 2
+       different Availability Zones.
+Remediation: Recreate your environment and choose subnets that satisfy the
+       requirement of being in at least 2 different Availability Zones.
+
+
+AWS
+
+
+Create
+
+
+
+Subnet Load Balancer Tagging
+
+
+In order for load balancers to choose subnets correctly, a subnet needs to have
+       either the public or private ELB tags defined.
+Remediation: Tag subnets with either kubernetes.io/role/elb or
+       kubernetes.io/role/internal-elb based on whether they are public or private. 
+https://docs.cloudera.com/cdp-public-cloud/cloud/requirements-aws/topics/mc-aws-req-vpc.html
+
+
+AWS
+
+
+Create
+
+
+
+API Server Access
+
+
+Validates that there are no conflicting requests between Kubernetes API CIDR
+       ranges and private AKS clusters.
+Remediation: When using a private AKS cluster, Kubernetes API CIDR ranges are not
+       supported,
+
+
+All
+
+
+Create
+Update
+
+
+
+Available Subnets
+
+
+Subnets cannot be shared when provisioning Kubernetes clusters on Azure. At least
+       one available subnet must exist that is not being used by another AKS cluster and must not
+       have an existing route table with conflicting pod CIDRs.
+Remediation: Create a new subnet to satisfy this requirement or delete an old and
+       unused cluster to free an existing subnet.
+
+
+Azure
+
+
+Create
+
+
+
+Delegated Subnet
+
+
+A subnet which has been delegated for a particular service cannot be used to
+       provision an Azure AKS cluster. 
+Remediation: Choose a different subnet or remove the delegated service from at
+       least one subnet in the environment.
+
+All
+
+Create
+
+
+
+Kubernetes API Server Security
+
+
+Validates that the supplied IP CIDR ranges are valid and do not overlap any
+       reserved IP ranges. Each cloud provider has a limit set on the maximum number of allowed
+       CIDRs.
+Remediation: Use valid CIDR formats and ranges when limiting access to the
+       Kubernetes API server and limit the number of ranges specified.
+
+All
+
+Create
+
+
+
+Kubernetes Service CIDR Validation
+
+
+Validates that the specified service CIDR for Kubernetes services does not
+       overlap any restricted CIDR ranges and is a valid CIDR format.
+Remediation: Change the service CIDR so that it doesn’t conflict with any pod CIDRs
+       or other routes on the subnet.
+
+All
+
+Create
+
+
+
+Autoscale Parameters
+
+
+Azure’s built-in autoscaler has limitations on the ranges of values for scale-up
+       and scale-down operations.
+Remediation: Adjust the specified parameters from the error message which are not
+       within the required ranges.
+
+Azure
+
+Create
+Update
+
+
+Example
+{
+   "result": "PASSED",
+   "summary": {
+       "passed": 8,
+       "warning": 0,
+       "failed": 0,
+       "skipped": 10,
+       "total": 18
+   },
+   "message": "The cluster validation has passed, but some checks were skipped",
+   "validations": [
+       {
+           "name": "Instance Count",
+           "description": "Each instance count must be between minInstance and maxInstance inclusively. The minInstance and maxInstance of infrastructure group should comply with minimum number of infra nodes and maximum number of infra nodes.",
+           "category": "COMMON",
+           "status": "PASSED",
+           "message": "The minimum and maximum instance counts are correct for all instance groups.",
+           "detailedMessage": "The minimum and maximum instance counts are correct for all instance groups.",
+           "duration": "1µs"
+       },
+       {
+           "name": "Instance Group Count",
+           "description": "Total instance group count must be less than or equal to maximum instance group limit.",
+           "category": "COMMON",
+           "status": "PASSED",
+           "message": "The number of instance groups in the request is less than or equal to the maximum allowed.",
+           "detailedMessage": "The total instance group count of 2 is within the limit.",
+           "duration": "3µs"
+       },
+       {
+           "name": "Instance Group Naming",
+           "description": "Each instance group name must conform the restrictions of the cloud provider. This includes using valid characters and adhering to length restrictions.",
+           "category": "COMMON",
+           "status": "PASSED",
+           "message": "All instance groups meet the naming restrictions for Azure.",
+           "detailedMessage": "All instance groups meet the naming restrictions for Azure.",
+           "duration": "12µs"
+       },
+       {
+           "name": "Instance Type",
+           "description": "Instance groups must have an instance type that exists in the region in which they will be created. For EKS, there is additional verifiation for EKS support and usage class.",
+           "category": "COMMON",
+           "status": "PASSED",
+           "message": "All instance groups have valid instance types.",
+           "detailedMessage": "The following instance types were validated for westus2: Standard_B2s",
+           "duration": "599ms"
+       },
+       {
+           "name": "Kubernetes Version",
+           "description": "Each cloud provider (Amazon, Azure, Google, etc) supports different versions of Kubernetes.",
+           "category": "COMMON",
+           "status": "PASSED",
+           "message": "The specified Kubernetes version 1.18 has been resolved to 1.18.17 and is valid on Azure",
+           "detailedMessage": "The specified Kubernetes version 1.18 has been resolved to 1.18.17 and is valid on Azure",
+           "duration": "388ms"
+       },
+       {
+           "name": "Placement Rule",
+           "description": "Instance Types must be allowed by the placement rule.",
+           "category": "COMMON",
+           "status": "SKIPPED",
+           "message": "Skipping validation since the cloud platform is Azure.",
+           "detailedMessage": "Skipping validation since the cloud platform is Azure.",
+           "duration": "6µs"
+       },
+       {
+           "name": "Entitlement Check",
+           "description": "When the entitlement LIFTIE_USE_PRECREATED_IAM_RESOURCES is enabled, the expected profile (cdp-liftie-instance-profile) should exist and it needs to have the necessary roles attached to it. ",
+           "category": "ENTITLEMENTS",
+           "status": "SKIPPED",
+           "message": "IAM Resource Entitlement validation skipped for Cloud Provider azure.",
+           "detailedMessage": "IAM Resource Entitlement validation skipped for Cloud Provider azure.",
+           "duration": "14µs"
+       },
+       {
+           "name": "Cluster Proxy Connectivity",
+           "description": "Verifies connectivity to the cluster proxy service which is used to register private cluster endpoints.",
+           "category": "CONTROL_PLANE",
+           "status": "SKIPPED",
+           "message": "Connectivity to the cluster connectivity manager will be skipped since this is not a private cluster.",
+           "detailedMessage": "The cluster being provisioned is not marked as private in the provisioning request.",
+           "duration": "1µs"
+       },
+       {
+           "name": "Cluster Proxy Enabled",
+           "description": "Verifies that the environment was created with the cluster proxy service enabled.",
+           "category": "CONTROL_PLANE",
+           "status": "SKIPPED",
+           "message": "Skipping the environment check for cluster proxy connectivity since the cluster is public.",
+           "detailedMessage": "Skipping the environment check for cluster proxy connectivity since the cluster is public.",
+           "duration": "1µs"
+       },
+       {
+           "name": "DataLake Connectivity",
+           "description": "Validates whether DataLake connection is reachable and if FreeIPA is available.",
+           "category": "CONTROL_PLANE",
+           "status": "PASSED",
+           "message": "DataLake validation succeeded.",
+           "detailedMessage": "Data lake is healthy and reachable. Service Discovery Feature is enabled, verified DNS entries retrieved for Data Lakes. Datalake URL : localhost:8081  Service discovery URL : localhost:8082 "
+       },
+       {
+           "name": "AWS Shared VPC Access",
+           "description": "When a shared VPC is used, proper access should be granted.",
+           "category": "NETWORK",
+           "status": "SKIPPED",
+           "message": "Skipping validation since the cloud platform is Azure.",
+           "detailedMessage": "Skipping validation since the cloud platform is Azure.",
+           "duration": "3µs"
+       },
+       {
+           "name": "AWS Subnet Availability Zones",
+           "description": "When existing AWS subnets are provided for provisioning an EKS cluster, the subnets must be in at least 2 different Availability Zones.",
+           "category": "NETWORK",
+           "status": "SKIPPED",
+           "message": "Skipping validation since the cloud platform is Azure.",
+           "detailedMessage": "Skipping validation since the cloud platform is Azure.",
+           "duration": "2µs"
+       },
+       {
+           "name": "AWS Subnet Tagging",
+           "description": "In order for load balancers to choose subnets correctly a subnet needs to have either the public or private ELB tags defined.",
+           "category": "NETWORK",
+           "status": "SKIPPED",
+           "message": "Skipping validation since the cloud platform is Azure.",
+           "detailedMessage": "Skipping validation since the cloud platform is Azure.",
+           "duration": "26µs"
+       },
+       {
+           "name": "Azure API Access Parameters",
+           "description": "Verifies that the security parameters for locking down access to the Azure Kubernetes API Server are correct.",
+           "category": "NETWORK",
+           "status": "PASSED",
+           "message": "The API server access parameters specified in the cluster request are valid.",
+           "detailedMessage": "The cluster will be provisioned as public with the following whitelist CIDRs: ",
+           "duration": "48µs"
+       },
+       {
+           "name": "Azure Available Subnets",
+           "description": "When an existing Azure subnet is chosen for provisioning an AKS cluster, the subnet must not be in use by any other cluster. This is a restriction of Kubenet, which is the CNI used on the new cluster. Although the subnet may have a routing table, it may not have any existing IP address associations.",
+           "category": "NETWORK",
+           "status": "PASSED",
+           "message": "At least 1 valid subnet was found and can be used for cluster creation.",
+           "detailedMessage": "The cluster can be provisioned using subnet liftie-dev.internal.2.westus2 in virtual network liftie-dev and resource group liftie-test",
+           "duration": "917ms"
+       },
+       {
+           "name": "Kubernetes API Server CIDR Security",
+           "description": "CIDR blocks for whitelisting access to the Kubernetes API Server must not overlap restricted IP ranges.",
+           "category": "NETWORK",
+           "status": "SKIPPED",
+           "message": "Skipping CIDR validation for whitelisting because it is not enabled.",
+           "detailedMessage": "The ability to secure access the Kubernetes API server via a list of allowed CIDRs is not enabled. This can be enabled either in the controlplane (currently false) or via the provisioning request (currently false).",
+           "duration": "11µs"
+       },
+       {
+           "name": "Service CIDR Validation",
+           "description": "CIDR blocks that Kubernetes assigns service IP addresses from should not overlap with any other networks that are peered or connected to existing VPC.",
+           "category": "NETWORK",
+           "status": "SKIPPED",
+           "message": "Service CIDR is missing in Network Profile.",
+           "detailedMessage": "VPC validation is executed only if the VPC already exists and a service CIDR is specified in the network profile.",
+           "duration": "426µs"
+       },
+       {
+           "name": "Azure Autoscale Parameters",
+           "description": "The following autoscale parameters for Azure, which are specified during provisioning and update, need to be in multiples of 60s. Autoscale parameters: scaleDownDelayAfterAdd, scaleDownDelayAfterFailure, scaleDownUnneededTime, scaleDownUnreadyTime.",
+           "category": "DEPLOYMENT",
+           "status": "SKIPPED",
+           "message": "There are no autoscale parameters specified in the request.",
+           "detailedMessage": "The request did not contain an Autoscaler structure.",
+           "duration": "0s"
+       }
+   ]
+}
+
+
+
+Instance type preflight check failsOn AWS, in a given region, the corresponding Availability Zones do not always support   the same instance types. The instance type preflight check will fail if the desired instance type   is not supported in all AZs in the region.

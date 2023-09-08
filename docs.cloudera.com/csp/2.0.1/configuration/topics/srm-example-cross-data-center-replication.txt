@@ -1,0 +1,135 @@
+Cross Data Center Replication of Multiple ClustersCloudera Docs
+Cross Data Center Replication of Multiple Clusters
+Configuration example with three data centers that have two Kafka clusters
+    each.
+
+In more advanced deployments, you may have multiple Kafka clusters in each of several data
+        centers. To prevent creating a fully-connected mesh of all Kafka clusters, Cloudera
+        recommends leveraging a single Kafka cluster in each data center for cross data center
+        replication. 
+This example demonstrates the steps required to configure a deployment with three data
+        centers that each have two Kafka clusters. Additionally, it also provides example commands
+        to start bidirectional replication of all topics within each data center and an example on
+        how to replicate a single topic across all data centers. 
+Figure 1. Cross Data Center Replication of Multiple
+          Clusters
+The steps shown here have to be carried out on all clusters in a given
+          deployment. Configuration properties presented in Steps 3-5 are configured identically on
+          all clusters. The configuration property presented in Step 7 will differ for each
+          cluster.
+noteThe following list of steps assume that the Streams Replication Manager
+        Service role is running on 1 host on each cluster and is targeting the cluster it is running
+        on.
+
+
+In Cloudera Manager select Streams Replication Manager. Go to Configuration.Specify cluster aliases:
+          
+Find the Streams Replication Manager
+                Cluster alias. property.
+Add a comma
+              delimited list of cluster aliases. For example:
+west1, west2, east1, east2, south1, south2
+Cluster aliases are arbitrary names
+              defined by the user. Aliases specified here are used in other configuration properties
+              and with the srm-control tool to refer to the clusters added for
+              replication.
+Specify cluster connection
+          information:
+Find the
+                streams.replication.manager's replication configs
+              property.
+Click the add button and add new lines
+              for each cluster alias you have specified in the Streams Replication
+                Manager Cluster alias. property
+Add connection information for your
+              clusters. For example:
+west1.bootstrap.servers=west1_host1:9092,west1_host2:9092,west1_host3:9092
+west2.bootstrap.servers=west2_host1:9092,west2_host2:9092,west2_host3:9092
+
+east1.boostrap.servers=east1_host1:9092,east1_host2:9092,east1_host3:9092
+east2.boostrap.servers=east2_host1:9092,east2_host2:9092,east2_host3:9092
+
+south1.boostrap.servers=south1_host1:9092,south1_host2:9092,south1_host3:9092
+south2.boostrap.servers=south2_host1:9092,south2_host2:9092,south2_host3:9092
+
+Each cluster has to be added to a new line. If a cluster has multiple hosts, add
+                them to the same line but delimit them with commas.
+
+Add and enable
+          replications:
+Find the
+                streams.replication.manager's replication configs
+              property.
+Click the add button and add new lines
+              for each unique replication you want to add and enable.
+Add and enable your replications. For example:
+Enable cross data center replication by adding the following replications:
+west1->east1.enabled=true
+west1->south1.enabled=true
+east1->west1.enabled=true
+east1->south1.enabled=true
+south1->west1.enabled=true
+south1->east1.enabled=true
+
+Enable bidirectional replication within each data center by adding the following
+                replications:
+west1->west2.enabled=true
+west2->west1.enabled=true
+east1->east2.enabled=true
+east2->east1.enabled=true
+south1->south2.enabled=true
+south2->south1.enabled=true
+
+
+Enter a Reason for change, and then click Save
+            Changes to commit the changes.Add
+          Streams Replication Manager Driver role instances to all Kafka broker
+          hosts:
+Go to
+                Instances.
+Click Add Role
+                Instances.
+Click Select
+                Hosts.
+Select all Kafka broker hosts
+              and click Ok.
+Click
+                Continue.
+Find the streams
+                replication manager driver target cluster property.
+Add the cluster aliases that you want
+              the driver role to target. For
+              example:
+
+In the west data center:west1, west2
+In the east data center: east1, east2
+In the south data center:south1, south2
+
+
+The streams replication
+                manager driver target cluster property allows you to specify which
+              clusters the driver should write to. In this example, the drivers read data from all
+              clusters, but only write to the cluster they are running on. This allows you to
+              distribute replication workloads.
+Click
+                Continue.
+
+Restart Streams Replication Manager.
+Replicate topics between hosts within each data center:
+srm-control topics --source west1 --target west2 --add ".*"
+srm-control topics --source west2 --target west1 --add ".*"
+srm-control topics --source east1 --target east2 --add ".*"
+srm-control topics --source east2 --target east1 --add ".*"
+srm-control topics --source south1 --target south2 --add ".*"
+srm-control topics --source south2 --target south1 --add ".*"
+Replicate topic1 across all data centers:
+srm-control topics --source west1 --target east1 --add topic1,west2.topic1
+
+srm-control topics --source west1 --target south1 --add topic1,west2.topic1
+srm-control topics --source east1 --target west1 --add topic1,east2.topic1
+srm-control topics --source east1 --target south1 --add topic1,east2.topic1
+srm-control topics --source south1 --target west1 --add topic1,south2.topic1
+srm-control topics --source south1 --target east1 --add topic1,south2.topic1
+
+
+Parent topic: Configuration Examples

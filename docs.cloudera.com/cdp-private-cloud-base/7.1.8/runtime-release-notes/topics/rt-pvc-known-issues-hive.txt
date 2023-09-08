@@ -1,0 +1,226 @@
+Known Issues in Apache HiveCloudera Docs
+Known Issues in Apache Hive
+Learn about the known issues in Hive, the impact or changes to the functionality, and
+    the workaround.
+
+
+CDPD-45134: Disabling the cache configuration for HWC secure
+          access mode is not enforced at query-level
+While enabling or disabling cache for HWC secure access
+          mode, setting the spark.hadoop.secure.access.cache.disable property at a
+          runtime or query-level does not work.noteThis issue is fixed in
+            the CDP Private Cloud Base version 7.1.8 Cumulative hotfix 2.
+Specify the property at a global level or at a
+          session-level.
+
+
+CDPD-43107: SemanticException for INSERT INTO statement when Hive
+          Cost-based Optimizer (CBO) is disabled
+If you are running the INSERT INTO query and
+            hive.cbo.enable is set to "false", the query fails with a
+          SemanticException. For
+            example,set hive.cbo.enable=false;
+
+CREATE TABLE mytable (
+id INT,
+str STRING
+);
+
+INSERT INTO mytable (id, str) VALUES (1, 'a');Output:
+org.apache.hadoop.hive.ql.parse.SemanticException: 0:0 Expected 2 columns for insclause-0/default@mytable; select produces 1 columns. Error encountered near token ''a''This
+            issue occurs only when columns are specified for the target table in the query.
+              INSERT INTO mytable values (1, 'a'); does not result in an
+            exception.
+Enable CBO and run the query.
+
+
+CDPD-43957: HiveServer2 shuts down during replication due to high
+          resource usage
+During Hive replication (both bootstrap and incremental),
+          you may notice that the HiveServer2 (HS2) shuts down periodically with the following
+            error:java.sql.SQLException: org.apache.hive.jdbc.ZooKeeperHiveClientException: Unable to read HiveServer2 configs from ZooKeeper
+	at org.apache.hive.jdbc.HiveConnection.<init>(HiveConnection.java:265)
+	at org.apache.hive.jdbc.HiveDriver.connect(HiveDriver.java:107)
+	at java.sql.DriverManager.getConnection(DriverManager.java:664)
+	at java.sql.DriverManager.getConnection(DriverManager.java:247)
+	at com.cloudera.enterprise.hive3qt.Hive3QueryTool$HiveOperation.execute(Hive3QueryTool.java:682)
+	at com.cloudera.enterprise.hive3qt.Hive3QueryTool.main(Hive3QueryTool.java:935)
+Caused by: org.apache.hive.jdbc.ZooKeeperHiveClientException: Unable to read HiveServer2 configs from ZooKeeper
+	at org.apache.hive.jdbc.ZooKeeperHiveClientHelper.configureConnParams(ZooKeeperHiveClientHelper.java:177)
+	at org.apache.hive.jdbc.Utils.configureConnParamsFromZooKeeper(Utils.java:580)
+	at org.apache.hive.jdbc.Utils.parseURL(Utils.java:391)
+	at org.apache.hive.jdbc.HiveConnection.<init>(HiveConnection.java:263)
+	... 5 more
+Caused by: org.apache.hive.jdbc.ZooKeeperHiveClientException: Tried all existing HiveServer2 uris from ZooKeeper.
+	at org.apache.hive.jdbc.ZooKeeperHiveClientHelper.getServerHosts(ZooKeeperHiveClientHelper.java:132)
+	at org.apache.hive.jdbc.ZooKeeperHiveClientHelper.configureConnParams(ZooKeeperHiveClientHelper.java:172)
+	... 8 morThis issue occurs when you replicate at scale with an
+            unbalanced cluster setup that has all the roles running on the Cloudera Manager host. As
+            a result, Cloudera Manager ends up in a bottleneck situation because HS2 crashes,
+            preventing further replication. The logs (/var/log/messages) indicate
+            that there were a large number of Java processes running on the host, which exhausted
+            the host's memory and triggered an Out Of Memory Killer process to stop HS2.You
+            can restart HS2 and reinitiate replication. However, the replication process may take a
+            longer time to complete.
+
+
+Follow these recommendations when setting up your source and target clusters:
+Ensure that no HS2, Hive metastore (HMS), DataNode, or NameNode roles are
+                  running on the Cloudera Manager host.
+Ensure that you have multiple instances of HS2 and HMS roles on different
+                  nodes.
+It is recommended that you have the HS2 and HMS roles on different nodes than
+                  the DataNodes or NameNodes.
+These practices increase the possibility of Hive replication at scale
+                completing successfully.
+Limit the scale of Hive replication by temporarily disabling replication
+              policies.
+
+
+
+
+CDPD-40730: Parquet change can cause incompatibility
+Parquet files written by the parquet-mr library in CDP 7.1.8,
+          where the schema contains a timestamp with no UTC conversion will not be compatible with
+          older versions of Parquet readers. The effect is that the older versions will still
+          consider these timestamps as they would require UTC conversions and will thus end up with
+          a wrong result. You can encounter this problem only when you write Parquet-based tables
+          using Hive, and tables have the non-default configuration
+            hive.parquet.write.int64.timestamp=true.
+None.
+
+
+CDPD-26975: Using the ABFS / S3A connectors in an Oozie workflow where the operations are "secured" may trigger an IllegalArgumentException with the error message java.net.URISyntaxException: Relative path in absolute URI.
+Set the following XML configuration in the Datahub cluster's Cloudera Manager:
+        
+In the Cloudera Manager Admin Console, go to the Oozie service.
+Click the Configuration tab. 
+In the Oozie Server Advanced Configuration Snippet (Safety Valve) for oozie-site.xml
+              set the following:
+Set the following if you are using Amazon S3: <property>
+                    <name>oozie.service.HadoopAccessorService.fs.s3a</name>
+                    <value>fs.s3a.buffer.dir=/tmp/s3a</value> </property>
+Set the following if you are using ABFS: <property>
+                    <name>oozie.service.HadoopAccessorService.fs.abfs</name>
+                    <value>fs.azure.buffer.dir=/tmp/abfs</value> </property> <property>
+                    <name>oozie.service.HadoopAccessorService.fs.abfss</name>
+                    <value>fs.azure.buffer.dir=/tmp/abfss</value> </property>
+                  
+
+Enter a Reason for change, and then click Save Change to commit the changes. 
+Restart the Oozie service. 
+
+
+
+
+CDPD-41274: HWC + Oozie issue: Could not open client transport
+          with JDBC Uri
+Currently only Spark cluster mode is supported in the Oozie Spark
+          Action with Hive Warehouse Connector (HWC).
+Use Spark action in cluster
+          mode.<spark xmlns="uri:oozie:spark-action:1.0">
+            ...
+            <mode>cluster</mode>
+            ...
+            </spark>
+
+
+CDPD-26556: After an upgrade, querying a CTAS table under certain
+          conditions might throw an exception
+If you upgrade your Hive cluster from CDH 6 to CDP 7, create a
+          CTAS table in the CDP cluster from a table you upgraded from CDH, you might see the
+          following exception when you query the new table:
+            class org.apache.hadoop.io.IntWritable cannot be cast to class org.apache.hadoop.hive.serde2.objectinspector.StandardUnionObjectInspector$StandardUnion        This
+            issue involves CDH-based tables having columns of complex types ARRAY, MAP, and STRUCT.
+          
+
+
+CDPD-23506: OutOfMemoryError in LLAP
+Long running spark-shell applications can leave sessions in
+          interactive Hiveserver2 until the Spark application finishes (user exists from
+          spark-shell), causing memory pressure in case of a high number of queries in the same
+          shell (1000+). 
+You must close spark-shell so that sessions are closed. Add
+          the owner of the database or the tables as a user with read or read/write access to the
+          tables directly.
+
+
+CDPD-23041: DROP TABLE on a table having an index does not
+          work
+If you migrate a Hive table to CDP having an index, DROP TABLE
+          does not drop the table. Hive no longer supports indexes (HIVE-18448). A foreign key constraint on the indexed table prevents dropping the
+          table. Attempting to drop such a table results in the following error:
+          java.sql.BatchUpdateException: Cannot delete or update a parent row: a foreign key constraint fails ("hive"."IDXS", CONSTRAINT "IDXS_FK1" FOREIGN KEY ("ORIG_TBL_ID") REFERENCES "TBLS ("TBL_ID"))
+There are two workarounds: 
+Drop the foreign key "IDXS_FK1" on the "IDXS" table within the metastore. You can
+              also manually drop indexes, but do not cascade any drops because the IDXS table
+              includes references to "TBLS".
+Launch an older version of Hive, such as Hive 2.3 that includes IDXS in the DDL, and
+              then drop the indexes as described in Language Manual Indexing.
+
+Apache Issue:
+Hive-24815
+
+
+
+
+CDPD-17766: Queries fail when using
+          spark.sql.hive.hiveserver2.jdbc.url.principal in the JDBC URL to invoke Hive. 
+Do not specify
+            spark.sql.hive.hiveserver2.jdbc.url.principal in the JDBC URL to invoke
+          Hive remotely. 
+Workaround: specify
+            principal=hive.server2.authentication.kerberos.principal as shown in
+          the following syntax:
+          jdbc:hive://<host>:<port>/<dbName>;principal=hive.server2.authentication.kerberos.principal;<otherSessionConfs>?<hiveConfs>#<hiveVars>
+
+
+
+CDPD-13636: Hive job fails with OutOfMemory exception in the Azure
+          DE cluster
+Set the parameter
+            hive.optimize.sort.dynamic.partition.threshold=0. Add this
+          parameter in Cloudera Manager (Hive Service Advanced Configuration Snippet (Safety Valve)
+          for hive-site.xml)
+
+
+
+
+CDPD-10848: HiveServer Web UI displays incorrect data
+If you enabled auto-TLS for TLS encryption, the HiveServer2 Web UI does not display the correct data in the following tables:
+          Active Sessions, Open Queries, Last Max n Closed Queries
+        
+
+
+Technical Service Bulletins
+
+
+TSB 2021-501: JOIN queries return wrong result for join keys
+            with large size in Hive
+JOIN queries return wrong results when performing joins on large
+            size keys (larger than 255 bytes). This happens when the fast hash table join algorithm
+            is enabled, which is enabled by default.
+
+Knowledge article
+For the latest update on this issue, see the corresponding Knowledge article: TSB 2021-501: JOIN queries return wrong result for join
+              keys with large size in Hive
+
+
+
+TSB 2022-640: Apache Hive job fails with large partitioned
+            tables
+Queries against large partitioned tables may encounter a
+              “TTransportException: MaxMessageSize reached” exception from the
+            Apache Thrift library during the query compilation phase. This is likely to happen if
+            the table has thousands of partitions and the query either does not contain partition
+            pruning filter conditions or has such filters, but a large number of partitions are
+            selected by the filters.
+
+Upstream JIRA
+HIVE-26633
+Knowledge article
+For the latest update on this issue see the corresponding Knowledge article: TSB 2022-640: Apache Hive job fails with large partitioned tables
+
+
+
+Parent topic: Known issues in Cloudera Runtime 7.1.8

@@ -1,0 +1,863 @@
+Impala type conversion functionsCloudera Docs
+Impala type conversion functions
+Conversion functions are usually used in combination with other functions, to
+    explicitly pass the expected data types. Impala has strict rules regarding data types for
+    function parameters. For example, Impala does not automatically convert a
+      DOUBLE value to FLOAT, a BIGINT value to
+      INT, or other conversion where precision could be lost or overflow could
+    occur. Also, for reporting or dealing with loosely defined schemas in big data contexts, you
+    might frequently need to convert values to or from the STRING type.note Although in Impala 2.3, the SHOW FUNCTIONS output for
+        database _IMPALA_BUILTINS contains some function
+        signatures matching the pattern castto*, these
+        functions are not intended for public use and are expected to be
+        deprecated in future. 
+Function reference:
+
+      Impala supports the following type conversion functions:
+    
+CAST 
+TYPEOF
+
+
+ CAST(expression AS type) 
+
+Purpose: Returns expression converted to the
+              type data type.  If the expression value is
+              of a type that cannot be converted to the target type: 
+ Of DECIMAL, DATE, and
+                    BOOLEAN, the function returns an error. 
+ Of all other types, the function returns NULL. 
+
+
+Usage notes:
+ Use CAST when passing a column value or literal to a function
+              that expects a parameter with a different type. Frequently used in SQL operations such
+              as CREATE TABLE AS SELECT and INSERT ... VALUES to
+              ensure that values from various sources are of the appropriate type for the
+              destination columns.  Where practical, do a one-time CAST()
+              operation during the ingestion process to make each column into the appropriate type,
+              rather than using many CAST() operations in each query; doing type
+              conversions for each row during each query can be expensive for tables with millions
+              or billions of rows. 
+ The way this function deals with time zones
+        when converting to or from TIMESTAMP values is affected by the
+          ‑‑use_local_tz_for_unix_timestamp_conversions startup flag
+        for the impalad daemon. See TIMESTAMP Data type for details about how Impala handles
+        time zone considerations for the TIMESTAMP data type. 
+
+ CAST(expression AS type FORMAT pattern) 
+
+Purpose: Returns expression converted to
+            the type data type based on the
+              pattern format string. This signature of
+              CAST() with the FORMAT clause is
+            supported only for casts between STRING /
+              CHAR / VARCHAR types and
+              TIMESTAMP / DATE types. note
+              The patterns allowed in the FORMAT clause support
+              ISO SQL:2016 standard patterns. Those patterns are not the same
+              format patterns used with the other Impala conversion functions,
+              e.g. TO_TIMESTAMP() and
+                FROM_TIMESTAMP(). 
+ The following rules apply to pattern. Any
+              exceptions to these rules are noted in the Details column of the
+              table below. 
+
+pattern is a case-insensitive
+                    STRING unless noted otherwise in the table
+                  below. 
+ If pattern is NULL, an
+                  empty string, or a number, an error returns. 
+ A fewer digits in expression than
+                  specified in the pattern is accepted if a
+                  separator is correctly specified in the
+                    pattern. For example,
+                    CAST('5-01-2017' AS DATE FORMAT
+                    'MM-dd-yyyy') returns
+                    DATE'2017-05-01'. 
+ If fewer number of digits are in
+                    expression than specified in the
+                    pattern, the current date is used to
+                  complete the year pattern. For example, CAST('19/05'
+                    AS DATE FORMAT 'YYYY/MM') will return
+                    DATE'2019-05-01' when executed on August 8,
+                  2019. 
+
+
+ The following format patterns are supported in the
+                FORMAT clause. 
+
+ Pattern 
+ Description 
+ Details 
+
+
+
+
+YYYY
+
+ 4-digit year. 
+
+
+
+
+YYY
+
+ Last 3 digits of a year. 
+
+
+
+
+YY
+
+ Last 2 digits of a year. 
+
+
+
+
+Y
+
+ Last digit of a year 
+
+
+
+
+RRRR
+
+ 4-digit round year 
+
+ If 1, 3 or 4-digit year values are provided in
+                            expression, treated as
+                            YYYY. 
+ If 2-digit years are provided in
+                            expression, treated as
+                            RR. 
+ For date/time to string conversions, treated as
+                            YYYY. 
+ If YYYY, YYY,
+                            YY, Y, or
+                            RR is given in the same
+                            pattern for a string to date/time
+                          conversion, an error returns. 
+
+
+
+
+RR
+
+ 2-digit round year. 
+
+ For date/time to string conversion, same as
+                            YY. 
+For string to date/time conversions, the first 2
+                          digits of the year in the return value depends on the
+                          specified two-digit year and the last two digits of
+                          the current year as follows: 
+
+ If the specified 2-digit year is 00 to 49: 
+
+
+ If the last 2 digits of the current year
+                                    are 00 to 49, the returned year has the same
+                                    first 2 digits as the current year. 
+
+
+ If the last 2 digits of the current year
+                                    are 50 to 99, the first 2 digits of the
+                                    returned year are 1 greater than the first 2
+                                    digits of the current year. 
+
+
+
+
+ If the specified 2-digit year is 50 to 99: 
+
+
+ If the last 2 digits of the current year
+                                    are 00 to 49, the first 2 digits of the
+                                    returned year are 1 less than the first 2
+                                    digits of the current year. 
+
+
+ If the last 2 digits of the current year
+                                    are 50 to 99, the returned year has the same
+                                    first 2 digits as the current year. 
+
+
+
+
+
+ If YYYY, YYY,
+                            YY, Y, or
+                            RR is given in the same
+                            pattern for a string to date/time
+                          conversion, an error returns. 
+ If 1-digit year values are provided in
+                            expression, it is treated as
+                            YYYY. 
+
+
+
+
+Q
+
+ Quarter of year (1-4) 
+
+ Not supported in string to date/time conversions.
+                        
+
+
+
+
+MM
+
+ Month 
+
+ In date/time to string conversions, 1-digit months
+                          are prefixed with a zero. 
+
+
+
+
+MONTH
+
+Month
+
+
+month
+
+
+ Full month name 
+ In string to date/time conversions: 
+ Converts a textual month name to a 2-digit month
+                            number. 
+ The input strings are expected without trailing
+                            spaces, e.g. "June",
+                              "August". 
+ If the FX modifier is active for
+                            the token, a 9-character-long full month name with
+                            trailing spaces is expected for the input string.
+                          
+
+ In date/time to string conversions: 
+ Converts to a 9-character-long full month name
+                              with trailing spaces. 
+ If the FM modifier is active
+                              for this token, converts to a month name without
+                              trailing spaces. 
+
+
+ This pattern token is case sensitive.
+                            MONTH, Month,
+                            month would require different
+                          casing of the input in string to date/time conversions
+                          and would produce cased outputs in date/time to string
+                          conversions, For example, MONTH,
+                            Month, month would
+                          convert respectively JULY,
+                            July, and july.
+                        
+
+
+
+
+MON
+
+Mon
+
+
+mon
+
+
+ Abbreviated 3-character month name 
+
+ This pattern token is case sensitive.
+                            MON, Mon,
+                            mon would require different casing
+                          of the input in string to date/time conversions and
+                          would produce cased outputs in date/time to string
+                          conversions, For example, MON,
+                            Mon, mon would
+                          convert respectively JUL,
+                            Jul, and jul. 
+
+
+
+
+WW
+
+ Week of year (1-53) 
+
+ Not supported in string to date/time conversions. 
+ The 1st week begins on January 1st and ends on
+                          January 7th. 
+
+
+
+
+W
+
+ Week of month (1-5) 
+ Week of month (1-5) 
+
+
+
+D
+
+ Day of week (1-7) 
+ Day of week (1-7) 
+
+
+
+DD
+
+ Day of month (1-31) 
+
+ In date/time to string conversions, a 1-digit day is
+                          prefixed with a zero. 
+
+
+
+
+DDD
+
+ Day of year (1-366) 
+
+ In string to date/time conversions, providing
+                            MM and DD along
+                          with DDD results an error, e.g.
+                            YYYY-MM-DDD. 
+
+
+
+
+DAY
+
+Day
+
+
+day
+
+
+ Day name 
+
+ Not supported in string to date/time conversions. 
+ In date/time to string conversions: 
+ Converts to a 9-character-long full day name
+                              with trailing spaces. 
+ If the FM modifier is active
+                              for this token, converts to a day name without
+                              trailing spaces. 
+
+
+ This pattern token is case sensitive.
+                            DAY, Day,
+                            day would produce cased outputs in
+                          date/time to string conversions, For example,
+                            DAY, Day,
+                            day would convert respectively
+                            MONDAY, Monday,
+                          and monday. 
+
+
+
+
+
+DY
+
+Dy
+
+
+dy
+
+
+
+ Not supported in string to date/time conversions. 
+ This pattern token is case sensitive.
+                            DY, Dy,
+                            dy would produce cased outputs in
+                          date/time to string conversions, For example,
+                            DY, Dy,
+                            dy would convert respectively
+                            MON, Mon, and
+                            mon. 
+
+
+
+
+HH
+
+HH12
+
+
+ Hour of day (1-12) 
+
+ In date/time to string conversions, 1-digit hours
+                          are prefixed with a zero. 
+ If provided hour in expression is
+                          not between 1 and 12, returns an error. 
+ If no AM/PM is provided in
+                            expression, the default is
+                            AM. 
+
+
+
+
+HH
+
+HH12
+
+
+ Hour of day (1-12) 
+
+ In date/time to string conversions, 1-digit hours
+                          are prefixed with a zero. 
+ If provided hour in expression is
+                          not between 1 and 12, returns an error. 
+ If no AM/PM is provided in
+                            expression, the default is
+                            AM. 
+
+
+
+
+HH24
+
+ Hour of day (0-23) 
+
+ In string to date/time conversions, if
+                            HH12, AM,
+                            PM are given in the same
+                            pattern, an error returns. 
+
+
+
+
+MI
+
+ Minute of hour (0-59) 
+
+ In date/time to string conversions, 1-digit minutes
+                          are prefixed with a zero. 
+
+
+
+
+SS
+
+ Second of minute (0-59) 
+
+ In date/time to string conversions, 1-digit seconds
+                          are prefixed with a zero. 
+
+
+
+
+SSSSS
+
+ Second of Day (0-86399) 
+ In string to timestamp conversions, if
+                          SS, HH,
+                          HH12, HH24,
+                          MI,
+                          AM/PM are given in
+                        the same pattern, an error returns.
+                      
+
+
+
+FF
+
+FF1, ..., FF9
+
+
+ Fractional second 
+
+ A number, 1 to 9, can be used to indicate the number
+                          of digits. 
+
+FF specifies a 9 digits fractional
+                          second. 
+
+
+
+
+AM
+
+PM
+
+
+A.M.
+
+
+P.M.
+
+
+ Meridiem indicator 
+
+ For date/time to string conversions,
+                            AM and PM are
+                          treated as synonyms. For example, casting
+                            '2019-01-01 11:00 am' to
+                            TIMESTAMP with the
+                            'YYYY-MM-DD HH12:MI PM' pattern
+                          returns 01-JAN-19 11.00.00.000000 AM. 
+ For string to date/time conversion,
+                            HH24 in the same
+                            pattern returns an error. 
+
+
+
+
+TZH
+
+ Timezone offset hour 
+
+ An optional sign, + or -, and 2 digits for the value
+                          of signed numbers are allowed for the source
+                            expression, e.g.
+                            +10, -05,
+                            04. 
+ The allowed values are from -15 to
+                            +5. 
+
+
+
+
+TZM
+
+ Timezone offset minute 
+
+ Unsigned numbers are allowed for the source
+                            expression. 
+ The allowed values are from 0 to
+                            59. 
+
+
+
+
+-
+
+.
+
+
+/
+
+
+,
+
+
+'
+
+
+;
+
+
+:
+
+ <space> 
+
+ Separator 
+
+ For string to date/time conversions, any separator
+                          character in the pattern string
+                          would match any separator character in the input
+                            expression. 
+ For example, CAST(“20191010” AS DATE FORMAT
+                            “YYYY-MM-DD”) returns an error, but
+                            CAST("2019-.;10 10" AS DATE FORMAT
+                            "YYYY-MM-DD") succeeds. 
+
+
+
+
+T
+
+ Separates the date from the time. 
+ This pattern is used for accepting ISO 8601
+                        date/time formats.  Example:
+                              YYYY-MM-DDTHH24:MI:SS.FF9Z
+
+
+
+
+
+Z
+
+ Indicates the zero hour offset from UTC. 
+ This pattern is used for accepting ISO 8601
+                        date/time formats. 
+
+
+FX
+Forces an exact match between the format pattern,
+                          pattern, and the input argument,
+                          expression.
+
+Must be specified at the beginning of the format
+                            pattern and is valid for the
+                          whole pattern.
+ In string to date/time conversions:
+
+Forces strict separator matching, including the
+                            separator character.
+Expects all the tokens to have the maximum
+                            possible length.
+
+In date/time to string conversions, the outputs are
+                          padded as follows:
+
+Numeric outputs are left padded with zeros.
+Text outputs are right padded with spaces.
+
+
+
+
+FM
+Overrides FX.
+
+In a date/time to string conversions,
+                            FM suppresses blank padding for the
+                          element immediately following the FM
+                          in the pattern string, e.g.
+                            "2010-1-9".
+In string to date/time conversions,
+                            FM is used to override the effect
+                          of FX for certain tokens as follows:
+
+The length of the token in the input argument
+                                can be shorter than the max length of that token
+                                type if followed by a separator, e.g. 1-digit
+                                month, less than 4-digit year.
+
+
+FM modifier skips the
+                                separators and affects the next non-separator
+                                token. For example, CAST('1999-10-2' AS
+                                  TIMESTAMP FORMAT 'FXYYYY-MMFM-DD')
+                                returns 1999-10-02
+                                  00:00:00 as FM is
+                                applied to DD and not to the
+                                  separator(-).
+
+
+
+
+
+Free text
+Nested string
+
+You can specify a free text with surrounding double
+                          quotes (") in pattern where the
+                          same text is expected in the input argument without
+                          surrounding double quotes.
+In date/time to string conversions, the string is
+                          included in the output with the characters' case
+                          preserved.
+ In string to date/time conversions, the nested
+                          string is not included in the resulting date/time
+                          object. However, the nested string has to match the
+                          related part of the input string, including the
+                          case.
+The following rules apply:
+
+If the pattern is surrounded
+                                by double quotes, double quotes surrounding the
+                                free text token must be escaped with a single
+                                backslash (\").
+For example: CAST('"Date:"2019-11-10'
+                                  AS DATE FORMAT
+                                  "\"Date:\"YYYY-MM-DD")
+
+
+ If the pattern is
+                                surrounded by double quotes, and there is an
+                                escaped double quotes inside a text token that
+                                is itself surrounded by escaped double quotes,
+                                escape the double quotes in the free text token
+                                with a triple backslash:
+                                (\\\")
+For example: CAST("1985 some \"text
+                                  11-28" AS DATE''' FORMAT "YYYY\" some
+                                    \\\"text \"MM-DD")
+
+
+If the pattern is surrounded
+                                by single quotes, the free text token can be
+                                surrounded by (non-escaped) double quotes. To
+                                include double quotes within the free text
+                                token, those double quotes must be escaped by a
+                                single backslash. 
+For example: CAST('"Date:"2019-11-10'
+                                  AS DATE FORMAT
+                                  '"\"Date:\""YYYY-MM-DD')
+
+
+ Literal single quotes/apostrophes
+                                  (') in the nested string must
+                                be escaped with a single backslash if the whole
+                                pattern string is delimited by single
+                                quotes.
+
+
+If a free text token contains any separator
+                                characters in the beginning, and the text token
+                                is right after a separator token sequence, an
+                                error returns as it's not trivial to find where
+                                the separator sequence ends and where the free
+                                text starts. In this case, use
+                                  FX for strict matching.
+For example: CAST("1985-11- ' 10" AS
+                                  DATE FORMAT "YYYY-MM-\" '
+                                  \"DD") returns an error, but
+                                removing the dash before the text token makes
+                                this succeed.
+
+
+
+
+
+
+
+Examples:
+
+
+
+ Input 
+ Output 
+
+
+
+
+CAST("02-11-2014" AS DATE FORMAT 'dd-mm-yyyy')
+
+ 2014-11-02 
+
+
+
+CAST("365 2014" AS DATE FORMAT 'DDD-YYYY')
+
+ 2014-12-31 
+
+
+
+CAST("5-01-26" AS DATE FORMAT 'YY-MM-DD')
+
+ Executed at 2019-01-01 11:11:11:  2015-01-26 
+
+
+
+
+CAST('2018-11-10T15:11:04Z' 
+   AS TIMESTAMP
+   FORMAT 'YYYY-MM-DDTHH24:MI:SSZ')
+
+ 2018-11-10 15:11:04 
+
+
+
+CAST("95-01-28" AS DATE FORMAT 'YYY-MM-DD')
+
+ Executed at 2019-01-01 11:11:11:  2095-01-28 
+
+
+
+
+CAST("49-01-15" AS DATE FORMAT 'RR-MM-DD')
+
+ Round year when last 2 digits of current year is
+                      greater than 49.  Executed at 2099-01-01 11:11:11: 
+ 2149-01-15 
+
+
+
+
+CAST('2019.10.10 13:30:40.123456 +01:30'
+   AS TIMESTAMP
+   FORMAT 'YYYY-MM-DD HH24:MI:SS.FF9 TZH:TZM')
+
+ 2019-10-10 13:30:40.123456000 
+
+
+
+CAST('2001-03-01 03:10:15.123456 -01:30'
+   AS TIMESTAMP
+   FORMAT 'FXYYYY-MM-DD HH12:MI:SS.FF6 TZH:TZM')
+
+2001-03-01 03:10:15.123456000
+
+
+
+CAST('2001-03-02 03:10:15'
+   AS TIMESTAMP
+   FORMAT 'FXYYYY MM-DD HH12:MI:SS')
+
+NULL because the separator between the year and month
+                      do not match.
+
+
+
+CAST('2001-3-05'
+   AS TIMESTAMP
+   FORMAT 'FXYYYY-MM-DD')
+
+NULL because the length of the month token does not
+                      match the pattern.
+
+
+
+CAST('2001-3-11 3:15:00.12345'
+   AS TIMESTAMP
+   FORMAT 'FXYYYY-FMMM-DD FMHH12:MI:SS.FMFF')
+
+2001-03-11 03:15:00.123450000The multiple
+                          FM modifiers for the month and hour
+                        override the FX and suppress
+                        padding.
+
+
+
+CAST('2019-01-01 01:01:01'
+   AS TIMESTAMP
+   FORMAT 'FMHH12:MI:FMSS')
+
+1:01:1
+
+
+
+CAST('Date: 2019-11-10'
+   AS DATE
+   FORMAT '"Date: "YYYY-MM-DD')
+
+
+2019-11-10
+
+
+
+ TYPEOF(expression) 
+
+Purpose: Returns the name of the data type corresponding to
+              expression. For types with extra attributes,
+            such as length for CHAR and
+              VARCHAR, or precision and scale for
+              DECIMAL, includes the full specification of the
+            type. 
+Return type:
+STRING
+
+
+Usage notes: Typically used in interactive exploration of a
+              schema, or in application code that programmatically generates
+              schema definitions such as CREATE TABLE
+              statements, for example, to get the type of an expression such as
+                col1 / col2 or CONCAT(col1, col2,
+                col3). This function is especially useful for
+              arithmetic expressions involving DECIMAL types
+              because the precision and scale of the result is can be different
+              than that of the operands. 
+Examples:
+TYPEOF(2) returns TINYINT. 
+TYPEOF(NOW()) returns TIMESTAMP.
+            
+
+

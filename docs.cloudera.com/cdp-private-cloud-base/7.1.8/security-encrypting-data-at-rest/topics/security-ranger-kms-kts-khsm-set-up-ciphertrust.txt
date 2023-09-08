@@ -1,0 +1,161 @@
+Set up CipherTrust HSM for Ranger KMS, KTS, and KeyHSMCloudera Docs
+Set up CipherTrust HSM for Ranger KMS, KTS, and KeyHSM
+ How to integrate Ranger KMS, KTS and KeyHSM with the CipherTrust HSM appliance. 
+
+ This task describes how to set up the CipherTrust hardware security moudule (HSM)
+                appliance provided by Thales. The process describes configuring the NAE port using
+                CipherTrust Manager, setting up and configuring KeyHSM in your cluster, and
+                validating keys using CipherTrust Manager.
+
+You must:
+Have Thales CipherTrust Manger installed in your enivronment.
+Have Ranger Key Management System, Key Trustee Server and Key HSM installed in
+                    your environment.
+Have Java (jdk1.8.0.232) installed. 
+See related topics for more information about installing Ranger KMS, KTS and
+                KeyHSM.
+
+Configure NAE port in Thales CipherTrust Manager
+
+Log in to Thales CipherTrust Manager.
+
+In CipherTrust Manager > Admin Settings, select Add Interface.
+
+In Type, Select NAE (default).
+
+In Network Interface,
+                    selectAll.
+
+In Port, type a value for the port number.
+9000
+
+In Mode, select one of the following options to match
+                    your environment:
+
+
+No TLS, user must supply password.
+TLS, Ignore client cert. user must supply password.
+
+
+
+Click Add.
+
+Create a user.
+
+
+In Access Management > Users, click Create New User .
+
+
+In Create a New User, provide a username,
+                            password, and any any required information.
+
+
+Click Create.
+
+
+Setting up a cluster and configuring KeyHSMnotePerform the following steps on both active and passive KTS
+                nodes.
+In your Key HSM root directory, make sure that appropriate versions of KeyHSM
+                    files are available with proper permissions.
+
+cd /usr/share/keytrustee-server-keyhsm/ 
+
+
+note
+Cipher Trust HSM supports two keyhsm versions. 
+If using Ingrian v6.x, then copy all jars into this folder and
+                                    make sure you have provided proper permission.
+If using Ingrian v8.12.x ,then copy all the jars except
+                                    gson-2.1.jar into this folder and make sure you have provided
+                                    proper permission. 
+
+
+
+
+Only if SSL is enabled on CipherTrust Manager:
+
+echo "thales_machine_ip  nae.keysecure.local" >> /etc/hosts              
+note Perform this step only if SSL is enabled on Cipher
+                        Trust Manager. 
+
+
+Setup Key HSM service.
+
+keyhsm setup keysecure
+
+
+-- Configuring keyHsm General Setup --
+Cloudera Recommends to use 127.0.0.1 as the listener port for Key HSM 
+Please enter Key HSM SSL listener IP address: [127.0.0.1] Hit Enter
+Will attempt to setup listener on 127.0.0.1
+Please enter Key HSM SSL listener PORT number: 9090
+
+validate Port:                                    :[ Successful ]
+
+-- Ingrian HSM Credential Configuration --
+Please enter HSM login USERNAME: username
+Please enter HSM login PASSWORD: password
+
+Please enter HSM IP Address or Hostname: 18.218.251.172
+Please enter HSM Port number: 9000
+Valid address:                                    :[ Successful ]
+
+Use SSL? [Y/n] Y (If TSL is enabled on NAE port then press Y else type n and hit enter and act accordingly)
+
+org.bouncycastle.cert.X509CertificateHolder@f20f09ff
+org.bouncycastle.cert.X509CertificateHolder@ebb30faf
+Trust this server? [y/N] y
+
+Trusted server:                                   :[ Successful ]                      
+
+
+Validate Key HSM Service.
+
+$ service keyhsm validate 
+
+
+Start the Key HSM service.
+
+$ service keyhsm start
+
+
+Configure Key HSM to trust KTS.
+
+noteMust be the full path to the file.
+
+
+$ keyhsm trust /var/lib/keytrustee/.keytrustee/.ssl/ssl-cert-keytrustee.pem
+
+
+Configure KTS to trust the Key HSM server.
+
+$ ktadmin keyhsm --server http://127.0.0.1:9090 --trust 
+
+
+Restart Key HSM.
+
+$ service keyhsm restart 
+
+
+Restart the KTS from Cloudera Manager UI.
+
+Test the HSM.
+
+curl -k https://$(hostname -f):11371/test_hsm                
+
+
+Login to the Ranger UI using keyadmin user role for creating an encryption zone
+                    key and do further validation.
+Validating Keys in Cipher Trust HSM
+In Thales Cipher Trust Manager > Left Navigation Panel, click Keys.
+
+Keys created in the second to last step should be present, as shown in:
+
+Figure 1. Validating Keys in CipherTrust Manager
+
+
+
+
+Further keys for zone operation can be created using Ranger UI with keyadmin role credentials and also using hadoop commands.
+
+Parent topic: Integrating Components for Encrypting Data at Rest

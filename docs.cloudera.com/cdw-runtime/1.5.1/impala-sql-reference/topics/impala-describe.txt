@@ -1,0 +1,705 @@
+DESCRIBE statementCloudera Docs
+DESCRIBE statement
+The DESCRIBE statement displays metadata about a table, such as the
+    column names and their data types. In Impala 2.3 and higher, you can specify the
+      name of a complex type column, which takes the form of a dotted path. The path might include
+      multiple components in the case of a nested type definition.
+In Impala 2.5 and higher, the DESCRIBE DATABASE form can
+      display information about a database.
+Syntax:
+DESCRIBE [DATABASE] [FORMATTED|EXTENDED] object_name
+
+object_name ::=
+    [db_name.]table_name[.complex_col_name ...]
+  | db_name
+
+      You can use the abbreviation DESC for the DESCRIBE statement.
+    
+      The DESCRIBE FORMATTED variation displays additional information, in a format familiar to
+      users of Apache Hive. The extra information includes low-level details such as whether the table is internal
+      or external, when it was created, the file format, the location of the data in HDFS, whether the object is a
+      table or a view, and (for views) the text of the query from the view definition.
+    note
+      The Compressed field is not a reliable indicator of whether the table contains compressed
+      data. It typically always shows No, because the compression settings only apply during the
+      session that loads data and are not stored persistently with the table metadata.
+    
+Describing databases:
+
+  By default, the DESCRIBE output for a database includes the location
+  and the comment, which can be set by the LOCATION and COMMENT
+  clauses on the CREATE DATABASE statement.
+
+  The additional information displayed by the FORMATTED or EXTENDED
+  keyword includes the HDFS user ID that is considered the owner of the database, and any
+  optional database properties. The properties could be specified by the WITH DBPROPERTIES
+  clause if the database is created using a Hive CREATE DATABASE statement.
+  Impala currently does not set or do any special processing based on those properties.
+ The following examples show the variations in syntax and output for describing
+        databases. This feature is available in Impala 2.5 and higher. 
+describe database default;
++---------+----------------------+-----------------------+
+| name    | location             | comment               |
++---------+----------------------+-----------------------+
+| default | /user/hive/warehouse | Default Hive database |
++---------+----------------------+-----------------------+
+
+describe database formatted default;
++---------+----------------------+-----------------------+
+| name    | location             | comment               |
++---------+----------------------+-----------------------+
+| default | /user/hive/warehouse | Default Hive database |
+| Owner:  |                      |                       |
+|         | public               | ROLE                  |
++---------+----------------------+-----------------------+
+
+describe database extended default;
++---------+----------------------+-----------------------+
+| name    | location             | comment               |
++---------+----------------------+-----------------------+
+| default | /user/hive/warehouse | Default Hive database |
+| Owner:  |                      |                       |
+|         | public               | ROLE                  |
++---------+----------------------+-----------------------+
+
+Describing tables:
+
+  If the DATABASE keyword is omitted, the default
+  for the DESCRIBE statement is to refer to a table.
+ If you have the SELECT privilege on a subset of the
+      table columns and no other relevant table/database/server-level
+      privileges, DESCRIBE returns the data from the columns
+      you have access to.  If you have the SELECT privilege on a subset of the
+      table columns and no other relevant table/database/server-level
+      privileges, DESCRIBE FORMATTED/EXTENDED does not return
+      the LOCATION field. The LOCATION data is
+      shown if you have any privilege on the table, the containing database or
+      the server. 
+-- By default, the table is assumed to be in the current database.
+describe my_table;
++------+--------+---------+
+| name | type   | comment |
++------+--------+---------+
+| x    | int    |         |
+| s    | string |         |
++------+--------+---------+
+
+-- Use a fully qualified table name to specify a table in any database.
+describe my_database.my_table;
++------+--------+---------+
+| name | type   | comment |
++------+--------+---------+
+| x    | int    |         |
+| s    | string |         |
++------+--------+---------+
+
+-- The formatted or extended output includes additional useful information.
+-- The LOCATION field is especially useful to know for DDL statements and HDFS commands
+-- during ETL jobs. (The LOCATION includes a full hdfs:// URL, omitted here for readability.)
+describe formatted my_table;
++------------------------------+----------------------------------------------+----------------------+
+| name                         | type                                         | comment              |
++------------------------------+----------------------------------------------+----------------------+
+| # col_name                   | data_type                                    | comment              |
+|                              | NULL                                         | NULL                 |
+| x                            | int                                          | NULL                 |
+| s                            | string                                       | NULL                 |
+|                              | NULL                                         | NULL                 |
+| # Detailed Table Information | NULL                                         | NULL                 |
+| Database:                    | my_database                                  | NULL                 |
+| Owner:                       | jrussell                                     | NULL                 |
+| CreateTime:                  | Fri Mar 18 15:58:00 PDT 2016                 | NULL                 |
+| LastAccessTime:              | UNKNOWN                                      | NULL                 |
+| Protect Mode:                | None                                         | NULL                 |
+| Retention:                   | 0                                            | NULL                 |
+| Location:                    | /user/hive/warehouse/my_database.db/my_table | NULL                 |
+| Table Type:                  | MANAGED_TABLE                                | NULL                 |
+| Table Parameters:            | NULL                                         | NULL                 |
+|                              | transient_lastDdlTime                        | 1458341880           |
+|                              | NULL                                         | NULL                 |
+| # Storage Information        | NULL                                         | NULL                 |
+| SerDe Library:               | org. ... .LazySimpleSerDe                    | NULL                 |
+| InputFormat:                 | org.apache.hadoop.mapred.TextInputFormat     | NULL                 |
+| OutputFormat:                | org. ... .HiveIgnoreKeyTextOutputFormat      | NULL                 |
+| Compressed:                  | No                                           | NULL                 |
+| Num Buckets:                 | 0                                            | NULL                 |
+| Bucket Columns:              | []                                           | NULL                 |
+| Sort Columns:                | []                                           | NULL                 |
++------------------------------+----------------------------------------------+----------------------+
+
+Complex type considerations:
+
+      Because the column definitions for complex types can become long, particularly when such types are nested,
+      the DESCRIBE statement uses special formatting for complex type columns to make the output readable.
+     For the ARRAY, STRUCT, and MAP
+        types available in Impala 2.3 and higher, the DESCRIBE output is formatted
+        to avoid excessively long lines for multiple fields within a STRUCT, or a
+        nested sequence of complex types. 
+        You can pass a multi-part qualified name to DESCRIBE
+        to specify an ARRAY, STRUCT, or MAP
+        column and visualize its structure as if it were a table.
+        For example, if table T1 contains an ARRAY column
+        A1, you could issue the statement DESCRIBE t1.a1.
+        If table T1 contained a STRUCT column S1,
+        and a field F1 within the STRUCT was a MAP,
+        you could issue the statement DESCRIBE t1.s1.f1.
+        An ARRAY is shown as a two-column table, with
+        ITEM and POS columns.
+        A STRUCT is shown as a table with each field
+        representing a column in the table.
+        A MAP is shown as a two-column table, with
+        KEY and VALUE columns.
+      
+      For example, here is the DESCRIBE output for a table containing a single top-level column
+      of each complex type:
+    create table t1 (x int, a array<int>, s struct<f1: string, f2: bigint>, m map<string,int>) stored as parquet;
+
+describe t1;
++------+-----------------+---------+
+| name | type            | comment |
++------+-----------------+---------+
+| x    | int             |         |
+| a    | array<int>      |         |
+| s    | struct<         |         |
+|      |   f1:string,    |         |
+|      |   f2:bigint     |         |
+|      | >               |         |
+| m    | map<string,int> |         |
++------+-----------------+---------+
+
+ Here are examples showing how to drill down into the layouts of complex
+        types, including using multi-part names to examine the definitions of nested types. The
+          < > delimiters identify the columns with complex types; these are
+        the columns where you can descend another level to see the parts that make up the complex
+        type. This technique helps you to understand the multi-part names you use as table
+        references in queries involving complex types, and the corresponding column names you refer
+        to in the SELECT list. These tables are from the nested TPC-H
+        schema, shown in detail in Sample schema and data for experimenting with Impala
+          complex types. 
+      The REGION table contains an ARRAY of STRUCT
+      elements:
+    
+
+
+          The first DESCRIBE specifies the table name, to display the definition
+          of each top-level column.
+        
+
+
+
+          The second DESCRIBE specifies the name of a complex
+          column, REGION.R_NATIONS, showing that when you include the name of an ARRAY
+          column in a FROM clause, that table reference acts like a two-column table with
+          columns ITEM and POS.
+        
+
+
+
+          The final DESCRIBE specifies the fully qualified name of the ITEM field,
+          to display the layout of its underlying STRUCT type in table format, with the fields
+          mapped to column names.
+        
+
+
+-- #1: The overall layout of the entire table.
+describe region;
++-------------+-------------------------+---------+
+| name        | type                    | comment |
++-------------+-------------------------+---------+
+| r_regionkey | smallint                |         |
+| r_name      | string                  |         |
+| r_comment   | string                  |         |
+| r_nations   | array<struct<           |         |
+|             |   n_nationkey:smallint, |         |
+|             |   n_name:string,        |         |
+|             |   n_comment:string      |         |
+|             | >>                      |         |
++-------------+-------------------------+---------+
+
+-- #2: The ARRAY column within the table.
+describe region.r_nations;
++------+-------------------------+---------+
+| name | type                    | comment |
++------+-------------------------+---------+
+| item | struct<                 |         |
+|      |   n_nationkey:smallint, |         |
+|      |   n_name:string,        |         |
+|      |   n_comment:string      |         |
+|      | >                       |         |
+| pos  | bigint                  |         |
++------+-------------------------+---------+
+
+-- #3: The STRUCT that makes up each ARRAY element.
+--     The fields of the STRUCT act like columns of a table.
+describe region.r_nations.item;
++-------------+----------+---------+
+| name        | type     | comment |
++-------------+----------+---------+
+| n_nationkey | smallint |         |
+| n_name      | string   |         |
+| n_comment   | string   |         |
++-------------+----------+---------+
+
+
+      The CUSTOMER table contains an ARRAY of STRUCT
+      elements, where one field in the STRUCT is another ARRAY of
+      STRUCT elements:
+    
+
+
+          Again, the initial DESCRIBE specifies only the table name.
+        
+
+
+
+          The second DESCRIBE specifies the qualified name of the complex
+          column, CUSTOMER.C_ORDERS, showing how an ARRAY
+          is represented as a two-column table with columns ITEM and POS.
+        
+
+
+
+          The third DESCRIBE specifies the qualified name of the ITEM
+          of the ARRAY column, to see the structure of the nested ARRAY.
+          Again, it has has two parts, ITEM and POS. Because the
+          ARRAY contains a STRUCT, the layout of the STRUCT
+          is shown.
+        
+
+
+
+          The fourth and fifth DESCRIBE statements drill down into a STRUCT field that
+          is itself a complex type, an ARRAY of STRUCT.
+          The ITEM portion of the qualified name is only required when the ARRAY
+          elements are anonymous. The fields of the STRUCT give names to any other complex types
+          nested inside the STRUCT. Therefore, the DESCRIBE parameters
+          CUSTOMER.C_ORDERS.ITEM.O_LINEITEMS and CUSTOMER.C_ORDERS.O_LINEITEMS
+          are equivalent. (For brevity, leave out the ITEM portion of
+          a qualified name when it is not required.)
+        
+
+
+
+          The final DESCRIBE shows the layout of the deeply nested STRUCT type.
+          Because there are no more complex types nested inside this STRUCT, this is as far
+          as you can drill down into the layout for this table.
+        
+
+-- #1: The overall layout of the entire table.
+describe customer;
++--------------+------------------------------------+
+| name         | type                               |
++--------------+------------------------------------+
+| c_custkey    | bigint                             |
+... more scalar columns ...
+| c_orders     | array<struct<                      |
+|              |   o_orderkey:bigint,               |
+|              |   o_orderstatus:string,            |
+|              |   o_totalprice:decimal(12,2),      |
+|              |   o_orderdate:string,              |
+|              |   o_orderpriority:string,          |
+|              |   o_clerk:string,                  |
+|              |   o_shippriority:int,              |
+|              |   o_comment:string,                |
+|              |   o_lineitems:array<struct<        |
+|              |     l_partkey:bigint,              |
+|              |     l_suppkey:bigint,              |
+|              |     l_linenumber:int,              |
+|              |     l_quantity:decimal(12,2),      |
+|              |     l_extendedprice:decimal(12,2), |
+|              |     l_discount:decimal(12,2),      |
+|              |     l_tax:decimal(12,2),           |
+|              |     l_returnflag:string,           |
+|              |     l_linestatus:string,           |
+|              |     l_shipdate:string,             |
+|              |     l_commitdate:string,           |
+|              |     l_receiptdate:string,          |
+|              |     l_shipinstruct:string,         |
+|              |     l_shipmode:string,             |
+|              |     l_comment:string               |
+|              |   >>                               |
+|              | >>                                 |
++--------------+------------------------------------+
+
+-- #2: The ARRAY column within the table.
+describe customer.c_orders;
++------+------------------------------------+
+| name | type                               |
++------+------------------------------------+
+| item | struct<                            |
+|      |   o_orderkey:bigint,               |
+|      |   o_orderstatus:string,            |
+... more struct fields ...
+|      |   o_lineitems:array<struct<        |
+|      |     l_partkey:bigint,              |
+|      |     l_suppkey:bigint,              |
+... more nested struct fields ...
+|      |     l_comment:string               |
+|      |   >>                               |
+|      | >                                  |
+| pos  | bigint                             |
++------+------------------------------------+
+
+-- #3: The STRUCT that makes up each ARRAY element.
+--     The fields of the STRUCT act like columns of a table.
+describe customer.c_orders.item;
++-----------------+----------------------------------+
+| name            | type                             |
++-----------------+----------------------------------+
+| o_orderkey      | bigint                           |
+| o_orderstatus   | string                           |
+| o_totalprice    | decimal(12,2)                    |
+| o_orderdate     | string                           |
+| o_orderpriority | string                           |
+| o_clerk         | string                           |
+| o_shippriority  | int                              |
+| o_comment       | string                           |
+| o_lineitems     | array<struct<                    |
+|                 |   l_partkey:bigint,              |
+|                 |   l_suppkey:bigint,              |
+... more struct fields ...
+|                 |   l_comment:string               |
+|                 | >>                               |
++-----------------+----------------------------------+
+
+-- #4: The ARRAY nested inside the STRUCT elements of the first ARRAY.
+describe customer.c_orders.item.o_lineitems;
++------+----------------------------------+
+| name | type                             |
++------+----------------------------------+
+| item | struct<                          |
+|      |   l_partkey:bigint,              |
+|      |   l_suppkey:bigint,              |
+... more struct fields ...
+|      |   l_comment:string               |
+|      | >                                |
+| pos  | bigint                           |
++------+----------------------------------+
+
+-- #5: Shorter form of the previous DESCRIBE. Omits the .ITEM portion of the name
+--     because O_LINEITEMS and other field names provide a way to refer to things
+--     inside the ARRAY element.
+describe customer.c_orders.o_lineitems;
++------+----------------------------------+
+| name | type                             |
++------+----------------------------------+
+| item | struct<                          |
+|      |   l_partkey:bigint,              |
+|      |   l_suppkey:bigint,              |
+... more struct fields ...
+|      |   l_comment:string               |
+|      | >                                |
+| pos  | bigint                           |
++------+----------------------------------+
+
+-- #6: The STRUCT representing ARRAY elements nested inside
+--     another ARRAY of STRUCTs. The lack of any complex types
+--     in this output means this is as far as DESCRIBE can
+--     descend into the table layout.
+describe customer.c_orders.o_lineitems.item;
++-----------------+---------------+
+| name            | type          |
++-----------------+---------------+
+| l_partkey       | bigint        |
+| l_suppkey       | bigint        |
+... more scalar columns ...
+| l_comment       | string        |
++-----------------+---------------+
+
+
+Usage notes:
+
+  After the impalad daemons are restarted, the first query against a table can take longer
+  than subsequent queries, because the metadata for the table is loaded before the query is processed. This
+  one-time delay for each table can cause misleading results in benchmark tests or cause unnecessary concern.
+  To warm up the Impala metadata cache, you can issue a DESCRIBE statement in advance
+  for each table you intend to access later.
+
+  When you are dealing with data files stored in HDFS, sometimes it is important to know details such as the
+  path of the data files for an Impala table, and the hostname for the namenode. You can get this information
+  from the DESCRIBE FORMATTED output. You specify HDFS URIs or path specifications with
+  statements such as LOAD DATA and the LOCATION clause of CREATE
+  TABLE or ALTER TABLE. You might also use HDFS URIs or paths with Linux commands
+  such as hadoop and hdfs to copy, rename, and so on, data files in HDFS.
+ If you connect to different Impala nodes within an
+          impala-shell session for load-balancing purposes, you can enable the
+          SYNC_DDL query option to make each DDL statement wait before returning,
+        until the new or changed metadata has been received by all the Impala nodes. Each table can also have associated table statistics and column statistics. To see
+        these categories of information, use the SHOW TABLE STATS
+            table_name and SHOW COLUMN STATS
+            table_name statements.
+        
+        See the SHOW statement topic for details. important
+        After adding or replacing data in a table used in performance-critical queries, issue a COMPUTE
+        STATS statement to make sure all statistics are up-to-date. Consider updating statistics for a
+        table after any INSERT, LOAD DATA, or CREATE TABLE AS
+        SELECT statement in Impala, or after loading data through Hive and doing a REFRESH
+        table_name in Impala. This technique is especially important for tables that
+        are very large, used in join queries, or both.
+      
+Examples:
+
+  The following example shows the results of both a standard DESCRIBE and DESCRIBE
+  FORMATTED for different kinds of schema objects:
+
+
+DESCRIBE for a table or a view returns the name, type, and comment for each of the
+      columns. For a view, if the column value is computed by an expression, the column name is automatically
+      generated as _c0, _c1, and so on depending on the ordinal number of the
+      column.
+    
+
+      A table created with no special format or storage clauses is designated as a MANAGED_TABLE
+      (an internal table in Impala terminology). Its data files are stored in an HDFS directory under the
+      default Hive data directory. By default, it uses Text data format.
+    
+
+      A view is designated as VIRTUAL_VIEW in DESCRIBE FORMATTED output. Some
+      of its properties are NULL or blank because they are inherited from the base table. The
+      text of the query that defines the view is part of the DESCRIBE FORMATTED output.
+    
+
+      A table with additional clauses in the CREATE TABLE statement has differences in
+      DESCRIBE FORMATTED output. The output for T2 includes the
+      EXTERNAL_TABLE keyword because of the CREATE EXTERNAL TABLE syntax, and
+      different InputFormat and OutputFormat fields to reflect the Parquet file
+      format.
+    
+[localhost:21000] > create table t1 (x int, y int, s string);
+Query: create table t1 (x int, y int, s string)
+[localhost:21000] > describe t1;
+Query: describe t1
+Query finished, fetching results ...
++------+--------+---------+
+| name | type   | comment |
++------+--------+---------+
+| x    | int    |         |
+| y    | int    |         |
+| s    | string |         |
++------+--------+---------+
+Returned 3 row(s) in 0.13s
+[localhost:21000] > describe formatted t1;
+Query: describe formatted t1
+Query finished, fetching results ...
++------------------------------+--------------------------------------------+------------+
+| name                         | type                                       | comment    |
++------------------------------+--------------------------------------------+------------+
+| # col_name                   | data_type                                  | comment    |
+|                              | NULL                                       | NULL       |
+| x                            | int                                        | None       |
+| y                            | int                                        | None       |
+| s                            | string                                     | None       |
+|                              | NULL                                       | NULL       |
+| # Detailed Table Information | NULL                                       | NULL       |
+| Database:                    | describe_formatted                         | NULL       |
+| Owner:                       | doc_demo                                   | NULL       |
+| CreateTime:                  | Mon Jul 22 17:03:16 EDT 2013               | NULL       |
+| LastAccessTime:              | UNKNOWN                                    | NULL       |
+| Protect Mode:                | None                                       | NULL       |
+| Retention:                   | 0                                          | NULL       |
+| Location:                    | hdfs://127.0.0.1:8020/user/hive/warehouse/ |            |
+|                              |   describe_formatted.db/t1                 | NULL       |
+| Table Type:                  | MANAGED_TABLE                              | NULL       |
+| Table Parameters:            | NULL                                       | NULL       |
+|                              | transient_lastDdlTime                      | 1374526996 |
+|                              | NULL                                       | NULL       |
+| # Storage Information        | NULL                                       | NULL       |
+| SerDe Library:               | org.apache.hadoop.hive.serde2.lazy.        |            |
+|                              |   LazySimpleSerDe                          | NULL       |
+| InputFormat:                 | org.apache.hadoop.mapred.TextInputFormat   | NULL       |
+| OutputFormat:                | org.apache.hadoop.hive.ql.io.              |            |
+|                              |   HiveIgnoreKeyTextOutputFormat            | NULL       |
+| Compressed:                  | No                                         | NULL       |
+| Num Buckets:                 | 0                                          | NULL       |
+| Bucket Columns:              | []                                         | NULL       |
+| Sort Columns:                | []                                         | NULL       |
++------------------------------+--------------------------------------------+------------+
+Returned 26 row(s) in 0.03s
+[localhost:21000] > create view v1 as select x, upper(s) from t1;
+Query: create view v1 as select x, upper(s) from t1
+[localhost:21000] > describe v1;
+Query: describe v1
+Query finished, fetching results ...
++------+--------+---------+
+| name | type   | comment |
++------+--------+---------+
+| x    | int    |         |
+| _c1  | string |         |
++------+--------+---------+
+Returned 2 row(s) in 0.10s
+[localhost:21000] > describe formatted v1;
+Query: describe formatted v1
+Query finished, fetching results ...
++------------------------------+------------------------------+----------------------+
+| name                         | type                         | comment              |
++------------------------------+------------------------------+----------------------+
+| # col_name                   | data_type                    | comment              |
+|                              | NULL                         | NULL                 |
+| x                            | int                          | None                 |
+| _c1                          | string                       | None                 |
+|                              | NULL                         | NULL                 |
+| # Detailed Table Information | NULL                         | NULL                 |
+| Database:                    | describe_formatted           | NULL                 |
+| Owner:                       | doc_demo                     | NULL                 |
+| CreateTime:                  | Mon Jul 22 16:56:38 EDT 2013 | NULL                 |
+| LastAccessTime:              | UNKNOWN                      | NULL                 |
+| Protect Mode:                | None                         | NULL                 |
+| Retention:                   | 0                            | NULL                 |
+| Table Type:                  | VIRTUAL_VIEW                 | NULL                 |
+| Table Parameters:            | NULL                         | NULL                 |
+|                              | transient_lastDdlTime        | 1374526598           |
+|                              | NULL                         | NULL                 |
+| # Storage Information        | NULL                         | NULL                 |
+| SerDe Library:               | null                         | NULL                 |
+| InputFormat:                 | null                         | NULL                 |
+| OutputFormat:                | null                         | NULL                 |
+| Compressed:                  | No                           | NULL                 |
+| Num Buckets:                 | 0                            | NULL                 |
+| Bucket Columns:              | []                           | NULL                 |
+| Sort Columns:                | []                           | NULL                 |
+|                              | NULL                         | NULL                 |
+| # View Information           | NULL                         | NULL                 |
+| View Original Text:          | SELECT x, upper(s) FROM t1   | NULL                 |
+| View Expanded Text:          | SELECT x, upper(s) FROM t1   | NULL                 |
++------------------------------+------------------------------+----------------------+
+Returned 28 row(s) in 0.03s
+[localhost:21000] > create external table t2 (x int, y int, s string) stored as parquet location '/user/doc_demo/sample_data';
+[localhost:21000] > describe formatted t2;
+Query: describe formatted t2
+Query finished, fetching results ...
++------------------------------+----------------------------------------------------+------------+
+| name                         | type                                               | comment    |
++------------------------------+----------------------------------------------------+------------+
+| # col_name                   | data_type                                          | comment    |
+|                              | NULL                                               | NULL       |
+| x                            | int                                                | None       |
+| y                            | int                                                | None       |
+| s                            | string                                             | None       |
+|                              | NULL                                               | NULL       |
+| # Detailed Table Information | NULL                                               | NULL       |
+| Database:                    | describe_formatted                                 | NULL       |
+| Owner:                       | doc_demo                                           | NULL       |
+| CreateTime:                  | Mon Jul 22 17:01:47 EDT 2013                       | NULL       |
+| LastAccessTime:              | UNKNOWN                                            | NULL       |
+| Protect Mode:                | None                                               | NULL       |
+| Retention:                   | 0                                                  | NULL       |
+| Location:                    | hdfs://127.0.0.1:8020/user/doc_demo/sample_data    | NULL       |
+| Table Type:                  | EXTERNAL_TABLE                                     | NULL       |
+| Table Parameters:            | NULL                                               | NULL       |
+|                              | EXTERNAL                                           | TRUE       |
+|                              | transient_lastDdlTime                              | 1374526907 |
+|                              | NULL                                               | NULL       |
+| # Storage Information        | NULL                                               | NULL       |
+| SerDe Library:               | org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe | NULL       |
+| InputFormat:                 | com.cloudera.impala.hive.serde.ParquetInputFormat  | NULL       |
+| OutputFormat:                | com.cloudera.impala.hive.serde.ParquetOutputFormat | NULL       |
+| Compressed:                  | No                                                 | NULL       |
+| Num Buckets:                 | 0                                                  | NULL       |
+| Bucket Columns:              | []                                                 | NULL       |
+| Sort Columns:                | []                                                 | NULL       |
++------------------------------+----------------------------------------------------+------------+
+Returned 27 row(s) in 0.17s
+Cancellation: Cannot be cancelled.
+      
+HDFS permissions:
+
+      The user ID that the impalad daemon runs under,
+      typically the impala user, must have read and execute
+      permissions for all directories that are part of the table.
+      (A table could span multiple different HDFS directories if it is partitioned.
+      The directories could be widely scattered because a partition can reside
+      in an arbitrary HDFS directory based on its LOCATION attribute.)
+    
+Cloudera Manager considerations:
+
+      A change in the behavior of metadata loading in Impala 2.9 could
+      lead to certain long-running statements being left out of the Cloudera Manager list of Impala
+      queries until the statements are completed.
+    
+      Prior to Impala 2.9, statements such as DESCRIBE
+      could cause the Impala web UI, and Cloudera Manager monitoring pages that rely on information
+      from the web UI, to become unresponsive while they ran. The first time Impala references a
+      large table, for example one with thousands of partitions, the statement might take longer than
+      normal while the metadata for the table is loaded. In Impala 2.9 and higher,
+      the Impala web UI and associated Cloudera Manager monitoring pages are more responsive while a
+      metadata loading operation is in progress.
+    
+      Although the statement that loads the metadata shows up on the Impala web UI /queries
+      page immediately, it does not show up in the Cloudera Manager list of queries until the metadata is
+      finished loading. For example, the first DESCRIBE of a large partitioned table
+      might take 30 minutes due to metadata loading, and the statement does not show up in Cloudera Manager
+      during those 30 minutes.
+    Kudu considerations:
+      The information displayed for Kudu tables includes the additional attributes
+      that are only applicable for Kudu tables:
+    
+
+        Whether or not the column is part of the primary key. Every Kudu table
+        has a true value here for at least one column. There
+        could be multiple true values, for tables with
+        composite primary keys.
+      
+
+        Whether or not the column is nullable. Specified by the NULL
+        or NOT NULL attributes on the CREATE TABLE statement.
+        Columns that are part of the primary key are automatically non-nullable.
+      
+
+        The default value, if any, for the column. Specified by the DEFAULT
+        attribute on the CREATE TABLE statement. If the default value is
+        NULL, that is not indicated in this column. It is implied by
+        nullable being true and no other default value specified.
+      
+
+        The encoding used for values in the column. Specified by the ENCODING
+        attribute on the CREATE TABLE statement.
+      
+
+        The compression used for values in the column. Specified by the COMPRESSION
+        attribute on the CREATE TABLE statement.
+      
+
+        The block size (in bytes) used for the underlying Kudu storage layer for the column.
+        Specified by the BLOCK_SIZE attribute on the CREATE TABLE
+        statement.
+      
+
+      The following example shows DESCRIBE output for a simple Kudu table, with
+      a single-column primary key and all column attributes left with their default values:
+    
+describe million_rows;
++------+--------+---------+-------------+----------+---------------+---------------+---------------------+------------+
+| name | type   | comment | primary_key | nullable | default_value | encoding      | compression         | block_size |
++------+--------+---------+-------------+----------+---------------+---------------+---------------------+------------+
+| id   | string |         | true        | false    |               | AUTO_ENCODING | DEFAULT_COMPRESSION | 0          |
+| s    | string |         | false       | false    |               | AUTO_ENCODING | DEFAULT_COMPRESSION | 0          |
++------+--------+---------+-------------+----------+---------------+---------------+---------------------+------------+
+
+      The following example shows DESCRIBE output for a Kudu table with a
+      two-column primary key, and Kudu-specific attributes applied to some columns:
+    
+create table kudu_describe_example
+(
+  c1 int, c2 int,
+  c3 string, c4 string not null, c5 string default 'n/a', c6 string default '',
+  c7 bigint not null, c8 bigint null default null, c9 bigint default -1 encoding bit_shuffle,
+  primary key(c1,c2)
+)
+partition by hash (c1, c2) partitions 10 stored as kudu;
+
+describe kudu_describe_example;
++------+--------+---------+-------------+----------+---------------+---------------+---------------------+------------+
+| name | type   | comment | primary_key | nullable | default_value | encoding      | compression         | block_size |
++------+--------+---------+-------------+----------+---------------+---------------+---------------------+------------+
+| c1   | int    |         | true        | false    |               | AUTO_ENCODING | DEFAULT_COMPRESSION | 0          |
+| c2   | int    |         | true        | false    |               | AUTO_ENCODING | DEFAULT_COMPRESSION | 0          |
+| c3   | string |         | false       | true     |               | AUTO_ENCODING | DEFAULT_COMPRESSION | 0          |
+| c4   | string |         | false       | false    |               | AUTO_ENCODING | DEFAULT_COMPRESSION | 0          |
+| c5   | string |         | false       | true     | n/a           | AUTO_ENCODING | DEFAULT_COMPRESSION | 0          |
+| c6   | string |         | false       | true     |               | AUTO_ENCODING | DEFAULT_COMPRESSION | 0          |
+| c7   | bigint |         | false       | false    |               | AUTO_ENCODING | DEFAULT_COMPRESSION | 0          |
+| c8   | bigint |         | false       | true     |               | AUTO_ENCODING | DEFAULT_COMPRESSION | 0          |
+| c9   | bigint |         | false       | true     | -1            | BIT_SHUFFLE   | DEFAULT_COMPRESSION | 0          |
++------+--------+---------+-------------+----------+---------------+---------------+---------------------+------------+
+
+Related informationSHOW statementParent topic: Impala SQL statements

@@ -1,0 +1,216 @@
+VNet and subnet planningCloudera Docs
+VNet and subnet planning
+Whether you decide to use your own VNet for CDP or have CDP create one for you, you
+  should carefully plan your network, calculating and verifying the limits of the VNet and subnets
+  available in your Azure subscription to ensure that you have enough networking resources to create
+  clusters in CDP.  
+When registering an Azure environment in CDP, you are asked to select a VNet and one
+   or more subnets. You have two options:
+
+CDP will create a new VNet and subnets 
+Select a VNet and subnets that you previously created 
+
+In both cases, use this guide to calculate and verify the limits of the VNet and
+   subnets available in your Azure subscription to ensure that you have enough networking resources
+   to create clusters in CDP.
+Option 1: CDP creates the VNet and subnets
+If you would like CDP to create a new VNet, you will need to specify a valid CIDR in
+    IPv4 range that will be used to define the range of private IPs for VM instances provisioned
+    into these subnets. This must be a /16 CIDR, but you can customize the IP Range. The default is
+    10.10.0.0/16. 
+You cannot use the following reserved CIDR blocks for your VNet: 
+
+10.0.0.0/16 
+10.244.0.0/16
+172.17.0.1/16
+10.20.0.0/16
+10.244.0.0/16
+
+CDP will divide this address range as follows:
+
+32 x /24 subnets - Recommended for Machine Learning workspaces and Data
+     Engineering Services 
+3 x /19 subnets - Recommended for Data Warehouse service 
+3 x /19 subnets - Recommended for Data Lake and Data Hub 
+3 x /24 subnets - Reserved for future use 
+
+
+note
+Not all subnets are used upon creation. Many of the above start getting used once you enable
+      certain features and create more workloads in CDP. 
+
+
+If you would like to have a minimal virtual network instead, you can use the guide
+    outlined in the next option. 
+
+Option 2: Existing VNet and subnets
+If you would like to use an existing VNet, the subnet requirements vary based on the
+    services used. Below is a guide for calculating network requirements per service. 
+In addition, make sure you follow the following guidelines: 
+
+You cannot use the following reserved CIDR blocks for your VNet: 
+10.0.0.0/16 
+10.244.0.0/16
+172.17.0.1/16
+10.20.0.0/16
+10.244.0.0/16
+
+The Microsoft.Storage and Microsoft.SQL Service endpoints should be registered for all
+     subnets that will be used by CDP. 
+
+Subnets for Data Lake and Data Hub
+Both Data Lake and DataHub share the same subnet, so only one subnet is required.
+Cloudera recommends a minimum of a /24 CIDR. If you would like to use a smaller
+    subnet, use the following guidelines:
+
+
+One IP address is used for each VM
+One Light Duty Data Lake cluster uses three VMs 
+A typical Data Hub cluster uses a minimum of four VMs as a starting point, but
+      this number can be dynamically scaled up or down
+Make sure you allocate enough IPs to handle each cluster running at peak
+      capacity
+
+
+Subnets for Data Warehouse
+
+The Data Warehouse service needs one subnet. You can choose the specific subnet used by DW
+    when you activate Data Warehouse for an environment. This subnet should not be shared with any
+    of the other CDP applications. 
+Cloudera recommends a /20 or larger subnet as it can be difficult to accurately predict the
+    size of each VW due to autoscaling. 
+If you would like to size the subnets to a smaller CIDR, the following guidelines assume that
+    you are activating your DW environment with the default settings (no overlay networks):
+
+
+VM Purpose
+# VMs
+# pods per VM
+IPs per VM (1 for the instance + 1 per pod)
+
+Total IP addresses required 
+
+
+DW Shared Services - (Shared among all VWs in an
+         environment)
+3
+30
+31
+93
+
+
+Per Database Catalog(One catalog is created by default, you can
+           create additional catalogs)
+2
+30
+31
+62
+
+
+Per Virtual Warehouse (XS) - without autoscaling*
+2
+10
+11
+22
+
+
+Per Virtual Warehouse (S) - without autoscaling*
+10
+10
+11
+110
+
+
+Per Virtual Warehouse (M) - without autoscaling*
+20
+10
+11
+220
+
+
+Per Virtual Warehouse (L) - without autoscaling*
+40
+10
+11
+440
+
+If you would like to use a smaller subnet, you can enable the Overlay Networks feature
+    for DW, which will provision your AKS cluster with the kubenet network plugin instead of Azure
+    CNI. When you use kubnet, you may need to manage the Azure Route Table (UDR) manually in
+    accordance with AKS documentation. In this case, use the following table as your
+     guideline:
+
+VM Purpose
+# VMs
+Total IP addresses required 
+
+
+CDW Shared Services(shared among all VWs in an
+         environment)
+3
+3
+
+
+Per Database Catalog(One catalog is created by default, you can
+           create additional catalogs)
+2
+2
+
+
+Per Virtual Warehouse (XS) - without autoscaling*
+2
+2
+
+
+Per Virtual Warehouse (S) - without autoscaling*
+10
+10
+
+
+Per Virtual Warehouse (M) - without autoscaling*
+20
+20
+
+
+Virtual Warehouse (L) - without autoscaling*
+40
+40
+
+
+* Each autoscaling activity can be treated as deploying a new Virtual Warehouse.
+    For example, when a XS Virtual Warehouse is scaled once, it uses four VMs instead of two.
+Subnets for Machine Learning
+Azure Files NFS v4.1 is a managed, POSIX compliant NFS service on Azure. The file share is
+    used to store files for the CML infrastructure and ML workspaces. This is the recommended NFS
+    service for use with CML. You need one separate subnet delegated to the Azure Files NFS service
+    (all workspaces in a region will share this service). Cloudera recommends a /28 subnet for this
+    purpose. 
+You also need one subnet per each workspace that you plan to run. ML uses the Kubenet plugin
+    to AKS and the subnet used for a workspace cannot be shared with another workspace or another
+    service. You can choose which subnet is used by a workspace at the time of provisioning.
+    Cloudera recommends a /25 CIDR for these subnet, but if you would like to provide a custom
+    range, the formula to calculate IP Addresses per workspace is as follows:
+Each workspace can grow up to 30 CPU worker nodes and 30 GPU workers; each node
+      consumes one IP address. 
+In addition, you need to allocate up to 11 IP address (6 infrastructure nodes and
+      5 for auxiliary networking usage). 
+
+For more information, see Network Planning for Cloudera Machine Learning on
+    Azure.
+Subnets for Data Engineering
+Cloudera Data Engineering runs in the VNet registered in CDP as part of your Azure
+    environment. 
+Each CDE service requires its own subnet. CDE on AKS uses the Kubenet CNI plugin provided by
+    Azure. In order to use Kubenet CNI, we need to create multiple smaller subnets when creating an
+    Azure environment. It is recommended to partition the vnet with subnets that is just the right
+    size to fit the expected max nodes in the cluster.
+Cloudera recommends a /24 CIDR for these subnet, but if you would like to provide a custom
+    range, the formula to calculate IP Addresses per CDE service is as follows:
+Each CDE service can scale up to 100 compute nodes; each node consumes one IP
+      address. 
+In addition, you need to allocate 3 IPs for the base infra nodes and 2 IP address
+      per virtual cluster for the virtual cluster service nodes.  
+
+
+
+Parent topic: VNet and subnets

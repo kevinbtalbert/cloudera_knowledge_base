@@ -1,0 +1,88 @@
+Ozone architectureCloudera Docs
+Ozone architecture
+Ozone can be co-located with HDFS with single security and governance policies for easy
+    data exchange or migration and also offers seamless application portability. Ozone has a
+    scale-out architecture with minimal operational overheads. Ozone separates management of
+    namespaces and storage, helping it to scale effectively. The Ozone Manager (OM) manages the
+    namespaces while the Storage Container Manager (SCM) handles the containers. All the metadata
+    stored on OM SCM and data nodes are required to be stored in low latency devices like NVME or
+    SSD.
+The following diagram shows the components that form the basic architecture of Ozone:
+
+
+
+
+Ozone Manager
+The Ozone Manager (OM) is a highly available namespace manager for Ozone. OM
+                        manages the metadata for volumes, buckets, and keys. OM maintains the
+                        mappings between keys and their corresponding Block IDs. When a client
+                        application requests for keys to perform read and write operations, OM
+                        interacts with SCM for information about blocks relevant to the read and
+                        write operations, and provides this information to the client. OM uses
+                            Apache Ratis (Raft protocol) to replicate Ozone manager state. While
+                            RocksDB (embedded storage engine) persists the metadata or keyspace, the
+                            flush of the Ratis transaction to the local disk ensures data durability
+                            in Ozone. Therefore,  a low-latency local storage device like NVMe SSD
+                            on each OM node for maximum throughput is required. A typical Ozone
+                            deployment has three OM nodes for redundancy.
+DataNodes
+Ozone DataNodes, not the same as HDFS DataNodes, store the actual user data in
+                        the Ozone cluster. DataNodes store the blocks of data that clients write. A
+                        collection of these blocks is a storage container. The client streams data
+                        in the form of fixed-size chunk files (4MB) for a block. The chunk files
+                        constitute what gets actually written to the disk. The DataNode sends
+                        heartbeats to SCM at fixed time intervals. With every heartbeat, the
+                        DataNode sends container reports.Every storage container in the
+                            DataNode has its own RocksDB instance which stores the metadata for the
+                            blocks and individual chunk files. Every DataNode can be a part of one
+                            or more active pipelines. A pipeline of DataNodes is actually a Ratis
+                            quorum with an elected leader and follower DataNodes accepting writes.
+                            Reads from the client go directly to the DataNode and not over Ratis. An
+                            SSD on a DataNode to persist the Ratis logs for the active pipelines and
+                            significantly boosts the write throughput is required.
+Storage Container Manager
+The Storage Container Manager (SCM) is a master service in Ozone.A storage container
+                    is the replication unit in Ozone. Unlike HDFS, which manages block-level replication,
+                    Ozone manages the replication of a collection of storage blocks called storage
+                    containers. The default size of a container is 5 GB. SCM manages DataNode pipelines and
+                    placement of containers on the pipelines. A pipeline is a collection of DataNodes based
+                    on the replication factor. For example, given the default replication factor of three,
+                    each pipeline contains three DataNodes. SCM is responsible for creating and managing
+                    active write pipelines of DataNodes on which the block allocation happens.The
+                        client directly writes blocks to open containers on the DataNode, and the SCM is not
+                        directly on the data path. A container is immutable after it is closed. SCM uses RocksDB
+                        to persist the pipeline metadata and the container metadata. The size of this metadata
+                        is much smaller compared to the keyspace managed by OM.SCM is a highly available
+                            component which makes use of Apache Ratis. Cloudera recommends an SSD on SCM nodes for
+                            the Ratis write-ahead log and the RocksDB.A typical Ozone deployment has three
+                                SCM nodes for redundancy. SCM service instances can be collocated with OM instances;
+                                therefore, you can use the same master nodes for both SCM and OM.
+Recon Server
+Recon is a centralized monitoring and management service within an Ozone cluster that
+                    provides information about the metadata maintained by different Ozone components such as
+                    OM and SCM.Recon takes a snapshot of the OM and SCM metadata while also receiving
+                        heartbeats from the Ozone DataNode. Recon asynchronously builds an offline copy of the
+                        full state of the cluster in an incremental manner depending on how busy the cluster is.
+                        Recon usually trails the OM by a few transactions in terms of updating its snapshot of
+                        the OM metadata. Cloudera recommends using an SSD for maintaining the snapshot
+                        information because an SSD would help Recon in staying updated with the OM.
+Ozone File System Interfaces
+Ozone is a multi-protocol storage system with support for the following interfaces:
+s3: Amazon’s Simple Storage Service (S3) protocol. You can use S3
+                        clients and S3 SDK-based applications without any modifications on Ozone with S3 Gateway.
+o3: An object store interface that can be used from the Ozone shell. 
+ofs: A Hadoop-compatible filesystem (HCFS) allowing any application that
+                        expects an HDFS-like interface to work against Ozone with no API changes. Frameworks like
+                        Apache Spark, YARN and Hive work against Ozone without the need of any change.
+o3fs: (Deprecated, not recommended) A bucket-rooted Hadoop-compatible filesystem (HCFS) interface.
+
+S3 Gateway
+S3 gateway is a stateless component that provides REST access to Ozone over HTTP and
+                    supports the AWS-compatible s3 API. S3 gateway supports multipart uploads and encryption
+                    zones. In addition, S3 gateway transforms the s3 API calls over HTTP to rpc calls to
+                        other Ozone components. To scale your S3 access, Cloudera recommends deploying
+                    multiple gateways behind a load balancer like haproxy that support Direct
+                    Server Return (DSR) so that the load balancer is not on the data path.
+
+
+Parent topic: Introduction to Ozone

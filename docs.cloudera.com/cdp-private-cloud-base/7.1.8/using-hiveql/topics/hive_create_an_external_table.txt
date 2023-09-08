@@ -1,0 +1,98 @@
+Creating, using, and dropping an external tableCloudera Docs
+Creating, using, and dropping an external table
+You use an external table, which is a table that Hive does not manage, to import data
+        from a file on a file system into Hive. In contrast to the Hive managed table, an external
+        table keeps its data outside the Hive metastore. Hive metastore stores only the schema
+        metadata of the external table. Hive does not manage, or restrict access, to the actual
+        external data.
+
+
+You need to set up access to external tables in the file system or object store using
+                Ranger.
+
+
+In this task, you create an external table from CSV (comma-separated values) data
+                stored on the file system. Next, you want Hive to manage and store the actual data
+                in the metastore. You create a managed table and insert the external table data into
+                the managed table.
+This task demonstrates the following Hive principles:
+
+The LOCATION clause in the CREATE TABLE specifies the location of external table
+                    data.
+A major difference between an external and a managed (internal) table: the
+                    persistence of table data on the files system after a DROP
+                        TABLE statement. 
+External table drop: Hive drops only the metadata, consisting mainly of
+                            the schema.
+Managed table drop: Hive deletes the data and the metadata stored in the
+                            Hive warehouse.
+
+
+After dropping an external table, the data is not gone. To retrieve it, you issue
+                another CREATE EXTERNAL TABLE statement to load the data from the file system.
+
+
+Create a text file named students.csv that contains the
+                    following lines.
+
+1,jane,doe,senior,mathematics 2,john,smith,junior,engineering
+
+
+Move the file to HDFS in a directory called andrena, and
+                    put students.csv in the directory.
+
+Start the Hive
+                    shell.
+For example, substitute the URI of your HiveServer: beeline -u
+                        jdbc:hive2://myhiveserver.com:10000 -n hive -p
+
+Create an external table schema definition that specifies the text format,
+                    loads data from students.csv in
+                        /user/andrena.
+
+CREATE EXTERNAL TABLE IF NOT EXISTS names_text( 
+student_ID INT,
+FirstName STRING, 
+LastName STRING, 
+year STRING, 
+Major STRING) 
+COMMENT 'Student Names' ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' 
+STORED AS TEXTFILE LOCATION '/user/andrena';
+
+
+Verify that the Hive warehouse stores the student names in the external
+                    table.
+SELECT * FROM names_text;
+
+Create the schema for a managed table.
+CREATE TABLE IF NOT EXISTS Names(
+student_ID INT, 
+FirstName STRING, 
+LastName STRING, 
+year STRING, 
+Major STRING) 
+COMMENT 'Student Names';
+
+Move the external table data to the managed table.
+INSERT OVERWRITE TABLE Names SELECT * FROM
+                    names_text;
+
+Verify that the data from the external table resides in the managed table, and
+                    drop the external table, and verify that the data still resides in the managed
+                    table. 
+
+SELECT * from Names; DROP TABLE names_text; SELECT * from Names;
+                    
+
+The results from the managed table Names appears. 
+
+Verify that the external table schema definition is lost.
+SELECT * from names_text;
+Selecting all from names_text returns no results because the
+                    external table schema is lost. 
+
+Check that the students.csv file on the file system or
+                    object store remains intact.
+
+
+Related informationHMS storageHDFS ACLSParent topic: Apache Hive 3 tables

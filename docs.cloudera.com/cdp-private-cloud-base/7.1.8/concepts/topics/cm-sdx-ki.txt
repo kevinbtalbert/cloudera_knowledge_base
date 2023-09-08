@@ -1,0 +1,242 @@
+Compatibility Considerations for Virtual Private ClustersCloudera Docs
+Compatibility Considerations for Virtual Private Clusters 
+
+Related informationNetworking Considerations for Virtual Private ClustersParent topic: Virtual Private Clusters and Cloudera SDX
+CDH and Cloudera Runtime Version Compatibility
+
+The Cloudera Runtime version of the Compute cluster must match the
+        major.minor version of the Base cluster. Support for additional
+        combinations of Compute and Base cluster versions may be added at a
+        later time. The following Cloudera Runtime and CDH versions are
+        supported for creating Virtual Private Clusters: 
+CDH 5.15
+CDH 5.16
+CDH 6.0
+CDH 6.1
+CDH 6.2
+CDH 6.3
+Cloudera Runtime 7.0.3
+Cloudera Runtime 7.1.1 and higher
+
+
+
+
+Licensing Requirements
+
+A valid CDP Private Cloud Base Edition license is required to
+        use Virtual Private Clusters. You cannot access this feature with a
+          CDP Private Cloud Base Edition Trial license. 
+
+
+
+Components
+
+
+SOLR – Not supported on Compute clusters
+Kudu – Not supported on Compute clusters. 
+HDFS
+Either the Core Configuration service or the HDFS service is
+              required on Compute clusters as temporary, persistent space. If
+              you are using Hive-on-Tez in the Compute Cluster, the HDFS service
+              is required. The intent is to use this for Hive temporary queries
+              and is also recommended for multi-stage Spark ETL jobs.
+Cloudera recommends a minimum storage of 1TB per host,
+              configured as the HDFS DataNode storage directory.
+The Base cluster must have an HDFS service. 
+Isilon is not supported on the Base cluster.
+S3 and ADLS connectors are supported only on the Base
+              cluster; Compute clusters will use the supplied S3 or ADLS
+              credentials from their associated Base cluster
+The HDFS service on the Base cluster must be
+              configured for high availability.
+
+Cloudera highly recommends enabling high availability
+                for the HDFS service on the Compute cluster, but it is not
+                required. 
+
+
+The Base and compute nameservice names must be
+                distinct.
+
+The following configurations for the local HDFS
+              service on a compute cluster must match the configurations on the
+              Base cluster. This enables services on the Compute cluster to
+              correctly access services on the Base cluster:
+
+Hadoop RPC protection
+
+
+Data Transfer protection
+
+
+Enable Data Transfer Encryption
+
+Kerberos Configurations
+TLS/SSL Configuration (only when the cluster is not using
+                  Auto-TLS). See Security.
+
+Do not override the nameservice configuration in the Compute
+              cluster by using Advanced Configuration Snippets.
+The HDFS path to compute cluster home directories use the
+              following structure:
+                  /mc/<cluster_id>/fs/userYou
+                can find the <cluster_id> by clicking the
+                cluster name in the Cloudera Manager Admin Console. The URL
+                displayed by your browser includes the cluster id. For example,
+                in the URL below, the cluster ID is
+                1.http://myco-1.prod.com:7180/cmf/clusters/1/status
+
+
+Backup and Disaster Recovery (BDR) – not supported when the
+          source cluster is a Compute cluster and the target cluster is running
+          a version of Cloudera Manager lower than 6.2. 
+YARN and MapReduce
+If both MapReduce (MR1, Deprecated in CM6) and YARN (MR2) are
+              available on the Base cluster, dependent services in the Compute
+              cluster such as Hive Execution Service will use MR1 because of the
+              way service dependencies are handled in Cloudera Manager. To use
+              YARN, you can update the configuration to make these Compute
+              cluster services depend on YARN (MR2) before using YARN in your
+              applications. 
+
+Impala – Not supported on Compute clusters
+Hue
+Only one Hue service instance is supported on a
+              Compute cluster.
+The Hue service on Compute clusters will not share
+              user-specific query history with the Hue service on other Compute
+              clusters or Hue services on the Base cluster
+Hue examples may not install correctly due to
+              differing permissions for creating tables and inserting data. You
+              can work around this problem by deleting the sample tables and
+              then re-adding them.
+              
+If you add Hue to a Compute cluster after the cluster has
+              already been created, you will need to manually configure any
+              dependencies on other services (such as Hive or Hive Execution
+              Service) in the Compute cluster. 
+
+Hive Execution ServiceThe newly
+            introduced “Hive execution service” is only supported on Compute
+            clusters, and is not supported on Base or Regular clusters.
+              To enable Hue to run Hive queries on a Compute
+            cluster, you must install the Hive Execution
+              Service on the Compute cluster.  
+
+
+
+
+Compute Cluster Services
+
+Only the following services can be installed on Compute clusters:
+
+Hive Execution Service (This service supplies the
+          HiveServer2 role only.)
+Hue
+Kafka
+Spark 2
+Oozie (only when Hue is available, and is a requirement
+          for Hue)
+YARN
+HDFS
+Stub DFS (Stub DFS replaces Core Settings and requires the Storage Operations
+          role.)
+
+
+
+
+Cloudera Navigator Support
+
+Navigator lineage and metadata, and Navigator KMS are not
+        supported on Compute clusters.
+
+
+
+Cloudera Manager Permissions
+
+Cluster administrators who are authorized to only see Base or
+        Compute clusters can only see and administer these clusters, but cannot
+        create, delete, or manage Data Contexts. Data context creation and
+        deletion is only allowed with the Full Administrator use role or for
+        unrestricted Cluster Administrators.
+
+
+
+Security 
+
+
+
+KMS
+Base cluster: 
+Hadoop KMS is not supported.
+KeyTrustee KMS is supported on Base cluster.
+
+
+Compute cluster: Any type of KMS is
+                    not supported.
+
+
+Authentication/User directory 
+Users should be identically configured on hosts on
+                compute and Base clusters, as if the nodes are part of the same
+                cluster. This includes Linux local users, LDAP, Active
+                Directory, or other third-party user directory
+                integrations.
+
+Kerberos
+
+If a Base cluster has Kerberos installed, then the
+                Compute and Base clusters  must both use Kerberos in the same
+                Kerberos realm. The Cloudera Manager  Admin Console helps
+                facilitate this configuration in the cluster creation process to
+                ensure compatible Kerberos configuration.
+
+TLS 
+If the Base cluster has TLS configured for cluster
+                services, Compute cluster services must also have TLS configured
+                for services that access those Base cluster services. 
+Cloudera strongly recommends enabling Auto-TLS to
+                ensure that services on Base and Compute clusters uniformly use
+                TLS for communication.
+If you have configured TLS, but are not using Auto-TLS, note
+                the following: 
+You must create an identical configuration on the Compute
+                    cluster hosts before you add them to a Compute
+                    cluster using Cloudera Manager. Copy all files located in
+                    the directories specified by the following configuration
+                    properties, from the Base clusters to the Compute cluster hosts:
+hadoop.security.group.mapping.ldap.ssl.keystore
+ssl.server.keystore.location
+ssl.client.truststore.location
+
+Cloudera Manager will copy the following configurations to
+                    the compute cluster when you create the Compute cluster. 
+hadoop.security.group.mapping.ldap.use.ssl
+hadoop.security.group.mapping.ldap.ssl.keystore
+hadoop.security.group.mapping.ldap.ssl.keystore.password
+hadoop.ssl.enabled
+ssl.server.keystore.location
+ssl.server.keystore.password
+ssl.server.keystore.keypassword
+ssl.client.truststore.location
+ssl.client.truststore.password
+
+
+
+
+
+
+
+
+Networking
+
+Workloads running on Compute clusters will communicate
+        heavily with hosts on the Base cluster; Customers should have network
+        monitoring in place for networking hardware (such as switches including
+        top-of-rack, spine/leaf routers and so on) to track and adjust bandwidth
+        between racks hosting hosts utilized in Compute and Base clusters.
+You can also use the Cloudera Manager Network Performance Inspector to
+        evaluate your network.
+For more information on how to set up networking, see Networking Considerations for Virtual Private Clusters.
+
+

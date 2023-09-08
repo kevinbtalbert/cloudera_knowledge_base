@@ -1,0 +1,283 @@
+Configure SCIM with Azure ADCloudera Docs
+Configure SCIM with Azure AD
+CDP
+  supports SCIM with Microsoft Azure Active Directory (Azure AD).
+SCIM is a common way to get around:
+The Azure AD SAML 150 groups-per-claim limit.
+The Azure AD SAML sAMAccountName not available on groups created in Azure
+     AD limitation (this is where group names are sent as their Object IDs in SAML instead of their
+     human readable name).
+For more information on these limitations, see Configure group claims for applications by using Azure Active
+    Directory.
+Refer to this documentation if you would like to configure CDP to use SCIM. Prior to
+   configuring CDP to use SCIM, you should be aware of the following limitations:
+You can only configure one identity provider per CDP account to use SCIM.
+Once you start using SCIM, you should not update users and groups in CDP, as they will get
+     out of sync with Azure AD, and you may notice unexpected changes if/when Azure AD realizes the
+     differences and attempts to re-sync the users/groups.
+Updating group names is not supported in CDP.
+Updating userName is not supported in CDP. You must use an Azure AD field
+     that will not change as a userName to map via SCIM to CDP. If that field is an
+     opaque ID (for example, a UUID) then you should generate workload usernames from email as
+     described below.
+
+Once you are aware of the limitations, you can proceed to configuring CDP to use SCIM. The
+   steps include:
+
+Prerequisites
+Enable SCIM for your identity provider in CDP
+Set up SCIM in Azure AD
+
+Prerequisites
+Prior to configuring CDP to use SCIM, ensure that you can meet the following requirements: 
+
+Prior to configuring CDP to use SCIM, you should Configure Azure AD in CDP. SCIM is meant to be
+          used in conjunction with SAML identity federation to synchronize users and groups from
+          your identity provider to CDP.
+Setting up SCIM requires administrative operations in both CDP and Azure AD, and
+     so it requires an Azure AD admin to perform the Azure AD steps. 
+Additionally, you need to be a CDP account administrator or have the
+      PowerUser role in CDP.
+
+
+Enable SCIM for your identity provider in CDP
+This task involves enabling SCIM for your identity provider and getting the SCIM URL
+    that you will need to configure Azure AD so it can connect to CDP. Next, you create an access
+    token for Azure AD to securely communicate with CDP for SCIM and get the access token secret you
+    will need to configure Azure AD.
+You will need to provide the lifetime for the access token used for Azure AD to
+    communicate to CDP. Typical values are 1 year or 3 years; consult your security policies. You
+    will need to rotate the access token before it expires.
+In order to perform these steps, you need to be a CDP account administrator or have the
+     PowerUser role in CDP.
+Steps
+
+
+
+Sign in to the CDP console.
+
+
+Navigate to the Management Console.
+
+Select User Management from the left pane.
+
+Click on Identity Providers.
+
+
+Select your identity provider, and from the (context menu) select Update
+        Identity Provider.
+
+
+On the Update Identity Provider window, check the box for Enable
+        SCIM. This will update the identity provider to be ready to accept SCIM API calls.
+
+
+(Optional) If you use an opaque ID for SAML NameID and SCIM
+        userName, on the Update Identity Provider window, check the box for
+        Generate workload username by email. Check this box if you use an opaque ID for SAML
+        NameID and SCIM userName. For more information, see Generating workload usernames based on email.
+
+
+Click Update.
+
+
+Select your identity provider, and from the (context menu) select
+        View Identity Provider.
+
+
+Copy the SCIM URL. You will need it later.
+
+
+Click Close.
+
+
+Select your identity provider and from the (context menu) select
+        Update SCIM Access Tokens.
+
+
+On the Update SCIM Access Tokens window, click the button to Create
+        SCIM Token.
+
+
+Set your lifetime, in days. This is how long you will have before you need to
+       rotate your SCIM access token. Note that you can always rotate your tokens earlier than their
+       expiration date and you can revoke tokens at any time.
+
+
+Click the Create button. This creates a SCIM access token that is used to
+       authenticate SCIM API calls to this identity provider.
+
+
+Your Access Token Secret will be shown. Copy it somewhere. You will need
+       it later and it will not be shown again.
+
+
+
+
+Set up SCIM in Azure AD
+After enabling SCIM for your identity provider in CDP, you should set up SCIM in Azure AD.
+    These steps must be performed by an Azure AD admin. 
+Steps
+
+
+Sign in to the Azure Portal.
+
+
+Navigate to Azure AD and then click on Enterprise Applications.
+
+
+Select the application you used to configure identity federation to CDP. Or, if
+      you are setting up SCIM in a new Azure AD app, create a new non-gallery enterprise
+      application.
+
+
+Under the Manage menu on the left, click Provisioning.
+
+
+From the Provisioning Mode dropdown, select Automatic.
+
+
+Expand the Admin Credentials section.
+
+
+In the box for Tenant URL, paste in the SCIM URL that you saved
+      earlier.
+
+
+In the box for Secret Token, paste in the Access Token Secret that
+      you saved earlier.
+
+
+Click Test Connection and wait for success.
+
+
+Click Save.
+
+
+Still in the same Provisioning blade, expand the Mappings section.
+      This section is grayed out until the connection has been successfully tested.
+
+
+Click on Provision Azure Active Directory Groups.
+
+Update the Attribute Mappings as follows:
+
+
+Azure Active Directory Attribute
+customappsso Attribute
+Matching precedence
+
+
+displayName
+displayName
+1
+
+
+members
+members
+
+
+
+As an outcome, your configuration should look similar to:
+
+noteUpdating group names is not supported in CDP.
+
+Click Save to save the group attribute mappings.
+
+
+Close this blade to return to the Provisioning blade.
+
+
+Click on Provision Azure Active Directory Users.
+
+Update the Attribute Mappings as follows:
+
+
+Azure Active Directory Attribute
+customappsso Attribute
+Matching precedence
+
+
+objectId
+userName
+1
+
+
+mail
+emails[type eq "work"].value
+
+
+
+givenName
+name.givenName
+
+
+
+surname
+name.familyName
+
+
+
+As an outcome, your configuration should look similar to:
+
+
+noteThe "customappsso Attribute" userName must be the same as your SAML
+        NameID attribute. The value of the field mapped to
+        NameID/userName is used to uniquely identify a user in CDP
+       and must also be immutable, or you will run into known issues. See Known issues and troubleshooting related to IdP setup in
+        CDP.
+
+
+Click Save to save the user attribute mappings.
+
+
+Close this blade to return to the Provisioning blade.
+
+
+Click Save in the Provisioning blade.
+
+
+Still in the Provisioning blade, expand the Settings section.
+
+
+Set Scope to Sync only assigned users and groups.
+
+
+Click Save.
+
+
+Now in the blade for the application, under the Manage menu click Users
+       and groups.
+
+
+If there are no users or groups, add a few. You will use this to test SCIM
+      later.
+
+
+Back in the blade for the application, under the Manage menu click
+       Provisioning.
+
+
+Click Start provisioning.
+
+
+Wait for the sync cycle to run. 
+The initial provisioning cycle may take a few minutes to start but subsequent
+      provisioning cycles run using a fixed cadence. You can see the cadence under the View
+       provisioning details expandable section.noteProvisioning cycles are set by Azure AD and
+       are not customizable.
+
+
+Once the provisioning cycle is complete, check your users and groups in CDP. If
+      there are any errors, contact your Cloudera representative.
+
+
+note
+
+CDP does not treat PATCH requests as atomic. PATCH operations are idempotent on CDP. 
+Querying resources using HTTP POST is not supported.
+
+
+
+
+Related informationConfiguring Azure Active Directory identity federation in CDPKnown issues and troubleshooting related to IdP setup in CDPParent topic: Onboarding users

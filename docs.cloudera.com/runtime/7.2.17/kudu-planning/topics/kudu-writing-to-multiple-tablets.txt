@@ -1,0 +1,113 @@
+Writing to multiple tabletsCloudera Docs
+Writing to multiple tablets
+Kudu does not support transactions that span multiple tablets. However, consistent
+    snapshot reads are possible (with caveats, as explained below). Writes from a Kudu client are
+    optionally buffered in memory until they are flushed and sent to the tablet server. When a
+    client’s session is flushed, the rows for each tablet are batched together, and sent to the
+    tablet server which hosts the leader replica of the tablet. Since there are no inter-tablet
+    transactions, each of these batches represents a single, independent write operation with its
+    own timestamp. However, the client API provides the option to impose some constraints on the
+    assigned timestamps and on how writes to different tablets are observed by clients.
+
+        Kudu was designed to be externally consistent, that is, preserving consistency when
+        operations span multiple tablets and even multiple data centers. In practice this means
+        that if a write operation changes item x at tablet A, and a following
+        write operation changes item y at tablet B, you might want to enforce that
+        if the change to y is observed, the change to x must also be observed.
+        There are many examples where this can be important. For example, if Kudu is storing
+        clickstreams for further analysis, and two clicks follow each other but are stored in
+        different tablets, subsequent clicks should be assigned subsequent timestamps so that
+        the causal relationship between them is captured.
+      
+
+
+
+
+CLIENT_PROPAGATED Consistency
+
+
+            Kudu’s default external consistency mode is called
+            CLIENT_PROPAGATED. This mode causes writes from a single
+            client to be automatically externally consistent. In the clickstream scenario
+            above, if the two clicks are submitted by different client instances, the
+            application must manually propagate timestamps from one client to the other for the
+            causal relationship to be captured. Timestamps between clients a and b
+            can be propagated as follows:
+          
+
+
+                Java Client
+              
+
+
+                  Call AsyncKuduClient#getLastPropagatedTimestamp() on client
+                  a, propagate the timestamp to client b, and call
+                  AsyncKuduClient#setLastPropagatedTimestamp() on client
+                  b.
+                
+
+
+                C++ Client
+              
+
+
+                  Call KuduClient::GetLatestObservedTimestamp() on client
+                  a, propagate the timestamp to client b, and call
+                  KuduClient::SetLatestObservedTimestamp() on client b.
+                
+
+
+
+
+
+
+COMMIT_WAIT Consistency
+
+
+            Kudu also has an experimental implementation of an external consistency model (used
+            in Google’s Spanner), called COMMIT_WAIT.
+            COMMIT_WAIT works by tightly synchronizing the clocks on all
+            machines in the cluster. Then, when a write occurs, timestamps are assigned and the
+            results of the write are not made visible until enough time has passed so that no
+            other machine in the cluster could possibly assign a lower timestamp to a following
+            write.
+          
+
+            When using this mode, the latency of writes is tightly tied to the accuracy of
+            clocks on all the cluster hosts, and using this mode with loose clock
+            synchronization causes writes to either take a long time to complete, or even time
+            out.
+          
+
+            The COMMIT_WAIT consistency mode may be selected as follows:
+          
+
+
+                Java Client
+              
+
+
+                  Call
+                  KuduSession#setExternalConsistencyMode(ExternalConsistencyMode.COMMIT_WAIT)
+
+
+
+                C++ Client
+              
+
+
+                  Call KuduSession::SetExternalConsistencyMode(COMMIT_WAIT)
+
+
+
+warning
+
+COMMIT_WAIT consistency is an experimental feature. It may return
+              incorrect results, exhibit performance issues, or negatively impact cluster
+              stability. Its use in production environments is discouraged.
+            
+
+
+
+
+Parent topic: Kudu transaction semantics

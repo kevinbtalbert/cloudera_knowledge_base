@@ -1,0 +1,765 @@
+Known issues for the CDP Private Cloud Data Services Management ConsoleCloudera Docs
+Known issues for the CDP Private Cloud Data Services Management Console
+This section lists known issues that you might run into while using the CDP Private Cloud Management Console service.
+Known Issues in Management Console 1.5.1
+
+External metadata databases are no longer supported on OCP
+
+As of CDP Private Cloud Data Services 1.5.1, external Control Plane metadata databases are no longer supported. New
+              installs require the use of an embedded Control Plane database. Upgrades from CDP Private Cloud Data Services 1.4.1
+              or 1.5.0 to 1.5.1 are supported, but there is currently no migration path from a
+              previous external Control Plane database to the embedded Control Plane database.
+              Upgrades from 1.4.0 or 1.5.0 with external Control Plane metadata databases also
+              require additional steps, which are described in the CDP Private Cloud Data Services 1.5.1
+              upgrade topics.
+
+
+
+OPSAPS-67214: Single Node | Restart Stability | Rolling start is failing with "global
+            timeout reached: 10m0s, error when evicting pods"
+
+For the ECS service, rolling restart is not applicable to a single node cluster.
+
+Workaround: Instead of a rolling restart, you should stop and start the ECS
+              Service. 
+
+
+CDPVC-1098: How to refresh the YuniKorn configuration
+
+Sometimes it is possible for the scheduler state to go out of sync from the cluster
+              state. This may result in pods in Pending and ApplicationRejected states, with pod
+              events showing Placement Rule related errors. To recover from this, you may need to
+              refresh the YuniKorn configuration.
+
+Workaround: Follow the steps in Refreshing the YuniKorn
+            configuration.
+
+
+OPSAPS-67340: L1 runs failing as service monitor is in bad health state
+
+Service Monitor (SMON) ends up in a bad health state after restarting the Cloudeara
+              Manager (CM) server, reporting problems with descriptor and metric schema age, when
+              Kerberos and CM SPNEGO authentication are both enabled. 
+
+Workaround: Use the following steps to restart SMON each time a CM server
+              restart is required:
+Stop SMON
+Restart the CM server
+Start SMON
+If the health status is already bad, a simple restart of SMON is
+            sufficient.
+
+
+DOCS-15855:  Networking API is deprecated after upgrade to CDP Private Cloud Data Services 1.5.1
+            (K8s 1.24)
+
+When the control plane is upgraded from 1.4.1 to 1.5.1, the Kubernates version
+              changes to 1.24. The Livy pods running in existing Virtual Clusters (VCs) use a
+              deprecated networking API for creating ingress for Spark driver pods. Because the old
+              networking API is deprecated and does not exist in Kubernates 1.24, any new job run
+              will not work for the existing VCs. 
+
+
+
+CDPQE-24295: Update docker client on docker.lab.eng.hortonworks machine
+
+When you attempt to execute the Docker command to fetch the Cloudera-provided images
+              into your air-gapped environment, you may encounter an issue where Docker pulls an
+              incorrect version of the HAProxy image, especially if you are using an outdated Docker
+              client. This situation arises due to the Cloudera registry containing images with
+              multiple platform versions. Unfortunately, older Docker clients may lack the
+              capability to retrieve the appropriate architecture version, such as amd64. 
+
+Workaround: Update the Docker client. It has been demonstrated that Docker
+              20.10.5 and later versions have been successful in resolving this problem.
+
+
+OPSX-4326: OCP upgrade from 1.5.0 to 1.5.1 – Restore is unsuccessful after
+            upgrade
+
+After upgrading CDP Private Cloud Data Services on OCP
+              from 1.5.0 to 1.5.1, Restore using a 1.5.0 backup could not be performed
+              successfully.
+
+Workaround: Make a backup of the OpenShift routes before upgrading to 1.5.1.
+              If you need to restore the control plane on a CDP Private Cloud Data Services1.5.1
+              OpenShift cluster using a 1.5.0 backup, contact Cloudera Customer Support.
+
+
+OPSX-4266: ECS upgrade from 1.5.0 to 1.5.1 is failing in Cadence schema update
+            job
+
+When upgrading from ECS 1.5.0 to 1.5.1, the CONTROL_PLANE_CANARY fails with the
+              following error: 
+
+Firing alerts for Control Plane: Job did not complete in time, Job failed to complete. 
+
+ And the cdp-release-cdp-cadence-schema-update job fails.
+
+Workaround: Use the following steps to manually execute the job: 
+
+Export the job manifest into a file:
+kubectl get job cdp-release-cdp-cadence-schema-update -n <cdp> -o yaml > job.yaml
+
+Delete the cdp-release-cdp-cadence-schema-update
+                  job:kubectl delete job cdp-release-cdp-cadence-schema-update -n <cdp>
+Remove runtime information from the manifest, such
+                  as:resourceVersion
+uid
+selector
+  matchLabels
+    controller-uid
+labels
+  controller-uid
+status section
+Create the job:kubectl apply -f job.yaml
+
+If the job still fails, contact Cloudera Support. 
+
+
+
+OPSX-4076:
+When you delete an environment after the backup event, the
+            restore operation for the backup does not bring up the environment. 
+Create the environment manually.
+
+
+
+
+OPSX-4295:
+The logs for the backups created in CDP Private Cloud Data
+            Services 1.5.0 version do not appear after you upgrade to version 1.5.1.
+
+
+
+OPSX-4024: CM truststore import into unified truststore should handle duplicate
+            CommonNames
+
+If multiple CA certificates with the exact same value for the Common Name field are
+              present in the Cloudera Manager truststore when a Private Cloud Data Services cluster
+              is installed, only one of them may be imported into the Data Services truststore. This
+              may cause certificate errors if an incorrect/old certificate is imported. 
+
+Workaround: Remove old certificates from the Cloudera Manager truststore,
+              and ensure certificates have unique Common Names.
+
+
+OPSX-2713: PVC ECS Installation: Failed to perform First Run of services
+
+If an issue is encountered during the Install Control Plane step of the Containerized
+              Cluster First Run, installation will be re-attempted infinitely rather than the
+              command failing. 
+
+Workaround: Because the control plane is installed and uninstalled in a
+              continuous cycle, it is often possible to address the cause of the failure while the
+              command is still running, at which point the next attempted installation should
+              succeed. If this is not successful, abort the First Run command, delete the
+              Containerized Cluster, address the cause of the failure, and then retry from the
+              beginning of the Add Cluster wizard. Any nodes that are reused must be cleaned before
+              re-attempting installation.
+OPSX-3666: mlx_crud_app DB connection fails with error "unable to create connection:
+            x509: certificate relies on legacy Common Name field, use SANs instead"
+
+After upgrade, the mlx-crud-app fails with the error "unable to create connection:
+              x509: certificate relies on legacy Common Name field, use SANs instead" 
+
+Workaround: If you are upgrading from CDP Private Cloud Data Services 1.4.1
+              or 1.5.0 to 1.5.1, and you were previously using an external database, you must
+              regenerate the DB certificate with SAN before upgrading to CDP Private Cloud Data
+              Services 1.5.1.
+
+
+OPSAPS-66166:  FreeIPA cmadminrole needs more privileges for PvC+ after upgrade
+
+After upgrade, the Cloudera Manager admin role may be missing the Host Administrators
+              privilege in an upgraded cluster. 
+
+Workaround: The cluster administrator should run the following command to
+              manually add this privilege to the role.
+ipa role-add-privilege <cmadminrole> --privileges="Host Administrators"
+
+
+
+COMOPS-2822:  OCP error x509: certificate signed by unknown authority
+
+The error x509: certificate signed by unknown authority usually
+              means that the Docker daemon that is used by Kubernetes on the managed cluster does
+              not trust the self-signed certificate.
+
+Workaround: Usually the fix is to copy the certificate to the path below on
+              all of the worker nodes in the cluster:
+/etc/docker/certs.d/<your_registry_host_name>:<your_registry_host_port>/ca.crt
+
+
+
+OPSX-4225: Upgrade failed as cadence pods are crashlooping post upgrade 
+
+When doing a fresh install of CDP Private Cloud Data Services 1.5.1,
+              external metadata databases are no longer supported. Instead, the CDP Private Cloud Data Services
+              installer will create an embedded database pod by default, which runs inside the
+              Kubernetes cluster to host the databases required for installation.
+If you are upgrading from CDP Private Cloud Data Services 1.4.1
+              or 1.5.0 to 1.5.1, and you were previously using an external database, you must run
+              the following psql commands to create the required databases. You
+              should also ensure that the two new databases are owned by the common database users
+              known by the control plane.
+
+CREATE DATABASE db-cadence;
+CREATE DATABASE db-cadence-visibility;
+
+
+
+
+OPSAPS-67046: Docker Server role fails to come up and returns a connection error
+            during ECS upgrade 
+
+When upgrading from 1.4.1 to 1.5.1, a Docker server role can sometimes fail to come
+              up and return the following error:
+
+grpc: addrConn.createTransport failed to connect to {unix:///var/run/docker/containerd/containerd.sock <nil> 0 <nil>}. 
+Err :connection error: desc = "transport: error while dialing: dial unix:///var/run/docker/containerd/containerd.sock: timeout". 
+Reconnecting... module=grpc 
+failed to start containerd: timeout waiting for containerd to start
+
+This error appears in the stderr file of the command, and can be
+              caused by a mismatch in the pid of containerd.
+
+Workaround: 
+Ensure that the problematic Docker server role has been stopped.
+Log in to the failing Docker server host.
+Run the following commands:
+                cd /var/run/docker/containerd/
+rm containerd.pid
+Restart the Docker server role.
+
+
+
+
+Longhorn-4212 Somehow the Rebuilding field inside volume.meta is
+            set to true causing the volume to get stuck in attaching/detaching loop
+
+This is a condition that can occur in ECS Longhorn storage.
+
+
+Since the volume has only 1 replica in this case, we can:
+1. Scale down the workload. The Longhorn volume will be detached.
+2. Wait for the Longhorn volume to be detached.
+3. SSH into the node that has the replica.
+4. cd into the replica folder (for example,
+                /longhorn/replicas/pvc-126d40e2-7bff-4679-a310-e444e84df267-1a5dc941).
+5. Change the"Rebuilding" field from true to false
+              in the volume.meta file.
+6. Scale up the workload to attach the volume.
+
+
+
+
+
+OPSX-3073 [ECS] First run command failed at setup storage step
+            with error "Timed out waiting for local path storage to come up"
+Pod stuck in pending state on host for a long time. Error in
+            Role log related to CNI plugin:
+            Events:   Type     Reason                  Age                   From     Message
+  ----     ------                  ----                  ----     -------
+  Warning  FailedCreatePodSandBox  3m5s (x269 over 61m)  kubelet  (combined from similar events): 
+Failed to create pod sandbox: rpc error: code = Unknown desc = failed to setup network for sandbox 
+"70427e9b26fb014750dfe4441fdfae96cb4d73e3256ff5673217602d503e806f": 
+failed to find plugin "calico" in path [/opt/cni/bin] 
+
+Delete the cni directory on the host failing to launch pods:
+ssh root@ecs-ha1-p-7.vpc.cloudera.com rm -rf /var/lib/cni
+Restart the canal pod running on that host:
+kubectl get pods -n kube-system -o wide | grep  ecs-ha1-p-7.vpc.cloudera.com
+kube-proxy-ecs-ha1-p-7.vpc.cloudera.com                 1/1     Running     0          11h   10.65.52.51    ecs-ha1-p-7.vpc.cloudera.com   <none>           <none>
+rke2-canal-llkc9                                        2/2     Running     0          11h   10.65.52.51    ecs-ha1-p-7.vpc.cloudera.com   <none>           <none>
+rke2-ingress-nginx-controller-dqtz8                     1/1     Running     0          11h   10.65.52.51    ecs-ha1-p-7.vpc.cloudera.com   <none>           <none>
+kubectl delete pod rke2-canal-llkc9 -n kube-system
+
+
+
+
+
+
+OPSX-3528: [Pulse] Prometheus config reload fails if
+              multiple remote storage configurations exist with the same name
+It is possible to create multiple remote storage
+              configurations with the same name. However, if such a situation occurs, the metrics
+              will not flow to the remote storage as the config reload of the original prometheus
+              will fail.
+At any point in time, there should never be multiple
+              remote storage configurations existing that have the same name.
+
+
+
+
+OPSX-1405: Able to create multiple CDP PVC Environments
+              with the same name
+If two users try to create an environment with the same name
+              at the same time, it might result in an unusable environment.
+Delete the environment and try again with only one user
+              trying to create the environment.
+
+
+OPSX-1412: Creating a new environment through the CDP
+              CLI reports intermittently that "Environment name is not unique" even though it is
+              unique
+When multiple users try to create the same environment at the
+              same time or use automation to create an environment with retries, create environment
+              may fail on collision with a previous request to create an environment.
+Delete the existing environment, wait 5 minutes, and try
+              again.
+
+
+OPSX-3323: Custom Log Redaction | String is not getting
+              redacted from all places in diagnostic bundle
+Custom redaction rule for URLs does not work.
+
+Cloudera Data Engineering service fails to start due to Ozone
+If the Ozone service is missing, misconfigured, or having other
+            issues when an Environment is registered in the Management Console,
+            CDE fails to start.
+Workaround: 
+Correct the issues with the Ozone service.
+Ensure that Ozone is running as expected.
+Re-create the environment.
+Create a new Cloudera Data Engineering service. 
+
+
+
+
+Known Issues in Management Console 1.5.0
+
+
+Longhorn-4212 Somehow the Rebuilding field inside volume.meta is
+            set to true causing the volume to get stuck in attaching/detaching loop
+
+This is a condition that can occur in ECS Longhorn storage.
+
+
+Since the volume has only 1 replica in this case, we can:
+1. Scale down the workload. The Longhorn volume will be detached.
+2. Wait for the Longhorn volume to be detached.
+3. SSH into the node that has the replica.
+4. cd into the replica folder (for example,
+                /longhorn/replicas/pvc-126d40e2-7bff-4679-a310-e444e84df267-1a5dc941).
+5. Change the"Rebuilding" field from true to false
+              in the volume.meta file.
+6. Scale up the workload to attach the volume.
+
+
+
+
+
+COMPX-13185 Upgrade from 1.4.1 to 1.5.0 failed - error: timed
+            out waiting for the condition on jobs/helm-install-longhorn
+Before ECS upgrade, you must update a specific ECS server node
+            toleration explicitly to ensure a cleaner upgrade process. 
+
+Delete the cni directory on the host failing to launch pods:
+ssh root@ecs-ha1-p-7.vpc.cloudera.com rm -rf /var/lib/cni
+Before ECS upgrade, run the following commands on the ECS Server hosts:
+TOLERATION='{"spec": { "template": {"spec": { "tolerations": [{ "effect": "NoSchedule","key": "node-role.kubernetes.io/control-plane","operator": "Exists" }]}}}}'
+
+kubectl patch deployment/yunikorn-admission-controller -n yunikorn -p "$TOLERATION"
+
+kubectl patch deployment/yunikorn-scheduler -n yunikorn -p "$TOLERATION"
+
+
+
+
+
+OPSX-3073 [ECS] First run command failed at setup storage step
+            with error "Timed out waiting for local path storage to come up"
+Pod stuck in pending state on host for a long time. Error in
+            Role log related to CNI plugin:
+            Events:   Type     Reason                  Age                   From     Message
+  ----     ------                  ----                  ----     -------
+  Warning  FailedCreatePodSandBox  3m5s (x269 over 61m)  kubelet  (combined from similar events): 
+Failed to create pod sandbox: rpc error: code = Unknown desc = failed to setup network for sandbox 
+"70427e9b26fb014750dfe4441fdfae96cb4d73e3256ff5673217602d503e806f": 
+failed to find plugin "calico" in path [/opt/cni/bin] 
+
+Delete the cni directory on the host failing to launch pods:
+ssh root@ecs-ha1-p-7.vpc.cloudera.com rm -rf /var/lib/cni
+Restart the canal pod running on that host:
+kubectl get pods -n kube-system -o wide | grep  ecs-ha1-p-7.vpc.cloudera.com
+kube-proxy-ecs-ha1-p-7.vpc.cloudera.com                 1/1     Running     0          11h   10.65.52.51    ecs-ha1-p-7.vpc.cloudera.com   <none>           <none>
+rke2-canal-llkc9                                        2/2     Running     0          11h   10.65.52.51    ecs-ha1-p-7.vpc.cloudera.com   <none>           <none>
+rke2-ingress-nginx-controller-dqtz8                     1/1     Running     0          11h   10.65.52.51    ecs-ha1-p-7.vpc.cloudera.com   <none>           <none>
+kubectl delete pod rke2-canal-llkc9 -n kube-system
+
+
+
+
+
+
+OPSX-3528: [Pulse] Prometheus config reload fails if
+              multiple remote storage configurations exist with the same name
+It is possible to create multiple remote storage
+              configurations with the same name. However, if such a situation occurs, the metrics
+              will not flow to the remote storage as the config reload of the original prometheus
+              will fail.
+At any point in time, there should never be multiple
+              remote storage configurations existing that have the same name.
+
+
+
+
+OPSX-2062:  Platform not shown on the Compute Cluster
+              UI tab
+On the CDP Private Cloud Management Console UI in ECS, when
+              listing the compute clusters, the Platform field is empty (null) instead of displaying
+              RKE as the Platform. 
+
+
+
+
+OPSX-1405: Able to create multiple CDP PVC Environments
+              with the same name
+If two users try to create an environment with the same name
+              at the same time, it might result in an unusable environment.
+Delete the environment and try again with only one user
+              trying to create the environment.
+
+
+OPSX-1412: Creating a new environment through the CDP
+              CLI reports intermittently that "Environment name is not unique" even though it is
+              unique
+When multiple users try to create the same environment at the
+              same time or use automation to create an environment with retries, create environment
+              may fail on collision with a previous request to create an environment.
+Delete the existing environment, wait 5 minutes, and try
+              again.
+
+
+OPSX-2062: Platform not shown on the Compute Cluster UI
+              tab
+On CDP Private Console UI in ECS, when listing the compute
+              clusters, the Platform field is empty (null) instead of displaying RKE as the
+              Platform.
+
+
+
+OPSX-3323: Custom Log Redaction | String is not getting
+              redacted from all places in diagnostic bundle
+Custom redaction rule for URLs does not work.
+
+Cloudera Data Engineering service fails to start due to Ozone
+If the Ozone service is missing, misconfigured, or having other
+            issues when an Environment is registered in the Management Console,
+            CDE fails to start.
+Workaround: 
+Correct the issues with the Ozone service.
+Ensure that Ozone is running as expected.
+Re-create the environment.
+Create a new Cloudera Data Engineering service. 
+
+
+
+
+Known Issues in Management Console 1.4.1
+
+
+INSIGHT-2469: COE Insight from case 922848: Not able to
+            connect to bit bucket
+After installing CML on an ECS cluster, users were not able to
+            connect the internal bitbucket repo. 
+Workaround:
+
+
+In this case the MTU of the ECS virtual network interfaces were larger than that of
+              host external interface, which may cause the network requests from ECS containers to
+              get truncated. 
+The Container Network Interface (CNI) is a framework for dynamically configuring
+              networking resources. CNI integrates smoothly with Kubenetes to enable the use of an
+              overlay or underlay network to automatically configure the network between pods.
+              Cloudera ECS uses Calico as the CNI network provider.
+The MTU of the pods’ virtual network interface can be seen by running the
+                ifconfig command.
+The default MTU of the virtual network interfaces is 1450.
+The MTU setting of the virtual interfaces is stored as a configmap in the kube-system
+              namespace. To modify the MTU, edit the rke2-canal-config
+              configmap.
+
+$ /var/lib/rancher/rke2/bin/kubectl --kubeconfig 
+ /etc/rancher/rke2/rke2.yaml --namespace kube-system 
+ edit cm rke2-canal-config
+
+Find the veth_mtu parameter in the YAML content. Modify the default
+              value of 1450 to the required MTU size. 
+Next, restart the rke2-canal pods from the kube-system namespace.
+              There will be rke2-canal pods for each ECS node.
+After the pods are restarted, all subsequent new pods will use the new MTU setting.
+              However, existing pods that are already running will remain on the old MTU setting.
+              Restart all of the pods to apply the new MTU setting.
+
+
+OPSAPS-67046: Docker Server role fails to come up and returns a connection error
+
+A Docker server role can sometimes fail to come up and return the following
+              error:
+
+grpc: addrConn.createTransport failed to connect to {unix:///var/run/docker/containerd/containerd.sock <nil> 0 <nil>}. 
+Err :connection error: desc = "transport: error while dialing: dial unix:///var/run/docker/containerd/containerd.sock: timeout". 
+Reconnecting... module=grpc 
+failed to start containerd: timeout waiting for containerd to start
+
+This error appears in the stderr file of the command, and can be
+              caused by a mismatch in the pid of containerd.
+
+Workaround: 
+Ensure that the problematic Docker server role has been stopped.
+Log in to the failing Docker server host.
+Run the following commands:
+                cd /var/run/docker/containerd/
+rm containerd.pid
+Restart the Docker server role.
+
+
+OPSX-1405: Able to create multiple
+            CDP PVC Environments with the same name
+If two users try to create an environment
+            with the same name at the same time, it might result in an unusable
+            environment.
+Delete the environment and try again
+            with only one user trying to create the environment.
+
+
+OPSX-1412: Creating a new environment
+            through the CDP CLI reports intermittently that "Environment name is
+            not unique" even though it is unique
+When multiple users try to create the same
+            environment at the same time or use automation to create an
+            environment with retries, create environment may fail on collision
+            with a previous request to create an environment.
+Delete the existing environment, wait
+            5 minutes, and try again.
+
+
+OPSX-3323: Custom Log Redaction |
+            String is not getting redacted from all places in diagnostic
+            bundle
+Custom redaction rule for URLs does not
+            work.
+
+Cloudera Data Engineering service fails to start due to Ozone
+If the Ozone service is missing, misconfigured, or having other
+            issues when an Environment is registered in the Management Console,
+            CDE fails to start.
+Workaround: 
+Correct the issues with the Ozone service.
+Ensure that Ozone is running as expected.
+Re-create the environment.
+Create a new Cloudera Data Engineering service. 
+
+
+
+Known Issues in Management Console 1.4.0
+
+Cloudera Data Engineering service fails to start due to Ozone
+If the Ozone service is missing, misconfigured, or having other
+            issues when an Environment is registered in the Management Console,
+            CDE fails to start.
+Workaround: 
+Correct the issues with the Ozone service.
+Ensure that Ozone is running as expected.
+Re-create the environment.
+Create a new Cloudera Data Engineering service. 
+
+
+OPSX-2062: Platform not shown on the
+            Compute Cluster UI tab
+On CDP Private Console UI in ECS, when
+            listing the compute clusters, the Platform field is empty (null)
+            instead of displaying RKE as the Platform.
+None.
+
+
+OPSX-2713: ECS Installation: Failed
+            to perform First Run of services.
+If an issue is encountered during the
+            Install Control Plane step of Containerized Cluster First Run,
+            installation will be re-attempted infinitely rather than the command
+            failing.
+Since the control plane is installed
+            and uninstalled in a continuous cycle, it is often possible to
+            address the cause of the failure while the command is still running,
+            at which point the next attempted installation should succeed. If
+            this is not successful, abort the First Run command, delete the
+            Containerized Cluster, address the cause of the failure, and retry
+            from the beginning of the Add Cluster wizard. Any nodes that are
+            re-used must be cleaned before re-attempting installation. 
+
+
+OPSX-735: Kerberos service should
+            handle CM downtime
+The Cloudera Manager Server in the base
+            cluster must be running in order to generate Kerberos principals for
+            Private Cloud. If there is downtime, you may observe
+            Kerberos-related errors.
+Resolve downtime on Cloudera Manager.
+            If you encountered Kerberos errors, you can retry the operation
+            (such as retrying creation of the Virtual Warehouse).
+
+
+OPSX-1405: Able to create multiple
+            CDP PVC Environments with the same name 
+If two users try to create an environment
+            with the same name at the same time, it might result in an unusable
+            environment.
+Delete the environment and try again
+            with only one user trying to create the environment.
+
+
+OPSX-1412: Creating a new environment
+            through the CDP CLI intermittently reports that, "Environment name
+            is not unique" even though it is unique
+When multiple users try to create the same
+            environment at the same time or use automation to create an
+            environment with retries, create environment may fail on collision
+            with a previous request to create an environment.
+Delete the existing environment, wait
+            5 minutes, and try again.
+
+
+OPSX-2484: FileAlreadyExistsException
+            during timestamp filtering
+The timestamp filtering may result in
+            FileAlreadyExistsException when there is a file with same name
+            already existing in the tmp directory. 
+
+
+
+OPSX-2772: For Account Administrator user, update roles
+            functionality should be disabled
+An Account Administrator user holds the biggest set of
+            privileges, and is not allowed to modify via current UI, even user try to modify
+            permissions system doesn't support changing for account administrator.
+
+
+
+Known Issues for Management Console 1.3.x and lower
+
+
+Recover fast in case of a Node failures with
+            ECS HA
+When a node is deleted from cloud or made
+            unavailable, it is observed that the it takes more than two minutes
+            until the pods were rescheduled on another node.
+It takes some time for the nodes to
+            recover. Failure detection and pod-transitioning are not
+            instantaneous.
+
+
+Cloudera Manager 7.6.1 is not compatible
+            with CDP Private Cloud Data Servicesversion 1.3.4. 
+You must use Cloudera Manager version 7.5.5
+            with this release. 
+
+
+
+
+
+CDP Private Cloud Data Services ECS
+            Installation: Failed to perform First Run of services.
+If an issue is encountered during the
+            Install Control Plane step of Containerized Cluster First Run,
+            installation will be re-attempted infinitely rather than the command
+            failing.
+Workaround: Since the control
+            plane is installed and uninstalled in a continuous cycle, it is
+            often possible to address the cause of the failure while the command
+            is still running, at which point the next attempted installation
+            should succeed. If this is not successful, abort the First Run
+            command, delete the Containerized Cluster, address the cause of the
+            failure, and retry from the beginning of the Add Cluster wizard. Any
+            nodes that are re-used must be cleaned before re-attempting
+            installation. 
+
+
+Environment creation through the CDP CLI
+            fails when the base cluster includes Ozone
+Problem: Attempt to create an
+            environment using the CDP command-line interface fails in a CDP Private Cloud Data Services deployment when the Private Cloud Base cluster is in a degraded
+            state and includes Ozone service. 
+Workaround: Stopping the Ozone
+            service temporarily in the Private Cloud Base cluster during
+            environment creation prevents the control plane from using Ozone as
+            a logging destination, and avoids this issue.
+
+
+Filtering the diagnostic data by time range
+            might result in a FileAlreadyExistsException
+Problem:Filtering the collected
+            diagnostic data might result in a FileAlreadyExistsException if the
+            /tmp directory already contains a file by that name.
+There is currently no workaround for
+            this issue.
+
+
+Full cluster name does not display in the
+            Register Environment Wizard
+
+None
+
+
+Kerberos service does not always handle
+            Cloudera Manager downtime
+Problem: The Cloudera Manager Server
+            in the base cluster must be running to generate Kerberos principals
+            for CDP Private Cloud. If there is downtime, you might observe
+            Kerberos-related errors.
+ Resolve downtime issues on Cloudera
+            Manager. If you encounter Kerberos errors, you can retry the
+            concerned operation such as creating Virtual Warehouses.
+
+
+Management Console allows registration of
+            two environments of the same name
+Problem: If two users attempt to
+            register environments of the same name at the same time, this might
+            result in an unusable environment.
+Delete the environment and ensure that
+            only one user attempts to register a new environment.
+
+
+Not all images are pushed during
+            upgrade
+A retry of a failed upgrade intermittently
+            fails at the Copy Images to Docker Registry step due to images not
+            being found locally.
+The failed images can be loaded
+            manually (with a docker load), and the upgrade resumed. To identify
+            which images need to be loaded take a look at the stderr file. The
+            downloaded images are present in the Docker Data Directory.
+
+
+The Environments page on the Management
+            Console UI for an environment in a deployment using ECS does not
+            display the platform name
+Problem: When you view the details of
+            an environment using the Management Console UI in a CDP Private Cloud Data Services deployment using ECS, the Platform field
+            appears blank. 
+Use the relevant CDP CLI command from
+            the environments module to view the required
+            details.
+
+
+Updating user roles for the admin user does
+            not update privileges 
+In the Management Console, changing roles on
+            the User Management page does not change
+            privileges of the admin user. 
+None
+
+
+Upgrade applies values that cannot be
+            patched
+If the size of a persistent volume claim in
+            a Containerized Cluster is manually modified, subsequent upgrades of
+            the cluster will fail.
+
+
+
+
+

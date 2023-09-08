@@ -1,0 +1,140 @@
+HDFSCloudera Docs
+HDFS
+Learn about the various considerations and bottlenecks when planning cluster
+  configuration for the HDFS service.
+Java heap sizes
+The NameNode memory should be increased over time as HDFS has more files and blocks
+    stored. Cloudera Manager can monitor and alert on memory usage. Roughly, the NameNode needs 1 GB
+    of memory for every 1 million files. Setting the heap size too large when it is not needed leads
+    to inefficient Java garbage collection, which can lead to erratic behavior that is hard to
+    diagnose. NameNode and Standby NameNode heap sizes must always be the same, and must be adjusted
+    together.
+
+NameNode metadata locations
+When a quorum-based high availability HDFS configuration is used, JournalNodes
+    handle the storage of metadata writes. The NameNode daemons require a local location to store
+    metadata. Cloudera recommends that only a single directory be used if the underlying disks are
+    configured as RAID, or two directories on different disks if the disks are mounted as JBOD.
+
+Block size
+HDFS stores files in blocks that are distributed over the cluster. A block is
+    typically stored contiguously on disk to provide high read throughput. The choice of block size
+    influences how long these high throughput reads run, and over how many nodes a file is
+    distributed. When reading the many blocks of a single file, a small block size spends more
+    overall time in slow disk seek, and a large block size has reduced parallelism. Data processing
+    that is I/O heavy benefits from larger block sizes, and data processing that is CPU heavy
+    benefits from smaller block sizes.
+The default provided by Cloudera Manager is 128 MB. The block size can also be
+    specified by an HDFS client on a per-file basis.
+
+Replication factor
+Bottlenecks can occur on a small number of nodes when only small subsets of files on
+    HDFS are being heavily accessed. Increasing the replication factor of the files so that their
+    blocks are replicated over more nodes can alleviate this. This is done at the expense of storage
+    capacity on the cluster. This can be set on individual files, or recursively on directories with
+    the -R parameter, by using the Hadoop shell command hadoop fs -setrep. By
+    default, the replication factor is 3.
+
+Erasure Coding
+Erasure Coding (EC) is an alternative to the 3x replication scheme. Read about data
+    durability for details on how EC works.
+EC reconstruction is nearly free computationally with the Intel ISA-L codec.
+    Performance improvements can be obtained by speeding up the computations through the use of the
+    following instruction sets: AES-NI, SSE, AVX, AVX2, and AVX 512. To determine whether a node has
+    ISA-L instruction sets available, check if any of the following CPU flags are
+    present:$ grep flags /proc/cpuinfo
+aes
+sse
+avx
+avx2
+avx512f
+avx512cd
+It is important that edge nodes and client gateways have codec support so that they
+    can do the calculations.
+Erasure Coding levies additional demands on the number of nodes or racks required to
+    achieve fault tolerance:
+node-level: number of DataNodes needed to equal or exceed the data stripe
+      width
+rack-level: number of racks needed to equal or exceed the data stripe
+      width
+
+For example, for a RS-10-4 policy to be rack-failure tolerant, you need at least 14
+    racks (10 for data blocks, 4 for parity blocks); for host-failure tolerance you need at least 14
+    nodes.
+Erasure Coding observes rack topology, but the resulting block placement policy
+    (BPP) differs from replication. With EC, the BPP tries to place all blocks as evenly as possible
+    on all racks. Cloudera recommends that racks have a consistent number of nodes. Racks with fewer
+    DataNodes are busier and fill faster than racks with more DataNodes.
+importantImpala and HBase queries fail if they attempt to
+    access Erasure Coded data. For more information, see Data Durability.
+
+Rack awareness
+Hadoop optimizes performance and redundancy when rack awareness is configured for
+    clusters that span across multiple racks, and Cloudera recommends doing so. You can assign racks
+    for nodes using Cloudera Manager.
+When setting up a multi-rack environment, place each master node on a different
+    rack. In the event of a rack failure, the cluster continues to operate using the remaining
+    master(s).
+
+DataNode failed volumes tolerated
+By default, Cloudera Manager sets the HDFS DataNode failed volume threshold to half
+    of the data drives in a DataNode. This is configured using the
+     dfs_datanode_failed_volumes_tolerated HDFS property in Cloudera Manager. If
+    each DataNode has eight drives dedicated to data storage, this threshold is set to four, meaning
+    that HDFS marks the DataNode dead on the fifth drive failure. This number may need to be
+    adjusted up or down depending on internal policies regarding hard drive replacements, or because
+    of evaluating what behavior is actually seen on the cluster under normal operating conditions.
+    Setting the value too high has a negative impact on the Hadoop cluster. Specifically for YARN,
+    the number of total containers available on the node with many drive failures is the same as
+    nodes without drive failures, meaning data locality is less likely on the former, leading to
+    more network traffic and slower performance.
+importantMultiple drive failures in a short amount of time
+    can indicate a larger problem with the machine, such as a failed disk controller.
+
+DataNode max transfer threads count
+This parameter replaces the deprecated
+     dfs.datanode.max.xcievers parameter, and needs to be adjusted for
+    workloads like HBase to ensure that the DataNodes serve adequate number of files at any one
+    time. Failure to do so can result in error messages about exceeding the number of transfer
+    threads or missing blocks.
+
+Balancing
+HDFS spreads data evenly across the cluster to optimize read access, MapReduce
+    performance, and node utilization. Over time, it is possible that the data distribution in the
+    cluster can go out of balance due to various reasons. Hadoop can help mitigate this by
+    rebalancing data across the cluster using the balancer tool. You can run the balancer tool
+    manually using Cloudera Manager or from the command line. By default, Cloudera Manager
+    configures the balancer to rebalance a DataNode when its utilization is 10% more or less from
+    the average utilization across the cluster. Individual DataNode utilization can be viewed from
+    Cloudera Manager.
+By default, the maximum bandwidth a DataNode uses for rebalancing is set to 1
+    MB/second (8 Mbit/second). This can be increased but network bandwidth used by rebalancing could
+    potentially impact production cluster application performance. Changing the balancer bandwidth
+    setting within Cloudera Manager requires a restart of the HDFS service: however, this setting
+    can also be made instantly across all nodes without a configuration change by running the
+    following command as an HDFS
+    superuser:hdfs dfsadmin -setBalancerBandwidth [***BYTES-PER-SECOND***]
+This is a convenient way to change the setting without restarting the cluster, but
+    since it is a dynamic change, it does not persist if the cluster is restarted. See Recommended
+    configurations for the Balancer for more insights into scenarios and suggested values for
+    tuning.
+note
+Cloudera does not recommend running the balancer on an HBase cluster as it affects data
+     locality for the RegionServers, which can reduce performance. Unfortunately, when HBase and
+     YARN services are colocated and heavy usage is expected on both, there is no good way to ensure
+     that the cluster is optimally balanced.
+If HDFS rebalancing is required on HBase clusters, then you may also need to run an HBase
+     major compaction operation when the rebalancing is completed. This can help restore region
+     locality.
+
+You can configure HDFS to distribute writes on each DataNode in a manner that
+    balances out available storage among that DataNode's disk volumes. By default, a DataNode writes
+    new block replicas to disk volumes solely on a round-robin basis. You can configure a
+    volume-choosing policy that causes the DataNode to take into account how much space is available
+    on each volume when deciding where to place a new replica.
+For more information, see Configure storage balancing for DataNodes using Cloudera
+    Manager.
+
+
+Related informationData durability and Erasure coding overviewIntel® Intelligent Storage Acceleration LibrarySpecifying Racks for HostsUsing dfs.datanode.max.transfer.threads with HBaseRecommended configurations for the BalancerConfigure storage balancing for DataNodes using Cloudera
+                            ManagerParent topic: Cluster configuration best practices

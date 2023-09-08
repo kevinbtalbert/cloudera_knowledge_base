@@ -1,0 +1,101 @@
+Pull-based audit archivingCloudera Docs
+Pull-based audit archiving
+ Pull-based audit archiving allows you to pull audit events for archiving purposes
+    without any extra configuration beyond Control Plane API usage.
+The Control Plane auditing system archives auditing events by writing them to cloud
+      storage that you configure and manage yourself. If you do not want to provide the network
+      access or credentials required for the Control Plane to automatically export audit logs to
+      cloud storage in your cloud provider, you can use pull-based audit archiving to retrieve the
+      events yourself in the same format (see What archiving looks like). Using
+      pull-based audit archiving, you can group the audit events into batches, list the event
+      batches that have not been marked as archived, retrieve those batches, and then mark them as
+      ready for purging from the Control Plane database.importantPull-based audit
+        archiving commands will return an error if automated audit archiving is
+      enabled.
+
+On a command line, run cdp audit batch-events-for-archiving to begin
+          the asynchronous process of grouping the audit events into batches.  For example:
+cdp audit batch-events-for-archiving \
+ --from-timestamp 2020-03-01T00:00:00Z \
+ --to-timestamp 2020-04-01T00:00:00Z 
+Note that if there is already a batch event operation in-progress, running the command
+            again is not allowed. If you run the command when an operation is already in progress,
+            you will receive an error. 
+If successful, the command returns a task ID for tracking the status of
+          the process. For example:
+          {
+    "taskId": "0b67c29c-bce9-4bbd-ac3e-8445df029f4f"
+}
+Use the cdp audit get-batch-events-for-archiving-status command
+          and the task ID to poll the asynchronous task repeatedly, until it completes successfully
+          or with an error:
+cdp audit get-batch-events-for-archiving-status \
+  --task-id 0b67c29c-bce9-4bbd-ac3e-8445df029f4f
+While the task is running, the status will be "OPEN": 
+{
+    "status": "OPEN",
+    "eventBatches": []
+}
+When it completes successfully, the status will be "COMPLETED," and identifiers will be
+            returned for the event
+            batches:{
+    "status": "COMPLETED",
+    "eventBatches": [
+        {
+            "accountId": "37t8i20c-cd82-4e8b-39e4-dcae1f9cd7ef",
+            "eventCount": 11,
+            "archiveId": "c5b57c79-6721-4e27-9hr9-67f5d299b1gq",
+            "archiveTimestamp": 0
+        }
+    ]
+ }
+Run cdp audit list-outstanding-archive-batches to determine event
+          batches which have not yet been marked as archived. The output appears similar to the
+          example below:
+{
+    "eventBatches": [
+        {
+            "accountId": "37t8120c-cd82-4e8b-39e4-dcae1f9cd7ef",
+            "eventCount": -1,
+            "archiveId": "c5b57c79-6721-4e27-9hr9-67f5d299b1gq",
+            "archiveTimestamp": 0
+        }
+    ]
+}
+For each batch that has not been marked as archived, run cdp audit
+            list-events-in-archive-batch to retrieve the batch of events:
+cdp audit list-events-in-archive-batch \
+  --archive-id c5b57c79-6721-4e27-9hr9-67f5d299b1gq
+The output of which will be similar to:
+{
+    "auditEvents": [
+        {
+            "version": "1.0.0",
+            ...
+        },
+        ...
+     ]
+ }
+Optionally, you can use shell builtins and utilities to convert the output to a gzipped
+            JSON lines format, like the archives produced by automated audit archiving, with a file
+            name that includes the account ID, a timestamp, and the batch archive ID. For
+            example:
+cdp audit list-events-in-archive-batch \
+  --archive-id c5b57c79-6721-4e27-9hr9-67f5d299b1gq \
+  | jq -c '.auditEvents[]' \
+  | gzip > 37t8120c-cd82-4e8b-39e4-dcae1f9cd7ef_`date -u +%Y%m%dT%H%M`Z_c5b57c79-6721-4e27-9hr9-67f5d299b1gq.json.gz
+Once you have saved an archive to your storage destination, use cdp audit
+            mark-archive-batches-as-successful to mark a batch as successfully archived, so
+          that it can later be purged automatically from the Control Plane database. You can provide
+          one or more batches for the --archive-ids parameter. For example:
+cdp audit mark-archive-batches-as-successful \
+  --archive-ids c5b57c79-6721-4e27-9hr9-67f5d299b1gq
+{
+    "archiveIds": [
+        "c5b57c79-6721-4e27-9hr9-67f5d299b1gq"
+    ],
+    "archiveTimestamp": "2021-08-10T21:54:59.223000+00:00"
+}
+
+
+Related informationWhat archiving looks like

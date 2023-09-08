@@ -1,0 +1,240 @@
+Add Streams Replication Manager to an existing clusterCloudera Docs
+Add Streams Replication Manager to an existing cluster 
+Streams Replication Manager (SRM) can be installed on an existing cluster managed by
+    Cloudera Manager. To do this, you need to define your external clusters using Kafka credentials,
+    add SRM to the cluster, and configure a number of mandatory properties related to clusters,
+    replications, and role targets.
+
+Streams Replication Manager is comprised of three roles:
+Streams Replication Manager Driver role: This role is responsible for
+            connecting to the specified clusters and performing replication between them. The driver
+            can be installed on one or more hosts.
+Streams Replication Manager Service role: This role consist of a REST API and a
+            Kafka Streams application to aggregate and expose cluster, topic and consumer group
+            metrics. The service can be installed on or more hosts.
+Streams Replication Manager Gateway role: This role can be used to deploy SRM
+            client configuration on hosts that do not have a Driver or Service role running on
+            them.
+noteDo not confuse Streams Replication Manager, which is a service managed by
+          Cloudera Manager, with the Streams Replication Manager Service role, which is a role
+          within Streams Replication Manager. You can install Streams Replication Manager
+        independent of the clusters that replication is happening between.
+The following steps walk you through the process of adding Streams Replication Manager to
+        your cluster. The configuration examples on this page are simple examples that are meant to
+        demonstrate the type of information that you have to enter. These steps and examples do not
+        go into detail of how security is configured or present all configuration options. For
+        additional information regarding the steps presented in this document, SRM security, and SRM
+        configuration in general, see the Related information section at the bottom of
+        this page 
+
+
+
+
+If you are planning on replicating data to or from a Kafka service running in either a
+            CDH 5.x or 6.x cluster and you are using Sentry for authorization, make sure that the
+               streamsrepmgr user is added to the Kafka Super
+              users property. You can find the  Super users
+            property by going to Kafka service > Configuration. Do this on all CDH 5.x or 6.x clusters where data replication will
+            happen.
+
+If you are planning on replicating data to or from a Kafka service running in Runtime
+          7.x and you are using Ranger for authorization, make sure that the
+            streamsrepmgr user has all required permissions assigned to it in
+          Ranger. Do this on all Runtime 7.x clusters where data replication will happen.
+
+
+In Cloudera Manager, go to
+              Administration >  > External
+              Accounts.Go to the Kafka Credentials tab. 
+The Kafka Credentials tab enables you to create, configure, and
+            manage Kafka credentials. A Kafka credential is an item that contains the connection
+            properties required by SRM to establish a connection with a cluster. You can think of a
+            Kafka credential as the definition of a single cluster. On this tab you will create a
+            credential for each external cluster taking part in the replication process.
+Create and configure Kafka credentials for the external clusters:
+Repeat this step for all external clusters.
+
+Click Add Kafka credentials.
+Configure the Kafka credential:
+The security configuration of the external cluster determines which of the
+                available properties you must set. At minimum, the following properties must be set: 
+Name
+Bootstrap servers
+Security protocol
+For example, assume that you have two clusters US-West and US-East. The SRM
+                service you are configuring is located on US-West. This means that, US-East is an
+                external cluster and US-West is co-located. In a case like this you would have to
+                specify US-East with a Kafka credential.
+                Name=useast
+Bootstrap servers=useast-1.cloudera.com:9092, useast-2.cloudera.com:9092, useast-3.cloudera.com:9092
+Security protocol=PLAINTEXT
+
+noteClick the i icon next to
+          each property in Cloudera Manager to reveal additional information about each
+          property.
+
+Click Add.If credential creation is
+              successful, a new entry corresponding to the Kafka credential you specified appears on
+              the page.
+
+From the Cloudera Manager Home page, select the drop-down to the
+          right of your cluster, and select Add a Service.
+
+Select Streams Replication Manager from the list of services and click
+            Continue. 
+Select dependenciesSelect the option that has the Kafka service listed
+          as an optional dependency.
+Assign role instances to hosts: 
+Select at least 2 hosts for both the Driver and the Service role if you want to enable
+          high availability mode for SRM.
+
+
+Click the field below SRM Driver to display a dialog box
+              containing a list of hosts.
+
+
+Select 1 or more hosts that the SRM Driver should be
+              assigned to and click Ok.
+
+
+Click the field below SRM Service to display a dialog box
+              containing a list of hosts.
+
+
+Select 1 or more host that the SRM Service should be
+              assigned to and click Ok.
+
+Click the field below SRM Gateway to display a dialog
+              box containing a list of hosts.
+Select 1 or more hosts that the SRM Gateway role
+              should be assigned to and click Ok.
+
+
+Click Continue.
+Add the clusters defined with Kafka credentials to SRM’s configuration:
+Find and configure the External Kafka Accounts
+              property.
+Click the add button and add new lines for each Kafka credential you
+              created.
+Add the names of all Kafka credentials.Each Kafka credential
+              must be added to a new line. For
+            example:useast
+Find and configure the Streams Replication Manager Co-located Kafka
+            Cluster Alias property.The alias you configure represents the
+          co-located cluster. Enter an alias that is unique and easily identifiable. For
+          example:uswestFind and configure the Streams Replication Manager Cluster
+            alias property.Add all cluster aliases. This includes aliases
+          present in the External Kafka Accounts and Streams
+            Replication Manager Co-located Kafka Cluster Alias properties. Delimit the
+          aliases with commas. For example:useast, uswestAdd and enable replications:
+Find the Streams Replication Manager's Replication
+                Configs property.
+Click the add button and add new lines for each unique replication you want
+              to add and enable.
+Add and enable your replications. For
+              example:uswest->useast.enabled=true
+useast->uswest.enabled=true
+
+
+Specify the Streams Replication Manager Service role target cluster:
+
+
+Find the Streams Replication Manager Service Target Cluster
+              property. 
+
+
+Add the target cluster alias. For example: 
+
+uswest
+
+
+
+
+The
+            target cluster is where the Service role gathers replication information from. Cloudera
+            recommends that you deploy the Service role on every cluster and configure each instance
+            of the Service role to target the cluster that it is running on.
+
+Optional: 
+Specify the Streams Replication Manager Driver role target clusters:
+
+Find the Streams
+                Replication Manager Driver Target Cluster property.
+
+Add the cluster aliases that you want
+              the driver role to target. For
+              example:
+
+uswest,useast
+
+
+
+
+You can use the Streams Replication Manager Driver Target
+              Cluster property to specify a subset of clusters that the driver should
+            target or in other words write data to. When this property is left empty (default) the
+            driver will read from and write to all clusters added to SRMs configuration. When this
+            property is set, the driver will collect data from all clusters, but will only write to
+            the clusters specified in this property. However, in order for monitoring to function
+            correctly, this property has to contain the target as well as source clusters. As a
+            result, custom configuration of this property is considered an advanced configuration
+            practice, which is only viable in complex replication scenarios. Cloudera recommends
+            that you either leave this property empty or add all clusters taking part in the
+            replication. 
+
+Optional: 
+Configure properties not
+          exposed in Cloudera Manager:
+ SRM accepts a number of additional configuration properties that are not available in
+          Cloudera Manager. Depending on your requirements you may need to configure these
+          properties as well. You can find a comprehensive list of these properties in
+            Configuration Properties Reference for Properties not Available in Cloudera
+            Manager. 
+
+Find the Streams Replication
+                Manager's Replication Configs property.
+Click the add button and add
+              new lines for each additional property you want to configure.
+Add configuration propertiesFor
+              example:offset.flush.timeout.ms=30000
+
+Optional: 
+Depending on your requirement, review and configure other properties available on this
+          page.
+
+Click Continue and wait until the process is finished
+
+Click Continue then click Finish.
+        Start SRM:
+
+On the Cloudera Manager Home page, select the drop-down to the right of
+              Streams Replication Manager, and select Start.
+Click Startand wait until the process is
+              finished.
+Click Close.
+
+
+
+Replicating data to or from the specified clusters is now possible.
+The SRM service REST API Swagger UI is available at one of the following addresses:
+
+http://<srm-service-host>:<srm-service-port/swagger
+
+
+https://<srm-service-host>:<srm-service-port/swagger
+
+
+
+
+
+
+
+Use the srm-control tool to kick off replication by adding topics or
+          groups to the allowlist.
+If you plan to use Streams Messaging Manager (SMM) to monitor Kafka cluster
+          replications, configure SMM to communicate with Streams Replication Manager (SRM). For
+          information, see Configuring SMM for Monitoring SRM Replications.
+
+
+
+Related informationConfiguration examplessrm-controlConfiguration Properties Reference for Properties not Available in Cloudera           ManagerDefining and adding clusters for replicationConfiguring the driver role target clustersConfiguring the service role target clusterConfiguring properties not exposed in Cloudera ManagerConfiguring replicationsConfiguring SMM for Monitoring SRM Replications

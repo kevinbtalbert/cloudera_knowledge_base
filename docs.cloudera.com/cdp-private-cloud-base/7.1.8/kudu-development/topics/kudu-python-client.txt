@@ -1,0 +1,110 @@
+Kudu Python clientCloudera Docs
+Kudu Python client
+The Kudu Python client provides a Python friendly interface to the C++ client API. To
+    install and use the Kudu Python client, you need to install the Kudu C++ client libraries and
+    headers.
+See Install Using Packages topic for installing the Kudu
+      C++ client libraries.
+
+Update all the packages on your system by using the following command:
+yum -y update
+
+Install the extra packages for the Enterprise Linux distribution:
+sudo yum -y install epel-release
+
+Install the Python package manager:
+sudo yum -y install python-pip
+
+Verify the version of the PIP manager that you just installed:
+pip --version
+
+Install Cython:
+sudo pip install cython
+
+Download the following files using wget:
+
+
+Kudu artifact:
+                  http://username:password@archive.cloudera.com/p/cdh7/RUNTIME_VERSION/redhat7/yum/kudu/KUDU_ARTIFACT
+Kudu-client artifact:
+                  http://username:password@archive.cloudera.com/p/cdh7/RUNTIME_VERSION/redhat7/yum/kudu/KUDU-CLIENT_ARTIFACT
+Kudu-client-devel artifact:
+                  http://username:password@archive.cloudera.com/p/cdh7/RUNTIME_VERSION/redhat7/yum/kudu/KUDU-CLIENT-DEVEL_ARTIFACT
+
+
+
+Install the kudu package from the local directory:
+sudo yum -y localinstall ./kudu-*
+
+Install the package used for developing Python extensions:
+sudo yum -y install python-devel
+
+Upgrade the setup tools:
+sudo pip install --upgrade pip setuptools
+
+Install the C++ compiler:
+sudo yum -y install gcc-c++
+
+Install the Kudu-python client:
+sudo pip install kudu-python==<kudu-version>
+
+Install kudu-python: sudo pip install kudu-python.
+The following sample demonstrates the use of part of the Python client:
+
+import kudu
+from kudu.client import Partitioning
+from datetime import datetime
+
+# Connect to Kudu master server
+client = kudu.connect(host='kudu.master', port=7051)
+
+# Define a schema for a new table
+builder = kudu.schema_builder()
+builder.add_column('key').type(kudu.int64).nullable(False).primary_key()
+builder.add_column('ts_val', type_=kudu.unixtime_micros, nullable=False, compression='lz4')
+schema = builder.build()
+
+# Define partitioning schema
+partitioning = Partitioning().add_hash_partitions(column_names=['key'], num_buckets=3)
+
+# Create new table
+client.create_table('python-example', schema, partitioning)
+
+# Open a table
+table = client.table('python-example')
+
+# Create a new session so that we can apply write operations
+session = client.new_session()
+
+# Insert a row
+op = table.new_insert({'key': 1, 'ts_val': datetime.utcnow()})
+session.apply(op)
+
+# Upsert a row
+op = table.new_upsert({'key': 2, 'ts_val': "2016-01-01T00:00:00.000000"})
+session.apply(op)
+
+# Updating a row
+op = table.new_update({'key': 1, 'ts_val': ("2017-01-01", "%Y-%m-%d")})
+session.apply(op)
+
+# Delete a row
+op = table.new_delete({'key': 2})
+session.apply(op)
+
+# Flush write operations, if failures occur, capture print them.
+try:
+    session.flush()
+except kudu.KuduBadStatus as e:
+    print(session.get_pending_errors())
+
+# Create a scanner and add a predicate
+scanner = table.scanner()
+scanner.add_predicate(table['ts_val'] == datetime(2017, 1, 1))
+
+# Open Scanner and read all tuples
+# Note: This doesn't scale for large scans
+result = scanner.open().read_all_tuples()
+
+
+

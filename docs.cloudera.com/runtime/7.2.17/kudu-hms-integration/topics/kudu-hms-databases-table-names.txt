@@ -1,0 +1,58 @@
+Databases and Table NamesCloudera Docs
+Databases and Table Names
+When Hive Matastore (HMS) integration is enabled in Kudu, both the namespace and table
+  names properties change to match the HMS model.
+With the Hive Metastore integration disabled, Kudu presents tables as a single flat namespace,
+   with no hierarchy or concept of a database. Additionally, Kudu's only restriction on table names
+   is that they be a valid UTF-8 encoded string. When the HMS integration is enabled in Kudu, both
+   of these properties change in order to match the HMS model: the table name must indicate the
+   table's membership of a Hive database, and table name identifiers (i.e. the table name and
+   database name) are subject to the Hive table name identifier constraints.
+Databases
+Hive has the concept of a database, which is a collection of individual tables. Each database
+    forms its own independent namespace of table names.
+In order to fit into this model, Kudu tables must be assigned a database when the HMS
+    integration is enabled. No new APIs have been added to create or delete databases, nor are there
+    APIs to assign an existing Kudu table to a database. Instead, a new convention has been
+    introduced that Kudu table names must be in the format
+     <hive-database-name>.<hive-table-name>. Thus, databases are an implicit
+    part of the Kudu table name. By including databases as an implicit part of the Kudu table name,
+    existing applications that use Kudu tables can operate on non-HMS-integrated and HMS-integrated
+    table names with minimal or no changes.
+Kudu provides no additional tooling to create or drop Hive databases. Administrators or users
+    should use existing Hive tools such as the Beeline Shell or Impala to do so.
+
+Naming Constraints
+When the Hive Metastore integration is enabled, the database and table names of Kudu tables
+    must follow the Hive Metastore naming constraints. Namely, the database and table name must
+    contain only alphanumeric ASCII characters and underscores.
+When the hive.support.special.characters.tablename Hive configuration is
+     true, the forward-slash (/) character in table name identifiers (i.e. the
+    table name and database name) is also supported.
+Additionally, the Hive Metastore does not enforce case sensitivity for table name identifiers.
+    As such, when enabled, Kudu will follow suit and disallow tables from being created when one
+    already exists whose table name identifier differs only by case. Operations that open, alter, or
+    drop tables will also be case-insensitive for the table name identifiers.
+warningGiven the case insensitivity upon enabling the integration, if multiple Kudu
+    tables exist whose names only differ by case, the Kudu master(s) will fail to start up. Be sure
+    to rename such conflicting tables before enabling the Hive Metastore integration.
+
+Metadata Synchronization
+When the Hive Metastore integration is enabled, Kudu will automatically synchronize metadata
+    changes to Kudu tables between Kudu and the HMS. As such, it is important to always ensure that
+    the Kudu and HMS have a consistent view of existing tables, using the administrative tools.
+    Failure to do so may result in issues like Kudu tables not being discoverable or usable by
+    external, HMS-aware components (e.g. Apache Sentry, Apache Impala).
+The Hive Metastore automatically creates directories for Kudu tables. These directories are
+    benign and can safely be ignored.
+Impala has notions of internal and external Kudu tables. When dropping an internal table from
+    Impala, the table's data is dropped in Kudu; in contrast when dropping an external table, the
+    table's data is not dropped in Kudu. External tables may refer to tables by names that are
+    different from the names of the underlying Kudu tables, while internal tables must use the same
+    names as those stored in Kudu. Additionally, multiple external tables may refer to the same
+    underlying Kudu table. Thus, since external tables may not map one-to-one with Kudu tables, the
+    Hive Metastore integration and tooling will only automatically synchronize metadata for internal
+    tables. 
+
+
+Related informationAdministrative tools for Hive Metastore integration

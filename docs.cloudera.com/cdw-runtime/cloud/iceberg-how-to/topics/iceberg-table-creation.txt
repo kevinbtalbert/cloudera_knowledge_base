@@ -1,0 +1,90 @@
+Create table featureCloudera Docs
+Create table feature
+You use CREATE TABLE from Impala or CREATE EXTERNAL TABLE from Hive to create an
+  external table in Iceberg. You learn the subtle differences in these features for creating Iceberg
+  tables from Hive and Impala. You also learn about partitioning.
+Hive and Impala handle external table creation a little differently, and that extends to
+   creating tables in Iceberg. By default, Iceberg tables you create are v1. To create an Iceberg v2
+   table from Hive or Impala, you need to set a table property as follows:'format-version' =
+    '2'.
+Iceberg table creation from Hive
+From Hive, CREATE EXTERNAL TABLE is recommended to create an Iceberg table in CDP. 
+When you use the EXTERNAL keyword to create the Iceberg table, by default only the schema is
+    dropped when you drop the table. The actual data is not purged. Conversely, if you do not use
+    EXTERNAL, by default the schema and actual data is purged. You can override the default
+    behavior. For more information, see the Drop table feature.
+From Hive, you can create a table that reuses existing metadata by setting the
+        metadata_location table property to the object store path of the metadata. The operation
+        skips generation of new metadata and re-registers the existing metadata. Use the following
+        syntax:
+        CREATE EXTERNAL TABLE ice_fm_hive (i int) STORED BY ICEBERG TBLPROPERTIES ('metadata_location'='<object store or file system path>')
+See examples below.
+
+Iceberg table creation from Impala
+From Impala, CREATE TABLE is recommended to create an Iceberg table in CDP.
+    Impala creates the Iceberg
+    table metadata in the metastore and also initializes the actual Iceberg table data in the object
+    store.
+The
+    difference between Hive and Impala with regard to creating an Iceberg table is related to Impala
+    compatibility with Kudu, HBase, and other tables. For more information, see the Apache
+    documentation, "Using Impala with Iceberg Tables".
+
+Metadata storage of Iceberg tables
+When you create an Iceberg table using CREATE EXTERNAL TABLE in Hive or using CREATE TABLE in
+    Impala, HiveCatalog creates an HMS table and also stores some metadata about the table on your
+    object store, such as S3. Creating an Iceberg table generates a metadata.json file, but not a snapshot. In the metadata.json, the snapshot-id of a new table is -1. Inserting, deleting, or updating table data generates a snapshot.
+    
+    The Iceberg metadata files and data files are stored in the table directory under the
+    warehouse folder. Any optional partition data is converted into Iceberg partitions instead of
+    creating partitions in the Hive Metastore, thereby removing the bottleneck.
+To create an Iceberg table from Hive or from Impala, you associate the Iceberg storage handler
+   with the table using one of the following clauses, respectively:
+Hive: STORED BY ICEBERG
+Impala: STORED AS ICEBERG or STORED BY ICEBERG
+
+
+Supported file formats
+You can write Iceberg tables in the following formats:
+From Hive: Parquet (default), Avro, ORC
+From Impala: Parquet
+
+Impala supports writing Iceberg tables in only Parquet format. Impala does not support
+    defining both file format and storage engine. For example, CREATE TABLE tbl ... STORED
+     AS PARQUET STORED BY ICEBERG works from Hive, but not from Impala.
+You can read Iceberg tables in the following formats: 
+From Hive: Parquet, Avro, ORC
+From Impala: Parquet, Avro, ORC
+noteReading Iceberg tables in Avro format from Impala is available as
+        a technical preview. Cloudera recommends that you use this feature in test and development
+        environments. It is not recommended for production deployments.
+
+
+
+Hive syntax
+CREATE [EXTERNAL] TABLE [IF NOT EXISTS] [db_name.]table_name	  
+  [(col_name data_type, ... )]
+  [PARTITIONED BY [SPEC]([col_name][, spec(value)][, spec(value)]...)]]
+  [STORED AS file_format]
+   STORED BY ICEBERG
+  [TBLPROPERTIES ('key'='value', 'key'='value', ...)] 
+
+Impala syntaxCREATE TABLE [IF NOT EXISTS] [db_name.]table_name	  
+  [(col_name data_type, ... )]
+  [PARTITIONED BY [SPEC]([col_name][, spec(value)][, spec(value)]...)]]
+   STORED {AS | BY} ICEBERG
+  [TBLPROPERTIES (property_name=property_value, ...)]
+Hive examples
+CREATE EXTERNAL TABLE ice_1 (i INT, t TIMESTAMP, j BIGINT) STORED BY ICEBERG;
+CREATE EXTERNAL TABLE ice_2 (i INT, t TIMESTAMP) PARTITIONED BY (j BIGINT) STORED BY ICEBERG;
+CREATE EXTERNAL TABLE ice_4 (i int) STORED AS ORC STORED BY ICEBERG;
+CREATE EXTERNAL TABLE ice_5 (i int) STORED BY ICEBERG TBLPROPERTIES ('metadata_location'='s3a://bucketName/ice_table/metadata/v1.metadata.json')
+CREATE EXTERNAL TABLE ice_6 (i int) STORED AS ORC STORED BY ICEBERG TBLPROPERTIES ('format-version' = '2');
+
+Impala examples
+CREATE TABLE ice_7 (i INT, t TIMESTAMP, j BIGINT) STORED BY ICEBERG; //creates only the schema
+CREATE TABLE ice_8 (i INT, t TIMESTAMP) PARTITIONED BY (j BIGINT) STORED BY ICEBERG; //creates schema and initializes data
+CREATE TABLE ice_v2 (i INT, t TIMESTAMP) PARTITIONED BY (j BIGINT) STORED BY ICEBERG TBLPROPERTIES ('format-version' = '2'); //creates a v2 table
+
+
+Related informationDrop table featurePartition transform featureParent topic: Apache Iceberg features

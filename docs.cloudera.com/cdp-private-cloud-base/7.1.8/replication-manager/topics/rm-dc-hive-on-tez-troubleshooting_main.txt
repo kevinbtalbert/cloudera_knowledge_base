@@ -1,0 +1,151 @@
+Troubleshooting Hive ACID table replication policiesCloudera Docs
+Troubleshooting Hive ACID table replication policies
+The troubleshooting scenarios in this topic help you to troubleshoot the Hive ACID
+        table replication policies in Replication Manager.
+In Cloudera Manager, the history of a schedule appears as FAILED and the status
+                shows SKIPPED. Why are the SKIPPED runs listed as FAILED runs?
+This scenario appears when there is no data to load during replication load on the
+                target cluster. 
+FAILED with SKIPPED status might indicate an issue with the dump schedule
+                on the source cluster. This can also appear when the dump completes after the load
+                starts which might result in no data to load. Note that the first run (bootstrap) of
+                the schedule takes a longer time than the subsequent (incremental) runs. Hence, the
+                Hive query on the target side (load) might fail because the query runs at the same
+                time as on source before the source completes the dumping operation.
+
+How to recover a schedule from FAILED_ADMIN state?
+When a non-recoverable error appears for a replication job and the status says
+                FAILED_ADMIN, you can perform the following steps to recover a schedule from this
+                    state:
+Go to the error log path.
+Search for the file _non_recoverable. 
+Search for the error stack in the
+                            _non_recoverable file. 
+Fix the error.
+Delete the _non_recoverable.
+noteFor the next replication jobs in the policy to function normally, the
+                        _non_recoverable file must be deleted.
+
+Why are notification events missing in the metastore?
+One of the possible errors that might appear with FAILED_ADMIN status is when the
+                notification events’ TTL expires. This results in notifications being deleted in the
+                metastore. In this scenario, the workaround is to start a fresh bootstrap phase of
+                replication.
+To re-bootstrap the database in the source cluster, perform the following
+                steps:
+
+Use beeline to drop the target database.
+Remove the dump directory on HDFS for the required policy. The path of
+                    the _non_recoverable error file path has the dump directory
+                    path.
+
+The policy schedule resumes automatically with the bootstrap phase.
+
+How does Hive ACID table replication handle default and custom locations for
+                databases and tables?
+The following use cases show how the default location and custom locations
+                for databases and tables are handled during Hive ACID table replication:
+
+Use case 1 - Database location and
+                        managedlocation properties.
+If the source database properties location and
+                                managedlocation are set to the default
+                            location (<dbname>.db.toLowerCase()), the
+                            target database properties location and
+                                managedlocation are also set to the default
+                            location after replication.
+If the source database properties location and
+                                managedlocation are set to custom locations,
+                            the target database properties location and
+                                managedlocation retain the corresponding
+                            custom locations on the target cluster after replication.
+By default, the custom location is retained on the target
+                        cluster. You can disable this behaviour by configuring the
+                            hive.repl.retain.custom.db.locations.on.target policy-level
+                        configuration property to false. When you disable this property and run the
+                        Hive ACID table replication, the replicated database locations on the target
+                        cluster are set to default locations, irrespective of whether the database
+                        locations on the source are set to default or custom locations.
+Use case 2: Table location and
+                        managedlocation properties.
+After replication, a replicated managed table inherits the parent’s
+                            database managedlocation property irrespective of
+                            whether the managedlocation property of the
+                            parent’s database is set to the default location or custom location on
+                            the source cluster.
+After replication, a replicated external table derives its location from
+                            the value of the
+                                hive.repl.replica.external.table.base.dir
+                            property and the external table location on the source cluster. For
+                                example, if an external table ext_tab1 is
+                                located at /ext_loc/ext_tab1/ on the source
+                                cluster and the
+                                    hive.repl.replica.external.table.base.dir
+                                property is configured as /ext_base1 on the
+                                target, the location for ext_tab1 on the target cluster is
+                                    /ext_base1/ext_loc/ext_tab1. The
+                                    hive.repl.replica.external.table.base.dir
+                                property is derived from the value you set for the
+                                    External Table Base Directory option in
+                                the Hive ACID table replication policy.
+
+
+
+Which replication policy in Replication Manager replicates both the managed
+                tables (ACID) and external tables in a database?
+To replicate managed tables (ACID) and external tables in the database
+                successfully, you must first replicate the ACID tables using Hive ACID table
+                replication policy. After the replication policy run completes, create the Hive
+                external table replication policy to replicate the external tables in the database. 
+noteYou must ensure that the target database name is the same as
+                the source database name, otherwise issues appear during or after data
+                replication.
+To accomplish this task, perform the following steps:
+Create a Hive ACID table replication policy where you choose the required
+                        database. The replication policy replicates data and metadata of the ACID
+                        tables in the database.The first run of the replication policy
+                            performs a bootstrap replication. During bootstrap replication, the
+                            target database is created and all the ACID tables are replicated to the
+                            target database. The subsequent policy runs are incremental. During
+                            incremental replication, only the source database changes between the
+                            current run and previous run are replicated.
+Ensure that the first Hive ACID table replication policy run is complete in
+                        Replication Manager.
+Create a Hive external table replication policy for the database. After
+                        policy creation is complete, a full replication (bootstrap) of data and
+                        metadata of all the external tables from the source database to target
+                        database is initiated. After the bootstrap replication is complete, the next
+                        policy run jobs leverage the HDFS snapshots to perform incremental
+                        replication of external table data. 
+
+Subsequent replication job runs perform full metadata replication and incremental
+                data replication.
+
+What table types in Hive does Replication Manager support?
+The following replication policies replicate the given table types in
+                    Hive:
+Hive ACID table replication policies replicate data and metadata of the
+                        following table types in Hive:
+Managed: CRUD transactional
+Managed: Insert-only transactional
+
+Hive external table replication policies replicate data and metadata of
+                        external tables.
+
+
+After creating a Hive external table replication policy, the “Bootstrap REPL LOAD
+                is not allowed on Database: sourceDB as it is not empty. One or more
+                tables/functions exist.” error appears. How to resolve this issue?
+This error appears if you create the Hive external table replication policy
+                before you create the Hive ACID table external table policy.
+To resolve this issue, the administrator must perform the following
+                    steps:
+Drop the database with the replicated data and metadata on the target
+                        cluster.
+Create a Hive ACID table replication policy.
+After the Hive ACID table replication policy run completes, create a Hive
+                        external table replication policy.
+
+
+
+Parent topic: Hive ACID table replication policies

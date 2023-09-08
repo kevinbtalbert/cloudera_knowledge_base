@@ -1,0 +1,170 @@
+Identifying problems in a Cloudera Search deploymentCloudera Docs
+Identifying problems in a Cloudera Search deployment
+Learn about common issues affecting Search performance and what you can do about
+    them.
+To investigate your Cloudera Search deployment for performance problems or misconfigurations,
+      inspect the log files, schema files, and the actual index for issues. If possible, connect to
+      the live Solr instance while watching log files so you can compare the schema with the index.
+      For example, the schema and the index can be out of sync in situations where the schema is
+      changed, but the index was never rebuilt. 
+
+
+Issue
+Recommendation
+
+
+
+A high number or proportion of 0-match queries
+This indicates that the user-facing part of the application is making it easy for
+              users to enter queries for which there are no matches. In Cloudera Search, given the
+              size of the data, this should be an extremely rare event.
+
+
+Queries that match an excessive number of documents
+All documents that match a query have to be scored, and the cost of scoring a
+              query goes up as the number of finds increases. Examine any frequent queries that match
+              millions of documents. An exception to this case is “constant score queries”. Queries,
+              such as those of the form ":" bypass the scoring process entirely.
+
+
+Overly complex queries
+Defining what constitutes overly complex queries is difficult to do, but a very
+              general rule is that queries over 1024 characters in length are likely to be overly
+              complex.
+
+
+High autowarm times
+Autowarming is the process of filling caches. Some queries are run before a new
+              searcher serves the first live user request. This keeps the first few users from
+              having to wait. Autowarming can take many seconds or can be instantaneous. Excessive
+              autowarm times often indicate excessively generous autowarm parameters. Excessive
+              autowarming usually has limited benefit, with longer runs effectively being wasted
+                work.
+Cache autowarm. Each Solr cache has an autowarm parameter. You can usually set
+                  this value to an upper limit of 128 and tune from there.
+FirstSearcher/NewSearcher. The
+                    solrconfig.xml file contains queries that can be fired when a
+                  new searcher is opened (the index is updated) and when the server is first
+                  started. Particularly for firstSearcher, it can be valuable to
+                  have a query that sorts relevant fields.
+noteThe aforementioned flags are available from
+                solrconfig.xml
+
+
+Exceptions
+The Solr log file contains a record of all exceptions thrown. Some exceptions,
+              such as exceptions resulting from invalid query syntax are benign, but others, such as
+              Out Of Memory, require attention.
+
+
+Excessively large caches
+The size of caches such as the filter cache are bounded by maxDoc/8. Having, for
+              instance, a filterCache with 10,000 entries is likely to result in Out Of Memory
+              errors. Large caches occurring in cases where there are many documents to index is
+              normal and expected.
+
+
+Caches with low find (hit) ratios, particularly filterCache
+Each cache takes up some space, consuming resources. There are several caches,
+              each with its own rate of finding stored information.
+filterCache. This cache should have a relatively high ratio of
+                  finding stored information (hit ratio), typically around 80%.
+queryResultCache. This is primarily used for paging so it can
+                  have a very low ratio of finding stored information (hit ratio). Each entry is
+                  quite small as it is basically composed of the raw query as a string for a key and
+                  perhaps 20-40 ints. While useful, unless users are experiencing
+                  paging, this requires relatively little attention.
+documentCache. This cache is a bit tricky. It’s used to cache
+                  the document data (stored fields) so various components in a request handler don’t
+                  have to re-read the data from the disk. It’s an open question how useful it is
+                  when using MMapDirectory to access the index.
+
+
+
+Very deep paging
+Users seldom go beyond the first page and very rarely to go through 100 pages of
+              results. A &start=<pick your number> query indicates
+              unusual usage that should be identified. Deep paging may indicate some agent is
+              completing scraping.noteSolr is not built to return full result sets no matter how
+                deep. If returning the full result set is required, explore alternatives to paging
+                through the entire result set.
+
+
+Range queries should work on trie fields
+Trie fields (numeric types) store extra information in the index
+              to aid in range queries. If range queries are used, it’s almost always a good idea to
+              be using trie fields.
+
+
+fq clauses that use bare NOW
+fq clauses are kept in a cache. The cache is a map from the
+                fq clause to the documents in your collection that satisfy that
+              clause. Using bare NOW clauses virtually guarantees that the entry in the filter cache
+              is not to be re-used.
+
+
+Multiple simultaneous searchers warming
+This is an indication that there are excessively frequent commits or that
+              autowarming is taking too long. This usually indicates a misunderstanding of when you
+              should issue commits, often to simulate Near Real Time (NRT) processing or an indexing
+              client is improperly completing commits. With NRT, commits should be quite rare, and
+              having more than one simultaneous autowarm should not happen.
+
+
+Stored fields that are never returned (fl= clauses)
+Examining the queries for fl= and correlating that with the
+              schema can tell if stored fields that are not used are specified. This mostly wastes
+              disk space. And fl=* can make this ambiguous. Nevertheless, it’s
+              worth examining.
+
+
+Indexed fields that are never searched
+This is the opposite of the case where stored fields are never returned. This is
+              more important in that this has real RAM consequences. Examine the request handlers
+              for “edismax” style parsers to be certain that indexed fields are not used.
+
+
+Queried but not analyzed fields
+It’s rare for a field to be queried but not analyzed in any way. Usually this is
+              only valuable for “string” type fields which are suitable for machine-entered data,
+              such as part numbers chosen from a pick-list. Data that is not analyzed should not be
+              used for anything that humans enter.
+
+
+String fields
+String fields are completely unanalyzed. Unfortunately, some people confuse
+                string with Java’s String type and use them for
+              text that should be tokenized. The general expectation is that string fields should be
+              used sparingly. More than just a few string fields indicates a design flaw.
+
+
+The schema and the index are out of sync
+Solr uses the schema to set expectations about the index. When schemas are
+              changed, there’s no attempt to retrofit the changes to documents that are currently
+              indexed, but any new documents are indexed with the new schema definition. So old and
+              new documents can have the same field stored in vastly different formats (for example,
+                String and TrieDate) making your index
+              inconsistent. This can be detected by examining the raw index. Whenever the schema is
+              changed, re-index the entire data set.
+
+
+Query stats
+Query stats can be extracted from the logs.  Statistics can be monitored on live
+              systems, but it is more common to have log files. Here are some of the statistics you
+              can gather:
+Longest running queries
+0-length queries
+average/mean/min/max query times
+You can get a sense of the effects of commits on the subsequent queries over
+                  some interval (time or number of queries) to see if commits are the cause of
+                  intermittent slowdowns
+
+
+
+Unsatisfactory performance
+Too-frequent commits have historically been the cause of unsatisfactory
+              performance. This is not so important with NRT processing, but it is valuable to
+              consider.
+
+
+

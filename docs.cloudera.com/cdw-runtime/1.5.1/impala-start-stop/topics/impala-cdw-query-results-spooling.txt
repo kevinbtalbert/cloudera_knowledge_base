@@ -1,0 +1,86 @@
+Spooling Impala Query ResultsCloudera Docs
+Spooling Impala Query Results
+In Impala, you can control how query results are materialized and
+  returned to clients, e.g. impala-shell, Hue, JDBC apps.
+Result spooling is turned ON by default and can be controlled using the
+   SPOOL_QUERY_RESULTS query option.
+
+
+Since the query result spooling is enabled by default, result sets of queries are
+     eagerly fetched and spooled in the spooling location, either in memory
+     or on disk. Once all result rows have been fetched and stored in
+      the spooling location, the resources are freed up. Incoming client
+      fetches can get the data from the spooled results.
+
+
+Admission Control and Result Spooling
+Query results spooling collects and stores query results in memory that
+    is controlled by admission control. Use the following query options to
+    calibrate how much memory to use and when to spill to disk.
+MAX_RESULT_SPOOLING_MEM
+
+The maximum amount of memory used when spooling query results.
+        If this value is exceeded when spooling results, all memory will
+        most likely be spilled to disk. Set to 100 MB by default. 
+
+MAX_SPILLED_RESULT_SPOOLING_MEM
+
+The maximum amount of memory that can be spilled to disk when
+        spooling query results. Must be greater than or equal to
+        MAX_RESULT_SPOOLING_MEM. If this value is
+        exceeded, the coordinator fragment will block until the client
+        has consumed enough rows to free up more memory. Set to 1 GB by
+        default.
+
+
+
+Fetch Timeout
+Resources for a query are released when the query completes its
+    execution. To prevent clients from indefinitely waiting for query
+    results, use the FETCH_ROWS_TIMEOUT_MS query option to
+    set the timeout when clients fetch rows. Timeout applies both when query
+    result spooling is enabled and disabled:
+When result spooling is disabled (SPOOL_QUERY_RESULTS =
+      FALSE), the timeout controls how long a client waits for
+      a single row batch to be produced by the coordinator. 
+When result spooling is enabled ( (SPOOL_QUERY_RESULTS =
+      TRUE), a client can fetch multiple row batches at a time,
+      so this timeout controls the total time a client waits for row
+      batches to be produced.
+
+
+Explain Plans
+Below is the part of the EXPLAIN plan output for
+    result spooling.F01:PLAN FRAGMENT [UNPARTITIONED] hosts=1 instances=1
+     |  Per-Host Resources: mem-estimate=4.02MB mem-reservation=4.00MB thread-reservation=1
+     PLAN-ROOT SINK
+     |  mem-estimate=4.00MB mem-reservation=4.00MB spill-buffer=2.00MB thread-reservation=0
+The mem-estimate for the PLAN-ROOT
+       SINK is an estimate of the amount of memory needed to
+       spool all the rows returned by the query.
+The mem-reservation is the number and size of the
+       buffers necessary to spool the query results. By default, the read
+       and write buffers are 2 MB in size each, which is why the default is
+       4 MB.
+
+
+PlanRootSink
+In Impala, the PlanRootSink class controls
+    the passing of batches of rows to the clients and acts as a queue of
+    rows to be sent to clients.
+
+
+
+When result spooling is disabled, a single batch or rows is sent
+       to the PlanRootSink, and then the client must
+       consume that batch before another one can be sent.
+
+
+When result spooling is enabled, multiple batches of rows can be
+       sent to the PlanRootSink, and multiple batches
+       can be consumed by the client.
+
+
+
+
+

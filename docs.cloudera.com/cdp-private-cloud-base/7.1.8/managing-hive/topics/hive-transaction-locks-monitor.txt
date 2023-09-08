@@ -1,0 +1,111 @@
+Options to monitor transaction locksCloudera Docs
+Options to monitor transaction locks
+As a Hive administrator, you can view information about locks on a table, partition, or
+  schema that are created as a result of transactions. You can either use the SHOW
+   LOCKS statement or query the LOCKS view within the SYS
+  database to view transaction locks.
+Hive transactions, enabled by default, disable ZooKeeper locking. DbLockManager stores and
+   manages all transaction lock information in the Hive Metastore. Heartbeats are sent regularly
+   from lock holders and transaction initiators to the Hive metastore to prevent stale locks and
+   transactions. The lock or transaction is aborted if the metastore does not receive a heartbeat
+   within the amount of time specified by the hive.txn.timeout configuration
+   property.
+The query statements display the following details about transaction locks unless ZooKeeper or
+   in-memory lock managers are used:
+
+LOCK_EXT_ID: Unique internal ID of a lock request that might be
+    requesting multiple lock entries on several resources (tables or partitions). 
+LOCK_INT_ID: Unique internal ID of a lock entry that has been
+    requested by a LOCK_EXT_ID
+TXNID: Transaction ID associated with the lock, if one exists
+DB: Hive database name
+TABLE: Table name
+PARTITION: Partition name (if the table is partitioned)
+LOCK_STATE: 
+acquired: transaction initiator holds the lock
+waiting: transaction initiator is waiting for the lock
+aborted: the lock has timed out but has not yet been cleaned 
+
+LOCK_TYPE: 
+exclusive: lock cannot be shared. No one else can hold the lock at the same
+      time.
+shared_read: any number of other shared_read locks can lock the same resource at
+      the same time
+shared_write: any number of shared_read locks can lock the same resource at the
+      same time, but no other shared_write locks are allowed
+
+LAST_HEARTBEAT: Last time the holder of this lock sent a heartbeat 
+ACQUIRED_AT: Time when the lock was acquired, if it has been
+    acquired
+USER: Hive user who requested the lock
+HOST: Host machine or virtual machine on which the Hive user is
+    running a Hive client
+HEARTBEAT_COUNT: Total number of heartbeats
+BLOCKEDBY_EXT_ID: ID of the lock (LOCK_EXT_ID)
+    causing current lock to be in “waiting” mode, if the lock is in this mode
+BLOCKEDBY_INT_ID: ID of the lock (LOCK_INT_ID) causing
+    current lock to be in “waiting” mode, if the lock is in this mode
+
+The following sections describe the various options that you can use to monitor transaction
+   locks.
+SHOW LOCKS
+You can run the SHOW LOCKS statement to view details about all transaction
+    locks. Ensure that transactions are enabled
+SHOW LOCKS;
+The following examples illustrate some sample queries that you can run:
+Query to check table locks
+SHOW LOCKS mytable EXTENDED;
+Query to check partition locks
+SHOW LOCKS mytable PARTITION(ds='2018-05-01', hr='12') EXTENDED;
+Query to check schema locks
+SHOW LOCKS SCHEMA mydatabase;The SHOW LOCKS SCHEMA
+        cannot be used with ZooKeeper or in-memory lock managers.
+
+The SHOW LOCKS statement lists all the transaction locks and you cannot
+    filter or limit the results as required. Alternatively, you can use the SYS
+    database to query and filter specific locks.
+
+Querying the SYS database
+You can query the LOCKS view within the SYS database to
+    filter and view specific locks.
+The following examples illustrate how you can run queries on the SYS.LOCKS
+    view to monitor transaction locks:
+
+Query to view locks requested on a particular resource (table or partition)
+
+SELECT *
+FROM SYS.LOCKS
+WHERE db='default'
+AND table='tab_acid';
+
+
+Query to view list of acquired locks
+
+SELECT *
+	FROM SYS.LOCKS
+	WHERE lock_state='acquired';
+
+
+Query to view blocking transactions that are preventing locks requested by a user- defined
+      transaction, from being acquired
+
+SELECT * 
+FROM SYS.TRANSACTIONS
+WHERE txn_id IN (
+  SELECT txnid 
+  FROM SYS.LOCKS
+    INNER JOIN (
+  SELECT blockedby_ext_id, blockedby_int_id 
+  FROM SYS.LOCKS
+    WHERE txnid=4534) b
+  ON lock_ext_id = b.blockedby_ext_id 
+    AND lock_int_id = b.blockedby_int_id
+);
+
+
+noteSimilarly, you can also query the INFORMATION_SCHEMA
+    database for details about transaction locks. You must use the Ranger service and set up access
+    policies for Hive users on this database to make it accessible.
+
+
+Related informationApache wiki transaction configuration documentationParent topic: ACID operations

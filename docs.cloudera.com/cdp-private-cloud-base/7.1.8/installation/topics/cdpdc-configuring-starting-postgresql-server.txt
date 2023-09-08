@@ -1,0 +1,253 @@
+Configuring and Starting the PostgreSQL ServerCloudera Docs
+Configuring and Starting the PostgreSQL Server
+By default, PostgreSQL only accepts connections on the loopback interface. Configure
+    PostgreSQL to accept the connections based on hostname, IP address (including CIDR address), or
+    MAC address. A fully qualified domain name (FQDN) is not a requirement. If you do not make these
+    changes, the services cannot connect to and use the database on which they depend.
+If you are making changes to an existing database, make sure to stop any services
+      that use the database before continuing.
+
+Make sure that LC_ALL is set to en_US.UTF-8 and
+          initialize the database as follows:
+
+RHEL
+            7:echo 'LC_ALL="en_US.UTF-8"' >> /etc/locale.conf
+RHEL
+            8:echo 'LC_ALL="en_US.UTF-8"' >> /etc/locale.conf
+SLES
+            12:sudo su -l postgres -c "initdb --pgdata=/var/lib/pgsql/data --encoding=UTF-8"
+Ubuntu:sudo service postgresql start
+
+Enable MD5 authentication. Edit pg_hba.conf, which is usually
+          found in /var/lib/pgsql/data or
+              /etc/postgresql/<version>/main. Add the
+          following line:
+host all all 127.0.0.1/32 md5
+If the default pg_hba.conf file contains the following
+            line:host all all 127.0.0.1/32 identthen
+            the host line specifying md5 authentication shown
+            above must be inserted before this ident line. Failure to do so
+            may cause an authentication error when running the
+              scm_prepare_database.sh script. You can modify the contents of the
+              md5 line shown above to support different configurations. For
+            example, if you want to access PostgreSQL from a different host, replace
+              127.0.0.1 with your IP address and update
+              postgresql.conf, which is typically found in the same place as
+              pg_hba.conf, to include:
+listen_addresses = '*'
+Configure settings to ensure your system performs as expected. Update these
+          settings in the /var/lib/pgsql/data/postgresql.conf or
+            /var/lib/postgresql/data/postgresql.conf file. Settings vary based on
+          cluster size and resources as follows:
+Small to mid-sized clusters - Consider the following settings as starting points.
+            If resources are limited, consider reducing the buffer sizes and checkpoint segments
+            further. Ongoing tuning may be required based on each host's resource utilization. For
+            example, if the Cloudera Manager Server is running on the same host as other roles, the
+            following values may be acceptable:
+max_connection - In general, allow each
+                database on a host 100 maximum connections and then add 50 extra
+                connections. You may have to increase the system resources
+                available to PostgreSQL, as described at Connection
+                Settings.
+shared_buffers - 256MB
+wal_buffers - 8MB
+checkpoint_segments - 16noteThe
+                    checkpoint_segments setting is removed in
+                  PostgreSQL 9.5 and higher, replaced by
+                    min_wal_size and
+                    max_wal_size. The PostgreSQL 9.5 release
+                  notes provides the following formula for determining the new
+                  settings:max_wal_size = (3 * checkpoint_segments) * 16MB
+checkpoint_completion_target - 0.9
+
+Large clusters - Can contain up to 1000 hosts. Consider the following settings as
+            starting points.
+max_connection - For large clusters, each
+                database is typically hosted on a different host. In general,
+                allow each database on a host 100 maximum connections and then
+                add 50 extra connections. You may have to increase the system
+                resources available to PostgreSQL, as described at Connection
+                Settings.
+shared_buffers - 1024 MB. This requires that the operating system
+                can allocate sufficient shared memory. See PostgreSQL information on Managing Kernel
+                Resources for more information on setting kernel resources.
+wal_buffers - 16 MB. This value is derived from the
+                  shared_buffers value. Setting wal_buffers to be
+                approximately 3% of shared_buffers up to a maximum of approximately
+                16 MB is sufficient in most cases.
+checkpoint_segments - 128. The PostgreSQL
+                Tuning Guide recommends values between 32 and 256 for
+                write-intensive systems, such as this one.noteThe
+                    checkpoint_segments setting is removed in
+                  PostgreSQL 9.5 and higher, replaced by
+                    min_wal_size and
+                    max_wal_size. The PostgreSQL 9.5 Release
+                  Notes provides the following formula for determining the new
+                  settings:max_wal_size = (3 * checkpoint_segments) * 16MB
+checkpoint_completion_target - 0.9.
+
+Configure the PostgreSQL server to start at boot.
+
+
+OS
+Command
+
+
+
+RHEL 7 compatible, SLES, and Ubuntu
+
+sudo systemctl enable postgresql
+
+
+
+Restart the PostgreSQL database:
+
+
+
+OS
+Command
+
+
+
+RHEL 7 compatible, SLES, and Ubuntu
+
+sudo systemctl restart postgresql
+
+
+
+
+
+Parent topic: Install and Configure PostgreSQL for CDP
+Creating Databases for Cloudera Software
+You must create databases and service accounts for components
+      that require databases.
+
+The following components require databases:
+
+Cloudera Manager Server
+Cloudera Management Service roles:
+Reports Manager
+
+Data Analytics Studio (DAS) Supported with PostgreSQL only.
+Hue
+Each Hive metastore
+Oozie
+Data Analytics Studio
+Schema Registry
+Streams Messaging Manager 
+
+The databases must be configured to support the PostgreSQL
+            UTF8 character set encoding.
+Record the values you enter for database names, usernames, and
+          passwords. The Cloudera Manager installation wizard requires this
+          information to correctly connect to these databases.
+noteThe instructions for Cloudera Manager Server, Cloudera Management
+          Service roles,Reports Manager, Hue, Hive metastores, Oozie, and Data
+          Analytics Studio (DAS) are documented in this topic.Additional
+            configuration for Ranger is documented in the following two topics.
+            Refer to those topics for detailed instructions on the Ranger
+            database.
+note
+
+For DAS, install the PostgreSQL database version 9.6.
+If you are creating more than one Data Hub clusters with DAS, then make sure that
+              you create and use a separate Postgres database for each DAS instance. Ensure this
+              especially when you are creating Data Hub clusters using the Cloudera Manager cluster
+              templates. You can configure a unique database instance by specifying different host,
+              name, or port.
+
+
+To create databases for Cloudera Manager Server, Cloudera Management
+          Service roles, Reports Manager, Hue, Hive metastores, Oozie, and DAS,
+          complete the following steps:
+
+
+Connect to PostgreSQL:
+
+sudo -u postgres psql
+
+Create databases for each service you are using from the
+            below
+            table:CREATE ROLE <user> LOGIN PASSWORD '<password>';CREATE DATABASE <database> OWNER <user> ENCODING 'UTF8';You
+            can use any value you want for <database>,
+              <user>, and
+            <password>. The following examples are the
+            default names provided in the Cloudera Manager configuration
+            settings, but you are not required to use them:Table 1. Databases for Cloudera Software
+
+Service
+Database
+User
+
+
+
+Cloudera Manager Server
+scm
+scm
+
+
+Reports Manager
+rman
+rman
+
+
+Ranger RHEL/CentOS/Ubuntu
+ranger
+rangeradmin
+
+
+Ranger KMS RHEL/CentOS
+ranger
+rangerkms
+
+
+Hue
+hue
+hue
+
+
+Hive Metastore Server
+hive
+hive
+
+
+Oozie
+oozie
+oozie
+
+
+Data Analytics Studio (DAS) Supported with PostgreSQL only.
+das
+das
+
+
+Schema Registry
+schemaregistry
+schemaregistry
+
+
+Streams Messaging Manager 
+smm
+smm 
+
+Record
+              the databases, usernames, and passwords chosen because you will
+              need them later.For PostgreSQL 8.4 and higher, set
+              standard_conforming_strings=off for the Hive
+            Metastore and Oozie databases:
+ALTER DATABASE <database> SET standard_conforming_strings=off;
+
+
+
+If you plan to use Apache Ranger, see the following topic for instructions on creating
+            and configuring the Ranger database and to install the JDBC driver for the database. See
+              Configuring a PostgreSQL Database for Ranger or Ranger KMS.
+If you plan to use Schema Registry or Streams Messaging Manager, see the following
+            topic for instructions on configuring the database: Configuring the Database for Streaming Components
+After you install and configure PostgreSQL databases for Cloudera software, continue
+            to Set up and configure the Cloudera Manager
+              database to configure a database for Cloudera Manager.
+
+
+
+

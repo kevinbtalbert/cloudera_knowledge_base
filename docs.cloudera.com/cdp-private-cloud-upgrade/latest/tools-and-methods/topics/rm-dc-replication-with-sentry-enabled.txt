@@ -1,0 +1,74 @@
+HDFS replication in Sentry-enabled clustersCloudera Docs
+HDFS replication in Sentry-enabled clusters
+When you run an HDFS replication policy on a Sentry-enabled source cluster, the
+    replication policy copies files and tables along with their permissions. Cloudera Manager
+    version 6.3.1 and above is required to run HDFS replication policies on a Sentry-enabled source
+    cluster. 
+Use the hdfs user to run HDFS replication policies on a
+        source cluster that is Sentry-enabled. To use a different user account, you must configure
+        the user account to bypass the Sentry ACLs during the replication process. 
+Consider the following points before you create an HDFS replication policy:
+When Sentry is not available or when Sentry does not manage the authorization for a
+            resource such file or directory in the source cluster, HDFS uses its internal ACLs to
+            manage resource authorization. 
+When Sentry is enabled for the source cluster and you use the
+              hdfs user to create the HDFS replication policy, HDFS copies
+            the ACLs configured in Sentry for the replicated files and tables to the target cluster. 
+When Sentry is enabled and you use a different user name to run the HDFS replication
+            policy, both Sentry ACLs and HDFS internal ACLs are copied which results in incorrect
+            HDFS metadata in the target cluster. If the Sentry ACLs are not compatible with HDFS
+            ACLs, the replication job fails. Create another user to avoid such  compatibility
+            issues.
+
+To avoid compatibility issues between HDFS and Sentry ACLs for a non-hdfs
+        user, you must complete the following steps:
+
+
+Create a user account that Replication Manager jobs can use to bypass the Sentry
+          ACLs.
+For example, create a user named bdr-only-user.
+
+Perform the following steps on the source cluster:
+
+
+In the Cloudera Manager Admin Console, go to the Clusters > HDFS service > Configuration tab.
+
+
+Search for NameNode Advanced Configuration Snippet (Safety Valve) for
+                hdfs-site.xml property.
+
+
+Enter the following property details:
+Name - Enter
+                dfs.namenode.inode.attributes.provider.bypass.users.Value
+                - Enter [***USERNAME,
+                    USERNAME@REALMNAME***], where
+                  [***USERNAME***] is the user you created in step 1 and the
+                  [***REALMNAME***] is the Kerberos realm name.For
+                example, if the username is bdr-only-user on the realm elephant, enter
+                  bdr-only-user, bdr-only-user@ElephantRealm
+
+
+Restart the NameNode.
+
+
+
+Repeat step 2 on the destination cluster.
+
+When you create an HDFS replication policy, specify the user you created in step 1 in
+          the Run As Username and Run on Peer as
+            Username fields.
+
+noteThe Run As Username field launches the MapReduce job to copy
+            data. The Run on Peer as Username field runs copy listing on
+            source, if different than Run as Username.
+
+
+noteEnsure that you set the value of Run on Peer as
+          Username same as Run as Username. Otherwise,
+        Replication Manager reads ACL from the source as hdfs, which pulls
+        the Sentry provided ACLs over to the target cluster and applies them to the files in HDFS.
+        This can result in additional usage of NameNode heap in the target cluster.
+
+
+Parent topic: HDFS replication policy considerations

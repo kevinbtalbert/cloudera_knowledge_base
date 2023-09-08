@@ -1,0 +1,128 @@
+TRUNCATE TABLE statementCloudera Docs
+TRUNCATE TABLE statement
+The TRUNCATE TABLE statement removes the data from an Impala table
+    while leaving the table itself. 
+Syntax:
+TRUNCATE [TABLE] [IF EXISTS] [db_name.]table_name
+Statement type: DDL
+      
+Usage notes:
+
+      Often used to empty tables that are used during ETL cycles, after the data has been copied to another
+      table for the next stage of processing. This statement is a low-overhead alternative to dropping and
+      recreating the table, or using INSERT OVERWRITE to replace the data during the
+      next ETL cycle.
+    
+      This statement removes all the data and associated data files in the table. It can remove data files from internal tables,
+      external tables, partitioned tables, and tables mapped to HBase or the Amazon Simple Storage Service (S3).
+      The data removal applies to the entire table, including all partitions of a partitioned table.
+    
+      Any statistics produced by the COMPUTE STATS statement are reset when the data is removed.
+    
+      Make sure that you are in the correct database before truncating a table, either by issuing a
+      USE statement first or by using a fully qualified name
+      db_name.table_name.
+    The optional TABLE keyword does not affect the behavior
+      of the statement. The optional IF EXISTS clause makes the statement
+        succeed whether or not the table exists. If the table does exist, it is truncated; if it
+        does not exist, the statement has no effect. This capability is useful in standardized setup
+        scripts that are might be run both before and after some of the tables exist. This clause is
+        available in Impala 2.5 and higher. 
+Amazon S3 considerations:
+ Although Impala cannot write new data to a table stored in the Amazon S3 filesystem,
+        the TRUNCATE TABLE statement can remove data files from S3. 
+Cancellation: Cannot be cancelled.
+      
+HDFS permissions:
+
+      The user ID that the impalad daemon runs under,
+      typically the impala user, must have write
+      permission for all the files and directories that make up the table.
+    Kudu considerations:Currently, the TRUNCATE TABLE
+        statement cannot be used with Kudu tables. 
+Examples:
+
+      The following example shows a table containing some data and with table and column statistics.
+      After the TRUNCATE TABLE statement, the data is removed and the statistics
+      are reset.
+    CREATE TABLE truncate_demo (x INT);
+INSERT INTO truncate_demo VALUES (1), (2), (4), (8);
+SELECT COUNT(*) FROM truncate_demo;
++----------+
+| count(*) |
++----------+
+| 4        |
++----------+
+COMPUTE STATS truncate_demo;
++-----------------------------------------+
+| summary                                 |
++-----------------------------------------+
+| Updated 1 partition(s) and 1 column(s). |
++-----------------------------------------+
+SHOW TABLE STATS truncate_demo;
++-------+--------+------+--------------+-------------------+--------+-------------------+
+| #Rows | #Files | Size | Bytes Cached | Cache Replication | Format | Incremental stats |
++-------+--------+------+--------------+-------------------+--------+-------------------+
+| 4     | 1      | 8B   | NOT CACHED   | NOT CACHED        | TEXT   | false             |
++-------+--------+------+--------------+-------------------+--------+-------------------+
+SHOW COLUMN STATS truncate_demo;
++--------+------+------------------+--------+----------+----------+
+| Column | Type | #Distinct Values | #Nulls | Max Size | Avg Size |
++--------+------+------------------+--------+----------+----------+
+| x      | INT  | 4                | -1     | 4        | 4        |
++--------+------+------------------+--------+----------+----------+
+
+-- After this statement, the data and the table/column stats will be gone.
+TRUNCATE TABLE truncate_demo;
+
+SELECT COUNT(*) FROM truncate_demo;
++----------+
+| count(*) |
++----------+
+| 0        |
++----------+
+SHOW TABLE STATS truncate_demo;
++-------+--------+------+--------------+-------------------+--------+-------------------+
+| #Rows | #Files | Size | Bytes Cached | Cache Replication | Format | Incremental stats |
++-------+--------+------+--------------+-------------------+--------+-------------------+
+| -1    | 0      | 0B   | NOT CACHED   | NOT CACHED        | TEXT   | false             |
++-------+--------+------+--------------+-------------------+--------+-------------------+
+SHOW COLUMN STATS truncate_demo;
++--------+------+------------------+--------+----------+----------+
+| Column | Type | #Distinct Values | #Nulls | Max Size | Avg Size |
++--------+------+------------------+--------+----------+----------+
+| x      | INT  | -1               | -1     | 4        | 4        |
++--------+------+------------------+--------+----------+----------+
+
+      The following example shows how the IF EXISTS clause allows the TRUNCATE TABLE
+      statement to be run without error whether or not the table exists:
+    CREATE TABLE staging_table1 (x INT, s STRING);
+Fetched 0 row(s) in 0.33s
+
+SHOW TABLES LIKE 'staging*';
++----------------+
+| name           |
++----------------+
+| staging_table1 |
++----------------+
+Fetched 1 row(s) in 0.25s
+
+-- Our ETL process involves removing all data from several staging tables
+-- even though some might be already dropped, or not created yet.
+
+TRUNCATE TABLE IF EXISTS staging_table1;
+Fetched 0 row(s) in 5.04s
+
+TRUNCATE TABLE IF EXISTS staging_table2;
+Fetched 0 row(s) in 0.25s
+
+TRUNCATE TABLE IF EXISTS staging_table3;
+Fetched 0 row(s) in 0.25s
+
+TRUNCATE on Insert-Only Transactional Tables
+The TRUNCATE table statement on Insert-Only Transactional tables creates new empty ACID
+        base directories and does not remove the files. To maintain transactional isolation TRUNCATE
+        statement will NOT delete the previous base and delta directories.
+
+
+Parent topic: Impala SQL statements

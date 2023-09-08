@@ -1,0 +1,96 @@
+Creating a Google Cloud function using CLICloudera Docs
+Creating a Google Cloud function using CLI
+Google Cloud Functions offers two product versions: Cloud Functions 1st Generation, the
+    original version and Google Cloud Functions 2nd Generation, a new version built on Cloud Run and
+    Eventarc to provide an enhanced feature set. See the below examples on how to deploy a DataFlow
+    Function in both versions of Google Cloud Functions, using the Google Cloud CLI.
+
+
+
+Your NiFi flow definition is stored in the DataFlow Catalog and you have the
+            CRN corresponding to the flow version you want to execute as a function
+
+
+You have created a Machine User with the proper role and you have its Access
+            Key and Private Key credentials
+
+
+You have installed and configured the Google Cloud CLI on your local
+            machine
+
+
+
+1st generation (1st gen)
+
+HTTP Trigger
+To deploy a Google Cloud Function  with an unauthenticated HTTP trigger, you can use the
+          following
+          example:gcloud functions deploy myfunctionname \
+	--region=europe-west1 \
+	--runtime=java11 \
+	--source=gs://my-bucket/naaf-gcp-cloud-functions-1.0.0-bin.zip \
+	--memory=1024MB \
+	--timeout=300 \
+	--trigger-http \
+	--allow-unauthenticated \
+	--entry-point=com.cloudera.naaf.gcp.cloud.functions.StatelessNiFiHttpFunction \
+	--update-labels=mylabelkey=mylabelvalue \
+--set-env-vars=FLOW_CRN=crn:cdp:df:us-west-1:00000000-0000-0000-0000-000000000000:flow:my-flow/v.1,DF_PRIVATE_KEY=00000000000000000000000000000000000,DF_ACCESS_KEY=00000000-0000-0000-0000-000000000000
+GCS Trigger
+To deploy a Google Cloud Function with a trigger on a GCS bucket, you can use the
+          following
+          example:gcloud functions deploy myfunctionname \
+	--region=europe-west1 \
+	--runtime=java11 \
+	--source=gs://my-bucket/naaf-gcp-cloud-functions-1.0.0-bin.zip \
+	--memory=1024MB \
+	--timeout=300 \
+	--trigger-bucket=my-trigger-bucket
+	--entry-point=com.cloudera.naaf.gcp.cloud.functions.StatelessNiFiBackgroundFunction \
+	--update-labels=mylabelkey=mylabelvalue \
+--set-env-vars=FLOW_CRN=crn:cdp:df:us-west-1:00000000-0000-0000-0000-000000000000:flow:my-flow/v.1,DF_PRIVATE_KEY=00000000000000000000000000000000000,DF_ACCESS_KEY=00000000-0000-0000-0000-000000000000
+Pub/Sub Trigger
+To deploy a Google Cloud Function with a trigger on a Pub/Sub topic, you can use the
+          following
+          example:gcloud functions deploy myfunctionname \
+	--region=europe-west1 \
+	--runtime=java11 \
+	--source=gs://my-bucket/naaf-gcp-cloud-functions-1.0.0-bin.zip \
+	--memory=1024MB \
+	--timeout=300 \
+	--trigger-topic=my-trigger-topic
+	--entry-point=com.cloudera.naaf.gcp.cloud.functions.StatelessNiFiBackgroundFunction \
+	--update-labels=mylabelkey=mylabelvalue \
+--set-env-vars=FLOW_CRN=crn:cdp:df:us-west-1:00000000-0000-0000-0000-000000000000:flow:my-flow/v.1,DF_PRIVATE_KEY=00000000000000000000000000000000000,DF_ACCESS_KEY=00000000-0000-0000-0000-000000000000
+
+
+2nd generation (2nd gen)
+For Google Cloud Functions 2nd gen, only HTTPS triggers are supported and a
+        Google Eventarc trigger can be added to trigger the function through HTTPS calls according
+        to configurable events (files added to a bucket, event published to a Pub/Sub topic, and so
+        on).
+You can use the following
+        example:gcloud functions deploy myfunctionname \
+	--gen2 \
+	--region=europe-west1 \
+	--runtime=java11 \
+	--source=gs://my-bucket/naaf-gcp-cloud-functions-1.0.0-bin.zip \
+	--memory=1024MB \
+	--timeout=300 \
+	--trigger-http \
+	--entry-point=com.cloudera.naaf.gcp.cloud.functions.StatelessNiFiHttpFunction \
+	--update-labels=mylabelkey=mylabelvalue \
+--set-env-vars=FLOW_CRN=crn:cdp:df:us-west-1:00000000-0000-0000-0000-000000000000:flow:my-flow/v.1,DF_PRIVATE_KEY=00000000000000000000000000000000000,DF_ACCESS_KEY=00000000-0000-0000-0000-000000000000
+It is then possible to create an Eventarc trigger and link it to the deployed function.
+        This is an example with
+        Pub/Sub:gcloud eventarc triggers create pubsub \
+--location=europe-west1 \
+--service-account=0000000000-compute@developer.gserviceaccount.com \
+--transport-topic=projects/my-project/topics/my-topic \
+--destination-run-service=myfunctionname \
+--destination-run-region=europe-west1 \
+--destination-run-path="/" \
+--event-filters="type=google.cloud.pubsub.topic.v1.messagePublished"
+
+
+

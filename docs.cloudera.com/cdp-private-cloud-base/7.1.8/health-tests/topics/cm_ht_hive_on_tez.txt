@@ -1,0 +1,76 @@
+Hive on Tez Health TestsCloudera Docs
+Hive on Tez Health Tests
+
+Parent topic: Cloudera Manager Health Tests
+Hive on Tez Compaction System Health Check
+
+ This is compaction system health test that checks whether compaction processes are properly configured and operational. Failure of this health test could indicate a problem with the compaction that could severely degrade query performance. Use the guidelines below for troubleshooting. Oldest initiated compaction passed threshold:
+Check the last successful compactions in the SYS.COMPACTION view. If no compactions have finished recently, check the logs for errors in the Worker threads for either the Compactor Virtual Warehouse or in the DataHub clusters, if applicable. If compactions are running successfully, but there are many queued compactions, increase the number of Worker threads set for 'hive.compactor.worker.threads' in the Compactor Virtual Warehouse or DataHub clusters. Alternatively, you can increase the amount of available resourcesLarge number of compaction failures:
+Many compactions are failing.Run SELECT * FROM SYS.COMPACTIONS WHERE C_STATE IN ("failed", "did not initiate"); to check the error message in the sys.compaction table.Check the logs in the Compactor Virtual Warehouse for the "Caught exception while trying to compact" message.Oldest uncleaned compaction passed threshold:
+Compactor cleaner process cannot clean obsolete data. Check the metastore log to make sure the cleaner thread is running.Run SHOW TRANSACTIONS; to check if there are open transactions blocking the cleaner. If the blocking transactions are not of the 'type=REPL_CREATED', they can be aborted by running ABORT TRANSACTIONS *transactionID*;Old aborted transaction not cleared:
+An old aborted transaction was not cleared. This can impact your overall query performance. This is most likely caused by an uncompacted table. Check for failed compactions in the SYS.COMPACTION view.Tables/partitions with many aborts:
+At least one table or partition has not been compacted and have more than hive.metastore.acidmetrics.table.aborted.txns.threshold (default: 1500) aborts.Verify that the "hive.compactor.abortedtxn.threshold" is not set to a value higher than 1000.Find the affected table/partition by running SELECT TC_DATABASE, TC_TABLE, TC_PARTITION, COUNT() FROM SYS.TRANSACTIONS WHERE STATE='aborted' GROUP BY TC_DATABASE, TC_TABLE, TC_PARTITION HAVING COUNT()*n; Where n is the value of hive.metastore.acidmetrics.table.aborted.txns.threshold. The default is 1500.Check the SYS.COMPACTIONS table for compactions on this table or partition in the "did not initiate", "failed", or "ready for cleaning" state.Check the Compactor Virtual Warehouse logs for "compactor.Initiator errors associated with this table or partition.Manually initiate compaction on the table/partition by running ALTER TABLE *table-name* [PARTITION (*partition-column*=*partition-value*] COMPACT 'minor';Oldest open transaction passed threshold:
+A transaction has been open for longer than the set threshold. Stuck transactions can block cleaning obsolete files and ACID metadata, which can lead to performance degradation. Check for old open transactions with SHOW TRANSACTIONS. If these are not type=REPL_CREATED, they can be aborted with ABORT TRANSACTIONS *txnid*;Oldest open replication transaction passed threshold:
+A replication transaction has been open longer than the set threshold. Stuck transactions can block cleaning of ACID metadata, which can lead to performance degradation.
+Before you abort a transaction that was created by replication, and which has been open a long time, make sure that the hive.repl.txn.timeout threshold has expired. If it has, there may be an issue with replication. Please contact Cloudera Support.Excessive ACID metadata:
+An excessive amount of Hive ACID metadata exists, which can cause serious performance degradation. Failing compactions or metadata cleanup service problems can cause this.Check for failed compactions by running SELECT * FROM SYS.COMPACTIONS WHERE c_state IN ("failed", "did not initiate"); against the SYS.COMPACTIONS view.Search for failed compactions in the HiveServer2 logs, which are indicated with the message "Caught exception while trying to compact"Excessive ACID metadata:
+An excessive amount of Hive ACID metadata exists, which can cause serious performance degradation. Failing compactions or metadata cleanup service problems can cause this.Check for failed compactions by running SELECT * FROM SYS.COMPACTIONS WHERE c_state IN ("failed", "did not initiate"); against the SYS.COMPACTIONS view.Search for failed compactions in the HiveServer2 logs, which are indicated with the message "Caught exception while trying to compact"Activity on table with disabled auto-compaction:
+A change has been made on a table where automated compaction is disabled. If this is not intended, re-enable compaction on the table by running ALTER TABLE table_name SET TBLPROPERTIES ("no_auto_compaction" = "false"). Table/partition with large number of active delta directories
+There are tables with a large number of delta directories, which can cause performance degradation. Check the "Top 100 partitions or unpartitioned tables with the most active deltas" chart in CM to see affected tables and partitions. These tables and partitions should be compacted.Table/partition with large number of small delta directories
+There are tables with a large number of small delta directories, which can cause performance degradation. Check the "Top 100 partitions or unpartitioned tables with the most small deltas" chart in CM to see affected tables and partitions. These tables and partitions should be compacted. This test can be configured using the Tables/Partitions with Large Number of Active Delta Directories Thresholds Hive monitoring settings. 
+
+Short Name: Compaction System Health Check
+      
+Tables/Partitions with Large Number of Active Delta Directories Thresholds
+
+Description
+The health test thresholds for table/partition with large number of active delta directories.
+Template Name
+
+hive_compaction_active_delta_thresholds
+
+Default Value
+CDH=[[CDH 7.1.8..CDH 7.2.0)=critical:never, warning:200.0,  [CDH 7.2.14..CDH 8.0.0)=critical:never, warning:200.0]
+Unit(s)
+TIMES
+
+
+Tables/Partitions with Large Number of Small Delta Directories Thresholds
+
+Description
+The health test thresholds for table/partition with large number of small delta directories
+Template Name
+
+hive_compaction_small_delta_thresholds
+
+Default Value
+CDH=[[CDH 7.1.8..CDH 7.2.0)=critical:never, warning:200.0,  [CDH 7.2.14..CDH 8.0.0)=critical:never, warning:200.0]
+Unit(s)
+TIMES
+
+
+
+
+
+Hive on Tez HiveServer2 Health
+
+ This is a Hive on Tez service-level health test that checks that enough of the HiveServer2s in the cluster are healthy. The test returns "Concerning" health if the number of healthy HiveServer2s falls below a warning threshold, expressed as a percentage of the total number of HiveServer2s. The test returns "Bad" health if the number of healthy and "Concerning" HiveServer2s falls below a critical threshold, expressed as a percentage of the total number of HiveServer2s. For example, if this test is configured with a warning threshold of 95% and a critical threshold of 90% for a cluster of 100 HiveServer2s, this test would return "Good" health if 95 or more HiveServer2s have good health. This test would return "Concerning" health if at least 90 HiveServer2s have either "Good" or "Concerning" health. If more than 10 HiveServer2s have bad health, this test would return "Bad" health. A failure of this health test indicates unhealthy HiveServer2s. Check the status of the individual HiveServer2s for more information. This test can be configured using the Hive on Tez Hive on Tez service-wide monitoring setting. 
+
+Short Name: HiveServer2 Health
+      
+Healthy HiveServer2 Monitoring Thresholds
+
+Description
+The health test thresholds of the overall HiveServer2 health. The check returns "Concerning" health if the percentage of "Healthy" HiveServer2s falls below the warning threshold. The check is unhealthy if the total percentage of "Healthy" and "Concerning" HiveServer2s falls below the critical threshold.
+Template Name
+
+hive_on_tez_hiveserver2s_healthy_thresholds
+
+Default Value
+critical:51.0, warning:99.0
+Unit(s)
+PERCENT
+
+
+
+

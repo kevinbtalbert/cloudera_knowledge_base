@@ -1,0 +1,72 @@
+Creating an Impala external partitioned tableCloudera Docs
+Creating an Impala external partitioned table
+You specify a partition column using PARTITIONED BY clause when you create an Impala
+        table. The actual data for the table can reside in a file, for example a CSV
+        (comma-separated values) in the object store. Alternatively, the data for the external table
+        can reside in another table that you select in a subquery.
+
+
+Set up Hadoop SQL policies in Ranger to include S3 URLs.
+
+
+
+Create subdirectories named 2021 and 2022 in the andrena directory on S3.
+
+
+
+
+
+
+Create CSV files named students_2021 and students_2022 that have the following
+                    text:
+students_2021:2,john,smith,junior,engineering,2021students_2022:1,jane,doe,senior,mathematics,2022
+3,somporn,lee,senior,humanities,2022
+
+Upload the CSV files students_2021.csv and students_2022.csv to the 2021 and
+                    2022 directories you created on S3.
+
+Run the queries to create the external partitioned table and alter the table to add partition directories.
+Impala
+                    example:CREATE EXTERNAL TABLE IF NOT EXISTS names_partitioned( 
+  student_ID INT,
+  FirstName STRING, 
+  LastName STRING,
+  level STRING, 
+  Major STRING) 
+  PARTITIONED BY (grad INT)
+  COMMENT 'Student Names' ROW FORMAT DELIMITED FIELDS TERMINATED BY ',' 
+  STORED AS TEXTFILE LOCATION 's3a://cdpsaasdemo-cdp-private-default-1ogvplm/user/andrena';
+Output indicates the table has been created. If you query the table, you see
+                    there is no data in the table yet.
+
+Add partitions and load the data in the CSV files from the partition
+                    directories.
+
+ALTER TABLE names_partitioned ADD PARTITION (grad=2021) LOCATION 's3a://cdpsaasdemo-cdp-private-default-1ogvplm/user/andrena/2021';
+ALTER TABLE names_partitioned ADD PARTITION (grad=2022) LOCATION 's3a://cdpsaasdemo-cdp-private-default-1ogvplm/user/andrena/2022';
+
+
+Query the partitioned table for 2022 graduates.
+select * from names_partitioned where grad=2022;
+                    Output looks something like
+                    this:+------------+-----------+----------+--------+-------------+------+
+| student_id | firstname | lastname | level  | major       | grad |
++------------+-----------+----------+--------+-------------+------+
+| 1          | jane      | doe      | senior | mathematics | 2022 |
+| 3          | somporn    | lee      | senior | humanities  | 2022 |
++------------+-----------+----------+--------+-------------+------+             select * from names_partitioned where grad=2021;
+
+
+Find the students in the table who graduated in 2021.
+
+SELECT * FROM names_partitioned WHERE grad=2021;
+           Output looks something like this:
+                    
++------------+-----------+----------+--------+-------------+------+
+| student_id | firstname | lastname | level  | major       | grad |
++------------+-----------+----------+--------+-------------+------+
+| 2          | john      | smith    | junior | engineering | 2021 |
++------------+-----------+----------+--------+-------------+------+
+
+
+Parent topic: Partitioned tables

@@ -1,0 +1,39 @@
+Replicating Phoenix Index TablesCloudera Docs
+Replicating Phoenix Index Tables
+The secondary indexing implementation in Phoenix changed drastically between versions
+  lower than Phoenix 4.14 and higher. The manner in which HBase replication sends Phoenix data is
+  fundamentally incompatible with the new style of Phoenix secondary index maintenance.
+  Architecturally, it is most desirable that we replicate only Phoenix data tables, and let the
+  “local” HBase cluster maintain any secondary indexes for you. However, currently no
+  “Phoenix-aware” replication strategy exists which is capable of automatically maintaining the
+  Phoenix secondary indexes for replicated Phoenix data tables. 
+Follow the recommended steps in Replicating Phoenix Data Tables to replicate all
+    Phoenix data tables before proceeding. For each index table that you want to replicate, perform
+    the following steps:
+Create the corresponding index in COD. Be sure to specify the same exact create index
+      command that was used in the legacy product (both indexes columns and “include” columns). If
+      you have a significant amount of data in the corresponding data table, include the async
+      keyword in the create index command. The async keyword will create the table but not populate
+      any data into this
+      table.jdbc:phoenix> CREATE INDEX SMALL_INDEX on SMALL_TABLE(col1) INCLUDE (col2);
+jdbc:phoenix> CREATE INDEX BIG_INDEX ON BIG_TABLE(col1) INCLUDE (col2) ASYNC;
+Enable replication on the Phoenix index table in the source cluster by using the “alter”
+      command in the HBase shell like enabling replication for HBase and Phoenix Data
+      tables.hbase> alter “BIG_INDEX”, {NAME=>”0”, REPLICATION_SCOPE=>1}
+If you used the ASYNC keyword in the create index in COD, now you have to use IndexTool to
+      build the index. This will launch a MapReduce job to build in the index in parallel, rather
+      than synchronously from a single client as is normally done. An example IndexTool invocation
+      would be done on the command line for the COD cluster (using the HBase client tarball) like
+      the
+      following:$ hbase org.apache.phoenix.mapreduce.index.IndexTool --data-table BIG_TABLE --index-table 
+BIG_INDEX --output-path /tmp/BIG_INDEX-files
+Ensure the MapReduce job launched by this command completes before proceeding.
+Validate the contents of the index table, as the index table is used for queries. For
+      example, you can read a few rows from the index table
+       directly:jdbc:phoenix> SELECT * FROM BIG_INDEX LIMIT 10;Alternatively,
+       you could look at the explain plan for a query that uses the index (noting that BIG_INDEX is
+       used instead of BIG_TABLE in this
+       example)jdbc:phoenix> EXPLAIN SELECT col1, col2 FROM BIG_TABLE;
+
+
+Related informationReplicating Phoenix Data TablesParent topic: Phoenix Replication to Cloudera Operational Database

@@ -1,0 +1,221 @@
+Hadoop File Formats SupportCloudera Docs
+Hadoop File Formats Support
+Impala supports a number of file formats used in Apache Hadoop. 
+ Impala can load and query data files produced by other Hadoop components
+      such as Spark, and data files produced by Impala can be used by other
+      components also. The following sections discuss the procedures,
+      limitations, and performance considerations for using each file format
+      with Impala. 
+
+      The file format used for an Impala table has significant performance consequences. Some
+      file formats include compression support that affects the size of data on the disk and,
+      consequently, the amount of I/O and CPU resources required to deserialize data. The
+      amounts of I/O and CPU resources required can be a limiting factor in query performance
+      since querying often begins with moving and decompressing data. To reduce the potential
+      impact of this part of the process, data is often compressed. By compressing data, a
+      smaller total number of bytes are transferred from disk to memory. This reduces the amount
+      of time taken to transfer the data, but a tradeoff occurs when the CPU decompresses the
+      content.
+    
+
+      For the file formats that Impala cannot write to, create the table from within Impala
+      whenever possible and insert data using another component such as Hive or Spark. See the
+      table below for specific file formats.
+    
+
+      The following table lists the file formats that Impala supports.
+    
+
+
+
+              File Type
+            
+
+              Format
+            
+
+              Compression Codecs
+            
+
+              Impala Can CREATE?
+            
+
+              Impala Can INSERT?
+            
+
+
+
+ Parquet 
+
+              Structured
+            
+ Snappy, gzip, zstd, LZ4; currently Snappy by default 
+
+              Yes.
+            
+ Yes.CREATE TABLE,
+                  INSERT, LOAD DATA, and
+                query.
+
+
+ ORC 
+
+              Structured
+            
+ gzip, Snappy, LZ4; currently gzip by default 
+
+Yes. By default, ORC reads are enabled in Impala
+ 3.4.0 and higher. To disable, set--enable_orc_scanner to
+                  false when starting the cluster.
+ 
+
+ No. Import data by using LOAD DATA on
+                data files already in the right format, or use
+                  INSERT in Hive followed by REFRESH
+                    table_name in Impala.
+              
+
+
+ Text 
+
+              Unstructured
+            
+ bzip2, deflate, gzip, Snappy,zstd 
+ Yes.CREATE TABLE with no STORED
+                  AS clause.The default file format is
+                uncompressed text, with values separated by ASCII
+                  0x01 characters (typically represented as
+                Ctrl-A). 
+ Yes if uncompressed. CREATE TABLE, INSERT,
+                  LOAD DATA, and query. No if
+                compressed.If
+                other kinds of compression are used, you must load data through LOAD
+                  DATA, Hive, or manually in HDFS. 
+
+
+ Avro 
+
+              Structured
+            
+
+              Snappy, gzip, deflate
+            
+ Yes.
+ No. Import data by using LOAD DATA on
+                data files already in the right format, or use
+                  INSERT in Hive followed by REFRESH
+                    table_name in Impala.
+              
+
+
+ RCFile 
+
+              Structured
+            
+
+              Snappy, gzip, deflate, bzip2
+            
+
+              Yes.
+            
+ No. Import data by using LOAD DATA on
+                data files already in the right format, or use
+                  INSERT in Hive followed by REFRESH
+                    table_name in Impala.
+              
+
+
+SequenceFile 
+
+              Structured
+            
+
+              Snappy, gzip, deflate, bzip2
+            
+
+              Yes.
+            
+ No.Import data by using LOAD DATA on
+                data files already in the right format, or use
+                  INSERT in Hive followed by REFRESH
+                    table_name in Impala.
+              
+
+
+
+      Impala supports the following compression codecs:
+    
+
+
+          Snappy
+        
+
+
+            Recommended for its effective balance between compression ratio and decompression
+            speed. Snappy compression is very fast, but gzip provides greater space savings.
+            Supported for text, RC, Sequence, and Avro files in Impala 2.0 and higher.
+          
+
+
+          Gzip
+        
+
+
+            Recommended when achieving the highest level of compression (and therefore greatest
+            disk-space savings) is desired. Supported for text, RC, Sequence and Avro files in
+            Impala 2.0 and higher.
+          
+
+
+          Deflate
+        
+
+ Supported for AVRO, RC, Sequence, and text files. 
+
+
+          Bzip2
+        
+
+
+            Supported for text, RC, and Sequence files in Impala 2.0 and higher.
+          
+
+
+
+
+ 
+
+Zstd
+For Parquet and text files only.
+Lz4
+For Parquet files only.
+
+Choosing the File Format for a Table
+ Different file formats and compression codecs work better for
+        different data sets. Choosing the proper format for your data can yield
+        performance improvements. Use the following considerations to decide
+        which combination of file format and compression to use for a particular
+        table.
+
+ If you are working with existing files that are already in a
+          supported file format, use the same format for the Impala table if
+          performance is acceptable. If the original format does not yield
+          acceptable query performance or resource usage, consider creating a
+          new Impala table with different file format or compression
+          characteristics, and doing a one-time conversion by rewriting the data
+          to the new table. 
+ Text files are convenient to produce through many different tools
+          and are human-readable for ease of verification and debugging. Those
+          characteristics are why text is the default format for an Impala
+            CREATE TABLE statement. However, when performance
+          and resource usage are the primary considerations, use one of the
+          structured file formats that include metadata and built-in
+          compression.  A typical workflow might involve bringing data into
+            an Impala table by copying CSV or TSV files into the appropriate
+            data directory, and then using the INSERT ...
+              SELECT syntax to rewrite the data into a table using a
+            different, more compact file format. 
+
+
+
+

@@ -1,0 +1,305 @@
+Using a non-transparent proxyCloudera Docs
+Using a non-transparent proxy
+Refer to this section if your environment requires all internet traffic to go through
+    an internet proxy. You can use a proxy server to control the connections that are allowed from
+    your VPC or VNet and block unauthorized connections initiated from your environment.
+When creating a CDP environment, you can set up an HTTP proxy such as Squid or a comparable
+      product. For a majority of use cases, this is enough to direct the traffic through a proxy. 
+Proxy servers can be used for: 
+
+
+FreeIPA backups: Backups created on an hourly basis are uploaded to cloud storage
+          S3/ADLS Gen2.
+Parcel downloads: Although CDP currently only supports pre-warmed images, it is a
+          requirement to download parcels from archive.cloudera.com when an upgrade is
+          performed.
+Cluster Connectivity Manager (CCM): Communication via CCMv1 and CCMv2.
+TLS and Deep Packet Inspection (DPI): TLS and DPI Inspection can be performed through
+          the use of a proxy. To see how to configure this, refer to the Setting up a web proxy
+            for TLS inspection section below. 
+
+
+The following diagram illustrates the communication between the customer’s CDP environment
+      and the CDP Control Plane in a cloud provider network (VPC/VNet) via a web proxy: 
+
+
+
+
+noteThe above diagram illustrates a simple architecture where the web proxy is located
+        within the customer VPC/VNet. However, the web proxy could be located anywhere in the
+        network between the CCM agent and the CCM server: in the customer VPC outside of CDP (as
+        above), in another customer VPC, or in a cloud-based web proxy service. 
+
+Supported CDP services
+The following CDP services allow the use of a web proxy: 
+
+
+
+CDP service
+AWS
+Azure
+GCP
+
+
+
+Data Lake
+GA
+GA
+GA
+
+
+FreeIPA
+GA
+GA
+GA
+
+
+Data Engineering
+GA
+
+
+
+
+Data Hub
+GA
+GA
+GA
+
+
+Data Warehouse
+GA
+
+
+
+
+DataFlow
+GA
+
+
+
+
+Machine Learning
+GA
+
+
+
+
+Operational Database
+
+
+
+
+
+
+Note that in order to use a non-transparent proxy with CDP data services (such as Data
+        Engineering, Data Warehouse, DataFlow, and Machine Learning), you must first configure it at
+        the environment level and then once again when enabling/activating the CDP data service. 
+
+
+
+Setting up a non-transparent proxy in CDP
+To set up a proxy server you can register an http proxy server as a shared resource and
+    then add that shared resource when you set up your environment. 
+noteOnce you register a proxy in CDP, there is no option to edit the proxy registration. You
+      need to delete the proxy registration in CDP and register the proxy again.
+Required role:
+EnvironmentCreator can register a proxy in CDP and manage user access to the proxy.
+        Owner or SharedResourceUser can view the proxy details. Owner can
+      delete the proxy registration from CDP.
+Steps
+CDP UICDP CLI
+
+
+Log in to the CDP web interface.
+
+Navigate to the Management Console.
+
+Select Shared Resources > Proxies from the left
+              navigation pane.
+
+
+Click Create Proxy Configuration.
+
+
+
+
+
+Enter the information for your proxy server:
+
+Parameter
+Description
+
+
+
+Name (Required)
+Provide a name for the proxy. The name will be used for this specific
+                        proxy in CDP. 
+
+
+Description 
+You can optionally specify a longer description for this proxy. 
+
+
+Protocol (Required)
+Select the protocol used by the proxy: HTTP or HTTPS. 
+
+
+Server Host (Required)
+Provide proxy server's host.
+
+
+Server Port (Required)
+Provide the proxy server's port. 
+
+
+No Proxy Hosts
+
+The no-proxy field allows you to designate specific IP addresses,
+                          domains, or subdomains that bypass the proxy. This setting can be useful
+                          for locally resolvable and internal endpoints, for example the CCMv2 agent
+                          or the metering agent. 
+Enter the values for this field in a comma-separated list. For example:
+                            172.100.0.110,domainname.com,my.host.com
+Note the following guidelines:
+The period character (".") is allowed as a prefix for domain names
+                              only
+CIDR notation is not allowed
+
+noteIf you are running a CDP environment on Azure using Runtime 7.2.14 or
+                          newer and you don't want to make an exception for management.azure.com
+                          (which is mentioned as required in Azure outbound network access
+                            destinations), you can add the following to the No Proxy Hosts
+                          list:localhost,127.0.0.1,169.254.169.254,168.63.129.16
+
+
+
+User name 
+If needed, provide a user name to access the proxy.
+
+
+Password
+If needed, provide a password to access the proxy.
+
+
+
+Click REGISTER.
+
+Click Environments in the left navigation pane, then click
+                Register Environment.
+
+
+Add your environment information, navigating through the Register
+                Environment and Data Lake Scaling steps.
+
+
+When you reach the Region, Networking and Security steps,
+              choose the Proxy you registered. 
+
+
+
+
+
+Finish setting up your Environment.
+
+
+
+As an alternative to using the UI, you can also register the proxy using the CLI.
+
+Use the following commands:
+cdp environments create-proxy-config \
+  --proxy-config-name companyProxy \
+  --host 10.102.0.19 \
+  --port 3128 \
+  --user squid \
+  --password squid \
+  --protocol http
+
+
+Provide the proxyConfigName in the environment JSON:
+...
+"subnetIds": [
+  "subnet-1",
+  "subnet-2",
+  "subnet-3"
+  ],
+  "proxyConfigName": "companyProxy" must be on the root level
+}
+
+
+Or in the --proxy-config-name argument of the environment creation
+                command, enter the following:
+AWS:
+cdp environments create-aws-environment \
+  --cli-input-json '{...}' \
+  --proxy-config-name companyProxy
+Azure:cdp environments create-azure-environment \
+  --cli-input-json '{...}' \
+  --proxy-config-name companyProxy
+
+
+
+
+
+Setting up a web proxy for TLS inspection
+After setting up the proxy server in CDP, you can further configure it to perform TLS
+  interception and Deep Packet Inspection (DPI). 
+Without a web proxy, a single TLS session is initiated from the CCM agent and
+   terminated at the CCM server within the Control Plane. With the introduction of the web proxy,
+   there are two TLS sessions: (1) a TLS session initiated from the CCM agent terminating at the
+   proxy and (2) a TLS session initiated from the proxy terminating at the CCM server within the
+   Control Plane. The web proxy decrypts the packets of the TLS session, performs any operations on
+   the clear text (such as DPI), and re-encrypts the packets onto the second TLS session. Thus the
+   proxy behaves as a man-in-the-middle (MITM) that is able to view the communications between the
+   CCM agent and the CCM server using TLS inspection.
+The following diagram illustrates the communication between the customer’s CDP
+   environment and the CDP Control Plane in a cloud provider network (VPC/VNet) via a web proxy: 
+
+
+
+
+
+noteThe above diagram illustrates a simple architecture where the web proxy is located within
+   the customer VPC/VNet. However, the web proxy could be located anywhere in the network between
+   the CCM agent and the CCM server: in the customer VPC outside of CDP (as above), in another
+   customer VPC, or as a cloud-based web proxy service. 
+The CDP architecture with and without proxy-based TLS inspection is illustrated in the
+   following two diagrams.
+The following diagram illustrates CCM communication without a web proxy as MITM:
+
+
+
+The following diagram illustrates CCM communication with a web proxy as MITM:
+
+
+
+To configure TLS inspection, you need to set up your proxy to trust the certificate of CCM,
+   and, in turn, make sure that CCM trusts the proxy’s CA certificate. 
+Steps 
+
+
+Register a new CDP environment. 
+
+
+After the FreeIPA nodes are running, SSH into the FreeIPA nodes and perform the
+     following set of steps:
+
+
+Get the CA certificate from /etc/jumpgate/config.toml and grab
+       the pinned CA certificate from the agent.relayServerCertificate
+       parameter.
+
+
+Configure your proxy server to trust this certificate for the CCM traffic.
+
+
+Copy your proxy server’s CA certificate and replace the contents of
+        agent.relayServerCertificate in
+       /etc/jumpgate/config.toml.
+
+
+Configure your proxy to start MITM-ing the underlying TLS connection.
+
+
+
+
+

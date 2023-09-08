@@ -1,0 +1,96 @@
+DROP TABLE statementCloudera Docs
+DROP TABLE statement
+The DROP TABLE statement removes an Impala table. Also removes the
+    underlying HDFS data files for internal tables, although not for external tables. 
+Syntax:
+DROP TABLE [IF EXISTS] [db_name.]table_name [PURGE]
+IF EXISTS clause:
+
+      The optional IF EXISTS clause makes the statement succeed whether or not the table exists.
+      If the table does exist, it is dropped; if it does not exist, the statement has no effect. This capability is
+      useful in standardized setup scripts that remove existing schema objects and create new ones. By using some
+      combination of IF EXISTS for the DROP statements and IF NOT
+      EXISTS clauses for the CREATE statements, the script can run successfully the first
+      time you run it (when the objects do not exist yet) and subsequent times (when some or all of the objects do
+      already exist).
+    
+PURGE clause:
+ The optional PURGE keyword, available in Impala 2.3 and higher,
+        causes Impala to remove the associated HDFS data files immediately, rather than going
+        through the HDFS trashcan mechanism. Use this keyword when dropping a table if it is crucial
+        to remove the data as quickly as possible to free up space, or if there is a problem with
+        the trashcan, such as the trash cannot being configured or being in a different HDFS
+        encryption zone than the data files. 
+Statement type: DDL
+      
+Usage notes:
+
+      By default, Impala removes the associated HDFS directory and data files for the table. If you issue a
+      DROP TABLE and the data files are not deleted, it might be for the following reasons:
+    
+ If the table was created with the EXTERNAL clause, Impala leaves all
+          files and directories untouched. Use external tables when the data is under the control of
+          other Hadoop components, and Impala is only used to query the data files from their
+          original locations. 
+ Impala might leave the data files behind unintentionally, if there is no HDFS location
+          available to hold the HDFS trashcan for the impala user.
+
+      Make sure that you are in the correct database before dropping a table, either by issuing a
+      USE statement first or by using a fully qualified name
+      db_name.table_name.
+    
+      If you intend to issue a DROP DATABASE statement, first issue DROP TABLE
+      statements to remove all the tables in that database.
+    
+Examples:
+create database temporary;
+use temporary;
+create table unimportant (x int);
+create table trivial (s string);
+-- Drop a table in the current database.
+drop table unimportant;
+-- Switch to a different database.
+use default;
+-- To drop a table in a different database...
+drop table trivial;
+ERROR: AnalysisException: Table does not exist: default.trivial
+-- ...use a fully qualified name.
+drop table temporary.trivial;
+Amazon S3 considerations:
+ The DROP TABLE statement can remove data
+        files from S3 if the associated S3 table is an internal table. In Impala 2.6 and higher, as
+        part of improved support for writing to S3, Impala also removes the associated folder when
+        dropping an internal table that resides on S3. For compatibility with the S3
+        write support in Impala, follow these steps for querying table through Impala: 
+Use native Hadoop techniques, such as hadoop fs -cp or
+              INSERT in Impala or Hive to create data files in S3.
+Use the PURGE clause with DROP TABLE when dropping
+            internal (managed) tables.
+By default, when you do not include the PURGE clause in the statement, the data
+        files are moved to the S3A trashcan. This operation is expensive. When you do include the
+          PURGE clause, the data files are deleted immediately, skipping the
+        expensive S3A trashcan operation. In Impala 2.6 and higher, Impala DDL
+        statements such as CREATE DATABASE, CREATE TABLE,
+          DROP DATABASE CASCADE, DROP TABLE, and ALTER
+          TABLE [ADD|DROP] PARTITION can create or remove folders as needed in the Amazon
+        S3 system. Prior to Impala 2.6, you had to create folders yourself and point Impala
+        database, tables, or partitions at them, and manually remove folders when no longer needed.
+Cancellation: Cannot be cancelled.
+      
+HDFS permissions:
+
+      For an internal table, the user ID that the impalad daemon runs under,
+      typically the impala user, must have write
+      permission for all the files and directories that make up the table.
+    
+      For an external table, dropping the table only involves changes to metadata in the metastore database.
+      Because Impala does not remove any HDFS files or directories when external tables are dropped,
+      no particular permissions are needed for the associated HDFS files or directories.
+    Kudu considerations:
+      Kudu tables can be managed or external, the same as with HDFS-based
+      tables. For a managed table, the underlying Kudu table and its data
+      are removed by DROP TABLE. For an external table,
+      the underlying Kudu table and its data remain after a
+      DROP TABLE.
+    
+Related informationCREATE DATABASE statementParent topic: Impala SQL statements

@@ -1,0 +1,98 @@
+Using secure access modeCloudera Docs
+Using secure access mode
+Learn how to use HWC secure access mode that offers fine-grained access control
+        (FGAC) column masking and row filtering to secure managed (ACID), or external Hive table
+        data that you read from Spark. 
+In this task, you enter the following configuration options when you launch the
+            Spark shell. 
+spark.datasource.hive.warehouse.load.staging.dir=<path of the staging location in
+                        your cloud storage service>, for example,
+                            s3a://s3-hwc/stagingHWC/. The path represents
+                    the temporary subdirectories per user, per session that are created under this
+                    directory. This is the temporary location where the output is staged for the
+                    duration of the session. Make sure to provide the absolute path, or fully
+                    qualified name (FQDN), not the relative path of the staging directory.
+spark.datasource.hive.warehouse.read.mode=secure_access starts
+                    using the staging output mode with fine-grained access control (FGAC). No code
+                    refactoring is required. You can use hive.sql() in your
+                    queries.
+
+
+
+Your administrator has set up ranger permissions for using secure access mode on
+                    Hive tables.
+Your administrator has granted you
+                    permission to the staging location in your cloud storage service, such as S3 or
+                    ADLS.
+
+
+
+Launch the Spark shell, configuring secure access mode.
+For example, use the Spark session user name
+                        livy.[cloudbreak@hwc-dh-master0 hwc]$ sudo -u livy spark-shell 
+--jars  /opt/cloudera/parcels/CDH/jars/hive-warehouse-connector-assembly-1.0.0.7.2.16.0-SNAPSHOT.jar
+--master yarn spark.sql.extensions="com.hortonworks.spark.sql.rule.Extensions" 
+--conf spark.kryo.registrator=com.qubole.spark.hiveacid.util.HiveAcidKyroRegistrator
+--conf spark.sql.hive.hiveserver2.jdbc.url="jdbc:hive2://<domain name>:<port>
+/default;httpPath=cliservice;retries=5;serviceDiscoveryMode=zooKeeper;ssl=true;transportMode=http;zooKeeperNamespace=hiveserver2"
+--conf spark.datasource.hive.warehouse.read.mode=secure_access
+--conf spark.datasource.hive.warehouse.load.staging.dir="s3a://s3-hwc/stagingHWC/"
+--conf spark.security.credentials.hiveserver2.enabled=true
+--conf spark.sql.hive.hiveserver2.jdbc.url.principal=hive/_HOST@ROOT.HWX.SITE
+Output
+                        is:Setting default log level to "WARN".
+
+Spark context Web UI available at http://<domain name>:<port>
+Spark context available as 'sc' (master = yarn, app id = application_1637657444149_0024).
+Spark session available as 'spark'.
+Welcome to
+      ____              __
+     / __/__  ___ _____/ /__
+    _\ \/ _ \/ _ `/ __/  '_/
+   /___/ .__/\_,_/_/ /_/\_\ 
+        /_/
+
+Using Scala version 2.11.12 (OpenJDK 64-Bit Server VM, Java 1.8.0_292)
+Type in expressions to have them evaluated.
+Type :help for more information.
+
+Read a Hive table.
+scala> val hive = com.hortonworks.hwc.HiveWarehouseSession.session(spark).build()
+hive: com.hortonworks.spark.sql.hive.llap.HiveWarehouseSessionImpl = com.hortonworks.spark.sql.hive.llap.HiveWarehouseSessionImpl@159b4611
+
+scala> hive.sql("select id, name from test.acidtable limit 3").show
+
++---+--------------------+
+| id|                name|
++---+--------------------+
+|  1|   namex x xxxx xxxx|
+|  4|namex xxxx xxxxxx...|
+|  1|   namex x xxxx xxxx|
++---+--------------------+
+
+
+To illustrate how fine-grained access control column
+            masking and row filtering works, consider the following schema of a managed Hive table,
+                test.acidtable:+--------+---------+-------+
+|col_name|data_type|comment|
++--------+---------+-------+
+|      id|      int|       |
+|    name|   string|       |
+|    col3|      int|       |
+|    col4|   string|       |
+|    col5|      int|       |
+|    col6|   string|       |
++--------+---------+-------+
+The Spark session user, 'livy' has access to only the
+                    id and name columns and there is a masking
+                policy on the name
+                column.scala> val hive = com.hortonworks.hwc.HiveWarehouseSession.session(spark).build()
+hive: com.hortonworks.spark.sql.hive.llap.HiveWarehouseSessionImpl = com.hortonworks.spark.sql.hive.llap.HiveWarehouseSessionImpl@6e12d8be
+
+scala> hive.sql("select col4, col5 from test.acidtable").showOutput
+                is:22/01/01 08:31:48 WARN conf.HiveConf: HiveConf of name hive.masking.algo does not exist
+java.lang.RuntimeException: Error while compiling statement: FAILED: HiveAccessControlException Permission denied: user [livy] does not have [SELECT] privilege on [test/acidtable/col4,col5]
+The exception indicates that the user, 'livy' does not have
+                access to columns — col4 and col5.
+
+Related informationIntroduction to secure access modeSetting up secure access modeParent topic: Reading data through HWC

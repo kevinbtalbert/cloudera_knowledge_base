@@ -1,0 +1,277 @@
+Known Issues and LimitationsCloudera Docs
+Known Issues and Limitations
+There are some known issues you might run into while using Cloudera Machine
+    Learning.
+Cloning from Git using SSH is not supported via HTTP proxy
+Workaround: CML Projects support HTTPS for cloning git projects. It is suggested to use
+        this as the workaround.
+
+
+
+
+Model deployments requiring outbound access via proxy do not honor HTTP_PROXY,
+        HTTPS_PROXY environment variables
+Workaround: Add the HTTP_PROXY, HTTPS_PROXY,
+          http_proxy and https_proxy environment variables to
+        the cdsw-build.sh file of the Project Repository.
+
+
+Model Registry is not certified with NTP
+Model Registry has not been certified with clusters using a non-transparent proxy.
+
+Application does not restart after upgrade or migration
+An application may fail to automatically restart after a workspace upgrade or migration. In
+        this case, manually restart the application.
+
+Sidebar links may not work
+CDP sidebar links (for example, from Machine Learning to
+          Home) do not work when using regional control plane.
+
+Do not use Python 3.10 with Spark 2
+Spark 2 is only compatible with Python 3.7.
+
+Do not use backtick characters in environment variable names
+Avoid using backtick characters ( ` ) in environment variable names, as
+        this will cause sessions to fail with exit code 2.
+
+Model Registry is not supported on R models
+Model Registry is not supported on R models.
+
+Model Registry model name cannot exceed 19 characters
+The Model Registry model name cannot exceed 19 characters. 
+
+The mlflow.log_model registered model files might not be available
+        on NFS Server
+When using mlflow.log_model, registered model files might not be
+        available on the NFS server due to NFS server settings or network connections. This could
+        cause the model to remain in the registering status. 
+Workaround: 
+Re-register the model. It will register as an additional version, but it should
+            correct the problem. 
+Add the ARTIFACT_SYNC_PERIOD environment variable to
+              hdfscli-server Kubernetes deployment and set it to an integer
+            value. This will set the model registry retry operation to twice the number of seconds
+            specified by the artifact sync period integer value. If the
+              ARTIFACT_SYNC_PERIOD is set to 30 seconds then model registry
+            will retry for 60 seconds. The default value is 10 and model registry retries for 20
+            seconds. For example: -name: ARTIFACT_SYNC_PERIOD value: “30”.
+          
+
+
+Applications appear in failed state after upgrade (DSE-23330)
+After upgrading CML from version 1.29.0 on AWS, some applications may be in a Failed state.
+        The workaround is to restart the application.
+
+Cannot use hashtag character in JDBC connection string
+The special character # (hashtag) cannot be used in a password that is
+        then used in a JDBC connection string. Avoid using this special character, or use
+          '%23' instead.
+
+CML workspace installation fails
+CML workspace installation with Azure NetApp Files on NFS v4.1 fails. The workaround is to
+        use NFS v3.
+
+Spark executors fail due to insufficient disk space
+Generally, the administrator should estimate the shuffle data set size before provisioning
+        the workspace, and then specify the root volume size of the compute node that is appropriate
+        given that estimate. For more specific guidelines, see the following resources.
+
+How do I avoid the "No space left on device" error where
+            my disk is running out of space?
+How can I prevent a Hadoop or Spark job's user cache from
+            consuming too much disk space in Amazon EMR?
+
+
+Runtime Addon fails to load (DSE-16200)
+A Spark runtime add-on may fail when upgrading a workspace. 
+Solution: To resolve this problem, try to reload the add-on. In Site Administration > Runtime/Engine, in the option menu next to the failed add-on, select
+          Reload.
+
+CML workspace provisioning times out
+When provisioning a CML workspace, the process may time out with an error similar to
+          Warning FailedMount or Failed to sync secret cache:timed out
+          waiting for the condition. This can happen on AWS or Azure.
+Solution: Delete the workspace and retry provisioning.
+
+CML endpoint connectivity from DataHub and Cloudera Data Engineering
+        (DSE-14882)
+When CDP services connect to CML services, if the ML workspace is provisioned on a public
+        subnet, traffic is routed out of the VPC first, and then routed back in. On Private Cloud
+        CML, traffic is not routed externally.
+
+Jupyter Notebook sessions do not time out (DSE-13741)
+Jupyter Notebook sessions in legacy engine:8 through
+          engine:13 do not exit after IDLE_MAXIMUM_MINUTES of
+        inactivity. They will run until SESSION_MAXIMUM_MINUTES (which is seven
+        days by default).
+Workaround
+You can change the configuration of your cluster to apply the fix for this issue. Change
+        the editor command for Jupyter Notebook in every engine that uses it to the following:
+NOTEBOOK_TIMEOUT_SECONDS=$(python3 -c “print(${IDLE_MAXIMUM_MINUTES}*60)“)
+        /usr/local/bin/jupyter notebook --no-browser --ip=127.0.0.1 --port=${CDSW_APP_PORT}
+        --NotebookApp.token= --NotebookApp.allow_remote_access=True --NotebookApp.quit_button=False
+        --log-level=ERROR --NotebookApp.shutdown_no_activity_timeout=300
+        --MappingKernelManager.cull_idle_timeout=${NOTEBOOK_TIMEOUT_SECONDS}
+        --TerminalManager.cull_inactive_timeout=${NOTEBOOK_TIMEOUT_SECONDS}
+        --MappingKernelManager.cull_interval=60 --TerminalManager.cull_interval=60
+        --MappingKernelManager.cull_connected=True
+This does the following: 
+Kills each running notebook after IDLE_MAXIMUM_MINUTES of inactivity
+Kills the CDSW/CML session in which Jupyter is running after 5 minutes with no
+            notebooks
+
+
+NFS performance issues on AWS EFS (DSE-12404)
+CML uses NFS as the filesystem for storing application and user data. NFS performance may
+        be much slower than expected in situations where a data scientist writes a very large number
+        (typically in the thousands) of small files. Example tasks include: using git
+          clone to clone a very large source repository (such as TensorFlow), or using
+          pip to install a Python package that includes JavaScript code (such as
+          plotly). Reduced performance is particularly common with CML on AWS
+        (which uses EFS), but it may be seen in other environments.
+
+Disable file upload and download (DSE-12065)
+You cannot disable file upload and download when using the Jupyter Notebook.
+
+Remove Workspace operation fails (DSE-8834)
+Remove Workspace operation fails if workspace creation is still in progress.
+
+API does not enforce a maximum number of nodes for ML workspaces
+Problem: When the API is used to provision new ML workspaces, it does not enforce an
+        upper limit on the autoscale range.
+
+Downscaling ML workspace nodes does not work as expected (MLX-637, MLX-638)
+Problem: Downscaling nodes does not work as seamlessly as expected due to a lack of
+        Bin Packing on the Spark default scheduler, and because dynamic allocation is not currently
+        enabled. As a result, currently infrastructure pods, Spark driver/executor pods, and session
+        pods are tagged as non-evictable using the
+          cluster-autoscaler.kubernetes.io/safe-to-evict: "false" annotation.
+        
+
+Technical Service Bulletins
+
+
+TSB 2023-628: Sensitive user data getting collected in CML/CDSW
+            workspace diagnostic bundles
+When using Cloudera Data Science Workbench (CDSW), Cloudera
+              recommends users to store sensitive information, such as passwords or access keys, in
+              environment variables rather than in the code. See Engine Environment Variables in the official
+              Cloudera documentation for details. Cloudera recently learned that all session
+              environment variables in the affected releases of CDSW and CML are logged in web pod
+              logs, which may be included in support diagnostic bundles sent to Cloudera as part of
+              support tickets.
+Severity: 
+Medium
+
+Component affected:
+CDSW
+CML workspaces on Public Cloud
+CML workspaces on Private Cloud
+
+Products affected: 
+Cloudera Machine Learning
+
+Releases affected:
+CDSW 1.10.1 and lower
+CML workspaces on Public Cloud 2.0.32-b117 and lower
+CML workspaces on Private Cloud 1.4.0 and lower
+
+Users affected:
+CML workspace users who are storing sensitive data like DB passwords or secrets
+                  as environment variables in the product.
+CML workspace users who are setting WORKLOAD_PASSWORD in CML
+                  Public Cloud workspaces from User Settings > Environment Variables > WORKLOAD_PASSWORD.
+
+Impact:
+Session environment variables in CML workspaces (Private Cloud, Public Cloud or
+                  OnPrem CDSW) are getting logged and collected when Admin generates diagnostic
+                  bundles from CDSW/CML Workspace > Site Administration > Support > Generate Log Archives. These logs are typically sent to Cloudera as part of support
+                  cases.
+On Public Cloud, CML workspace service (web) logs, which are the source of the
+                  diagnostic bundles, also get stored on customer S3 or ADLS storage.
+
+Action required: Upgrade CDSW/CML workspace
+Upgrade to CDSW 1.10.2 version or higher.
+Public Cloud 
+Upgrade Public Cloud CML workspaces to the latest release.
+Delete the CML workspace service logs from S3 or ADLS storage. 
+Find the Storage Location for “Logs Storage and Audits” in the
+                          Environment service details page. (say <datalake_logs_path>)
+Find the Cluster Name from the CML Workspace details page. (say
+                          <cluster_name>)
+Now please delete all the files under
+                          <datalake_logs_path>/<cluster_name> folder that are generated before
+                          CML workspace is upgraded to the latest with this fix.
+
+
+Private Cloud 
+Upgrade Private Cloud CML workspace to 1.4.1 or higher
+
+
+Addressed in release/refresh/patch: 
+CDSW 1.10.2
+Public Cloud 2.0.32-b123
+Private Cloud 1.4.1
+
+
+
+Knowledge article
+For the latest update on this issue see the corresponding Knowledge article: TSB-2023-628: Sensitive user data getting collected in
+              CML/CDSW workspace diagnostic bundles 
+
+
+TSB 2022-588: Kubeconfig and new version of
+            aws-iam-authenticator
+Regenerate Kubeconfig and in conjunction use a newer version
+              of aws-iam-authenticator on AWS. Kubeconfig in Cloudera Data Platform (CDP) Public
+              Cloud Data Services needs to be regenerated because the Kubeconfig generated before
+              June 15, 2022 uses an old APIVersion (client.authentication.k8s.io/v1alpha1) which is
+              no longer supported. This causes compatibility issues with aws-iam-authenticator
+              starting from v0.5.7. To be able to use the new
+              aws-iam-authenticator, the Kubeconfig needs to be regenerated.
+Severity: 
+High
+
+Component affected:
+Cloudera Machine Learning (CML) Data Service
+Cloudera Data Engineering (CDE) Data Service
+Cloudera Data Flow (CDF) Data Service
+
+Products affected: 
+CDP Public Cloud
+
+Releases affected:
+All existing and upcoming CDP Public Cloud releases using the affected
+                  components, listed above.
+
+Users affected:
+Users of CML, CDE, and CDF using Kubeconfig generated before June 15, 2022 and a
+                  version of aws-iam-authenticator prior to v0.5.7.
+
+Impact:
+Customers using a Kubeconfig generated before June 15, 2022 and an
+                  aws-iam-authenticator version prior to v0.5.7 may see Kubernetes clients not able
+                  to access the cluster successfully.
+
+Action required:
+From June 15, 2022 onwards, existing customers on AWS using a previously generated
+              Kubeconfig will have to:
+Regenerate and use the new Kubeconfig, and
+Use a new version of aws-iam-authenticator starting with v0.5.7.
+
+The newly generated Kubeconfig changes the APIVerson of the user’s section as: 
+Old:
+ApiVersion: "client.authentication.k8s.io/v1alpha1"
+New:
+ApiVersion: "client.authentication.k8s.io/v1beta1"
+
+
+
+Knowledge article
+For the latest update on this issue see the corresponding Knowledge article: TSB-2022-588: Kubeconfig and new version of
+              aws-iam-authenticator 
+
+
+
+
+Related informationAWS LimitationsAzure Limitations

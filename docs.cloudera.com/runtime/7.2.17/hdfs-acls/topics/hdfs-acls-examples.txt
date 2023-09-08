@@ -1,0 +1,170 @@
+ACL examplesCloudera Docs
+ACL examples
+Access Control Lists (ACLs) on HDFS help in addressing access-related issues better
+      than Permission Bits.
+Drawbacks of Permission Bits
+Before the implementation of ACls, the HDFS permission model was equivalent to
+            traditional UNIX Permission Bits. In this model, permissions for each file or directory
+            are managed by a set of three distinct user classes: Owner, Group, and Others. There are
+            three permissions for each user class: Read, Write, and Execute. Thus, for any file
+            system object, its permissions can be encoded in 3*3=9 bits. When a user attempts to
+            access a file system object, HDFS enforces permissions according to the most specific
+            user class applicable to that user. If the user is the owner, HDFS checks the Owner
+            class permissions. If the user is not the owner, but is a member of the file system
+            object’s group, HDFS checks the Group class permissions. Otherwise, HDFS checks the
+            Others class permissions.
+This model can sufficiently address a large number of security requirements. For
+            example, consider a sales department that would like a single user -- Bruce, the
+            department manager -- to control all modifications to sales data. Other members of the
+            sales department need to view the data, but must not be allowed to modify it. Everyone
+            else in the company (outside of the sales department) must not be allowed to view the
+            data. This requirement can be implemented by running chmod 640 on the file, with the
+            following outcome:
+-rw-r-----1 brucesales22K Nov 18 10:55 sales-data
+Only Bruce can modify the file, only members of the sales group can read the file, and
+            no one else can access the file in any way.
+Suppose new requirements arise as a result of which users Bruce, Diana, and Clark are
+            allowed to make modifications. Permission Bits cannot address this requirement, because
+            there can be only one owner and one group, and the group is already used to implement
+            the read-only requirement for the sales team. A typical workaround is to set the file
+            owner to a synthetic user account, such as "salesmgr," and allow Bruce, Diana, and Clark
+            to use the "salesmgr" account through sudo or similar impersonation mechanisms. The
+            drawback with this workaround is that it forces complexity on end-users, requiring them
+            to use different accounts for different actions.
+Consider another example where the sales staff and all the executives require access to
+            the sales data. This is another requirement that Permission Bits cannot address, because
+            there is only one group, and it is already used by sales. A typical workaround is to set
+            the file’s group to a new synthetic group, such as "salesandexecs," and add all users of
+            "sales" and all users of "execs" to that group. The drawback with this workaround is
+            that it requires administrators to create and manage additional users and groups.
+The preceding examples indicate that Permission Bits cannot address permission
+            requirements that differ from the natural organizational hierarchy of users and groups.
+            ACLs enable you to address these requirements more naturally by allowing multiple users
+            and multiple groups to have different sets of permissions.
+
+Examples of using ACLs for addressing access permission requirements
+
+
+The following examples explain how you can use ACLs and address different requirements
+            related to access permissions:
+
+Using a Default ACL for Automatic Application to New Children 
+In addition to an ACL that is enforced during permission checks, a default ACL is also
+            available. A default ACL can only be applied to a directory -- not to a file. Default
+            ACLs have no direct effect on permission checks for existing child files and
+            directories, but instead define the ACL that new child files and directories will
+            receive when they are created.
+Suppose we have a "monthly-sales-data" directory that is further subdivided into
+            separate directories for each month. We will set a default ACL to guarantee that members
+            of the "execs" group automatically get access to new subdirectories as they get created
+            each month.
+
+
+ Set a default ACL on the parent directory:
+> hdfs dfs -setfacl -m default:group:execs:r-x /monthly-sales-data
+
+
+
+
+ Make subdirectories:
+> hdfs dfs -mkdir /monthly-sales-data/JAN
+> hdfs dfs -mkdir /monthly-sales-data/FEB
+
+
+
+
+ Verify that HDFS has automatically applied the default ACL to the
+                  subdirectories:
+> hdfs dfs -getfacl -R /monthly-sales-data
+# file: /monthly-sales-data
+# owner: bruce
+# group: sales
+user::rwx
+group::r-x
+other::---
+default:user::rwx
+default:group::r-x
+default:group:execs:r-x
+default:mask::r-x
+default:other::---
+
+# file: /monthly-sales-data/FEB
+# owner: bruce
+# group: sales
+user::rwx
+group::r-x
+group:execs:r-x
+mask::r-x
+other::---
+default:user::rwx
+default:group::r-x
+default:group:execs:r-x
+default:mask::r-x
+default:other::---
+
+# file: /monthly-sales-data/JAN
+# owner: bruce
+# group: sales
+user::rwx
+group::r-x
+group:execs:r-x
+mask::r-x
+other::---
+default:user::rwx
+default:group::r-x
+default:group:execs:r-x
+default:mask::r-x
+default:other::---
+
+
+
+Blocking Access to a Sub-Tree for a Specific User 
+Suppose there is a need to immediately block access to an entire sub-tree for a specific
+            user. Applying a named user ACL entry to the root of that sub-tree is the fastest way to
+            accomplish this without accidentally revoking permissions for other users.
+
+
+Add an ACL entry to block user Diana's access to "monthly-sales-data":
+> hdfs dfs -setfacl -m user:diana:--- /monthly-sales-data
+
+
+
+
+Run getfacl to check the results:
+> hdfs dfs -getfacl /monthly-sales-data
+# file: /monthly-sales-data
+# owner: bruce
+# group: sales
+user::rwx
+user:diana:---
+group::r-x
+mask::r-x
+other::---
+default:user::rwx
+default:group::r-x
+default:group:execs:r-x
+default:mask::r-x
+default:other::---
+
+
+It is important to keep in mind the order of evaluation for ACL entries when a user
+            attempts to access a file system object:
+
+
+If the user is the file owner, the Owner Permission Bits are enforced.
+
+
+Else, if the user has a named user ACL entry, those permissions are enforced.
+
+
+Else, if the user is a member of the file’s group or any named group in an ACL
+                  entry, then the union of permissions for all matching entries are enforced. (The
+                  user may be a member of multiple groups.)
+
+
+If none of the above are applicable, the Other Permission Bits are enforced.
+
+
+In this example, the named user ACL entry accomplished our goal because the user is not
+            the file owner and the named user entry takes precedence over all other entries.
+

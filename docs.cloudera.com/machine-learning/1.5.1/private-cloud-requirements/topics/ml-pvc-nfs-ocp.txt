@@ -1,0 +1,124 @@
+Internal Network File System on OCPCloudera Docs
+Internal Network File System on OCP
+Learn about backing up and uninstalling an internal NFS server on OpenShift
+  Container Platform. 
+Backing up Project Files and Folders
+The block device backing the NFS server data must be backed up to protect the CML
+    project files and folders. The backup mechanism would vary depending on the
+    underlying block storage system and backup policies in place. 
+
+
+identify the underlying block storage to backup, first determine the NFS
+      PV:
+
+$ echo `kubectl get pvc -n cml-nfs -o jsonpath='{.items[0].spec.volumeName}'`
+       pvc-bec1de27-753d-11ea-a287-4cd98f578292
+      
+
+
+
+For Ceph, the RBD volume/image name is the name of the dynamically created persistent volume
+      (pvc-3d3316b6-6cc7-11ea-828e-1418774847a1).
+
+
+Ensure this volume is backed up using an appropriate backup policy. The Backup/Restore feature is not
+   yet supported for workspaces with an internal NFS.
+
+Uninstalling the NFS server on OpenShift
+Uninstall the NFS server provisioner using either of the following commands.
+Use this command if the NFS server provisioner was installed using oc and yaml files: 
+    $ oc delete scc nfs-scc
+$ oc delete clusterrole cml-nfs-nfs-server-provisioner 
+$ oc delete clusterrolebinding cml-nfs-nfs-server-provisioner 
+$ oc delete namespace cml-nfs
+
+Use this command if the NFS server provisioner was installed using Helm:
+    $ helm tiller run cml-nfs -- helm delete cml-nfs --purge
+$ oc delete scc nfs-scc securitycontextconstraints.security.openshift.io "nfs-scc" deleted
+
+
+Storage provisioner change
+In CDP 1.5.0 on OCP, CML has changed the underlying storage provisioner for internal
+    workspaces.
+Any new internal workspace on 1.5.0 will use CephFS as the underlying storage provisioner. A
+    storage class named "ocs-storagecluster-cephfs" with csi driver set to
+    "openshift-storage.cephfs.csi.ceph.com" must exist in the cluster for new internal workspaces to
+    get provisioned. Each workspace will have separate 1 TB internal storage.
+Internal workspaces running on PVC 1.4.0/1 use NFS server provisioner as the storage
+    provisioner. These workspaces when upgraded to 1.5.0 will continue to run with NFS Provisioner.
+    However, NFS server provisioner is deprecated now and will not be supported in 1.5.1 release.
+    So, customers are expected to migrate their 1.5.0 upgraded workspace from NFS server provisioner
+    to CephFS if they want to continue using the same workspace in 1.5.1 as well. If not, then
+    customer should create a new 1.5.0 workspace and migrate their existing workloads to that before
+    1.5.1 release.
+noteThere is no change in the underlying storage of external NFS backed workspaces and these
+    can be simply upgraded to 1.5.0.
+
+Portworx storage provisioner
+CML now supports Portworx as storage backend for workspaces. New CML workspaces can be 
+    configured to use Portworx volumes for storing data. 
+Steps:
+
+Create a Portworx storage class in your OCP cluster manually. This storage class should have
+     the provisioner field set to either pxd.portworx.com or
+      kubernetes.io/portworx-volume. noteAlthough
+       kubernetes.io/portworx-volume will work, this provisioner is deprecated in
+      upstream Kubernetes and might be removed in the future (See: Volumes). So, pxd.portworx.com is the preferred
+      provisioner to use. Also the storage class created must have the parameter
+       allow_all_ips: "true" (or have parameter allow_ips set
+      to the Kubernetes node in CIDR notation, such as allow_ips: 10.17.0.0/16
+      ).
+Sample storage classes are:
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+name: sample-portworx-storage-class-k8s
+parameters:
+repl: "3"
+allow_all_ips: "true"
+provisioner: kubernetes.io/portworx-volume
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: Immediate 
+      
+---
+      
+      
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+name: sample-portworx-storage-class-pxd 
+parameters:
+repl: "2"
+sharedv4: "true"
+sharedv4_svc_type: ClusterIP
+allow_all_ips: "true"
+provisioner: pxd.portworx.com
+reclaimPolicy: Retain
+allowVolumeExpansion: true     
+volumeBindingMode: Immediate
+      
+---
+      
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+name: sample-portworx-storage-class-pxd 
+parameters:
+repl: "2"
+sharedv4: "true"
+sharedv4_svc_type: ClusterIP
+allow_ips: 10.17.0.0/16
+provisioner: pxd.portworx.com
+reclaimPolicy: Retain
+allowVolumeExpansion: true     
+volumeBindingMode: Immediate
+In the CML workspace provisioning page, enable Set Custom NFS Storage Class
+      Name". Enter the name of storage class created manually above into the
+      Storage Class Name text box.
+Enter the rest of the workspace details and submit. This will create a Portworx-backed CML
+     workspace.
+
+
+
+Related informationUsing an External NFS ServerParent topic: Network File System (NFS)

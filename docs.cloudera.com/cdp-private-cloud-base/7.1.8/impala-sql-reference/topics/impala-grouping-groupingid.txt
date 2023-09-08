@@ -1,0 +1,87 @@
+GROUPING() and GROUPING_ID() functionsCloudera Docs
+GROUPING() and GROUPING_ID() functions
+These aggregate functions are used in conjunction with the GROUP BY ROLLUP, CUBE, and
+    GROUPING SETS clauses.
+GROUPING()
+GROUPING (column) function indicates whether the column in a GROUP BY list is aggregated or not. This function can be used only on a single column. Grouping returns 1 if the data is aggregated across the specified column or 0 for not aggregated in the result set. So these functions can be used to distinguish between a NULL value in the raw data vs the TOTAL across all values that are returned by ROLLUP, CUBE or GROUPING SETS for a specific column.
+Example:
+The following example shows GROUPING function applied to the columns "country" and
+        "city".
+Select country, city, sum(sales) as total_sales
+      GROUPING(country) as GP_country,
+      GROUPING(city) as GP_city
+      from sales_history 
+      GROUP BY ROLLUP (country, city);
+
+      +--------+----------+-------------+-------------+------------+
+      | country| city     | total_sales | GP_country  | GP_city    |
+      +--------+----------+-------------+-------------+------------+
+      | US     | San Jose | 1000        | 0           | 0          |
+      | US     | Fremont  | 2000        | 0           | 0          |
+      | US     | NULL     | 3000        | 0           | 1          |
+      | Japan  | Hiroshima| 5000        | 0           | 0          |
+      | Japan  | Tokyo    | 3000        | 0           | 0          |
+      | Japan  | NULL     | 4000        | 0           | 0          |
+      | Japan  | NULL     | 12000       | 0           | 1          |
+      | NULL   | NULL     | 15000       | 1           | 1          |
+      +--------+----------+-------------+-------------+------------+
+    
+In the above example the value “NULL” in the third row for the column "city" represents the
+        total sales for both cities (San jose and Fremont) in the US. This is the summary row added
+        by the ROLLUP operation on the column "city". Since this is an aggregated value the result set
+        for the GROUPING (city) is indicated by 1 in the GROUPING alias GP_city column for the corresponding row. However the
+        NULL value in the 6th row for the column city shows the sales for an UNKNOWN city in Japan.
+        SInce this is an actual NULL value in the raw data and does not indicate an aggregate the
+        corresponding GROUPING alias GP_city column is indicated by 0.
+
+GROUPING_ID()
+GROUPING_ID function computes the level of grouping and returns an integer value which is
+        unique for each combination of grouping values. The integer value can be interpreted as a
+        bit vector where bits in the binary representation of the integer correspond to each
+        GROUPING() value.
+GROUPING_ID(col1, col2, col3) = GROUPING(col1) * pow(2,2) + GROUPING(col2) * pow(2,1) + GROUPING(col3) * pow(2,0)
+This function can be used with multiple columns however they must match with the GROUP BY column list.
+    
+Return type:
+ GROUPING_ID function performs the binary to decimal conversion and returns a BIGINT. 
+noteGROUPING_ID() with no arguments is equivalent to GROUPING_ID() with all of the grouping columns specified in the group by clause. This function can be used only in the SELECT list, HAVING, or ORDER BY clauses when GROUP BY is specified.
+Example:
+The following example shows GROUPING_ID applied to the column “country, city” and also matches the "column_expression" in the GROUP BY list. 
+Select country, city, sum(sales) as total_sales
+      GROUPING_ID(country, city) as GPID,
+     from sales_history 
+      GROUP BY ROLLUP (country, city);
+In this example the GROUPING_ID(country, city) function is equivalent to GROUPING(country)
+        * pow(2,1) + GROUPING(city). However, GROUPING_ID(country, city) returns an integer value
+        whereas GROUPING(country) + GROUPING(city) returns a binary string.
+
+      +--------+----------+-------------+----------------+
+      | country| city     | total_sales | GPID (integer) |
+      +--------+----------+-------------+----------------+
+      | US     | San Jose | 1000        | 0              |
+      | US     | Fremont  | 2000        | 0              | 
+      | US     | NULL     | 3000        | 1              | 
+      | Japan  | Hiroshima| 5000        | 0              | 
+      | Japan  | Tokyo    | 3000        | 0              | 
+      | Japan  | NULL     | 4000        | 0              | 
+      | Japan  | NULL     | 12000       | 1              | 
+      | NULL   | NULL     | 15000       | 3              | 
+      +--------+----------+-------------+----------------+
+      
+The following table shows the binary equivalent of the GROUPING_ID () function GPID calcualted in the above example.
+
+    +--------------------------------------------+------------------------------------------------------------------------------------------------+
+    | GROUPING_ID(country, city) GPID in integer | Binary equivalent of GROUPING_ID(country, city) = LPAD(BIN(GROUPING_ID(country, city)), 2, ‘0’)|
+    +--------------------------------------------+------------------------------------------------------------------------------------------------+
+    | 0                                          | 00                                                                                             |
+    | 0                                          | 00                                                                                             |
+    | 1                                          | 01                                                                                             |
+    | 0                                          | 00                                                                                             |
+    | 0                                          | 00                                                                                             |
+    | 0                                          | 00                                                                                             |
+    | 1                                          | 01                                                                                             |
+    | 3                                          | 11                                                                                             |    
+    +--------------------------------------------+------------------------------------------------------------------------------------------------+
+  
+
+

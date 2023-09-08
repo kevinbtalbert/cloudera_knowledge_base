@@ -1,0 +1,83 @@
+Creating Hue Schema in Oracle databaseCloudera Docs
+Creating Hue Schema in Oracle database
+Hue requires a SQL database to store small amounts of data, including user account
+        information as well as the history of queries and sharing permissions. Ensure that tables in
+        the Hue schema are not compressed.
+
+Due to a known bug in the Oracle database (12c and higher), you cannot alter a table
+                if it is compressed. If you have compressed tables in the Hue schema, then you may
+                see the “ORA-39726: unsupported add/drop column operation on compressed tables”
+                error. Even if you uncompress an existing table, you may not be allowed to alter the
+                columns. To resolve this, follow the below steps: 
+Create a new uncompressed table with the same structure as the compressed
+                        table.
+Copy the data from the compressed table to the new uncompressed table.
+Rename or delete the compressed table.
+Rename the uncompressed table with the name of the original compressed
+                        table.
+
+
+
+Create the Hue schema, set quotas, and grant select permissions (do not grant
+                    all).
+
+noteOracle 12c users must ALTER session set to avoid
+                        creating a common user with the prefix,
+                        c##.
+
+
+vi create_hue_database.ddl
+Save in create_hue_database.ddl
+## Change huepassword to something more secure
+CONNECT / as sysdba
+ALTER session set "_ORACLE_SCRIPT"=true;
+
+DROP user hue cascade;
+CREATE user hue identified by huepassword;
+ALTER user hue quota 1000m on users;
+ALTER user hue quota 100m on system;
+GRANT create sequence to hue;
+GRANT create session to hue;
+GRANT create table to hue;
+GRANT create view to hue;
+GRANT create procedure to hue;
+GRANT create trigger to hue;
+GRANT execute on sys.dbms_crypto to hue;
+GRANT execute on sys.dbms_lob to hue;
+sqlplus /nolog < create_hue_database.ddl
+
+
+Verify that you can connect to Hue by running the following command:
+
+sqlplus hue/[***HUE-PASSWORD***]
+
+
+Clean all Hue user tables. Create a script to spool delete statements into a
+                    new file.
+
+delete_from_tables.ddl
+vi spool_statements.ddl
+## Save in spool_statements.ddl (which generates delete_from_tables.ddl)
+spool delete_from_tables.ddl
+set pagesize 100;
+SELECT 'DELETE FROM ' || table_name || ';' FROM user_tables;
+commit;
+spool off
+quit
+## Create delete_from_tables.ddl
+sqlplus hue/[***HUE-PASSWORD***] < spool_statements.ddl
+
+## Run delete_from_tables.ddl
+sqlplus hue/[***HUE-PASSWORD***] < delete_from_tables.ddl
+
+
+
+
+
+
+
+
+
+
+
+Parent topic: Using Oracle database with Hue

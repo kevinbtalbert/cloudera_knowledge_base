@@ -1,0 +1,85 @@
+Restoring HueCloudera Docs
+Restoring Hue
+The backup procedure automatically saved the Hue database content and placed the
+        content into the configured logs or data folders based on availability. Using the saved
+        content, the restore process loads the data for the new Hue deployments.
+During the manual or automatic Hue database restore operation it is critical to block any traffic to the running Hue services. If you cannot bring down the cluster, use the recommended workaround to disable end user access to the cluster endpoints. Failing to do so results in errors in addition to existing key constraints and other issues. 
+Automatic restoration
+Automatic backup and restoration of Hue extracts the saved query and query history
+                and loads them to the new cluster. In case the restore operation is called multiple
+                times, the Hue database restore job will be run. This job will overwrite the current
+                query history and saved queries with the contents of the backup.
+
+Monitoring restoration execution
+The restoration starts a job to load the database dump file, but does not wait for
+                the job to complete. If you have a large database, the job can take up to an hour to
+                complete. Ensure you allow enough time for the job to succeed.
+To monitor execution, log into the cluster and monitor the job status under the
+                database catalog namespace.
+$ kubectl get jobs -n <database catalog id>
+The output that shows the hue-restore job looks something like this:
+$ kubectl get jobs -n warehouse-1692037411-96hk
+NAME                                              COMPLETIONS   DURATION   AGE
+hue-restore-ede2b8bd-1d53-4d23-a0f9-87d8ec658f74   1/1           11s        113s
+hue-query-processor-db-create-job                 1/1           8s         42h
+
+Manual restoration
+You can manually restore the Hue database instance that you backed up.
+
+
+In the manual backup of Hue, you followed steps to dump the entire Hue database. In
+                the following procedure, you move the Hue backup file from the dump to the new CDW
+                environment. 
+
+
+(Optional) Edit the Hue statefulset Hue backup files that are larger than 3Gb
+                    and require a significant amount of memory to restore the database contents. 
+Sufficient memory is not available for the Hue pod by default. To successfully
+                    load the data, you must increase the Hue pod memory limit. 
+
+(Optional) Check file sizes and configure the memory accordingly.
+kubectl edit statefulset huebackend -n <new Virtual Warehouse ID>
+
+Set the hue container memory limit to 24Gb to provide leeway for the load command.
+name: hue 
+resources:
+  limits:
+    memory: 24G
+  requests: 
+    cpu: "1"
+    memory: 8192M
+
+Copy the Hue backup data to the hue pod on the new Virtual Warehouse cluster. 
+ For example:
+                    $ kubectl cp /tmp/data.json compute-1677087760-cj7q/huebackend-0:/tmp/data.json -c hue
+
+
+Connect to Hue pod on new Hive/Impala Virtual Warehouse cluster.
+$ kubectl exec -it huebackend-0 -n <new Virtual Warehouse ID> -c hue – /bin/bash
+
+Load data to Hue onto the new Virtual Warehouse cluster.
+$ ./build/env/bin/hue loaddata --exclude auth.permission --exclude contenttypes --ignorenonexistent /tmp/data.json
+
+Go to the Hue UI and verify the saved queries and query history are showing up in the new CDW environment. Also, verify that Hue is working.
+
+If the Hue UI is not accessible, try the following workarounds.
+
+
+Kill the Hue frontend pod, providing the Hue frontend pod ID, for
+                            example
+                            huefrontend-5bdc7bc7b8-8lpgj.$ kubectl get pods -n <new Virtual Warehouse ID> # the pod name
+
+$ kubectl delete pod <Hue frontend pod ID> -n <new Virtual Warehouse ID>
+Increase virtual warehouse memory if the database size is
+                            large.## edit hue backend container to max 16GB (note: there are two containers:
+## busybox and hue)
+
+$ kubectl edit sts huebackend -n <new Virtual Warehouse ID>
+
+
+
+After the data load is finished, revert the container memory limit back to the
+                    original 8192M setting.
+
+
+Parent topic: Restoring the environment

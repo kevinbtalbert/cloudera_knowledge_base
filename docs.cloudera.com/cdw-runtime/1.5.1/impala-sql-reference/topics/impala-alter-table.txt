@@ -1,0 +1,923 @@
+ALTER TABLE statementCloudera Docs
+ALTER TABLE statement
+The ALTER TABLE statement changes the structure or properties of an
+    existing Impala table.
+
+      In Impala, this is primarily a logical operation that updates the table metadata in the
+      metastore database that Impala shares with Hive. Most ALTER TABLE
+      operations do not actually rewrite, move, and so on the actual data files. (The
+      RENAME TO clause is the one exception; it can cause HDFS files to be
+      moved to different paths.) When you do an ALTER TABLE operation, you
+      typically need to perform corresponding physical filesystem operations, such as rewriting
+      the data files to include extra fields, or converting them to a different file format.
+    
+Syntax:
+ALTER TABLE [old_db_name.]old_table_name RENAME TO [new_db_name.]new_table_name
+
+ALTER TABLE name ADD [IF NOT EXISTS] COLUMNS (col_spec[, col_spec ...])
+ALTER TABLE name REPLACE COLUMNS (col_spec[, col_spec ...])
+
+ALTER TABLE name ADD COLUMN [IF NOT EXISTS] col_spec
+ALTER TABLE name DROP [COLUMN] column_name
+ALTER TABLE name CHANGE column_name col_spec
+
+ALTER TABLE name SET OWNER USER user_name
+ALTER TABLE name SET OWNER ROLE role_name
+
+
+-- Kudu tables only.
+ALTER TABLE name ALTER [COLUMN] column_name
+  { SET kudu_storage_attr attr_value
+    | DROP DEFAULT }
+
+kudu_storage_attr ::= { DEFAULT | BLOCK_SIZE | ENCODING | COMPRESSION }
+
+-- Non-Kudu tables only.
+ALTER TABLE name ALTER [COLUMN] column_name
+  SET COMMENT 'comment_text'
+
+ALTER TABLE name ADD [IF NOT EXISTS] PARTITION (partition_spec)
+  [location_spec]
+  [cache_spec]
+ALTER TABLE name ADD [IF NOT EXISTS] RANGE PARTITION kudu_partition_spec
+
+ALTER TABLE name DROP [IF EXISTS] PARTITION (partition_spec)
+  [PURGE]
+ALTER TABLE name DROP [IF EXISTS] RANGE PARTITION kudu_partition_spec
+
+ALTER TABLE name RECOVER PARTITIONS
+
+ALTER TABLE name [PARTITION (partition_spec)]
+  SET { FILEFORMAT file_format
+  | ROW FORMAT row_format
+  | LOCATION 'hdfs_path_of_directory'
+  | TBLPROPERTIES (table_properties)
+  | SERDEPROPERTIES (serde_properties) }
+
+ALTER TABLE name colname
+  ('statsKey'='val, ...)
+
+statsKey ::= numDVs | numNulls | avgSize | maxSize
+
+ALTER TABLE name [PARTITION (partition_spec)] SET { CACHED IN 'pool_name' [WITH REPLICATION = integer] | UNCACHED }
+
+new_name ::= [new_database.]new_table_name
+
+col_spec ::= col_name type_name  COMMENT 'column-comment' [kudu_attributes]
+
+kudu_attributes ::= { [NOT] NULL | ENCODING codec | COMPRESSION algorithm |
+  DEFAULT constant | BLOCK_SIZE number }
+
+partition_spec ::= simple_partition_spec | complex_partition_spec
+
+simple_partition_spec ::= partition_col=constant_value
+
+complex_partition_spec ::= comparison_expression_on_partition_col
+
+kudu_partition_spec ::= constant range_operator VALUES range_operator constant | VALUE = constant
+
+cache_spec ::= CACHED IN 'pool_name' [WITH REPLICATION = integer] | UNCACHED
+
+location_spec ::= LOCATION 'hdfs_path_of_directory'
+
+table_properties ::= 'name'='value'[, 'name'='value' ...]
+
+serde_properties ::= 'name'='value'[, 'name'='value' ...]
+
+file_format ::= { PARQUET | TEXTFILE | RCFILE | SEQUENCEFILE | AVRO }
+
+row_format ::= DELIMITED
+  [FIELDS TERMINATED BY 'char' [ESCAPED BY 'char']]
+  [LINES TERMINATED BY 'char']
+Statement type: DDL
+      
+Complex type considerations:
+ In Impala 2.3 and higher, the ALTER TABLE statement can change the
+        metadata for tables containing complex types (ARRAY,
+          STRUCT, and MAP). For example, you can use an
+          ADD COLUMNS, DROP COLUMN, or CHANGE
+        clause to modify the table layout for complex type columns. Although Impala queries only
+        work for complex type columns in Parquet tables, the complex type support in the
+          ALTER TABLE statement applies to all file formats. For example, you can
+        use Impala to update metadata for a staging table in a non-Parquet file format where the
+        data is populated by Hive. Or you can use ALTER TABLE SET FILEFORMAT to
+        change the format of an existing table to Parquet so that Impala can query it. Remember that
+        changing the file format for a table does not convert the data files within the table; you
+        must prepare any Parquet data files containing complex types outside Impala, and bring them
+        into the table using LOAD DATA or updating the table's
+          LOCATION property.
+Usage notes:
+
+      Whenever you specify partitions in an ALTER TABLE statement, through the
+      PARTITION (partition_spec) clause, you must include
+      all the partitioning columns in the specification.
+    
+      Most of the ALTER TABLE operations work the same for internal tables
+      (managed by Impala) as for external tables (with data files located in arbitrary
+      locations). The exception is renaming a table; for an external table, the underlying data
+      directory is not renamed or moved.
+    
+To drop or alter multiple partitions:
+ In Impala 2.8 and higher, the expression for the partition clause with a
+          DROP or SET operation can include comparison operators
+        such as <, IN, or BETWEEN, and Boolean
+        operators such as AND and OR. 
+      For example, you might drop a group of partitions corresponding to a particular date range
+      after the data ages out:
+    
+alter table historical_data drop partition (year < 1995);
+alter table historical_data drop partition (year = 1996 and month between 1 and 6);
+
+
+      For tables with multiple partition keys columns, you can specify multiple conditions
+      separated by commas, and the operation only applies to the partitions that match all the
+      conditions (similar to using an AND clause):
+    
+alter table historical_data drop partition (year < 1995, last_name like 'A%');
+
+
+      This technique can also be used to change the file format of groups of partitions, as part
+      of an ETL pipeline that periodically consolidates and rewrites the underlying data files
+      in a different file format:
+    
+alter table fast_growing_data partition (year = 2016, month in (10,11,12)) set fileformat parquet;
+
+note
+
+        The extended syntax involving comparison operators and multiple partitions applies to
+        the SET FILEFORMAT, SET TBLPROPERTIES, SET
+        SERDEPROPERTIES, and SET [UN]CACHED clauses. You can also use
+        this syntax with the PARTITION clause in the COMPUTE
+        INCREMENTAL STATS statement, and with the PARTITION clause of
+        the SHOW FILES statement. Some forms of ALTER TABLE
+        still only apply to one partition at a time: the SET LOCATION and
+        ADD PARTITION clauses. The PARTITION clauses in the
+        LOAD DATA and INSERT statements also only apply to one
+        partition at a time.
+      
+
+        A DDL statement that applies to multiple partitions is considered successful (resulting
+        in no changes) even if no partitions match the conditions. The results are the same as
+        if the IF EXISTS clause was specified.
+      
+
+        The performance and scalability of this technique is similar to issuing a sequence of
+        single-partition ALTER TABLE statements in quick succession. To
+        minimize bottlenecks due to communication with the metastore database, or causing other
+        DDL operations on the same table to wait, test the effects of performing ALTER
+        TABLE statements that affect large numbers of partitions.
+      
+
+Amazon S3 considerations:
+ You can specify an s3a:// prefix on the
+          LOCATION attribute of a table or partition to make Impala query data from
+        the Amazon S3 filesystem. In Impala 2.6 and higher, Impala automatically handles creating or
+        removing the associated folders when you issue ALTER TABLE statements with
+        the ADD PARTITION or DROP PARTITION clauses. 
+In Impala 2.6 and higher, Impala DDL statements such as CREATE DATABASE, CREATE TABLE, DROP
+        DATABASE CASCADE, DROP TABLE, and ALTER TABLE [ADD|DROP] PARTITION can create or remove
+        folders as needed in the Amazon S3 system. Prior to Impala 2.6, you had to create folders
+        yourself and point Impala database, tables, or partitions at them, and manually remove
+        folders when no longer needed. See Related Information for details about reading and
+        writing S3 data with Impala.
+HDFS caching (CACHED IN clause):
+ If you specify the CACHED IN clause, any existing or future data
+        files in the table directory or the partition subdirectories are designated to be loaded
+        into memory with the HDFS caching mechanism. In Impala 2.2 and higher, the optional
+          WITH REPLICATION clause for CREATE TABLE and
+          ALTER TABLE lets you specify a replication factor, the
+        number of hosts on which to cache the same data blocks. When Impala processes a cached data
+        block, where the cache replication factor is greater than 1, Impala randomly selects a host
+        that has a cached copy of that data block. This optimization avoids excessive CPU usage on a
+        single host when the same cached data block is processed multiple times. Cloudera recommends specifying a value greater than or equal to the HDFS block
+        replication factor.  If you connect to different Impala nodes within an
+          impala-shell session for load-balancing purposes, you can enable the
+          SYNC_DDL query option to make each DDL statement wait before returning,
+        until the new or changed metadata has been received by all the Impala nodes.
+      The following sections show examples of the use cases for various ALTER
+      TABLE clauses.
+    
+To rename a table (RENAME TO clause):
+
+      The RENAME TO clause lets you change the name of an existing table, and
+      optionally which database it is located in.
+    
+      For internal tables, this operation physically renames the directory within HDFS that
+      contains the data files; the original directory name no longer exists. By qualifying the
+      table names with database names, you can use this technique to move an internal table (and
+      its associated data directory) from one database to another. For example:
+    create database d1;
+create database d2;
+create database d3;
+use d1;
+create table mobile (x int) TBLPROPERTIES ('transactional'='false');
+use d2;
+-- Move table from another database to the current one.
+alter table d1.mobile rename to mobile;
+use d1;
+-- Move table from one database to another.
+alter table d2.mobile rename to d3.mobile;
+To change the owner of a table:
+ALTER TABLE name SET OWNER USER user_name;
+ALTER TABLE name SET OWNER ROLE role_name;
+ The table owner is originally set to the user who creates the table. When
+        object ownership is enabled in Ranger, an owner of a table can have the
+          ALL with GRANT or
+          ALL without GRANT privilege. The
+        term OWNER is used to differentiate between the
+          ALL privilege that is explicitly granted via the
+          GRANT statement and a privilege that is implicitly
+        granted by the CREATE TABLE statement. 
+      Use the ALTER TABLE SET OWNER to transfer the ownership from the current
+      owner to another user or a role.
+    
+To change the physical location where Impala looks for data files associated with a
+      table or partition:
+ALTER TABLE table_name [PARTITION (partition_spec)] SET LOCATION 'hdfs_path_of_directory';
+      The path you specify is the full HDFS path where the data files reside, or will be
+      created. Impala does not create any additional subdirectory named after the table. Impala
+      does not move any data files to this new location or change any data files that might
+      already exist in that directory.
+    
+      To set the location for a single partition, include the PARTITION clause.
+      Specify all the same partitioning columns for the table, with a constant value for each,
+      to precisely identify the single partition affected by the statement:
+    create table p1 (s string) partitioned by (month int, day int);
+-- Each ADD PARTITION clause creates a subdirectory in HDFS.
+alter table p1 add partition (month=1, day=1);
+alter table p1 add partition (month=1, day=2);
+alter table p1 add partition (month=2, day=1);
+alter table p1 add partition (month=2, day=2);
+-- Redirect queries, INSERT, and LOAD DATA for one partition
+-- to a specific different directory.
+alter table p1 partition (month=1, day=1) set location '/usr/external_data/new_years_day';
+note
+        If you are creating a partition for the first time and specifying its location, for maximum efficiency, use
+        a single ALTER TABLE statement including both the ADD PARTITION and
+        LOCATION clauses, rather than separate statements with ADD PARTITION and
+        SET LOCATION clauses.
+      
+To automatically detect new partition directories added through Hive or HDFS
+      operations:
+ In Impala 2.3 and higher, the RECOVER
+          PARTITIONS clause scans a partitioned table to detect if any new partition
+        directories were added outside of Impala, such as by Hive ALTER TABLE
+        statements or by hdfs dfs or hadoop fs commands. The
+          RECOVER PARTITIONS clause automatically recognizes any data files present
+        in these new directories, the same as the REFRESH statement does. 
+      For example, here is a sequence of examples showing how you might create a partitioned
+      table in Impala, create new partitions through Hive, copy data files into the new
+      partitions with the hdfs command, and have Impala recognize the new
+      partitions and new data:
+    
+      In Impala, create the table, and a single partition for demonstration purposes:
+    
+
+create database recover_partitions;
+use recover_partitions;
+create table t1 (s string) partitioned by (yy int, mm int);
+insert into t1 partition (yy = 2016, mm = 1) values ('Partition exists');
+show files in t1;
++---------------------------------------------------------------------+------+--------------+
+| Path                                                                | Size | Partition    |
++---------------------------------------------------------------------+------+--------------+
+| /user/hive/warehouse/recover_partitions.db/t1/yy=2016/mm=1/data.txt | 17B  | yy=2016/mm=1 |
++---------------------------------------------------------------------+------+--------------+
+quit;
+
+
+      In Hive, create some new partitions. In a real use case, you might create the partitions
+      and populate them with data as the final stages of an ETL pipeline.
+    
+
+hive> use recover_partitions;
+OK
+hive> alter table t1 add partition (yy = 2016, mm = 2);
+OK
+hive> alter table t1 add partition (yy = 2016, mm = 3);
+OK
+hive> quit;
+
+
+      For demonstration purposes, manually copy data (a single row) into these new partitions,
+      using manual HDFS operations:
+    
+
+$ hdfs dfs -ls /user/hive/warehouse/recover_partitions.db/t1/yy=2016/
+Found 3 items
+drwxr-xr-x - impala   hive 0 2016-05-09 16:06 /user/hive/warehouse/recover_partitions.db/t1/yy=2016/mm=1
+drwxr-xr-x - jrussell hive 0 2016-05-09 16:14 /user/hive/warehouse/recover_partitions.db/t1/yy=2016/mm=2
+drwxr-xr-x - jrussell hive 0 2016-05-09 16:13 /user/hive/warehouse/recover_partitions.db/t1/yy=2016/mm=3
+
+$ hdfs dfs -cp /user/hive/warehouse/recover_partitions.db/t1/yy=2016/mm=1/data.txt \
+  /user/hive/warehouse/recover_partitions.db/t1/yy=2016/mm=2/data.txt
+$ hdfs dfs -cp /user/hive/warehouse/recover_partitions.db/t1/yy=2016/mm=1/data.txt \
+  /user/hive/warehouse/recover_partitions.db/t1/yy=2016/mm=3/data.txt
+
+
+
+hive> select * from t1;
+OK
+Partition exists  2016  1
+Partition exists  2016  2
+Partition exists  2016  3
+hive> quit;
+
+
+      In Impala, initially the partitions and data are not visible. Running ALTER
+      TABLE with the RECOVER PARTITIONS clause scans the table data
+      directory to find any new partition directories, and the data files inside them:
+    
+
+select * from t1;
++------------------+------+----+
+| s                | yy   | mm |
++------------------+------+----+
+| Partition exists | 2016 | 1  |
++------------------+------+----+
+
+alter table t1 recover partitions;
+select * from t1;
++------------------+------+----+
+| s                | yy   | mm |
++------------------+------+----+
+| Partition exists | 2016 | 1  |
+| Partition exists | 2016 | 3  |
+| Partition exists | 2016 | 2  |
++------------------+------+----+
+
+
+To change the key-value pairs of the TBLPROPERTIES and SERDEPROPERTIES fields:
+ALTER TABLE table_name SET TBLPROPERTIES ('key1'='value1', 'key2'='value2'[, ...]);
+ALTER TABLE table_name SET SERDEPROPERTIES ('key1'='value1', 'key2'='value2'[, ...]);
+      The TBLPROPERTIES clause is primarily a way to associate arbitrary
+      user-specified data items with a particular table.
+    
+      The SERDEPROPERTIES clause sets up metadata defining how tables are read
+      or written, needed in some cases by Hive but not used extensively by Impala. You would use
+      this clause primarily to change the delimiter in an existing text table or partition, by
+      setting the 'serialization.format' and 'field.delim'
+      property values to the new delimiter character. The SERDEPROPERTIES
+      clause does not change the existing data in the table. The change only affects the future
+      inserts into the table.
+    
+      Use the DESCRIBE FORMATTED statement to see the current values of these
+      properties for an existing table.
+    
+To manually set or update table or column statistics:
+
+      Although for most tables the COMPUTE STATS or COMPUTE INCREMENTAL
+      STATS statement is all you need to keep table and column statistics up to date
+      for a table, sometimes for a very large table or one that is updated frequently, the
+      length of time to recompute all the statistics might make it impractical to run those
+      statements as often as needed. As a workaround, you can use the ALTER
+      TABLE statement to set table statistics at the level of the entire table or a
+      single partition, or column statistics at the level of the entire table.
+     You can set the numrows value for table statistics by changing the
+          TBLPROPERTIES setting for a table or partition. For example: create table analysis_data stored as parquet as select * from raw_data;
+Inserted 1000000000 rows in 181.98s
+compute stats analysis_data;
+insert into analysis_data select * from smaller_table_we_forgot_before;
+Inserted 1000000 rows in 15.32s
+-- Now there are 1001000000 rows. We can update this single data point in the stats.
+alter table analysis_data set tblproperties('numRows'='1001000000', 'STATS_GENERATED_VIA_STATS_TASK'='true');
+-- If the table originally contained 1 million rows, and we add another partition with 30 thousand rows,
+-- change the numRows property for the partition and the overall table.
+alter table partitioned_data partition(year=2009, month=4) set tblproperties ('numRows'='30000', 'STATS_GENERATED_VIA_STATS_TASK'='true');
+alter table partitioned_data set tblproperties ('numRows'='1030000', 'STATS_GENERATED_VIA_STATS_TASK'='true');
+ In Impala 2.6 and higher, you can use the SET COLUMN
+          STATS clause to set a specific stats value for a particular column. 
+        You specify a case-insensitive symbolic name for the kind of statistics:
+        numDVs, numNulls, avgSize, maxSize.
+        The key names and values are both quoted. This operation applies to an entire table,
+        not a specific partition. For example:
+
+create table t1 (x int, s string);
+insert into t1 values (1, 'one'), (2, 'two'), (2, 'deux');
+show column stats t1;
++--------+--------+------------------+--------+----------+----------+
+| Column | Type   | #Distinct Values | #Nulls | Max Size | Avg Size |
++--------+--------+------------------+--------+----------+----------+
+| x      | INT    | -1               | -1     | 4        | 4        |
+| s      | STRING | -1               | -1     | -1       | -1       |
++--------+--------+------------------+--------+----------+----------+
+alter table t1 set column stats x ('numDVs'='2','numNulls'='0');
+alter table t1 set column stats s ('numdvs'='3','maxsize'='4');
+show column stats t1;
++--------+--------+------------------+--------+----------+----------+
+| Column | Type   | #Distinct Values | #Nulls | Max Size | Avg Size |
++--------+--------+------------------+--------+----------+----------+
+| x      | INT    | 2                | 0      | 4        | 4        |
+| s      | STRING | 3                | -1     | 4        | -1       |
++--------+--------+------------------+--------+----------+----------+
+
+
+To reorganize columns for a table:
+You can add multiple columns at a time using the ALTER
+        TABLE statement. If you specify the IF NOT
+        EXISTS clause, Impala silently ignores the ADD
+      request and does not return an error if a column with the same name exists
+      in the table.When you replace columns, all the original column definitions are
+      discarded. You might use these statements if you receive a new set of data files
+      with different data types or columns in a different order. The data files
+      are retained, so if the new columns are incompatible with the old ones,
+      use INSERT OVERWRITE or LOAD DATA
+        OVERWRITE to replace all the data before issuing any further
+      queries.
+      For example, here is how you might add columns to an existing table. The first
+      ALTER TABLE adds two new columns, and the second ALTER
+      TABLE adds one new column. A single Impala query reads both the old and new data
+      files, containing different numbers of columns. For any columns not present in a
+      particular data file, all the column values are considered to be NULL.
+    
+create table t1 (x int);
+insert into t1 values (1), (2);
+
+alter table t1 add columns (s string, t timestamp);
+insert into t1 values (3, 'three', now());
+
+alter table t1 add columns (b boolean);
+insert into t1 values (4, 'four', now(), true);
+
+select * from t1 order by x;
++---+-------+-------------------------------+------+
+| x | s     | t                             | b    |
++---+-------+-------------------------------+------+
+| 1 | NULL  | NULL                          | NULL |
+| 2 | NULL  | NULL                          | NULL |
+| 3 | three | 2016-05-11 11:19:45.054457000 | NULL |
+| 4 | four  | 2016-05-11 11:20:20.260733000 | true |
++---+-------+-------------------------------+------+
+
+      You might use the CHANGE clause to rename a single column, or to treat an
+      existing column as a different type than before, such as to switch between treating a
+      column as STRING and TIMESTAMP, or between
+      INT and BIGINT. You can only drop a single column at a
+      time; to drop multiple columns, issue multiple ALTER TABLE statements, or
+      define the new set of columns with a single ALTER TABLE ... REPLACE
+      COLUMNS statement.
+    
+      The following examples show some safe operations to drop or change columns. Dropping the
+      final column in a table lets Impala ignore the data causing any disruption to existing
+      data files. Changing the type of a column works if existing data values can be safely
+      converted to the new type. The type conversion rules depend on the file format of the
+      underlying table. For example, in a text table, the same value can be interpreted as a
+      STRING or a numeric value, while in a binary format such as Parquet, the
+      rules are stricter and type conversions only work between certain sizes of integers.
+    
+create table optional_columns (x int, y int, z int, a1 int, a2 int);
+insert into optional_columns values (1,2,3,0,0), (2,3,4,100,100);
+
+-- When the last column in the table is dropped, Impala ignores the
+-- values that are no longer needed. (Dropping A1 but leaving A2
+-- would cause problems, as we will see in a subsequent example.)
+alter table optional_columns drop column a2;
+alter table optional_columns drop column a1;
+
+select * from optional_columns;
++---+---+---+
+| x | y | z |
++---+---+---+
+| 1 | 2 | 3 |
+| 2 | 3 | 4 |
++---+---+---+
+
+create table int_to_string (s string, x int);
+insert into int_to_string values ('one', 1), ('two', 2);
+
+-- What was an INT column will now be interpreted as STRING.
+-- This technique works for text tables but not other file formats.
+-- The second X represents the new name of the column, which we keep the same.
+alter table int_to_string change x x string;
+
+-- Once the type is changed, we can insert non-integer values into the X column
+-- and treat that column as a string, for example by uppercasing or concatenating.
+insert into int_to_string values ('three', 'trois');
+select s, upper(x) from int_to_string;
++-------+----------+
+| s     | upper(x) |
++-------+----------+
+| one   | 1        |
+| two   | 2        |
+| three | TROIS    |
++-------+----------+
+
+      Remember that Impala does not actually do any conversion for the underlying data files as
+      a result of ALTER TABLE statements. If you use ALTER
+      TABLE to create a table layout that does not agree with the contents of the
+      underlying files, you must replace the files yourself, such as using LOAD
+      DATA to load a new set of data files, or INSERT OVERWRITE to
+      copy from another table and replace the original data.
+    
+      The following example shows what happens if you delete the middle column from a Parquet
+      table containing three columns. The underlying data files still contain three columns of
+      data. Because the columns are interpreted based on their positions in the data file
+      instead of the specific column names, a SELECT * query now reads the
+      first and second columns from the data file, potentially leading to unexpected results or
+      conversion errors. For this reason, if you expect to someday drop a column, declare it as
+      the last column in the table, where its data can be ignored by queries after the column is
+      dropped. Or, re-run your ETL process and create new data files if you drop or change the
+      type of a column in a way that causes problems with existing data files.
+    
+-- Parquet table showing how dropping a column can produce unexpected results.
+create table p1 (s1 string, s2 string, s3 string);
+
+insert into p1 values ('one', 'un', 'uno'), ('two', 'deux', 'dos'),
+  ('three', 'trois', 'tres');
+select * from p1;
++-------+-------+------+
+| s1    | s2    | s3   |
++-------+-------+------+
+| one   | un    | uno  |
+| two   | deux  | dos  |
+| three | trois | tres |
++-------+-------+------+
+
+alter table p1 drop column s2;
+-- The S3 column contains unexpected results.
+-- Because S2 and S3 have compatible types, the query reads
+-- values from the dropped S2, because the existing data files
+-- still contain those values as the second column.
+select * from p1;
++-------+-------+
+| s1    | s3    |
++-------+-------+
+| one   | un    |
+| two   | deux  |
+| three | trois |
++-------+-------+
+
+-- Parquet table showing how dropping a column can produce conversion errors.
+create table p2 (s1 string, x int, s3 string);
+
+insert into p2 values ('one', 1, 'uno'), ('two', 2, 'dos'), ('three', 3, 'tres');
+select * from p2;
++-------+---+------+
+| s1    | x | s3   |
++-------+---+------+
+| one   | 1 | uno  |
+| two   | 2 | dos  |
+| three | 3 | tres |
++-------+---+------+
+
+alter table p2 drop column x;
+select * from p2;
+WARNINGS:
+File 'hdfs_filename' has an incompatible Parquet schema for column 'add_columns.p2.s3'.
+Column type: STRING, Parquet schema:
+optional int32 x [i:1 d:1 r:0]
+
+File 'hdfs_filename' has an incompatible Parquet schema for column 'add_columns.p2.s3'.
+Column type: STRING, Parquet schema:
+optional int32 x [i:1 d:1 r:0]
+ In Impala 2.6 and higher, if an Avro table is created without column
+        definitions in the CREATE TABLE statement, and columns are later added
+        through ALTER TABLE, the resulting table is now queryable. Missing values
+        from the newly added columns now default to NULL. 
+To change the file format that Impala expects data to be in, for a table or
+      partition:
+
+      Use an ALTER TABLE ... SET FILEFORMAT clause. You can include an optional
+      PARTITION (col1=val1,
+      col2=val2, ... clause so that the file
+      format is changed for a specific partition rather than the entire table.
+    
+      Because this operation only changes the table metadata, you must do any conversion of
+      existing data using regular Hadoop techniques outside of Impala. Any new data created by
+      the Impala INSERT statement will be in the new format. You cannot specify
+      the delimiter for Text files; the data files must be comma-delimited.
+
+    
+      To set the file format for a single partition, include the PARTITION
+      clause. Specify all the same partitioning columns for the table, with a constant value for
+      each, to precisely identify the single partition affected by the statement:
+    create table p1 (s string) partitioned by (month int, day int);
+-- Each ADD PARTITION clause creates a subdirectory in HDFS.
+alter table p1 add partition (month=1, day=1);
+alter table p1 add partition (month=1, day=2);
+alter table p1 add partition (month=2, day=1);
+alter table p1 add partition (month=2, day=2);
+-- Queries and INSERT statements will read and write files
+-- in this format for this specific partition.
+alter table p1 partition (month=2, day=2) set fileformat parquet;
+
+To change the row format with different delimiter characters:
+
+      Use the SET ROW FORMAT DELIMITED clause to ingest data files that use a
+      different delimiter character or a different line end character. When specifying delimiter
+      and line end characters with the FIELDS TERMINATED BY, ESCAPED
+      BY, and LINES TERMINATED BY clauses, you can use the following:
+      
+
+          A regular ASCII character surrounded by single or double quotation marks.
+        
+
+          An octal sequence, such as '\054' representing a comma or
+          '\0' for ASCII null (hex 00).
+        
+
+          Special characters, such as:
+          
+
+'\t' for tab
+            
+
+'\n' for newline or linefeed
+            
+
+'\r' for carriage return
+            
+
+
+
+          An integer in the range '-127'..'128' (with quotation marks but no backslash)
+          
+            Negative values are subtracted from 256. For example, FIELDS TERMINATED BY
+            '-2' sets the field delimiter to ASCII code 254.
+          
+
+
+
+      For the ESCAPED BY clause, choose an escape character that is not used
+      anywhere else in the file. The character following the escape character is taken literally
+      as part of a field value.
+    
+      Surrounding field values with quotation marks does not help Impala to parse fields with
+      embedded delimiter characters as the quotation marks are considered to be part of the
+      column value.
+    
+      If you want to use \ as the escape character, specify the clause in
+      impala-shell as ESCAPED BY '\\'.
+    
+To add or drop partitions for a table, the table must already be partitioned (that
+      is, created with a PARTITIONED BY clause). The partition is a physical
+      directory in HDFS, with a name that encodes a particular column value (the partition
+      key). The Impala INSERT statement already creates the partition if
+      necessary, so the ALTER TABLE ... ADD PARTITION is primarily useful for
+      importing data by moving or copying existing data files into the HDFS directory
+      corresponding to a partition. (You can use the LOAD DATA statement to
+      move files into the partition directory, or ALTER TABLE ... PARTITION (...) SET
+      LOCATION to point a partition at a directory that already contains data files.
+    
+      The DROP PARTITION clause is used to remove the HDFS directory and
+      associated data files for a particular set of partition key values; for example, if you
+      always analyze the last 3 months worth of data, at the beginning of each month you might
+      drop the oldest partition that is no longer needed. Removing partitions reduces the amount
+      of metadata associated with the table and the complexity of calculating the optimal query
+      plan, which can simplify and speed up queries on partitioned tables, particularly join
+      queries. Here is an example showing the ADD PARTITION and DROP
+      PARTITION clauses.
+    
+      To avoid errors while adding or dropping partitions whose existence is not certain, add
+      the optional IF [NOT] EXISTS clause between the ADD or
+      DROP keyword and the PARTITION keyword. That is, the
+      entire clause becomes ADD IF NOT EXISTS PARTITION or DROP IF
+      EXISTS PARTITION. The following example shows how partitions can be created
+      automatically through INSERT statements, or manually through
+      ALTER TABLE statements. The IF [NOT] EXISTS clauses let
+      the ALTER TABLE statements succeed even if a new requested partition
+      already exists, or a partition to be dropped does not exist.
+    
+      Inserting 2 year values creates 2 partitions:
+    
+create table partition_t (s string) partitioned by (y int);
+insert into partition_t (s,y) values ('two thousand',2000), ('nineteen ninety',1990);
+show partitions partition_t;
++-------+-------+--------+------+--------------+-------------------+--------+-------------------+
+| y     | #Rows | #Files | Size | Bytes Cached | Cache Replication | Format | Incremental stats |
++-------+-------+--------+------+--------------+-------------------+--------+-------+
+| 1990  | -1    | 1      | 16B  | NOT CACHED   | NOT CACHED        | TEXT   | false |
+| 2000  | -1    | 1      | 13B  | NOT CACHED   | NOT CACHED        | TEXT   | false |
+| Total | -1    | 2      | 29B  | 0B           |                   |        |       |
++-------+-------+--------+------+--------------+-------------------+--------+-------+
+
+      Without the IF NOT EXISTS clause, an attempt to add a new partition might
+      fail:
+    
+alter table partition_t add partition (y=2000);
+ERROR: AnalysisException: Partition spec already exists: (y=2000).
+
+      The IF NOT EXISTS clause makes the statement succeed whether or not there
+      was already a partition with the specified key value:
+    
+alter table partition_t add if not exists partition (y=2000);
+alter table partition_t add if not exists partition (y=2010);
+show partitions partition_t;
++-------+-------+--------+------+--------------+-------------------+--------+-------------------+
+| y     | #Rows | #Files | Size | Bytes Cached | Cache Replication | Format | Incremental stats |
++-------+-------+--------+------+--------------+-------------------+--------+-------+
+| 1990  | -1    | 1      | 16B  | NOT CACHED   | NOT CACHED        | TEXT   | false |
+| 2000  | -1    | 1      | 13B  | NOT CACHED   | NOT CACHED        | TEXT   | false |
+| 2010  | -1    | 0      | 0B   | NOT CACHED   | NOT CACHED        | TEXT   | false |
+| Total | -1    | 2      | 29B  | 0B           |                   |        |       |
++-------+-------+--------+------+--------------+-------------------+--------+-------+
+
+      Likewise, the IF EXISTS clause lets DROP PARTITION
+      succeed whether or not the partition is already in the table:
+    
+alter table partition_t drop if exists partition (y=2000);
+alter table partition_t drop if exists partition (y=1950);
+show partitions partition_t;
++-------+-------+--------+------+--------------+-------------------+--------+-------------------+
+| y     | #Rows | #Files | Size | Bytes Cached | Cache Replication | Format | Incremental stats |
++-------+-------+--------+------+--------------+-------------------+--------+-------+
+| 1990  | -1    | 1      | 16B  | NOT CACHED   | NOT CACHED        | TEXT   | false |
+| 2010  | -1    | 0      | 0B   | NOT CACHED   | NOT CACHED        | TEXT   | false |
+| Total | -1    | 1      | 16B  | 0B           |                   |        |       |
++-------+-------+--------+------+--------------+-------------------+--------+-------+
+ The optional PURGE keyword, available in Impala 2.3 and higher, is
+        used with the DROP PARTITION clause to remove associated HDFS data files
+        immediately rather than going through the HDFS trashcan mechanism. Use this keyword when
+        dropping a partition if it is crucial to remove the data as quickly as possible to free up
+        space, or if there is a problem with the trashcan, such as the trash cannot being configured
+        or being in a different HDFS encryption zone than the data files. -- Create an empty table and define the partitioning scheme.
+create table part_t (x int) partitioned by (month int);
+-- Create an empty partition into which you could copy data files from some other source.
+alter table part_t add partition (month=1);
+-- After changing the underlying data, issue a REFRESH statement to make the data visible in Impala.
+refresh part_t;
+-- Later, do the same for the next month.
+alter table part_t add partition (month=2);
+
+-- Now you no longer need the older data.
+alter table part_t drop partition (month=1);
+-- If the table was partitioned by month and year, you would issue a statement like:
+-- alter table part_t drop partition (year=2003,month=1);
+-- which would require 12 ALTER TABLE statements to remove a year's worth of data.
+
+-- If the data files for subsequent months were in a different file format,
+-- you could set a different file format for the new partition as you create it.
+alter table part_t add partition (month=3) set fileformat=parquet;
+
+      The value specified for a partition key can be an arbitrary constant expression, without
+      any references to columns. For example:
+    alter table time_data add partition (month=concat('Decem','ber'));
+alter table sales_data add partition (zipcode = cast(9021 * 10 as string));note
+
+        An alternative way to reorganize a table and its associated data files is to use
+        CREATE TABLE to create a variation of the original table, then use
+        INSERT to copy the transformed or reordered data to the new table. The
+        advantage of ALTER TABLE is that it avoids making a duplicate copy of
+        the data files, allowing you to reorganize huge volumes of data in a space-efficient way
+        using familiar Hadoop techniques.
+      
+
+To switch a table between internal and external:
+
+        You can switch a table from
+        internal to external, or from external to internal, by using the
+          ALTER TABLE statement:
+        
+-- Switch a table from internal to external.
+ALTER TABLE table_name SET TBLPROPERTIES('EXTERNAL'='TRUE');
+
+-- Switch a table from external to internal.
+ALTER TABLE table_name SET TBLPROPERTIES('EXTERNAL'='FALSE');
+
+        If the Kudu service is integrated with the Hive Metastore, the above
+        operations are not supported.
+      
+Cancellation: Cannot be cancelled.
+      
+HDFS permissions:
+
+      Most ALTER TABLE clauses do not actually read or write any HDFS files,
+      and so do not depend on specific HDFS permissions. For example, the SET
+      FILEFORMAT clause does not actually check the file format existing data files or
+      convert them to the new format, and the SET LOCATION clause does not
+      require any special permissions on the new location. (Any permission-related failures
+      would come later, when you actually query or insert into the table.)
+    
+      In general, ALTER TABLE clauses that do touch HDFS files and directories
+      require the same HDFS permissions as corresponding CREATE,
+      INSERT, or SELECT statements. The permissions allow the
+      user ID that the impalad daemon runs under, typically the
+      impala user, to read or write files or directories, or (in the case of
+      the execute bit) descend into a directory. The RENAME TO clause requires
+      read, write, and execute permission in the source and destination database directories and
+      in the table data directory, and read and write permission for the data files within the
+      table. The ADD PARTITION and DROP PARTITION clauses
+      require write and execute permissions for the associated partition directory.
+    Kudu considerations:
+      Because of the extra constraints and features of Kudu tables, such as the NOT
+      NULL and DEFAULT attributes for columns, ALTER
+      TABLE has specific requirements related to Kudu tables:
+      
+
+
+            In an ADD COLUMNS operation, you can specify the
+            NULL, NOT NULL, and DEFAULT
+            default_value column attributes.
+          
+
+
+ In Impala 2.9 and higher, you can also specify the
+                ENCODING, COMPRESSION, and
+                BLOCK_SIZE attributes when adding a column. 
+
+
+
+            If you add a column with a NOT NULL attribute, it must also have a
+            DEFAULT attribute, so the default value can be assigned to that
+            column for all existing rows.
+          
+
+
+
+            The DROP COLUMN clause works the same for a Kudu table as for other
+            kinds of tables.
+          
+
+
+
+            Although you can change the name of a column with the CHANGE
+            clause, you cannot change the type of a column in a Kudu table.
+          
+
+
+
+            You cannot change the nullability of existing columns in a Kudu table.
+          
+
+
+ In Impala 2.10, you can change the default value, encoding,
+              compression, or block size of existing columns in a Kudu table by using the
+                SET clause. 
+
+
+
+            You cannot use the REPLACE COLUMNS clause with a Kudu table.
+          
+
+
+          The RENAME TO clause for a Kudu table only affects the name stored in
+          the metastore database that Impala uses to refer to the table. To change which
+          underlying Kudu table is associated with an Impala table name, you must change the
+          TBLPROPERTIES property of the table: SET
+          TBLPROPERTIES('kudu.table_name'='kudu_tbl_name). You can
+          only change underlying Kudu tables for the external tables.
+        
+
+
+      The following are some examples of using the ADD COLUMNS clause for a
+      Kudu table:
+    
+CREATE TABLE t1 ( x INT, PRIMARY KEY (x) )
+  PARTITION BY HASH (x) PARTITIONS 16
+  STORED AS KUDU
+
+ALTER TABLE t1 ADD COLUMNS (y STRING ENCODING prefix_encoding);
+ALTER TABLE t1 ADD COLUMNS (z INT DEFAULT 10);
+ALTER TABLE t1 ADD COLUMNS (a STRING NOT NULL DEFAULT '', t TIMESTAMP COMPRESSION default_compression);
+
+      The following are some examples of modifying column defaults and storage attributes for a
+      Kudu table:
+    
+create table kt (x bigint primary key, s string default 'yes', t timestamp)
+  stored as kudu;
+
+-- You can change the default value for a column, which affects any rows
+-- inserted after this change is made.
+alter table kt alter column s set default 'no';
+
+-- You can remove the default value for a column, which affects any rows
+-- inserted after this change is made. If the column is nullable, any
+-- future inserts default to NULL for this column. If the column is marked
+-- NOT NULL, any future inserts must specify a value for the column.
+alter table kt alter column s drop default;
+
+insert into kt values (1, 'foo', now());
+-- Because of the DROP DEFAULT above, omitting S from the insert
+-- gives it a value of NULL.
+insert into kt (x, t) values (2, now());
+
+select * from kt;
++---+------+-------------------------------+
+| x | s    | t                             |
++---+------+-------------------------------+
+| 2 | NULL | 2017-10-02 00:03:40.652156000 |
+| 1 | foo  | 2017-10-02 00:03:04.346185000 |
++---+------+-------------------------------+
+
+-- Other storage-related attributes can also be changed for columns.
+-- These changes take effect for any newly inserted rows, or rows
+-- rearranged due to compaction after deletes or updates.
+alter table kt alter column s set encoding prefix_encoding;
+-- The COLUMN keyword is optional in the syntax.
+alter table kt alter x set block_size 2048;
+alter table kt alter column t set compression zlib;
+
+desc kt;
++------+-----------+---------+-------------+----------+---------------+-----------------+---------------------+------------+
+| name | type      | comment | primary_key | nullable | default_value | encoding        | compression         | block_size |
++------+-----------+---------+-------------+----------+---------------+-----------------+---------------------+------------+
+| x    | bigint    |         | true        | false    |               | AUTO_ENCODING   | DEFAULT_COMPRESSION | 2048       |
+| s    | string    |         | false       | true     |               | PREFIX_ENCODING | DEFAULT_COMPRESSION | 0          |
+| t    | timestamp |         | false       | true     |               | AUTO_ENCODING   | ZLIB                | 0          |
++------+-----------+---------+-------------+----------+---------------+-----------------+---------------------+------------+
+ Kudu tables all use an underlying partitioning mechanism. The partition syntax is
+        different than for non-Kudu tables. You can use the ALTER TABLE statement
+        to add and drop range partitions from a Kudu table. Any new range must not
+        overlap with any existing ranges. Dropping a range removes all the associated rows from the
+        table.
+Parent topic: Impala SQL statements

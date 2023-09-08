@@ -1,0 +1,147 @@
+Impala DML for Kudu TablesCloudera Docs
+Impala DML for Kudu Tables
+In DML statements, Impala supports specific features and properties
+    that only apply to Kudu tables.
+The UPDATE and DELETE statements let
+      you modify data within Kudu tables without rewriting substantial amounts
+      of table data. 
+The UPSERT statement acts as a combination of
+        INSERT and UPDATE, inserting rows
+      where the primary key does not already exist, and updating the non-primary
+      key columns where the primary key does already exist in the table. 
+ The INSERT statement for Kudu tables honors the unique
+      and NOT NULL requirements for the primary key columns. 
+ Because Impala and Kudu do not support transactions, the effects of any
+        INSERT, UPDATE, or
+        DELETE statement are immediately visible. For example,
+      you cannot do a sequence of UPDATE statements and only
+      make the changes visible after all the statements are finished. Also, if a
+      DML statement fails partway through, any rows that were already inserted,
+      deleted, or changed remain in the table; there is no rollback mechanism to
+      undo the changes. 
+ In particular, an INSERT ... SELECT statement that
+      refers to the table being inserted into might insert more rows than
+      expected, because the SELECT part of the statement sees
+      some of the new rows being inserted and processes them again. 
+Query hints:
+ The INSERT or UPSERT
+      operations into Kudu tables automatically add an exchange and a sort node
+      to the plan that partitions and sorts the rows according to the
+      partitioning/primary key scheme of the target table (unless the number of
+      rows to be inserted is small enough to trigger single node execution).
+      Since Kudu partitions and sorts rows on write, pre-partitioning and
+      sorting takes some of the load off of Kudu and helps large
+        INSERT operations to complete without timing out.
+      However, this default behavior may slow down the end-to-end performance of
+      the INSERT or UPSERT operations. 
+You can use the /* +NOCLUSTERED */ and /*
+        +NOSHUFFLE */ hints together to disable partitioning and
+      sorting before the rows are sent to Kudu. Additionally, since sorting may
+      consume a large amount of memory, consider setting the
+        MEM_LIMIT query option for those queries. 
+Loading Data into Kudu Tables
+ Kudu tables are well-suited to use cases where data arrives
+        continuously, in small or moderate volumes. To bring data into Kudu
+        tables, use the Impala INSERT and
+          UPSERT statements. 
+The LOAD DATA statement does not support Kudu tables. 
+ Because Kudu manages its own storage layer that is optimized for
+        smaller block sizes than HDFS, and performs its own maintenance to keep
+        data evenly distributed, it is not subject to the many small
+          files issue and does not need explicit reorganization and
+        compaction as the data grows over time. 
+The partitions within a Kudu table can be specified to cover a variety
+        of possible data distributions, instead of hardcoding a new partition
+        for each new day, hour, and so on, which can lead to inefficient,
+        hard-to-scale, and hard-to-manage partition schemes with HDFS tables. 
+ Your strategy for performing ETL or bulk updates on Kudu tables should
+        take into account the limitations on consistency for DML operations. 
+The INSERT, UPDATE, and
+              UPSERT operations should produce an identical
+            result even when executed multiple times.
+If a bulk operation is in danger of exceeding capacity limits due
+            to timeouts or high memory usage, split it into a series of smaller
+            operations. 
+Avoid running concurrent ETL operations where the end results
+            depend on precise ordering. In particular, do not rely on an
+              INSERT ... SELECT statement that selects from the
+            same table into which it is inserting, unless you include extra
+            conditions in the WHERE clause to avoid reading the
+            newly inserted rows within the same statement. 
+Because relationships between tables cannot be enforced by Impala
+            and Kudu, and cannot be committed or rolled back together, do not
+            expect transactional semantics for multi-table operations.
+
+
+Consistency Considerations for Kudu Tables
+ Kudu tables have consistency characteristics such as uniqueness,
+        controlled by the primary key columns and non-nullable columns. The
+        emphasis for consistency is on preventing duplicate or incomplete data
+        from being stored in a table. 
+ Currently, Kudu does not enforce strong consistency for order of
+        operations, total success or total failure of a multi-row statement, or
+        data that is read while a write operation is in progress. Changes are
+        applied atomically to each row, but not applied as a single unit to all
+        rows affected by a multi-row DML statement. That is, Kudu does not
+        currently have atomic multi-row statements or isolation between
+        statements. 
+ If some rows are rejected during a DML operation because of a mismatch
+        with duplicate primary key values, NOT NULL
+        constraints, and so on, the statement succeeds with a warning. Impala
+        still inserts, deletes, or updates the other rows that are not affected
+        by the constraint violation. 
+ Consequently, the number of rows affected by a DML operation on a Kudu
+        table might be different than you expect. 
+ Because there is no strong consistency guarantee for information being
+        inserted into, deleted from, or updated across multiple tables
+        simultaneously, consider denormalizing the data where practical. That
+        is, if you run separate INSERT statements to insert
+        related rows into two different tables, one INSERT
+        might fail while the other succeeds, leaving the data in an inconsistent
+        state. Even if both inserts succeed, a join query might happen during
+        the interval between the completion of the first and second statements,
+        and the query would encounter incomplete inconsistent data.
+        Denormalizing the data into a single wide table can reduce the
+        possibility of inconsistency due to multi-table operations. 
+ Information about the number of rows affected by a DML operation is
+        reported in impala-shell output, and in the
+          PROFILE output, but is not currently reported to
+        HiveServer2 clients such as JDBC or ODBC applications. 
+
+Handling Date, Time, or Timestamp Data with Kudu
+You can include
+          TIMESTAMP columns in Kudu tables. The behavior of
+          TIMESTAMP for Kudu tables has some special
+        considerations: 
+
+ Any nanoseconds in the original 96-bit value produced by Impala
+              are not stored, because Kudu represents date/time columns using
+              64-bit values. The nanosecond portion of the value is rounded, not
+              truncated. Therefore, a TIMESTAMP value that you
+              store in a Kudu table might not be bit-for-bit identical to the
+              value returned by a query. 
+
+
+ The conversion between the Impala 96-bit representation and the
+              Kudu 64-bit representation introduces some performance overhead
+              when reading or writing TIMESTAMP columns. You
+              can minimize the overhead during writes by performing inserts
+              through the Kudu API. Because the overhead during reads applies to
+              each query, you might continue to use a BIGINT
+              column to represent date/time values in performance-critical
+              applications. 
+
+
+ The Impala TIMESTAMP type has a narrower range
+              for years than the underlying Kudu data type. Impala can represent
+              years 1400-9999. If year values outside this range are written to
+              a Kudu table by a non-Impala client, Impala returns
+                NULL by default when reading those
+                TIMESTAMP values during a query. Or, if the
+                ABORT_ON_ERROR query option is enabled, the
+              query fails when it encounters a value with an out-of-range year.
+            
+
+
+
+

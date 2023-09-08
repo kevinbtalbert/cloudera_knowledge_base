@@ -1,0 +1,194 @@
+Component descriptionCloudera Docs
+Component description
+This topic provides an overview of the VPC, subnets, gateways and route tables, and
+  security groups required for CDP Public Cloud for AWS.
+
+
+Parent topic: Network architecture
+VPC
+An Amazon Virtual Private Cloud (VPC) is needed for deploying CDP workloads into the
+  customer’s cloud account. Cloudera recommend that the VPC used for CDP is configured with
+  properties as specified in this topic.
+
+
+The CIDR block for the VPC should be sufficiently large for supporting all the
+     Data Hubs and data services that you intend to run. Refer to Determining the CIDR range for understanding how to
+     compute the CIDR block range.
+The VPC properties for DNS hostnames and DNS resolution must be ENABLED. DNS
+     resolution lets Kubernetes pods resolve external host names and also to support DNS hostnames.
+     The DNS hostnames option needs to be enabled as several CDP data services rely on EFS (see
+      Mounting on Amazon EC2 with a DNS name). Enabling these
+     properties is also a requirement (see Amazon EKS cluster endpoint access control) to enable private access
+     of EKS cluster endpoints.
+VPCs are associated with a DHCP Option Set. The DHCP option set for the VPCs must
+     be set up as per the section described in DHCP option set.
+
+
+
+
+Subnets
+A subnet is a partition of the virtual network in which CDP workloads are
+  launched.
+It is recommended that the subnets be configured with the following properties:
+
+
+It is recommended to have 3 private subnets and 3 public subnets, such that each
+     private-public subnet pair is in a different availability zone (AZ). Even if a region has two
+     AZs instead of three, it’s recommended that three private subnets are created, two in the same
+     AZ. This is required to prevent cross AZ routing of traffic and to maintain Quorum-based
+     consistency required by some services.
+Note that a subnet becomes ‘private’ or ‘public’ based on the routing devices it
+       is associated with in the route tables. This is described in Gateways and route tables.
+The private subnets will be where the compute workloads will be launched by CDP.
+       This ensures that these nodes are working in an isolated and secure environment that does not
+       have internet connectivity.
+The public subnet is needed to host a NAT gateway as this will allow the compute
+       nodes to reach out to the CDP Control Plane over the internet. More on this will be described
+       in Gateways and route tables.
+
+The CIDR block for the subnets should be sufficiently large for supporting all the
+     CDP data services you intend to run. Refer to Determining the CIDR range for understanding how to
+     compute the CIDR block range.
+The CIDR block for the subnets should not overlap with known AWS EKS ranges for pods/services. Several EKS based CDP
+     data services in Overlay networks
+In addition, you may want to ensure that the CIDR ranges assigned to the Subnets
+     will not overlap with any of your on-premise network CIDR ranges, as this may be a requirement
+     for setting up connectivity from your on-prem network to the subnets.
+Since Cloudera recommends fully private network configuration, the ‘Auto-assign
+     public IPs’ option must be disabled for the private subnets.
+A subnet can be associated with a Network ACL (NACL). However, since Cloudera
+     works with a fully private network configuration where communication is always initiated from
+     EC2 nodes within the subnets, a NACL is generally not useful for this configuration.
+Tag private subnets with a tag ‘kubernetes.io/role/internal-elb:1’. The key is the
+     string and the value is ‘1’. Cloud Controller Manager and AWS Load Balancer Controller both
+     require private subnets to have this tag for automatic creation of private ELBs. Private ELBs
+     are created in these subnets by EKS. This is applicable when CDP is supporting EKS versions
+     < 1.20 (which is currently the case). See How can I tag the Amazon VPC subnets in my Amazon EKS
+      cluster.
+
+
+
+
+Gateways and route tables
+This topic covers recommended gateway and route table configurations for CDP Public
+  Cloud for AWS.
+Connectivity from Control Plane to CDP workloads
+
+
+As described in Taxonomy of network architectures, nodes in the CDP
+      workloads need to connect to the CDP Control Plane over the internet to establish a ‘tunnel’
+      over which the CDP Control Plane can send instructions to the workloads.
+In order to accomplish this, there are two gateways that need to be configured -
+      a NAT Gateway in each of the public subnets and an Internet Gateway at the VPC level.
+The private subnet hosting the CDP workloads should be configured with a route
+      table where the default route (0.0.0.0/0) points to a NAT Gateway in the public subnet of its
+      AZ.
+The public subnet hosting the NAT Gateway should be configured with a route table
+      where the default route (0.0.0.0/0) points to an Internet Gateway the VPC is configured
+      with.
+Each NAT gateway requires an elastic IP address. The VPC should contain as many
+      elastic IP addresses as NAT gateways across the AZs in the VPC.
+
+
+
+Connectivity from customer on-prem to CDP workloads
+
+
+As described in Use cases, data consumers need to access data
+      processing or consumption services in the CDP workloads. Given these are created with private
+      IP addresses in private subnets, the customers will need to arrange for access to these
+      addresses from their on-prem or corporate networks in specific ways. 
+There are several possible solutions for achieving this, but one that is depicted
+      in the Architecture diagram, uses a AWS VPN Gateway
+      service.
+In this solution, the customer has to create a Virtual Private Gateway, and
+      connect it to the VPN service on the on-prem network.
+
+
+
+
+
+Security groups
+During the specification of a VPC to CDP, the CDP admin specifies the security groups
+  that will be associated with all the CDP workloads launched within that VPC. These security groups
+  will be used in allowing the incoming traffic to the hosts.
+Security groups for Data Lakes and Data Hubs
+During the specification of a VPC to CDP, the CDP admin can either let CDP create
+    security groups, taking a list of IP address CIDRs as input; or create them in AWS and then
+    provide them to CDP. 
+When getting started with CDP, the CDP admin can let CDP create security groups,
+    taking a list of IP address CIDRs as input. These will be used in allowing the incoming traffic
+    to the hosts. The list of CIDR ranges should correspond to the address ranges from which the CDP
+    workloads will be accessed. In a VPN-peered VPC, this would also include address ranges from
+    customer’s on-prem network. This model is useful for initial testing given the ease of set
+    up.
+Alternatively, the CDP admin can create security groups on their own and select them
+    during the setup of the VPC and other network configuration. This model is better for production
+    workloads, as it allows for greater control in the hands of the CDP admin. However, note that
+    the CDP admin must ensure that the rules meet the requirements described below.
+For a fully private network, security groups should be configured according
+    to the types of access requirements needed by the different services in the workloads:
+
+Services accessed only within the VPC must be configured with the following
+     inbound rules:
+All TCP / UDP / ICMP access is allowed for the CIDRs corresponding to the
+       VPC.
+Conversely, there is no need to provide any access to these services for any IP
+       CIDRs outside the VPC.
+
+Endpoint services are the services that can be accessed outside the VPC through
+     the gateway, chiefly by data consumers or CDP admins. For example, UIs like Hue, Atlas, Ranger,
+     Cloudera Manager all need to be accessed by data consumers or other administrators. For
+     enabling this, the following in-bound rules are set up:
+All TCP / UDP / ICMP access is allowed for the CIDRs corresponding to the
+       VPC.
+All TCP ports that correspond to services like Kafka, HBase, and so on that need
+       to be accessed outside the VPC are to be allowed for the list of CIDR ranges specified at the
+       time of creating the environment/CDP data service, or in the security group created by the
+       CDP admin. Alternatively, all TCP / UDP / ICMP access may be allowed for these CIDR
+       ranges.
+SSH access is allowed for the CIDR ranges specified at the time of creating the
+       environment.
+HTTPS access is allowed for the CIDR ranges specified at the time of creating
+       the environment.
+
+Note that for a fully private network, even specifying an open access here
+     (such as 0.0.0.0/0) is restrictive because these services are deployed in a private subnet
+     without a public IP address and hence do not have a route to the Internet gateway. However, the
+     list of CIDR ranges may be useful to restrict which private subnets of the customer’s on-prem
+     network can access the services. Rules for EKS based workloads are described in the following
+     section.
+Rules for AKS based workloads are described separately in the following section.
+
+
+Additional rules for EKS-based workloads
+At the time of enabling a CDP data service, the CDP admin can specify a list of CIDR
+    ranges that will be used in allowing the incoming traffic to the workload Elastic Load Balancer
+    (ELB). This list of CIDR ranges should correspond to the address ranges from which the CDP data
+    service workloads will be accessed. In a VPN peered VPC, this would also include address ranges
+    from customer’s on-prem network. In a fully private network setup, 0.0.0.0/0 implies
+    access only within the VPC and the peered VPN network which is still restrictive.
+Since a public endpoint is enabled by default for all EKS cluster Control Planes at
+    the moment, it is highly recommended to provide a list of outbound public CIDR ranges at the
+    time of provisioning a CDP data service to restrict access to the EKS clusters. By default, the
+    public endpoint is always allowed to connect to the CDP public CIDR range. The following
+    screenshot is an example configuration section for a CDP data service:
+
+
+
+
+
+Specific guidelines for restricting access to Kubernetes API server and workloads
+    are detailed in Restricting access for CDP services that create their own
+     security groups on AWS by each CDP data service.
+Within the EKS cluster, there are several security groups defined to facilitate EKS
+    control plane-pod communication, inter-pod and inter-worker node communication as well as
+    workload communication through ELBs. These groups are in accordance with AWS documentation (see
+     Amazon EKS security group considerations.)
+
+Outbound connectivity requirements
+Outbound traffic from the worker nodes is unrestricted and is targeted at other AWS
+    services and CDP services. The comprehensive list of services that get accessed from a CDP
+    environment can be found in AWS documentation (see Amazon EKS security group considerations). 
+
+

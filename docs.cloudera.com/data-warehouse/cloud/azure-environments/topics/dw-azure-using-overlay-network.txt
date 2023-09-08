@@ -1,0 +1,96 @@
+Kubenet networking for Azure environments in Cloudera Data Warehouse serviceCloudera Docs
+Kubenet networking for Azure environments in Cloudera Data Warehouse service
+Kubenet networking is a software-defined layer of network abstraction that is used to
+    run multiple separate, discrete virtualized network layers over the Azure virtual network. You
+    use kubenet networking to increase the number of IP addresses available to support nodes in
+    your CDW cluster on Azure.
+warningAKS doesn't support two kubenet AKS instances running on same subnet.
+Default CDW networking
+By default, CDW uses Azure Container Networking Interface (CNI). With
+        Azure CNI, every pod gets an IP address from the node subnet and is accessed directly. Each
+        IP address must be unique across your network space, and you must plan for them in advance
+        of deploying your CDW cluster. Each node has a configuration parameter for the maximum
+        number of pods that it can support. The equivalent number of IP addresses per executor node
+        is reserved up front for it. This requires advanced planning and it can often lead to IP
+        address exhaustion. As an alternative, you must rebuild the cluster in large subnets so your
+        cluster can meet your applications' demands. You can configure the maximum pods that are
+        deployable to an executor node when you create the cluster or when you create new executor
+        node pools. However, if you do not specify the maximum number of pods for the
+          maxPods property when you create new executor node pools, by default each
+        executor node gets 30 pods (with one IP address per pod).
+
+About using the kubenet networking feature
+To avoid IP address exhaustion, you can enable the kubenet networking feature when you
+        activate an Azure environment to use with CDW. For a full description of kubenet networking
+        in AKS, see the Microsoft documentation.
+importantThird-party overlay networking solutions like Weaveworks Weave Net and
+        Project Calico are not supported in Microsoft Azure. Cloudera strongly recommends that you
+        do not deploy these third-party overlay networking solutions.
+
+How kubenet compares to Azure CNI
+The following calculations compare kubenet to Azure CNI:
+
+kubenet: A simple /24 IP address range can support up to 251 executor nodes in the
+          cluster. Keep in mind that Azure virtual network subnet reserves the first three IP
+          addresses for management operations. 251 executor nodes can support up to 27,610 pods when
+          you use a default maximum of 110 pods per executor node.
+Azure CNI: The same basic /24 IP address subnet range can only support a maximum
+          of 8 executor nodes in the cluster. 8 executor nodes can only support up to 240 pods with
+          a default maximum of 30 pods per executor node.
+
+
+Guidelines for choosing kubenet networking in CDW
+The following guidelines help you to decide whether to enable kubenet networking when you
+        are activating Azure environments for CDW:
+
+Use kubenet networking when the following conditions are true for your CDW
+            deployment:
+
+You have a limited IP address space.
+Most of the pod communication is within the cluster.
+You do not need advanced AKS features such as virtual executor nodes or to secure
+              traffic between pods with network policies. See Microsoft documentation for more information
+              on Azure network policies.
+
+
+Do not use the kubenet networking (use Azure CNI) when the following is true for your
+            CDW deployment:
+
+You have adequate IP addresses available.
+Most of the pod communication is to resources outside of the cluster.
+You do not want to manage User Defined Routing (UDR) for connectivity between pods
+              across executor nodes, which is required for kubenet.
+You do not need advanced AKS features as described above.
+
+
+
+
+Limitations of kubenet networking in CDW on Azure environments
+If you choose kubenet networking when you activate Azure environments for CDW, the
+        following limitations exist:
+
+Permissions must be assigned before cluster creation. Ensure that you are using a service
+       principal with write permissions on your customer subnet and custom route table.
+Managed identities are not supported with custom route tables in kubenet.
+A custom route table must be associated to the subnet before you create the AKS
+         cluster. Afterwards, this route table cannot be updated. All routing rules must be added or
+       removed from the initial route table before you create the AKS cluster.
+All subnets within an AKS virtual network must use the same route table.
+Every AKS cluster must use a unique route table. You cannot re-use a route table with
+         multiple clusters.
+
+Node count limits
+The following executor node count limits apply to whether you use kubenet networking or
+        not:
+
+With kubenet networking, you can have up to 400 executor nodes/AKS cluster.
+Without kubenet networking, which uses Azure CNI, you can have up to 1,000
+            executor nodes/AKS cluster.
+
+importantCloudera recommends that you use kubenet networking if you are
+        specifically concerned about IP address exhaustion. If that is not an issue for your
+        deployment of CDW, Cloudera recommends not using kubenet networking. Instead, use the
+        default Azure CNI networking interface.
+
+
+Enabling kubenet networking in Azure environmentsIf you are experiencing IP address exhaustion for your Azure environment in Cloudera     Data Warehouse (CDW) Public Cloud, you can enable a kubenet network for the environment. 

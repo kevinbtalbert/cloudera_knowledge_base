@@ -1,0 +1,166 @@
+Creating tables and inserting dataCloudera Docs
+Creating tables and inserting data
+After making the sales and weather data available in S3, you first create external
+        tables, insert data into them, and then create managed tables using the external
+        tables.
+
+importantYou must have the DWUser role to perform this
+                task.
+
+
+Log in to the CDP web interface.
+
+Go to Data Warehouse.
+
+Locate your Impala Virtual Warehouse and click on
+                    Hue.
+
+Open the Unified Analytics editor from the left assist
+                    panel.
+
+Run the following query to create an external table "sales":
+
+CREATE EXTERNAL TABLE `sales_external`(
+  `store_nbr` bigint,
+  `item_nbr` bigint,
+  `local_date` date,
+  `city_name` string,
+  `item_name` string,
+  `units` double)
+ROW FORMAT SERDE
+  'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+STORED AS INPUTFORMAT
+  'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat'
+OUTPUTFORMAT
+  'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
+LOCATION
+  's3a://[***COMPLETE-PATH-OF-S3-BUCKET***]/bi-at-scale-historic-sales-data/';
+
+bi-at-scale-historic-sales-data is the name of the
+                    directory containing Parquet files that you uploaded to S3.
+
+Verify that the historical sales data is available by running the following
+                    query:
+
+SELECT count(*) FROM sales_external;
+
+
+Run the following query to create a managed table that can receive sales data
+                    from the external table:
+
+CREATE TABLE sales (
+    store_nbr bigint,
+    item_nbr bigint,
+    local_date date,
+    item_name string,
+    units double
+                   )
+PARTITIONED BY (city_name string);
+
+
+Run the following query to insert data into the managed "sales" table:
+
+INSERT INTO sales PARTITION (city_name)
+SELECT  store_nbr, 
+        item_nbr, 
+        local_date, 
+        item_name, 
+        units, 
+        city_name 
+FROM sales_external;
+
+
+Verify that the historical sales data is available by running the following
+                    query:
+
+SELECT count(*) FROM sales;
+
+
+Run the following query to create an external table
+                    "weather_hist_external":
+
+CREATE external TABLE weather_hist_external(
+  city string,
+  local_date date,
+  avg_temperature DOUBLE,
+  min_temperature DOUBLE,
+  max_temperature DOUBLE,
+  avg_feels_like_temperature DOUBLE,
+  min_feels_like_temperature DOUBLE,
+  max_feels_like_temperature DOUBLE,
+  avg_humidity DOUBLE,
+  min_humidity DOUBLE,
+  max_humidity DOUBLE,
+  avg_pressure DOUBLE,
+  min_pressure DOUBLE,
+  max_pressure DOUBLE,
+  avg_wind_speed DOUBLE,
+  min_wind_speed DOUBLE,
+  max_wind_speed DOUBLE,
+  avg_snow_1h DOUBLE,
+  min_snow_1h DOUBLE,
+  max_snow_1h DOUBLE,
+  avg_rain_1h DOUBLE,
+  min_rain_1h DOUBLE,
+  max_rain_1h DOUBLE,
+  creation_timestamp timestamp
+  )
+  location 's3a://[***COMPLETE-PATH-OF-S3-BUCKET***]/bi-at-scale-historic-weather-data/';
+
+bi-at-scale-historic-weather-data is the name of the
+                    directory containing Parquet files that you uploaded to S3.
+
+Verify that the historical weather data is available by running the following
+                    query:
+
+SELECT count(*) FROM weather_hist_external;
+
+
+Run the following query to insert data into the "weather_forecast" table:
+
+INSERT INTO weather_forecast --PARTITION (city) -- CHECK FOR PARTITION ERROR ---- 
+SELECT  local_date, 
+        avg_temperature as avg_temp_k, 
+        min_temperature as min_temp_k, 
+        max_temperature as max_temp_k, 
+        (avg_temperature - 273.15) * 9/5 + 32 as avg_temp_f, 
+        (min_temperature - 273.15) * 9/5 + 32 as min_temp_f, 
+        (max_temperature - 273.15) * 9/5 + 32 as max_temp_f, 
+        avg_feels_like_temperature as avg_feels_like_temp_k, 
+        min_feels_like_temperature as min_feels_like_temp_k, 
+        max_feels_like_temperature as max_feels_like_temp_k, 
+        (avg_feels_like_temperature - 273.15) * 9/5 + 32 as avg_feels_like_temp_f, 
+        (min_feels_like_temperature - 273.15) * 9/5 + 32 as min_feels_like_temp_f, 
+        (max_feels_like_temperature - 273.15) * 9/5 + 32 as max_feels_like_temp_f, 
+        avg_humidity, 
+        min_humidity, 
+        max_humidity, 
+        avg_pressure, 
+        min_pressure, 
+        max_pressure, 
+        avg_wind_speed, 
+        min_wind_speed, 
+        max_wind_speed, 
+        avg_snow_1h, 
+        min_snow_1h, 
+        max_snow_1h, 
+        avg_rain_1h, 
+        min_rain_1h, 
+        max_rain_1h, 
+        creation_timestamp,
+        city
+FROM    weather_hist_external;
+
+
+note"weather" and "weather_forecast" tables are created by the Spark
+                        job.
+
+
+Verify that the forecast weather data is available by running the following
+                    query:
+
+SELECT count(*) FROM weather_forecast;
+
+
+
+Parent topic: Analyzing data and visualizing results using Cloudera Data Warehouse

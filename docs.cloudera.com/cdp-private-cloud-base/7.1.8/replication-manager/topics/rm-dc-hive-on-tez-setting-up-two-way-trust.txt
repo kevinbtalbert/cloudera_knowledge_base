@@ -1,0 +1,110 @@
+Configure two-way trust between clustersCloudera Docs
+Configure two-way trust between clusters
+A two-way trust between the source cluster and target cluster is required when both
+        the clusters use different Kerberos KDC servers with the same realm or different realms. The
+        staging directory is on the target cluster. It allows the source cluster to access staging
+        on the target cluster for both the DistCp and YARN jobs after you configure the two-way
+        trust between the clusters. The administrator must set up a one-way trust in order to use
+        replication between two kerberized clusters. You can also set up a one-way trust when the
+        staging directory is on the source cluster. Optionally, a two-way trust can be
+        configured.
+Clusters using different Kerberos KDC Servers with same realm
+When the clusters use different Kerberos KDC servers with the same realm, you must
+                point both the clusters to a single Kerberos KDC server and regenerate the keytabs
+                of the migrated cluster in Cloudera Manager.
+To point the clusters to a single Kerberos KDC server, perform the following
+                    steps:
+Create a source cluster and a target cluster that belong to the same realm.
+                            For example, assume that the realm name is EXAMPLE.COM. noteIn
+                            this example, EXAMPLE.COM points to the KDC server on the source
+                            cluster. It can point to the target cluster as well.
+Set up the /etc/krb5.conf file on all the hosts of both
+                        the source and target clusters.
+Perform the following steps only on the target cluster:
+[realms] section - In the target cluster,
+                                copy EXAMPLE.COM from the source cluster's KDC, admin_server, and
+                                default_domain settings.
+[domain_realm] section - Enlist all the hosts
+                                of both source and target clusters.
+
+
+To regenerate the keytabs of the migrated cluster, perform the following steps:
+Log into Cloudera Manager with administrator privileges.
+Stop all the services including the Cloudera Management Service.
+Go to the Administration > Security > Kerberos credentials page.
+Click Setup KDC for this Cloudera Manager
+                        option.
+In the Setup KDC for this Cloudera Manager wizard,
+                        choose the following options:
+On the Getting Started page, select
+                                    MIT KDC. Select I have
+                                    completed all the above steps after you make sure
+                                that all the steps in this page are complete.
+Click Continue.
+On the Enter KDC Information page, update the
+                                    KDC Server Host information as per the
+                                source cluster configuration.
+Click Continue.
+Enter the required details in all pages of the wizard to complete
+                                the setup. 
+
+Go to the Administration > Security  > Kerberos Credentials page.
+Select all the listed Principal values, and click
+                            Regenerate Selected.
+Restart the Cloudera Management Service and the clusters.
+
+
+Clusters using different Kerberos KDC Servers with different realms
+When the CDP Private Cloud Base source cluster and target
+                cluster use different Kerberos KDC servers with different realms, you must set up a
+                two-way KDC trust between the clusters.
+Hive ACID table replication policies use a common staging location on the source or
+                target cluster. To set the staging location path, use the
+                    hive.repl.rootdir configuration parameter to configure the HDFS
+                root directory for all replication dumps in the source cluster. The REPL DUMP
+                command dumps data into the staging location and the REPL LOAD command reads the
+                data from the staging location. The REPL DUMP command runs in the source cluster and
+                the REPL LOAD command runs in the target cluster.
+When the staging location is on the target cluster, the source cluster hosts access
+                the target HDFS staging location. The target KDC trusts the connections from the
+                source using trusted keytabs. Similarly, if the staging location is on the source
+                cluster, the target cluster hosts access the source HDFS staging location.
+To set up two-way trust between the CDP Private Cloud Base
+                source and target cluster, perform the following steps:
+Create clusters that belong to different Kerberos realms. For example,
+                            assume that you have Realm: “DRT” for the target
+                            cluster and Realm: “DRS” for the source
+                            cluster.
+Set up the /etc/krb5.conf file on all hosts of both the
+                        source and target hosts:
+
+[realms]section - Enlist both the DRS and DRT
+                                realms, DRS from the source cluster's Kerberos KDC, admin_server,
+                                and default_domain settings.
+[domain_realm] - Enlist all the hosts of both
+                                source and target clusters.
+Add krbtgt/DRS@DRT principal on both the source and
+                                target hosts that have HDFS NameNode role.
+$ sudo kadmin.local
+kadmin.local: addprinc -pw cloudera krbtgt/DRS@DRT
+WARNING: no policy specified for krbtgt/DRS@DRT; defaulting to no policy
+Principal "krbtgt/DRS@DRT" created
+kadmin.local: listprincs
+
+
+In Cloudera Manager, perform the following steps:
+Enable DRT as Trusted Kerberos Realm in source cluster HDFS
+                                service's configuration.
+Enable DRS as Trusted Kerberos Realm (trusted_realm) in target
+                                cluster's configuration along with the source host name where HDFS
+                                NameNode role is present.
+Enable DRS as Trusted Kerberos Realm in target cluster HDFS
+                                service's configuration.
+Access the remote HDFS endpoint to verify whether the trust set up
+                                is successful. To access the remote HDFS endpoint, run the following
+                                commands:kinit krbtgt/DRS@DRT
+hadoop fs -ls hdfs://[***REMOTE HDFS ENDPOINT***]>:8020/
+
+
+
+Parent topic: Prepare to create Hive ACID table replication policies

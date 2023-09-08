@@ -1,0 +1,33 @@
+impala_tmp_file_mgr_scratch_read_memory_buffer_used_high_water_mark metricCloudera Docs
+impala_tmp_file_mgr_scratch_read_memory_buffer_used_high_water_mark metric
+CDP Private Cloud Data Service metrics for impala_tmp_file_mgr_scratch_read_memory_buffer_used_high_water_mark.
+Parent topic: coordinator deployment
+impala_tmp_file_mgr_scratch_read_memory_buffer_used_high_water_mark metric
+
+
+Name
+impala_tmp_file_mgr_scratch_read_memory_buffer_used_high_water_mark
+Description
+The high water mark for read memory buffer bytes of all scratch directories.
+Type
+GAUGE
+Labels
+
+Unit
+
+Aggregates
+
+Meta
+
+
+Category: dwx
+Deployment: coordinator
+
+
+Additional Notes
+null
+Version
+null
+
+
+

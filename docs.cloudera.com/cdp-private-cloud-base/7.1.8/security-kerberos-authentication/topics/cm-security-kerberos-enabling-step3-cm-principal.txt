@@ -1,0 +1,100 @@
+Step 3: Create the Kerberos Principal for Cloudera Manager ServerCloudera Docs
+Step 3: Create the Kerberos Principal for Cloudera Manager Server
+How to create a Kerberos principal for Cloudera Manager Server. 
+
+At the end of the integration process using the configuration wizard, Cloudera Manager
+        Server will create host principals and deploy keytabs for all services configured on the
+        cluster, which means that Cloudera Manager Server requires a principal that has privileges
+        to create these other accounts. 
+noteThis task requires administrator privileges on the Kerberos instance. If you
+        do not have administrator privileges, ask your Kerberos administrator to setup the principal
+        and password for you. You will need to enter the principal name and password into the wizard
+        later in the install process.
+If an administrator principal to act on behalf of Cloudera Manager cannot be created on the
+        Kerberos KDC for whatever reason, Cloudera Manager cannot create or manage principals and
+        keytabs for CDP services. That means these principals must be created manually on the
+        Kerberos KDC and then imported (retrieved) by Cloudera Manager. See Using a custom
+          Kerberos keytab retrieval script for details about this process.
+
+noteThe steps below summarize the process of adding a principal specifically for Cloudera
+          Manager Server to an MIT KDC and an Active Directory KDC. See documentation from MIT,
+          Microsoft, or the appropriate vendor for more detailed information. 
+
+
+
+Related informationUsing a custom Kerberos keytab retrieval scriptParent topic: Enabling Kerberos Authentication for CDP
+Creating a Principal in Active Directory
+
+
+Check the Microsoft documentation for specific details for your Active Directory KDC. The
+          general process is as follows:
+
+
+Create an Organizational Unit (OU) in your Active Directory KDC service that will
+            contain the principals for use by the CDP cluster.
+
+Add a new user account to Active Directory, for example,
+                username@EXAMPLE.COM. Set the password for the
+            user to never expire. 
+
+Use the Delegate Control wizard in Active Directory to grant
+            this new user permission to Create, Delete, and Manage User Accounts in the OU
+            created in step 1. Make sure that these permissions are only applied to that specific
+            OU, and nowhere else.
+
+
+
+Creating a Principal in an MIT KDC
+
+For MIT Kerberos, administrator principals are defined
+            in the /var/kerberos/krb5kdc/kadm5.acl file on the KDC host. The
+            default entry
+            is:*/admin@EXAMPLE.COM     *In
+            this example, principals that include the instance name admin designate
+            a user account as an administrator, such as
+                jdoe/admin@EXAMPLE.COM.If
+            you modify the kadm5.acl file, such as replacing
+              EXAMPLE.COM with your realm name, make sure to restart the
+              kadmin service:
+RHEL 7
+              Compatible:systemctl restart kadmin
+All
+              Others:service kadmin restart
+Create the Cloudera Manager Server administrator principal as shown below, using
+            the admin instance name and your realm name. If your
+              kadm5.acl file defines a different pattern for administrators, make
+            sure that the principal you create matches that pattern.For MIT Kerberos KDC
+              on a remote host:noteTo connect to a remote KDC using the
+              kadmin command, your currently authenticated Kerberos principal must
+            be an existing Kerberos administrator. If you do not have an existing admin principal,
+            you must run kadmin.local as described
+            below.kadmin
+kadmin: addprinc -pw password cloudera-scm/admin@EXAMPLE.COMFor
+            MIT Kerberos KDC on the local host:noteThe kadmin.local command
+            must be run as root on the same host as the
+          KDC.kadmin.local
+kadmin.local: addprinc -pw password cloudera-scm/admin@EXAMPLE.COM
+
+
+
+
+Creating a Principal in Red Hat Identity Management (FreeIPA)
+
+
+If you are using Red Hat IdM or FreeIPA, the wizard creates its own user account with the
+          necessary privileges. To do so, it requires admin credentials the first time. These admin
+          credentials are not stored, and are used only to create a new user and role (named
+              cmadin-<random_id> and
+            cmadminrole, respectively) and retrieve its keytab. Cloudera Manager
+          stores this keytab for future Kerberos operations, such as regenerating the credentials of
+          the CDP service accounts.
+Because the wizard creates the principal it requires, you do not need to manually create
+          an admin principal for Cloudera Manager at this time.
+For additional information, refer to the Red Hat documentation:
+
+RHEL 7: Linux Domain Identity, Authentication, and Policy Guide
+RHEL 6: Identity Management Guide
+
+
+
+

@@ -1,0 +1,199 @@
+Converting from Device Names to UUIDs for Encrypted DevicesCloudera Docs
+Converting from Device Names to UUIDs for Encrypted Devices
+
+When configuring a Navigator Encrypt mount point, you can use either the device
+      name (sample device name: /dev/sdb1) or the UUID (sample
+      UUID: 3a602a15-11f7-46ac-ae98-0a51e1b25cf9) to
+      configure the mount point. For more information, see Navigator Encrypt and Device UUIDs.
+The UUID mount point configuration choice is preferable for Navigator
+      Encrypt, because the device name can change when the system is rebooted or
+      new  disks are added, but the UUID never changes. You can only use the
+      UUID (--use-uuid) configuration option during the
+      initial mount point configuration. You cannot use the UUID mount point
+      configuration option on existing mount points that were created in Navigator
+      Encrypt 3.12.0 or earlier, or that were configured to use the
+      device name instead of the UUID. 
+For configurations where a device name was used, and you wish to convert to
+      a UUID, you have the option to use the UUID conversion utility
+      (navencrypt-prepare --convert-uuid), which converts existing
+      mount points from using the device name to using the UUID. The UUID conversion
+      utility updates the Navigator Encrypt configuration files to use UUIDs, and
+      then reloads the updated mount points. You can perform this conversion on
+      mount points with encrypted data without any impact on that data.
+      importantCloudera strongly recommends that Navigator Encrypt
+        mount points that are currently using the device name be converted to use
+        the device UUID. This will prevent error situations when the Navigator
+        Encrypt mount points cannot be mounted, and the encrypted data cannot be
+        accessed because the device name changed.
+
+
+
+Preparing for UUID Conversion
+
+The UUID conversion utility runs as part of the
+          navencrypt-prepare command:
+        # navencrypt-prepare -h
+...
+--convert-uuid --all|--device=DEVICE
+    Converts devices that are stored using the device name to instead use its uuid.
+    '--all' will attempt to convert all device names in the navencrypt ztab file.
+    '--device=DEVICE' will convert a single device.
+...
+As shown, you have two options when running the UUID conversion utility:
+--device=DEVICEUse this option to run the conversion
+              against a single specified device.
+--allUse this option to run the conversion against all
+              mount points that are currently using the device name instead of
+              the UUID as defined in the /etc/navencrypt/ztab
+              file.
+
+The conversion utility first backs up all files in
+          /etc/navencrypt to a timestamped directory under
+          /tmp. Ensure that the user running the
+          navencrypt-prepare operation has permission to write
+        to /tmp. If this backup directory is not created, then
+        the conversion script will exit without making any changes to the
+        Navigator Encrypt configuration files.noteBecause the conversion
+          utility backs up the Navigator Encrypt configuration files, it is not
+          necessary to back up the files separately. However, if you want the
+          files backed up elsewhere (somewhere other than the
+            /tmp folder), then manually perform this backup by
+          copying the /etc/navencrypt directory to the desired
+          location before running the conversion utility. Note that the
+          conversion utility will still attempt to create its own backup under
+            /tmp, and will not run if this backup cannot be
+          created.
+
+
+
+Converting a Single Device
+
+Use the UUID conversion utility --device=DEVICE
+        option  to convert from a device name to UUID for a mount point on a
+        single  device. It is recommended that you test the conversion against
+        at least one device before running it  against all devices:
+# navencrypt-prepare --convert-uuid --device=/dev/xvdd 
+Backing up /etc/navencrypt to /tmp/navencrypt_bkup_20180917_135716 ... 
+Stopping navencrypt-mount... 
+Stopping navencrypt directories
+
+Umounting /dev/xvdd ... [ OK ]
+Umounting /dev/xvde ... [ OK ]
+Umounting /dev/xvdf ... [ OK ]
+* Unloading module ... [ OK ] 
+Running conversion on /dev/xvdd
+... ..
+You must approve and finalize the conversion before it is complete.
+
+
+
+Converting All Available Devices
+
+Use the UUID conversion utility --all option to
+        convert from the device name to the device UUID on all available
+        devices. The conversion utility skips loop devices because they do not 
+        have a dedicated UUID:
+# navencrypt-prepare --convert-uuid --all 
+Backing up /etc/navencrypt to /tmp/navencrypt_bkup_20180917_135731 ... 
+Stopping navencrypt-mount... 
+Stopping navencrypt directories
+* Umounting /dev/xvdd ...                                 [  OK  ]
+* Umounting /dev/xvde ...                                 [  OK  ]
+* Umounting /dev/xvdf ...                                 [  OK  ]
+* Unloading module ...                                    [  OK  ] 
+Running conversion on /dev/xvdd... 
+Running conversion on /dev/xvde... 
+Running conversion on /dev/xvdf... ...
+You must approve and  finalize the conversion before it is
+        complete.
+
+
+
+Finalizing the Conversion
+
+Before the device name-to-UUID conversion is applied to the 
+        configuration files, you must review and approve the differences between
+        the  /etc/navencrypt/ztab and 
+        /etc/navencrypt/control by either  accepting the
+        changes ("y"), or rejecting them ("n"). 
+# navencrypt-prepare --convert-uuid --all
+...
+Running conversion on /dev/xvdd...
+Running conversion on /dev/xvde...
+Running conversion on /dev/xvdf...
+
+Showing diff of ztab and control files
+
+---------------------------------------------
+                    ZTAB
+---------------------------------------------
+2,4c2,4
+< /navencrypt_mount/block1     /dev/xvdd     luks     key=keytrustee
+< /navencrypt_mount/block2     /dev/xvde     luks     key=keytrustee
+< /navencrypt_mount/block3     /dev/xvdf     luks     key=keytrustee
+---
+/navencrypt_mount/block1       /dev/disk/by-uuid/4206d6d5-6014-435a-b342-1d3dad5559a2     luks     key=keytrustee
+> /navencrypt_mount/block2     /dev/disk/by-uuid/b84c4f38-bc74-40bc-87eb-2e857a996933     luks     key=keytrustee
+> /navencrypt_mount/block3     /dev/disk/by-uuid/622312d0-0e6c-4e37-adeb-f6066a1df07d     luks     key=keytrustee
+---------------------------------------------
+                  CONTROL
+---------------------------------------------
+8c8
+<     "name":     "/dev/xvdd",
+---
+>     "name":     "/dev/disk/by-uuid/4206d6d5-6014-435a-b342-1d3dad5559a2",
+11c11
+<     "name":     "/dev/xvde",
+---
+>     "name":     "/dev/disk/by-uuid/b84c4f38-bc74-40bc-87eb-2e857a996933",
+14c14
+<     "name":     "/dev/xvdf",
+---
+>     "name":     "/dev/disk/by-uuid/622312d0-0e6c-4e37-adeb-f6066a1df07d",
+
+
+Accept changes? [y/N] y
+Moving KeyTrustee deposit for /dev/xvdd...
+Moving KeyTrustee deposit for /dev/xvde...
+Moving KeyTrustee deposit for /dev/xvdf...
+Operation complete
+Overwriting old files...
+Starting navencrypt-mount...
+Starting navencrypt directories
+ * Mounting '4206d6d5-6014-435a-b342-1d3dad5559a2'         [  OK  ]
+ * Mounting 'b84c4f38-bc74-40bc-87eb-2e857a996933'         [  OK  ]
+ * Mounting '622312d0-0e6c-4e37-adeb-f6066a1df07d'         [  OK  ]
+If you reject the changes, the updated files are saved to
+        /etc/navencrypt/ztab.new and
+        /etc/navencrypt/control.new, and the existing
+        ztab and control files remain
+        unchanged.warningDo not manually copy the
+          ztab.new and control.new files
+          over the existing ztab and control
+          files. If upon review the new files are correct, then re-issue
+          navencrypt-prepare --convert-uuid and select “y” to
+          use the updated files. If you modify the ztab and
+          control files outside of the
+          navencrypt-prepare script, then you will encounter
+          a conflict in the saved keytrustee deposits that will
+          prevent the Navigator Encrypt mount points from mounting.
+# navencrypt-prepare --convert-uuid --all
+...
+Accept changes? [y/N] n
+
+Changes will not be applied. Proposed changes are saved to /etc/navencrypt/ztab.new and /etc/navencrypt/control.new
+
+
+
+Rolling Back the UUID Conversion
+
+If you experience any problems with the device name-to-UUID conversion,
+        you can restore the previous mount point state by replacing the contents
+        of the /etc/navencrypt/directory with the backup
+        created by the conversion
+        utility:# service navencrypt-mount stop
+# rm /etc/navencrypt/keytrustee/deposits/dev.disk.by-uuid.*
+# cp -rp /tmp/navencrypt_bkup_date_time/* /etc/navencrypt/
+# service navencrypt-mount start
+
+

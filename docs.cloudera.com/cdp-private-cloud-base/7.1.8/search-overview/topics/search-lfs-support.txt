@@ -1,0 +1,196 @@
+Local file system supportCloudera Docs
+Local file system support
+Learn about the advantages and limitations of using local File System (FS) to store
+  indexes of Cloudera Search.
+Apache Lucene-Solr supports various file systems to store index data, including the Hadoop
+   Distributed File System (HDFS) or file systems which are local to the server. 
+Solr queries perform the best when the index data is available in memory. The HDFS data storage
+   implementation includes various performance tweaks, for example data locality, Short Circuit Data
+   Reads and caching of the HDFS data blocks in memory. For most of the cases this yields acceptable
+   performance, however there are some cases where sub-second response time of queries is critical.
+   In these cases a local index storage (especially using performant Solid State Disks, SSDs) paired
+   with the OS caching, can yield better performance. In the upstream Apache Solr, local FS storage
+   is a widely used and supported feature that is considered stable.
+Cloudera curently supports local FS storage for new installations only. The global default
+   behavior of Cloudera Search remains storing indexes on HDFS. If you want to store your indexes
+   locally, you can configure it at collection level, by generating a collection configuration using
+   the solrctl instancedir --generate command with the -localfs
+   argument. This replaces HdfsDirectoryFactory with
+    NRTCachingDirectoryFactory, and HDFS lock factory with native lock factory in
+   the generated solrconfig.xml file. When Solr loads such a collection, it writes
+   the index into a subdirectory of the local data directory (by default
+    var/lib/solr).
+noteIf you opt for storing indexes on local FS, it is your responsibility to set quotas on OS
+   level, preventing Solr from consuming all available space under /var, negatively
+   impacting the performance of other services.
+Benefits of using local file system for index storage
+
+No need to worry about data locality
+
+The HDFS directory factory attempts to place each HDFS data block on a Data Node which is
+       local to a given Solr server, provided that such a Data Node is up and operational. When the
+       data node goes down, or an HDFS rebalancing operation is triggered in the cluster, the
+       overall data locality of Solr can be ruined which can negatively affect performance. At the
+       moment there is no easy way to restore locality, either you can optimize an index which can
+       have bad side effects, or you use the ADDREPLICA of the Collections API to re-add each
+       replica and then apply DELETEREPLICA on the old replica with bad locality. 
+With local FS there are no such issues.
+
+Faster disk reads and better caching
+
+The HDFS block cache provides a great help when you have to read data blocks which are not
+       available locally. For the fast execution of a query it is critically important to ensure
+       that a block is available locally - a cache miss can be costly due to the network round trips
+       involved. 
+
+Better Query Response Times
+
+Cloudera performed benchmarking to measure document indexing performance, and found that
+       the indexing was roughly two times faster on local FS than on HDFS even when using a magnetic
+       spinning disk.
+Table 1. Indexing time in seconds for 10 million records
+
+
+HDFS
+Local FS
+Percentage
+
+
+
+2x5 million records, 2x1 thread
+3265
+2853
+87.38
+
+
+2x5 million records, 2x5 thread
+1645
+856
+52.04
+
+
+2x5 million records, 2x10 thread
+1603
+715
+44.6
+
+
+2x5 million records, 2x20 thread
+1524
+695
+45.6
+
+
+Spark Crunch Indexer, 20 executors
+1652
+766
+46.37
+
+
+Spark Crunch Indexer, 40 executors
+1559
+762
+48.88
+
+
+Spark Crunch Indexer, 100 executors
+1471
+752
+51.12
+
+
+In another case NVMe SSDs were used with a local FS to store the Solr index. In this case
+       the query executions turned out to be three times faster than on HDFS. 
+note
+The downsides of this configuration are that replacing an NVMe SSD might require full
+        server downtime (since they are connected directly to the PCI Express bus). 
+
+You must take care regarding the RAID configurations, as the local FS does not provide an
+       FS level replication, so the data redundancy has to be provided at the disk level by using a
+       RAID setup and/or at the Solr level by adding more replicas to the collection.
+
+No “Small files problem”
+
+HDFS is sensitive to having a large number of small files stored. Even in spite of Solr
+       periodically merging the segments in the background, an index directory can have many small
+       files. NameNode RPC queues may be periodically overloaded when having a Solr collection with
+       a large number of shards (100+).
+
+Dynamic caching
+
+When using a local FS, caching of the files is managed by the underlying operating system.
+       The operating system can dynamically manage the amount of memory used for caching based on
+       the current memory pressure, whereas the HDFS block cache allocation is more static.
+
+Less impact from other services
+
+By storing the files locally, query performance is not affected by the load on HDFS caused
+       by other services. This is especially important if you have certain query response time SLAs
+       to meet.
+
+Less storage overhead
+
+The index files on HDFS are stored with the same replication factor as configured for the
+       underlying HDFS service. The current Solr implementation allows specifying a custom
+       replication factor for the transaction log files, but for the index files it always uses the
+       replication factor configured for the entire HDFS service even if you want to go with a
+       smaller replication factor.
+
+
+
+CDP features that are only available on HDFS
+
+Index data encryption
+
+CDP provides robust, transparent encryption of the HDFS data where the encryption key
+       management is external to HDFS. Only the authorized HDFS clients can access the data, even
+       HDFS and the operating system interact using encrypted data only. The solution also supports
+       various Hardware Security Modules and CPU instruction sets to accelerate the encryption. 
+When storing data on a local FS, encryption is also possible but needs to be implemented
+       and managed external to CDP.
+
+Quota support
+
+CDP have built in solutions to define quotas for the data stored on HDFS. 
+When using a local FS, the disk space taken by Solr indexes is not controlled by CDP, so
+       monitoring the disk usage and ensuring that index files do not eat up all the space has to be
+       done externally.
+
+File system level redundancy
+
+Solr allows collection level fault tolerance using the replica concept. Provided that the
+       replicas of each shard are stored on different machines, this provides enough protection
+       against the failure of a single server. Additionally to this, HDFS is distributed by nature
+       and it provides block level redundancy. This provides more opportunities for disaster
+       recovery - in case of any server going down, the affected replicas can be restarted on any
+       other server, pointing to the same data set.
+
+Flexible cross-cluster backups
+
+The backup implementation provided by Cloudera Search is relying on the hadoop distcp tool
+       to export index snapshots to HDFS, and it also allows transferring them to remote clusters.
+      
+
+Using the MapReduceIndexerTool (MRIT)
+
+MRIT does not work with local file systems as an indexing target, as it creates temporary
+       indexes on the HDFS. After the MapReduce jobs have completed, the client part of the indexer
+       invokes the MERGEINDEXES action of the Solr CoreAdmin API. This only works when the source
+       and target index  use the same directory factory.
+
+Using the HBASE MapReduceIndexerTool (HBASE MRIT)
+
+HBASE MRIT does not work with local file systems if the number of reducers are greater than
+       0 as an indexing target, as it creates temporary indexes on the HDFS. After the MapReduce
+       jobs have completed, the client part of the indexer invokes the MERGEINDEXES action of the
+       Solr CoreAdmin API. This only works when the source and target index use the same directory
+       factory.
+noteHBASE MRIT works correctly with local file systems if the number
+       of reducers are set to 0 (--reducers 0) because in this case documents are
+       sent directly from the mapper tasks to live Solr servers instead of using
+       MERGEINDEXES.
+
+
+
+
+Related informationGenerating Solr collection configuration using instance directoriessolrctl Reference

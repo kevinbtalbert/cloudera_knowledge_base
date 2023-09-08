@@ -1,0 +1,81 @@
+Writing user-defined aggregate functions (UDAFs)Cloudera Docs
+Writing user-defined aggregate functions (UDAFs)
+User-defined aggregate functions (UDAFs or UDAs) are a powerful and flexible category of
+        user-defined functions. If a query processes N rows, calling a UDAF during the query
+        condenses the result set, anywhere from a single value (such as with the
+          SUM or MAX functions), or some number less than or equal
+        to N (as in queries using the GROUP BY or HAVING clause).
+
+
+The underlying functions for a UDA
+
+ A UDAF must maintain a state value across subsequent calls, so that it can
+              accumulate a result across a set of calls, rather than derive it purely from one set
+              of arguments. For that reason, a UDAF is represented by multiple underlying functions: 
+
+ An initialization function that sets any counters to zero, creates empty buffers,
+                and does any other one-time setup for a query. 
+ An update function that processes the arguments for each row in the query result
+                set and accumulates an intermediate result for each node. For example, this function
+                might increment a counter, append to a string buffer, or set flags. 
+ A merge function that combines the intermediate results from two different nodes. 
+ A serialize function that flattens any intermediate values containing
+                pointers, and frees any memory allocated during the init, update, and merge phases. 
+ A finalize function that either passes through the combined result unchanged, or
+                does one final transformation. 
+
+ In the SQL syntax, you create a UDAF by using the statement CREATE AGGREGATE
+                FUNCTION. You specify the entry points of the underlying C++ functions
+              using the clauses INIT_FN, UPDATE_FN,
+                MERGE_FN, SERIALIZE_FN, and
+                FINALIZE_FN. 
+  For convenience, you can use a naming convention for the
+              underlying functions and Impala automatically recognizes those
+              entry points. Specify the UPDATE_FN clause, using
+              an entry point name containing the string update
+              or Update. When you omit the other
+                _FN clauses from the SQL statement, Impala
+              looks for entry points with names formed by substituting the
+                update or Update portion of
+              the specified name. 
+
+uda-sample.h: 
+ See this file online at: uda-sample.h
+
+
+uda-sample.cc: 
+ See this file online at: uda-sample.cc
+
+
+
+
+Intermediate results for UDAs
+
+ A user-defined aggregate function might produce and combine intermediate results
+              during some phases of processing, using a different data type than the final return
+              value. For example, if you implement a function similar to the built-in
+                AVG() function, it must keep track of two values, the number of
+              values counted and the sum of those values. Or, you might accumulate a string value
+              over the course of a UDA, then in the end return a numeric or Boolean result. 
+ In such a case, specify the data type of the intermediate results using the optional
+                INTERMEDIATE type_name clause of the
+                CREATE AGGREGATE FUNCTION statement. If the intermediate data is a
+              typeless byte array (for example, to represent a C++ struct or array), specify the
+              type name as CHAR(n), with n
+              representing the number of bytes in the intermediate result buffer. 
+ For an example of this technique, see the trunc_sum() aggregate
+              function, which accumulates intermediate results of type DOUBLE and
+              returns BIGINT at the end. View the appropriate CREATE
+                FUNCTION statement and the implementation of the underlying TruncSum*()
+              functions on Github.
+
+
+test_udfs.py
+test-udas.cc
+
+
+
+
+
+
+Parent topic: User-defined functions (UDFs)

@@ -1,0 +1,109 @@
+kite-morphlines-jsonCloudera Docs
+kite-morphlines-json
+This maven module contains morphline commands for reading, extracting, and transforming
+    JSON files and JSON objects.
+readJson
+The readJson command (source code) parses an InputStream or byte array
+        that contains JSON data, using the Jackson library. For each top level JSON object, the command emits a morphline
+        record containing the top level object as an attachment in the field _attachment_body.
+The input stream or byte array is read from the first attachment of the input record.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+outputClass
+com.fasterxml.jackson.databind.JsonNode
+The fully qualified name of a Java class that Jackson shall convert to.
+
+
+Example usage:
+readJson {}
+Example usage with conversion from JSON to java.util.Map objects:
+readJson {
+  outputClass : java.util.Map
+}
+
+extractJsonPaths
+The extractJsonPaths command (source code) extracts specific values from a JSON
+        object, akin to a simple form of XPath. The command uses zero or more JSON path expressions
+        to extract values from a Jackson JSON object of outputClass
+          com.fasterxml.jackson.databind.JsonNode.
+The JSON input object is expected to be contained in the field _attachment_body, and
+        typically placed there by an upstream readJson
+        command with outputClass : com.fasterxml.jackson.databind.JsonNode.
+Each path expression consists of a record output field name (on the left side of the colon
+        ':') as well as zero or more path steps (on the right hand side), each path step separated
+        by a '/' slash, akin to a simple form of XPath. JSON arrays are traversed with the '[]'
+        notation.
+The result of a path expression is a list of objects, each of which is added to the given
+        record output field.
+The path language supports all JSON concepts, including such concepts as nested objects,
+        arrays, etc. The path language supports a flatten option that collects the primitives in a
+        subtree into a flat output list.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+flatten
+true
+Whether to collect the primitives in a subtree into a flat output list.
+
+
+paths
+[]
+Zero or more JSON path expressions.
+
+
+Example usage:
+extractJsonPaths {
+  flatten : true
+  paths : {
+    my_price : /price
+
+    my_docId : /docId
+    my_links : /links
+    my_links_backward : "/links/backward"
+    my_links_forward : "/links/forward"
+    my_name_language_code : "/name[]/language[]/code"
+    my_name_language_country : "/name[]/language[]/country"
+    my_name : /name    
+  }
+}
+Alternatively, if the extractJsonPaths command doesn't fit your needs you can instead implement your own Custom
+          Morphline Command or script a java command
+        config that uses the com.fasterxml.jackson.databind.JsonNode Java API to
+        arbitrarily traverse and process the Jackson Json tree that is emitted by the readJson command. For example, along the
+        following lines:
+{ 
+  readJson { }
+}
+
+{
+  java { 
+    imports : """
+      import com.fasterxml.jackson.databind.JsonNode;
+      import org.kitesdk.morphline.base.Fields;
+      // import com.cloudera.cdk.morphline.base.Fields; // use this for CDK
+    """
+    code : """
+      JsonNode rootNode = (JsonNode) record.getFirstValue(Fields.ATTACHMENT_BODY);
+      String forwardLinks = rootNode.get("links").get("forward").asText(); // traverse via Jackson Tree API
+      record.put("forwardLinks", forwardLinks);
+      logger.debug("My output record: {}", record);
+      return child.process(record);
+    """
+    } 
+  }
+}
+
+

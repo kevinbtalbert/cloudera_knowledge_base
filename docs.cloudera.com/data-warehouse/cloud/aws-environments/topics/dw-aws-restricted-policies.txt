@@ -1,0 +1,684 @@
+AWS restricted policyCloudera Docs
+AWS restricted policy
+As Administrator, to enable the Cloudera Data Warehouse service your IAM role must
+      include two policies that restrict access to the environment. You must include this policies
+      before you activate the environment in Cloudera Data Warehouse to make the service available
+      to users. 
+Two policies are required because the content exceeds the AWS file size limit. The AWS
+         restricted policy associates a cross-account role with the environment.
+If you do not have a Ranger Authorized (RAZ)-enabled Data Lake, simply attach the
+         AWS restricted policy described below to your cross-account role, and nothing more. 
+If you do have a RAZ-enabled Data Lake, take the following actions: 
+Attach the AWS restricted policy described below to your cross-account role.
+Add ARNs to the role or a key to the AWS restricted policy.For more information
+                  see "RAZ-enabled Data Lake restricted policy"
+                  below.
+
+To attach the AWS restricted policy to your  cross-account role, perform the following
+            steps:
+In the AWS management console, find the IAM role you created.
+Attach the following restricted policies (two files are required to comply with
+               Amazon file size requirements):
+
+
+noteTo copy the JSON, which contains comments, click copy-to-clipboard
+                only. If you
+            use CTRL C to copy the code, the comments in addition to the JSON are captured, which
+            makes JSON invalid.
+
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "ResourceTag",
+            // Control access to AWS serviceresources based on
+            // resource tags using ResourceTag/key-name
+            // condition key to allow access to resource or not
+            // based on resource tagging                                             
+            "Effect": "Allow",
+            "Action": [
+                "acm:DeleteCertificate",
+                // Delete certificate attached to ELB
+                // created/deleted with cloudformation stack 
+                "autoscaling:SuspendProcesses",
+                // Suspend AZRebalance for autoscaling group;
+                // include AZRebalance; cannot suspend 
+                // AZRebalance in cloudformation; edit/update
+                // ASGs with AWS API to avoid AWS re-balancing
+                // nodes for AZ (most nodes run in 
+                // stateful/critical pods)
+                "autoscaling:UpdateAutoScalingGroup",
+                // Calico overlaynetwork option requires no EKS
+                // nodes up on installation; with CF stack
+                // creation 3 nodes start up, autoscaling group
+                // updates desired capacity to Zero via AWS API;
+                // need latest SSH key from CloudBreak for EKS
+                // node updates; new Launch template passes
+                // SSH key and updates in ASG
+                "cloudformation:DeleteStack",
+                // Delete the cf stack created
+                "cloudformation:DescribeStackEvents",
+                // Get cf stack events, identify cause of failed
+                // cf stack creation failure
+                "elasticfilesystem:PutFileSystemPolicy",
+                // While creating EFS Filesystem give
+                // permission to attach FileSystem Policy
+                // for Client access via MountTarget and
+                // Encryption In transit
+                "rds:DeleteDBInstance",
+                // Delete DB instance used to store
+                // Metastore/Hive/Impala/Hue query data
+                "rds:DeleteDBSecurityGroup",
+                // Delete DB security group created via cf
+                "rds:DeleteDBSubnetGroup",
+                // Delete DB Subnet group created via cf
+                "ec2:DeleteKeypair"
+                // Delete keypair while deactivating CDW
+                // needed if CB env ssh is not reused
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringLike": {
+                    "aws:ResourceTag/Cloudera-Resource-Name": "crn:cdp:*"
+                }
+            }
+        },
+        {
+            "Sid": "RequestTag",
+            "Effect": "Allow",
+            "Action": [
+                "autoscaling:CreateAutoScalingGroup",
+                //Create autoscaling groups for cluster
+                "cloudformation:CreateStack",
+                // Activate createstack mainly with 
+                // cloudformation
+                "eks:TagResource",
+                // Tag eks cluster, e.g.: clusterId,
+                // envId, clustername, accountId...
+                "elasticfilesystem:CreateFileSystem",
+                // Create efs storage to be used by hive and
+                // Prometheus
+                "kms:CreateGrant",
+                // Use KMS keys in cryptographic
+                // operations, e.g. in ebs
+                "kms:CreateKey",
+                // During activation KMSKey created with cf
+                "rds:AddTagsToResource",
+                // In CF when creating RDS instance tag created
+                // with stack information adds metadata tags to
+                // Amazon RDS resource for use with cost
+                // allocation reporting to track cost of Amazon
+                // resources or to use in Condition statement 
+                // of IAM policy for Amazon RDS
+                "cloudformation:UpdateStack"
+                // Update Custom AMI, upgrade EKS 
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringLike": {
+                    "aws:RequestTag/Cloudera-Resource-Name": "crn:cdp:*"
+                }
+            }
+        },
+        {
+            "Sid": "AttachRole",
+            "Effect": "Allow",
+            "Action": "iam:AttachRolePolicy",
+            // Attach AWS managed policy ARNs to
+            // NodeInstance and EKS Service Roles
+            // See footnote 1.
+            "Resource": [
+                "arn:aws:iam::*:role/env-*-dwx-stack-EKSServiceRole-*",
+                "arn:aws:iam::*:role/env-*-dwx-stack-NodeInstanceRole-*"
+            ],
+            "Condition": {
+                "ForAnyValue:ArnEqualsIfExists": {
+                    "iam:PolicyARN": [
+                        "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy",
+                        "arn:aws:iam::aws:policy/AmazonEKSServicePolicy",
+                        "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+                        "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+                        "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
+                        "arn:aws:iam::aws:policy/CloudWatchAgentAdminPolicy"
+                    ]
+                }
+            }
+        },
+        {
+            "Sid": "Role",
+            "Effect": "Allow",
+            "Action": [
+                "iam:AddRoleToInstanceProfile",
+                // Adds Node Instance IAM role to Ec2
+                // Node instance profile
+                "iam:CreateInstanceProfile",
+                // Creates Node Instance Profile
+                "iam:CreateRole",
+                // Creates Node Instance and EKS Service Roles
+                "iam:DeleteInstanceProfile",
+                // Delete Node Instance Profile at
+                // deactivation via cf stack creation
+                "iam:DeleteRole",
+                // Delete Node Instance and EKS Service
+                // Roles at deactivation
+                "iam:DeleteRolePolicy",
+                // Delete inline policies like efs, ebs,
+                // cluster-autoscaler etc created/attached
+                // to Node instance role at deactivation
+                "iam:DetachRolePolicy",
+                // Detach managed policy ARNs attached to Node
+                // Instance and EKS Service IAM roles at 
+                // deactivation
+                "iam:GetRole",
+                // Retrieve details about Node Instance and EKS
+                // service IAM roles, recursively called by cf
+                "iam:GetRolePolicy",
+                // Get inline policy attached to Node Instance
+                // role
+                "iam:PassRole",
+                // Required permission to assign Node instance
+                // role to Ec2 Node instance profile
+                "iam:PutRolePolicy",
+                // Add inline policies like efs, ebs,
+                // cluster-autoscaler to Node Instance Role
+                "iam:RemoveRoleFromInstanceProfile"
+                //Removes IAM role from EC2 instance profile
+            ],
+            "Resource": [
+                "arn:aws:iam::*:instance-profile/env-*-dwx-stack-NodeInstanceProfile-*",
+                "arn:aws:iam::*:role/env-*-dwx-stack-EKSServiceRole-*",
+                "arn:aws:iam::*:role/env-*-dwx-stack-NodeInstanceRole-*"
+            ]
+        },
+        {
+            "Sid": "gocode",
+            "Effect": "Allow",
+            "Action": [
+                "acm:DescribeCertificate",
+                // ACM validation adds DNS records
+                "acm:ListCertificates",
+                //ACM validation adds DNS records
+                "ec2:DescribeKeyPairs",
+                // Validate CB env ssh key pair exists, not
+                // deleted inbetween; check for duplicate
+                // keypair in case of CDW created keypair
+                "ec2:DescribeDhcpOptions",
+                // See Point 2-3; see footnote 3 
+                "ec2:DescribeSubnets",
+                // See Point 4 in footnote 3 URL 
+                "ec2:DescribeVpcs",
+                // Validate ID of set of DHCP options
+                // associated with the VPC
+                "autoscaling:DescribeAutoScalingGroups",
+                // Get shared services/compute ASGs, update
+                // as part of AZRebalance
+                "iam:SimulatePrincipalPolicy",
+                // Simulate CF stack formation policies
+                "iam:ListAttachedRolePolicies",
+                // List policies attached to Ranger RAZ
+                // role; attach to NodeInstanceRole for
+                // S3 access if RAZ enabled
+                "ec2:DescribeVpcAttribute",
+                // Validate enableDnsHostnames and
+                // enableDnsSupport VPC attributes;
+                // see 1 and 3 points in footnote 3 URL
+                "ec2:DescribeImages",
+                "ec2:CreateTags",
+                // Tag subnets and eks security group
+                // See footnote 2
+                "ec2:CreateKeyPair"
+                // Create ssh Public key pair, pass to ec2
+                // instances. Not required if passed/set/
+                // reused via CB
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "gocodeStack",
+            "Effect": "Allow",
+            "Action": [
+                "cloudformation:DescribeStacks"
+                // Check the status of stack--error or
+                // completed, then install helm charts
+            ],
+            "Resource": "arn:aws:cloudformation:*:*:stack/env-*-dwx-stack/*"
+        },
+        {
+            "Sid": "gocodeEKSCluster",
+            "Effect": "Allow",
+            "Action": [
+                "eks:UpdateClusterConfig",
+                // Update EKScluster config Enable
+                // Private EKS and Cloudwatch on EKS 
+                "eks:UpdateClusterVersion",
+                // Updates an Amazon EKS cluster to
+                // the specified Kubernetes version.
+                "eks:DescribeUpdate"
+                // Check status of Updates--enable
+                // Private EKS and Cloudwatch on EKS 
+            ],
+            "Resource": "arn:aws:eks:*:*:cluster/env-*-dwx-stack-eks"
+        },
+        {
+            "Sid": "S3full",
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetBucketLocation"
+                // Needed for external bucket feature
+                // via UI, where we validate the VPC
+                // and bucket region are the same
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "S3PutGetObject",
+            "Effect": "Allow",
+            "Action": [
+                "s3:PutObject",
+                // Put cf template in SDX bucket
+                "s3:GetObject"
+                // Get cf template while cf stack creation may
+                // not be needed for reduced mode
+            ],
+            "Resource": [
+                "arn:aws:s3:::${DATALAKE_BUCKET}/cf-templates/*",
+                "arn:aws:s3:::${DATALAKE_BUCKET}/backup/*"
+            ]
+        },
+        {
+            "Sid": "UpgradeCfStack",
+            "Effect": "Allow",
+            "Action": [
+                "cloudformation:GetTemplate",
+                // EKS upgrade gets Cloudformation
+                // template body and makew changes
+                "cloudformation:GetTemplateSummary",
+                // EKS upgrade loads CF template 
+                // parameters to call method, then
+                // needs the permission
+                "eks:ListUpdates",
+                // Identifies resources related to eks change
+                "ec2:CreateLaunchTemplateVersion",
+                // launchTemplate cannot be changed,
+                // only new versions can be added
+                "autoscaling:TerminateInstanceInAutoScalingGroup",
+                // Upgrade terminates instances in old
+                // autoscalinggroup
+                "autoscaling:DescribeScheduledActions",
+                // Updatestack in control of instances 
+                // of cluster autoscalinggroup, has permission
+                // to get status of group
+                "autoscaling:SetDesiredCapacity",
+                // DesiredCapacity can be changed with upgrade;
+                // will be set each time nodegroup is changed; 
+                // nodegroup changes when related launchtemplate 
+                // changes with new version of eks ami for 
+                // upgrade, requiring permission
+                "ec2:DescribeInstances"
+                // Upgrade needs old/new instance status
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+
+${DATALAKE_BUCKET} - Replace this with the name of your S3 bucket. For example
+				my-bucket.
+
+Footnote 1: AWS managed policies for Amazon Elastic Kubernetes
+				Service
+Footnote 2: Amazon EKS security group requirements and
+				considerations
+Footnote 3: AWS Environments Checklist
+
+noteTo copy the JSON, which contains comments, click copy-to-clipboard
+              only. If you
+             use CTRL C to copy the code, the comments in addition to the JSON are captured, which
+             makes JSON invalid.
+
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "cloudformation",
+            "Effect": "Allow",
+            "Action": [
+                "acm:AddTagsToCertificate",
+                // Add owner/stack related tags to Certificate
+                "acm:DescribeCertificate",
+                // Describe Certificate created by cf to check
+                // the certification status during activation
+                "acm:RequestCertificate",
+                // Requests ACM certificate for dwx
+                "autoscaling:DescribeScalingActivities",
+                // When dwx scales up/down AutoScalingGroups
+                // dwx must check ASG activity status
+                "ec2:CreateLaunchTemplate",
+                // LaunchTemplate creates EC2 instances used
+                // by DWX
+                "ec2:CreatePlacementGroup",
+                // Placement groups launch EC2 instances in 
+                // physical proximity within same AZ
+                "ec2:CreateSecurityGroup",
+                // Create Security Groups for EC2 instance
+                "ec2:DescribeAccountAttributes",
+                // Lists attributes for customer account that
+                // might be needed by cf to get quotas like 
+                // vpc-max-security-groups-per-interface
+                // and supported_platforms
+                "ec2:DescribeAvailabilityZones",
+                // DWX query executors deployed among 3
+                // availibility zones that need az info
+                "ec2:DescribeLaunchTemplates",
+                // Updates sshkey to get old sshkey info from
+                // ec2 Launch Template
+                "ec2:DescribeLaunchTemplateVersions",
+                // Update sshkey using old sshkey info from
+                // ec2 Launch Template Version
+                "ec2:DescribePlacementGroups",
+                // Describes specified placement groups created
+                // during activation
+                "ec2:DescribeSecurityGroups",
+                // Tags the eks security group to get cluster
+                // security group id
+                "ec2:RevokeSecurityGroupEgress",
+                // Revoke SecurityGroupEgress authorized by cf
+                "ec2:RevokeSecurityGroupIngress",
+                // Revoke SecurityGroupIngress authorized by cf
+                "ec2:RunInstances",
+                //Essential to run the EC2 instance
+                "ec2:DeleteLaunchTemplate",
+                // Delete LaunchTemplate created by cf
+                "ec2:DeletePlacementGroup",
+                // Delete Placement Groups created by cf
+                "elasticfilesystem:DescribeMountTargets",
+                // Called by CF while creating EFS
+                "elasticfilesystem:DescribeFileSystems"
+                // Called by CF while creating EFS
+            ],
+            "Resource": "*",
+            "Condition": {
+                "ForAnyValue:StringEquals": {
+                    "aws:CalledVia": "cloudformation.amazonaws.com"
+                }
+            }
+        },
+        {
+            "Sid": "CFResourceTag",
+            "Resource": "*",
+            "Effect": "Allow",
+            "Action": [
+                "ec2:AuthorizeSecurityGroupEgress",
+                // Adds outbound rules to security group for
+                // use with VPC
+                "ec2:AuthorizeSecurityGroupIngress",
+                //A dds inbound rules to security group
+                // for use with VPC
+                "ec2:RevokeSecurityGroupEgress",
+                // Revoke SecurityGroupEgress authorized by cf
+                "ec2:RevokeSecurityGroupIngress",
+                // Revoke SecurityGroupIngress authorized by cf
+                "autoscaling:DeleteAutoScalingGroup",
+                 // Delete sharedservices and compute
+                 // autoscaling groups--created/deleted with
+                 // cloudformation stack
+                "ec2:DeleteSecurityGroup",
+                // Delete NodeSecurityGroup,
+                // ClusterControlPlaneSecurityGroup,
+                // DB Security Group created via cf stack
+                "eks:DeleteCluster"
+                // Delete EKS cluster created via cf
+            ],
+            "Condition": {
+                "ForAnyValue:StringEquals": {
+                    "aws:CalledVia": "cloudformation.amazonaws.com"
+                },
+                "StringLike": {
+                    "aws:ResourceTag/Cloudera-Resource-Name": "crn:cdp:*"
+                }
+            }
+        },
+        {
+            "Sid": "CFRequestTag",
+            "Resource": "*",
+            "Effect": "Allow",
+            "Action": [
+                "kms:TagResource",
+                // Add owner/stack related tags to kms
+                "logs:CreateLogGroup"
+                // Create/name cloudwatch log group
+            ],
+            "Condition": {
+                "ForAnyValue:StringEquals": {
+                    "aws:CalledVia": "cloudformation.amazonaws.com"
+                },
+                "StringLike": {
+                    "aws:RequestTag/Cloudera-Resource-Name": "crn:cdp:*"
+                }
+            }
+        },
+        {
+            "Sid": "CFDatabase",
+            "Resource": [
+                "arn:aws:rds:*:*:db:env-*-dwx-stack-rds",
+                "arn:aws:rds:*:*:subgrp:env-*-dwx-stack-dbsubnetgroup-*"
+            ],
+            "Effect": "Allow",
+            "Action": [
+                "rds:CreateDBInstance",
+                // The RDBS (postgres) created to store dwx
+                // cluster info during activation
+                "rds:DescribeDBInstances",
+                // Describe RDBS (postgres) instance created by
+                // cf, used to detect quota of DB instance
+                "rds:CreateDBSubnetGroup",
+                // The DBSubnetGroup created during activation
+                "rds:DescribeDBSubnetGroups"
+                // Describe DBSubnetGroup instance created by cf
+                
+            ],
+            "Condition": {
+                "ForAnyValue:StringEquals": {
+                    "aws:CalledVia": "cloudformation.amazonaws.com"
+                }
+            }
+        },
+        {
+            "Sid": "CFEksCluster",
+            "Resource": "arn:aws:eks:*:*:cluster/env-*-dwx-stack-eks",
+            "Effect": "Allow",
+            "Action": [
+                "eks:CreateCluster",
+                // Creates eks cluster upon activation
+                // that dwx can deploy resources on
+                "eks:DescribeCluster"
+                // DWX keeps track of eks cluster created
+                // during env activation
+            ],
+            "Condition": {
+                "ForAnyValue:StringEquals": {
+                    "aws:CalledVia": "cloudformation.amazonaws.com"
+                }
+            }
+        },
+        {
+            "Sid": "CFCloudwatch",
+            "Resource": "arn:aws:eks:*::log-group:/aws/eks/env-*-dwx-stack-eks/cluster:*",
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogStream",
+                // Create log stream of log group that
+                // originates from monitored application
+                // or resource
+                "logs:DescribeLogStreams",
+                // List log streams for log groups
+                "logs:PutLogEvents",
+                // Upload log events to log stream
+                "logs:PutRetentionPolicy"
+                // Change number of days Cloudwatch retains
+            ],
+            "Condition": {
+                "ForAnyValue:StringEquals": {
+                    "aws:CalledVia": "cloudformation.amazonaws.com"
+                }
+            }
+        },
+        {
+            "Sid": "CFKeys",
+            "Resource": "*",
+            "Effect": "Allow",
+            "Action": [
+                "kms:CreateAlias",
+                // kms key id hard to recognize so an alias is
+                // created, e.g. "env-xxxxxx-dwx-stack-kms-key"
+                "kms:DeleteAlias",
+                // Delete the kms alias created by cf
+                "kms:DescribeKey",
+                // Describe the KMS key created during
+                // activation
+                "kms:EnableKeyRotation",
+                // Allow rotation of kms key after expiration
+                "kms:GenerateDataKey",
+                // Returns unique symmetric data key in plain
+                // text for use outside AWS KMS
+                "kms:GenerateDataKeyWithoutPlaintext",
+                // Return unique symmetric encrypted data key
+                // for use outside of AWS KMS
+                "kms:ScheduleKeyDeletion"
+                // Schedule deletion of KMS key, rotate to new
+                // key
+            ],
+            "Condition": {
+                "ForAnyValue:StringEquals": {
+                    "aws:CalledVia": "cloudformation.amazonaws.com"
+                }
+            }
+        },
+        {
+            "Sid": "CFFileSystem",
+            "Resource": "*",
+            "Effect": "Allow",
+            "Action": [
+                "elasticfilesystem:CreateMountTarget",
+                //Create 3 EFS mount targets for 3 AZs
+                "elasticfilesystem:DeleteFileSystem",
+                // Delete EFS file system during deactivation via cf
+                "elasticfilesystem:DeleteMountTarget"
+                // Delete all the 3 EFS mount targets
+            ],
+            "Condition": {
+                "ForAnyValue:StringEquals": {
+                    "aws:CalledVia": "cloudformation.amazonaws.com"
+                },
+                "StringLike": {
+                    "aws:ResourceTag/clusterId": "env-*"
+                }
+            }
+        },
+        {
+            "Sid": "AllowSsmParams",
+            "Effect": "Allow",
+            "Action": [
+                "ssm:DescribeParameters",
+                "ssm:GetParameter",
+                "ssm:GetParameters",
+                "ssm:GetParameterHistory",
+                "ssm:GetParametersByPath"
+                // these set of permissions is used by cloudformation 
+                // to obtain the latest AMI during stack create and upgrade
+            ],
+            "Resource": [
+                "arn:aws:ssm:*:*:parameter/aws/service/eks/optimized-ami/*"
+            ],
+            "Condition": {
+                "ForAnyValue:StringEquals": {
+                    "aws:CalledVia": "cloudformation.amazonaws.com"
+                }
+            }
+        }
+    ]
+}
+RAZ-enabled Data Lake restricted policy
+The AWS restricted policy associates a cross-account role with the environment, as
+            mentioned above. If you have a Ranger Authorized (RAZ)-enabled Data Lake, one of the
+            following additions to either the cross-account role or cross-account json policy are
+               required:
+Option 1 Append ARNs to role: To your cross-account restricted policy, in the
+                  existing sid "AttachRole ", append all policy ARNs attached to
+                  the RAZ role.
+Option 2 Add key to policy: Add a new sid "AttachRAZPolicyToNodeInstance"
+                   to the cross-account json policy
+
+
+Option 1 append ARNs to role
+Append all the cross-account policy ARNS attached to the RAZ role to the following sid key
+            "AttachRole" value in your cross-account restricted policy: 
+{
+      "Sid": "AttachRole",
+      "Effect": "Allow",
+      "Action": "iam:AttachRolePolicy",           
+         // Attach AWS managed policy ARNs to
+         // NodeInstance and EKS Service Roles
+         // See footnote 1.
+      "Resource": [
+         "arn:aws:iam::*:role/env-*-dwx-stack-EKSServiceRole-*",
+         "arn:aws:iam::*:role/env-*-dwx-stack-NodeInstanceRole-*"
+      ],
+      "Condition": {
+         "ForAnyValue:ArnEqualsIfExists": {
+            "iam:PolicyARN": [
+               "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy",
+               "arn:aws:iam::aws:policy/AmazonEKSServicePolicy",
+               "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+               "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+               "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
+               "arn:aws:iam::aws:policy/CloudWatchAgentAdminPolicy"
+               ...
+
+            ]
+         }
+      }
+   } 
+Footnote 1: AWS managed policies for Amazon Elastic Kubernetes
+               Service
+Replace the ellipsis … placeholder above with all policy ARNs attached to the RAZ
+            role as shown in the example below. See IAM policy definitions for more information
+            about these policies.
+arn:aws:iam::1234567:policy/aws-cdp-datalake-admin-s3-policy
+
+arn:aws:iam::1234567:policy/aws-cdp-bucket-access-policy
+
+arn:aws:iam::1234567:policy/aws-datalake-backup-policy
+
+arn:aws:iam::1234567:policy/aws-datalake-restore-policy
+Option 2 Add key to policy
+Add the new sid key "AttachRAZPolicyToNodeInstance" value to the cross-account json
+            policy.
+Make sure all the policies attached to RAZ/Data Lake Admin role are in the
+            following regex pattern format:
+            ${ANY_WILDCARD_REGEX}Use the pattern
+            as a value for the key "iam:PolicyARN"
+             as shown in the example below:
+Example policies attached to the RAZ/Data Lake Admin role
+arn:aws:iam::1234567:policy/cdp-dev-datalake-admin-s3-policy
+arn:aws:iam::1234567:policy/cdp-dev-datalake-bucket-access-policy
+arn:aws:iam::1234567:policy/cdp-dev-datalake-backup-policy
+arn:aws:iam::1234567:policy/cdp-dev-datalake-restore-policy
+The regex is "arn:aws:iam::1234567:policy/cdp-dev-datalake*".
+{
+      "Sid": "AttachRAZPolicyToNodeInstance",
+      "Effect": "Allow",
+      "Action": "iam:AttachRolePolicy",
+      "Resource": [
+            "arn:aws:iam::*:role/env-*-dwx-stack-NodeInstanceRole-*"
+      ],
+      "Condition": {
+            "ForAnyValue:ArnLikeIfExists": {
+                    "iam:PolicyARN": "arn:aws:iam::<AWS_ACCOUNT_ID>:policy/${ANY_WILDCARD_REGEX}"
+            }
+       }
+ } 
+For more information about using RAZ, see fine-grained access control and CDP policies documentation.
+
+
+Parent topic: Activating an AWS environment from CDW

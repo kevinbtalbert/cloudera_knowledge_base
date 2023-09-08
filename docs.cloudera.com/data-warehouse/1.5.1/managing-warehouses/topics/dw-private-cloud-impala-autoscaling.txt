@@ -1,0 +1,107 @@
+Auto-scaling Impala Virtual WarehousesCloudera Docs
+Auto-scaling Impala Virtual Warehouses
+Your Impala Virtual Warehouse in Cloudera Data Warehouse (CDW) Private Cloud has an
+    auto-scaler process that works with coordinators and executors to make resources available for
+    queued queries. This ensures that workload demand is met without wasting cloud resources.
+How autoscaling in Impala works
+How coorninators and executors are used to autoscale resources is explained as follows:
+
+Coordinator processes: Handle all incoming queries, creating
+          execution plans and handing off the query to executor processes for execution. By default,
+          there are two coordinator processes to enable high availability and fault tolerance. You
+          can configure a single coordinator or an active-passive coordinator pair to resolve or
+          mitigate query concurrency problems.. If one coordinator process fails, a backup
+          coordinator process takes over so there is no single point of failure. By using only one
+          coordinator process, you are likely to save on cloud resource consumption. 
+Executor processes: Processes that execute query fragments. Executor processes run on
+          executor nodes, the unit of sizing for Virtual Warehouses. Each executor node runs one
+          executor. 
+
+Executor groups: A group of executors that can execute queries. By default Impala
+            Virtual Warehouses can run 3 large queries per executor group. Executors can handle more
+            queries that are simpler and that do not utilize concurrency on the executor. When you
+            enable legacy multithreading, the Virtual Warehouse can run 12 queries per executor
+            group. For most read-only queries the default setting of 3 queries per executor group is
+            sufficient. The size of executor groups is determined by the size you choose when you
+            first create the Virtual Warehouse (XSMALL,
+              SMALL, MEDIUM, or
+              LARGE).
+It is recommended that you select the size of a Virtual Warehouse based on the number of
+            nodes you need to run a typical query for your workloads based on your normal query size
+            and complexity. For example, if you expect that 20 nodes are needed to run a typical
+            query in your workloads, you can create a medium-sized Virtual Warehouse, which by
+            default has 20 executor nodes. However, if you have a large number of queries that must
+            be run in your workloads concurrently, you can set the minimum executor node count to
+              40 and maximum count to 80 by using the
+              Nodes: Min: Max: setting. Then, each executor group for this
+            Virtual Warehouse contains the 20 executors required to run an average query, but you
+            have two executor groups to handle the volume of queries in your workloads. If the total
+            number of executor nodes auto-scales up to 80, then there will be 4 executor groups
+            containing 20 executor nodes each.
+The rationale behind selecting a size based on the normal size and complexity of your
+            queries is that then the Virtual Warehouse can run all your normal queries in an
+            acceptable time. Selecting size based on this criteria prevents you from "over-sizing"
+            your Virtual Warehouse and as a result, unnecessarily incurring extra costs. On the
+            other hand, keep in mind that under-sizing your Virtual Warehouse might result in
+            queries spilling, which makes them run slower, in spite of the fact that they may
+            eventually complete correctly.
+
+Auto-scaler: A process that monitors Impala to determine when more or fewer resources are
+          needed. When the auto-scaler detects an imbalance in resources, it sends a request to the
+          Kubernetes framework to increase or decrease the number of executor groups in the Virtual
+          Warehouse.
+
+Impala uses memory-based auto-scaling to
+        manage resources: 
+
+
+
+Coordinator(s): When users connect to Impala Virtual Warehouses using SQL applications
+          such as Hue, the Impala shell, or other SQL clients that use JDBC or ODBC, the query is
+          handled by the coordinator process. First, the coordinator generates an execution plan for
+          the query. The execution plan includes an estimate of the memory required to run the
+          query.
+Executor group: Then the coordinator locates an executor group that has enough available
+          memory to run the query. Each executor group is limited by the number of queries and the
+          memory available to run them. Currently, executor groups can handle up to 3 large queries.
+          Executors can handle more queries that are simpler and that do not utilize concurrency on
+          the executor. If there are no executor groups with enough available resources to handle a
+          query, it is queued until resources become available. 
+Auto-scaler: When the auto-scaler detects that there are queued queries, it adds executor
+          groups to the Virtual Warehouse to execute the queries. The auto-scaler starts scaling up
+          and down the number of executor groups according to what is set in the auto-scale
+          settings: 
+Scale Up Delay: Sets the length of time in seconds that the
+              system waits before adding more executors when it detects queries waiting in the queue
+              to execute. The time to auto-scale is affected by how the underlying Kubernetes system
+              is configured.
+Scale Down Delay: Sets the length of time in seconds that the
+              system waits before it removes executors when it detects idle executor groups. As with
+              the Scale Up Delay setting, the time to auto-scale is affected
+              by how the underlying Kubernetes system is configured.
+
+
+
+When the auto-scaler has scaled
+        back to the last executor group, which contains the default number of executors for the
+        Virtual Warehouse, and those executors are idle, the Virtual Warehouse is suspended. You can
+        override this behavior by turning on Disable Auto Suspend on the
+        Virtual Warehouse: 
+
+ The time CDW waits, after there are no longer any queries running and before the
+        Virtual Warehouse is auto-suspended, is determined by the value set for
+          AutoSuspend Timeout. The default number of executors per executor
+        group is based on the number of executor nodes contained by the original size of the Virtual
+        Warehouse when it was created. For example, if the Virtual Warehouse was created as
+          MEDIUM-sized, which has 20 executor nodes, then each executor group
+        contains 20 executors.
+If a query is executed on a suspended Virtual Warehouse, then the coordinator queues the
+       query. When the auto-scaler detects a queued query, it immediately adds an executor group
+       that can run the query on the Virtual Warehouse.
+     noteWhen the auto-scaler increases or decreases the number of executor groups in the Virtual
+       Warehouse, it can take several minutes before the scaling up or down takes effect. This
+       slight delay is caused by the time required by your cloud provider to provision
+       clusters.
+
+
+Parent topic: Impala warehouse configuration options

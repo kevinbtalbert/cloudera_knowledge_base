@@ -1,0 +1,209 @@
+Elasticsearch Type Mapping ChangesCloudera Docs
+Elasticsearch Type Mapping Changes
+Type mappings in Elasticsearch 5.6.2 have changed from ES 2.x. 
+The following is a list of the major changes in Elasticsearch 5.6.2:
+
+
+String fields replaced by text/keyword type
+
+
+Strings have new default mappings as follows:
+{
+  "type": "text",
+  "fields": {
+    "keyword": {
+      "type": "keyword",
+      "ignore_above": 256
+    }
+  }
+}
+
+
+There is no longer a _timestamp field that you can set "enabled"
+            on.
+This field now causes an exception on templates. The Metron model has a timestamp
+            field that is sufficient.
+
+
+The semantics for string types have changed. In 2.x, index settings are either
+        "analyzed" or "not_analyzed" which means "full text" and "keyword", respectively. Analyzed
+        text means the indexer will split the text using a text analyzer, thus allowing you to
+        search on substrings within the original text. "New York" is split and indexed as two
+        buckets, "New" and "York", so you can search or query for aggregate counts for those terms
+        independently and match against the individual terms "New" or "York." "Keyword" means that
+        the original text will not be split/analyzed during indexing and instead treated as a whole
+        unit. For example, "New" or "York" will not match in searches against the document
+        containing "New York", but searching on "New York" as the full city name will match. In
+        Elasticsearch 5.6 language, instead of using the "index" setting, you now set the "type" to
+        either "text" for full text, or "keyword" for keywords.
+Below is a table listing the changes to how String types are now handled.
+
+
+
+sort, aggregate, or access values
+
+
+Elasticsearch 2.x
+
+
+Elasticsearch 5.x
+
+
+Example
+
+
+
+no
+
+"my_property" : {
+  "type": "string",
+  "index": "analyzed"
+}
+
+
+
+"my_property" : {
+  "type": "text"
+}
+
+Additional defaults: "index": "true", "fielddata": "false"
+
+"New York" handled via in-mem search as "New" and "York" buckets. No aggregation or sort.
+
+
+yes
+
+"my_property": {
+  "type": "string",
+  "index": "analyzed"
+}
+
+
+
+"my_property": {
+  "type": "text",
+  "fielddata": "true"
+}
+
+
+"New York" handled via in-mem search as "New" and "York" buckets. Can aggregate and sort.
+
+
+yes
+
+"my_property": {
+  "type": "string",
+  "index": "not_analyzed"
+}
+
+
+
+"my_property" : {
+  "type": "keyword"
+}
+
+
+"New York" searchable as single value. Can
+                     aggregate and sort. A search for "New" or "York" will not match against the
+                     whole value.
+
+
+yes
+
+"my_property": {
+  "type": "string",
+  "index": "analyzed"
+}
+
+
+
+"my_property": {
+  "type": "text",
+  "fields": {
+    "keyword": {
+      "type": "keyword",
+      "ignore_above": 256
+    }
+  }
+}
+
+
+"New York" searchable as single value or as text document. Can aggregate and sort on the sub term
+                     "keyword."
+
+
+If you want to set default string behavior for all strings for a given index and type,
+        you can do so with a mapping similar to the following (replace ${your_type_here}
+        accordingly):
+# curl -XPUT 'http://${ES_HOST}:${ES_PORT}/_template/default_string_template' -d '
+{
+    "template": "*",
+    "mappings" : {
+        "${your_type_here}": {
+            "dynamic_templates": [
+                {
+                    "strings": {
+                        "match_mapping_type": "string",
+                        "mapping": {
+                            "type": "text"
+                            "fielddata": "true"
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}
+
+By specifying the template property with value *, the template
+        will apply to all indexes that have documents indexed of the specified type
+        (${your_type_here}).
+The following are other settings for types in Elasticsearch:
+
+
+doc_values
+
+
+
+
+
+On-disk data structure
+
+
+Provides access for sorting, aggregation, and field values
+
+
+Stores same values as _source, but in column-oriented fashion better for
+                      sorting and aggregating
+
+
+Not supported on text fields
+
+
+Enabled by default
+
+
+
+
+
+fielddata
+
+
+In-memory data structure
+
+
+Provides access for sorting, aggregation, and field values
+
+
+Primarily for text fields
+
+
+Disabled by default because the heap space required can be large
+
+
+
+
+
+
+
+Parent topic: Upgrading to Elasticsearch 5.6.x

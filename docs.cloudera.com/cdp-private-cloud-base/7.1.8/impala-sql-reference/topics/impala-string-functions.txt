@@ -1,0 +1,1451 @@
+Impala string functionsCloudera Docs
+Impala string functions
+String functions are classified as those primarily accepting or returning
+      STRING, VARCHAR, or CHAR data types, for
+    example to measure the length of a string or concatenate two strings together.List of supported string functions
+
+ All the functions that accept STRING arguments also accept the
+              VARCHAR and CHAR types introduced in Impala 2.0. 
+ Whenever VARCHAR or CHAR values are passed to a
+            function that returns a string value, the return type is normalized to
+              STRING. For example, a call to concat() with a mix
+            of STRING, VARCHAR, and CHAR
+            arguments produces a STRING result. 
+
+
+Function reference:
+
+      Impala supports the following string functions:
+    
+
+ASCII
+
+
+BASE64DECODE
+
+
+BASE64ENCODE
+
+
+BTRIM
+
+
+
+
+CHAR_LENGTH
+
+
+CHR
+
+
+CONCAT
+
+
+CONCAT_WS
+
+
+FIND_IN_SET
+
+
+GROUP_CONCAT
+
+
+INITCAP
+
+
+INSTR
+
+JARO_DISTANCE,
+            JARO_DIST
+
+
+JARO_SIMILARITY,
+            JARO_SIM
+
+
+JARO_WINKER_DISTANCE, JW_DST
+
+
+JARO_WINKER_SIMILARITY, JW_SIM
+
+LEFT
+
+
+LENGTH
+
+
+LEVENSHTEIN, LE_DST
+
+
+LOCATE
+
+
+LOWER, LCASE
+
+
+LPAD
+
+
+LTRI 
+
+
+PARSE_URL
+
+
+REGEXP_ESCAPE
+
+
+REGEXP_EXTRACT
+
+
+REGEXP_LIKE
+
+
+REGEXP_REPLACE
+
+
+REPEAT
+
+
+REPLACE
+
+
+REVERSE
+
+
+RIGHT
+
+
+RPAD
+
+
+RTRIM
+
+
+SPACE
+
+
+SPLIT_PART
+
+
+STRLEFT
+
+
+STRRIGHT
+
+
+SUBSTR, SUBSTRING
+
+
+TRANSLATE
+
+
+TRIM
+
+
+UPPER, UCASE
+
+
+
+ASCII(STRING str)
+
+
+Purpose: Returns the numeric ASCII code of the first character of the argument.
+          
+Return type: INT
+
+
+
+BASE64DECODE(STRING str)
+
+
+Purpose:
+
+Return type:
+STRING
+
+
+Usage notes:
+ The functions BASE64ENCODE()
+        and BASE64DECODE() are typically used in combination,
+        to store in an Impala table string data that is problematic to store or
+        transmit. For example, you could use these functions to store string
+        data that uses an encoding other than UTF-8, or to transform the values
+        in contexts that require ASCII values, such as for partition key
+        columns. Keep in mind that base64-encoded values produce different
+        results for string functions such as LENGTH(),
+          MAX(), and MIN() than when those
+        functions are called with the unencoded string values. 
+ The set of characters that can be generated as
+        output from BASE64ENCODE(), or specified in the
+        argument string to BASE64DECODE(), are the ASCII
+        uppercase and lowercase letters (A-Z, a-z), digits (0-9), and the
+        punctuation characters +, /, and
+          =. 
+ All return values produced by
+          BASE64ENCODE() are a multiple of 4 bytes in length.
+        All argument values supplied to BASE64DECODE() must
+        also be a multiple of 4 bytes in length. If a base64-encoded value would
+        otherwise have a different length, it can be padded with trailing
+          = characters to reach a length that is a multiple of
+        4 bytes. 
+ If the argument string to
+          BASE64DECODE() does not represent a valid
+        base64-encoded value, subject to the constraints of the Impala
+        implementation such as the allowed character set, the function returns
+          NULL. 
+
+Examples:
+
+ The following examples show how to use
+          BASE64ENCODE() and BASE64DECODE()
+        together to store and retrieve string values:
+        
+-- An arbitrary string can be encoded in base 64.
+-- The length of the output is a multiple of 4 bytes,
+-- padded with trailing = characters if necessary.
+select base64encode('hello world') as encoded,
+  length(base64encode('hello world')) as length;
++------------------+--------+
+| encoded          | length |
++------------------+--------+
+| aGVsbG8gd29ybGQ= | 16     |
++------------------+--------+
+
+-- Passing an encoded value to base64decode() produces
+-- the original value.
+select base64decode('aGVsbG8gd29ybGQ=') as decoded;
++-------------+
+| decoded     |
++-------------+
+| hello world |
++-------------+
+
+        These examples demonstrate incorrect encoded values that produce
+          NULL return values when decoded:
+        
+-- The input value to base64decode() must be a multiple of 4 bytes.
+-- In this case, leaving off the trailing = padding character
+-- produces a NULL return value.
+select base64decode('aGVsbG8gd29ybGQ') as decoded;
++---------+
+| decoded |
++---------+
+| NULL    |
++---------+
+WARNINGS: UDF WARNING: Invalid base64 string; input length is 15,
+  which is not a multiple of 4.
+
+-- The input to base64decode() can only contain certain characters.
+-- The $ character in this case causes a NULL return value.
+select base64decode('abc$');
++----------------------+
+| base64decode('abc$') |
++----------------------+
+| NULL                 |
++----------------------+
+WARNINGS: UDF WARNING: Could not base64 decode input in space 4; actual output length 0
+
+        These examples demonstrate round-tripping of an original string
+        to an encoded string, and back again. This technique is applicable if
+        the original source is in an unknown encoding, or if some intermediate
+        processing stage might cause national characters to be misrepresented:
+        
+select 'circumflex accents: â, ê, î, ô, û' as original,
+  base64encode('circumflex accents: â, ê, î, ô, û') as encoded;
++-----------------------------------+------------------------------------------------------+
+| original                          | encoded                                              |
++-----------------------------------+------------------------------------------------------+
+| circumflex accents: â, ê, î, ô, û | Y2lyY3VtZmxleCBhY2NlbnRzOiDDoiwgw6osIMOuLCDDtCwgw7s= |
++-----------------------------------+------------------------------------------------------+
+
+select base64encode('circumflex accents: â, ê, î, ô, û') as encoded,
+  base64decode(base64encode('circumflex accents: â, ê, î, ô, û')) as decoded;
++------------------------------------------------------+-----------------------------------+
+| encoded                                              | decoded                           |
++------------------------------------------------------+-----------------------------------+
+| Y2lyY3VtZmxleCBhY2NlbnRzOiDDoiwgw6osIMOuLCDDtCwgw7s= | circumflex accents: â, ê, î, ô, û |
++------------------------------------------------------+-----------------------------------+
+
+
+
+
+BASE64ENCODE(STRING str)
+
+
+Purpose:
+
+Return type:
+STRING
+
+
+Usage notes:
+ The functions BASE64ENCODE()
+        and BASE64DECODE() are typically used in combination,
+        to store in an Impala table string data that is problematic to store or
+        transmit. For example, you could use these functions to store string
+        data that uses an encoding other than UTF-8, or to transform the values
+        in contexts that require ASCII values, such as for partition key
+        columns. Keep in mind that base64-encoded values produce different
+        results for string functions such as LENGTH(),
+          MAX(), and MIN() than when those
+        functions are called with the unencoded string values. 
+ The set of characters that can be generated as
+        output from BASE64ENCODE(), or specified in the
+        argument string to BASE64DECODE(), are the ASCII
+        uppercase and lowercase letters (A-Z, a-z), digits (0-9), and the
+        punctuation characters +, /, and
+          =. 
+ All return values produced by
+          BASE64ENCODE() are a multiple of 4 bytes in length.
+        All argument values supplied to BASE64DECODE() must
+        also be a multiple of 4 bytes in length. If a base64-encoded value would
+        otherwise have a different length, it can be padded with trailing
+          = characters to reach a length that is a multiple of
+        4 bytes. 
+
+Examples:
+
+ The following examples show how to use
+          BASE64ENCODE() and BASE64DECODE()
+        together to store and retrieve string values:
+        
+-- An arbitrary string can be encoded in base 64.
+-- The length of the output is a multiple of 4 bytes,
+-- padded with trailing = characters if necessary.
+select base64encode('hello world') as encoded,
+  length(base64encode('hello world')) as length;
++------------------+--------+
+| encoded          | length |
++------------------+--------+
+| aGVsbG8gd29ybGQ= | 16     |
++------------------+--------+
+
+-- Passing an encoded value to base64decode() produces
+-- the original value.
+select base64decode('aGVsbG8gd29ybGQ=') as decoded;
++-------------+
+| decoded     |
++-------------+
+| hello world |
++-------------+
+
+        These examples demonstrate incorrect encoded values that produce
+          NULL return values when decoded:
+        
+-- The input value to base64decode() must be a multiple of 4 bytes.
+-- In this case, leaving off the trailing = padding character
+-- produces a NULL return value.
+select base64decode('aGVsbG8gd29ybGQ') as decoded;
++---------+
+| decoded |
++---------+
+| NULL    |
++---------+
+WARNINGS: UDF WARNING: Invalid base64 string; input length is 15,
+  which is not a multiple of 4.
+
+-- The input to base64decode() can only contain certain characters.
+-- The $ character in this case causes a NULL return value.
+select base64decode('abc$');
++----------------------+
+| base64decode('abc$') |
++----------------------+
+| NULL                 |
++----------------------+
+WARNINGS: UDF WARNING: Could not base64 decode input in space 4; actual output length 0
+
+        These examples demonstrate round-tripping of an original string
+        to an encoded string, and back again. This technique is applicable if
+        the original source is in an unknown encoding, or if some intermediate
+        processing stage might cause national characters to be misrepresented:
+        
+select 'circumflex accents: â, ê, î, ô, û' as original,
+  base64encode('circumflex accents: â, ê, î, ô, û') as encoded;
++-----------------------------------+------------------------------------------------------+
+| original                          | encoded                                              |
++-----------------------------------+------------------------------------------------------+
+| circumflex accents: â, ê, î, ô, û | Y2lyY3VtZmxleCBhY2NlbnRzOiDDoiwgw6osIMOuLCDDtCwgw7s= |
++-----------------------------------+------------------------------------------------------+
+
+select base64encode('circumflex accents: â, ê, î, ô, û') as encoded,
+  base64decode(base64encode('circumflex accents: â, ê, î, ô, û')) as decoded;
++------------------------------------------------------+-----------------------------------+
+| encoded                                              | decoded                           |
++------------------------------------------------------+-----------------------------------+
+| Y2lyY3VtZmxleCBhY2NlbnRzOiDDoiwgw6osIMOuLCDDtCwgw7s= | circumflex accents: â, ê, î, ô, û |
++------------------------------------------------------+-----------------------------------+
+
+
+
+
+BTRIM(STRING a), BTRIM(STRING a, STRING chars_to_trim)
+
+
+Purpose: Removes all instances of one or more characters from the start and end
+          of a STRING value. By default, removes only spaces. If a
+          non-NULL optional second argument is specified, the function removes
+          all occurrences of characters in that second argument from the beginning and end of
+          the string.
+          
+Return type: STRING
+
+
+Examples:
+
+
+            The following examples show the default btrim() behavior, and what
+            changes when you specify the optional second argument. All the examples bracket the
+            output value with [ ] so that you can see any leading or trailing
+            spaces in the btrim() result. By default, the function removes and
+            number of both leading and trailing spaces. When the second argument is specified,
+            any number of occurrences of any character in the second argument are removed from
+            the start and end of the input string; in this case, spaces are not removed (unless
+            they are part of the second argument) and any instances of the characters are not
+            removed if they do not come right at the beginning or end of the string.
+          
+-- Remove multiple spaces before and one space after.
+select concat('[',btrim('    hello '),']');
++---------------------------------------+
+| concat('[', btrim('    hello '), ']') |
++---------------------------------------+
+| [hello]                               |
++---------------------------------------+
+
+-- Remove any instances of x or y or z at beginning or end. Leave spaces alone.
+select concat('[',btrim('xy    hello zyzzxx','xyz'),']');
++------------------------------------------------------+
+| concat('[', btrim('xy    hello zyzzxx', 'xyz'), ']') |
++------------------------------------------------------+
+| [    hello ]                                         |
++------------------------------------------------------+
+
+-- Remove any instances of x or y or z at beginning or end.
+-- Leave x, y, z alone in the middle of the string.
+select concat('[',btrim('xyhelxyzlozyzzxx','xyz'),']');
++----------------------------------------------------+
+| concat('[', btrim('xyhelxyzlozyzzxx', 'xyz'), ']') |
++----------------------------------------------------+
+| [helxyzlo]                                         |
++----------------------------------------------------+
+
+
+
+CHAR_LENGTH(STRING a), CHARACTER_LENGTH(STRING a)
+
+
+Purpose: Returns the length in characters of the argument string. Aliases for
+          the length() function.
+          
+Return type: INT
+
+
+
+CHR(INT character_code)
+
+
+Purpose: Returns a character specified by a decimal code point value. The
+          interpretation and display of the resulting character depends on your system locale.
+          Because consistent processing of Impala string values is only guaranteed for values
+          within the ASCII range, only use this function for values corresponding to ASCII
+          characters. In particular, parameter values greater than 255 return an empty string.
+          
+Return type: STRING
+
+
+Usage notes: Can be used as the inverse of the ascii()
+            function, which converts a character to its numeric ASCII code.
+          
+
+Examples:
+
+SELECT chr(65);
++---------+
+| chr(65) |
++---------+
+| A       |
++---------+
+
+SELECT chr(97);
++---------+
+| chr(97) |
++---------+
+| a       |
++---------+
+
+
+
+CONCAT(STRING a, STRING b...)
+
+
+Purpose: Returns a single string representing all the
+            argument values joined together.  If any argument is
+                NULL, the function returns
+                NULL. 
+Return type:
+STRING
+
+
+Usage notes: concat() and concat_ws() are appropriate for
+        concatenating the values of multiple columns within the same row, while group_concat()
+        joins together values from different rows.
+      
+
+
+CONCAT_WS(STRING sep, STRING a, STRING b...)
+
+
+Purpose: Returns a single string representing the second and following argument
+            values joined together, delimited by a specified separator.
+Return type:
+STRING
+
+Usage notes: concat() and concat_ws() are appropriate for
+        concatenating the values of multiple columns within the same row, while group_concat()
+        joins together values from different rows.
+      
+
+
+FIND_IN_SET(STRING str, STRING strList)
+
+
+Purpose: Returns the position (starting from 1) of the first occurrence of a
+          specified string within a comma-separated string. Returns NULL if
+          either argument is NULL, 0 if the search string is not found, or 0 if
+          the search string contains a comma.
+          
+Return type: INT
+
+
+
+GROUP_CONCAT(STRING s [, STRING sep])
+
+
+Purpose: Returns a single string representing the argument value concatenated
+            together for each row of the result set. If the optional separator string is specified,
+            the separator is added between each pair of concatenated values. 
+Return type:
+STRING
+
+
+Usage notes: concat() and concat_ws() are appropriate for
+        concatenating the values of multiple columns within the same row, while group_concat()
+        joins together values from different rows.
+      
+ By default, returns a single string covering the whole result set. To include other
+              columns or values in the result set, or to produce multiple concatenated strings for
+              subsets of rows, include a GROUP BY clause in the query. 
+ Strictly speaking, group_concat() is an aggregate function, not a
+              scalar function like the others in this list. For additional details and examples, see
+              the GROUP_CONCAT function. 
+
+
+INITCAP(STRING str)
+
+
+Purpose: Returns the input string with the first letter of each word capitalized
+            and all other letters in lowercase. 
+Return type:
+STRING
+
+Example: 
+
+INITCAP("i gOt mY ChiCkeNs in tHe yard.") returns "I Got My
+                Chickens In The Yard.". 
+
+
+INSTR(STRING str, STRING substr [, BIGINT position [, BIGINT occurrence ] ])
+
+
+Purpose: Returns the position (starting from 1) of the first
+            occurrence of a substring within a longer string. 
+Return type:
+INT
+
+Usage notes:
+ If the substr is not present in
+                str, the function returns 0.  The optional third and fourth arguments
+              let you find instances of the substr other than
+              the first instance starting from the left. 
+
+ The third argument, position, lets you
+                specify a starting point within the str other
+                than 1.
+                
+-- Restricting the search to positions 7..end,
+-- the first occurrence of 'b' is at position 9.
+select instr('foo bar bletch', 'b', 7);
++---------------------------------+
+| instr('foo bar bletch', 'b', 7) |
++---------------------------------+
+| 9                               |
++---------------------------------+
+
+
+ If there are no more occurrences after the specified
+                position, the result is 0. 
+ If position is negative, the search works
+                right-to-left starting that many characters from the right. The
+                return value still represents the position starting from the
+                left side of str.
+                
+-- Scanning right to left, the first occurrence of 'o'
+-- is at position 8. (8th character from the left.)
+select instr('hello world','o',-1);
++-------------------------------+
+| instr('hello world', 'o', -1) |
++-------------------------------+
+| 8                             |
++-------------------------------+
+
+
+ The fourth argument, occurrence, lets you
+                specify an occurrence other than the first.
+                
+-- 2nd occurrence of 'b' is at position 9.
+select instr('foo bar bletch', 'b', 1, 2);
++------------------------------------+
+| instr('foo bar bletch', 'b', 1, 2) |
++------------------------------------+
+| 9                                  |
++------------------------------------+
+
+ If occurrence is greater than the number
+                of matching occurrences, the function returns 0. 
+
+occurrence cannot be negative or zero. A
+                non-positive value for this argument causes an error. 
+ If either of the optional arguments,
+                  position or occurrence,
+                is NULL, the function also returns
+                  NULL.
+
+
+ JARO_DISTANCE(STRING str1, STRING str2)
+JARO_DST(STRING str1, STRING str2) 
+
+Purpose: Returns the Jaro distance between two
+            input strings. The Jaro distance is a measure of similarity between
+            two strings and is the complementary of
+              JARO_SIMILARITY(), i.e. (1 -
+              JARO_SIMILARITY()). 
+Return type:
+DOUBLE
+
+
+Usage notes:
+
+ If the two input strings are identical, the function returns
+              0.0. 
+ If there is no matching character between the input strings, the
+              function returns 1.0. 
+ If either input strings is NULL, the function
+              returns NULL. 
+ If the length of either input string is bigger than 255
+              characters, the function returns an error. 
+
+ JARO_SIMILARITY(STRING str1, STRING str2)
+JARO_SIM(STRING str1, STRING str2) 
+
+Purpose: Returns the Jaro similarity of two
+            strings. The higher the Jaro similarity for two strings is, the more
+            similar the strings are. 
+Return type:
+DOUBLE
+
+
+Usage notes:
+
+ If the two input strings are identical, the function returns
+              1.0. 
+ If there is no matching character between the input strings, the
+              function returns 0.0. 
+ If either input strings is NULL, the function
+              returns NULL. 
+ If the length of either input string is bigger than 255
+              characters, the function returns an error. 
+
+ JARO_WINKLER_DISTANCE(STRING str1, STRING str2[, DOUBLE
+            scaling_factor, DOUBLE boost_threshold])
+JW_DST(STRING str1, STRING str2[, DOUBLE scaling_factor, DOUBLE
+            boost_threshold]) 
+
+Purpose: Returns the Jaro-Winkler distance of two
+            input strings. It is the complementary of
+              JARO_WINKLER_SIMILARITY(), i.e. 1 -
+              JARO_WINKLER_SIMILARITY(). 
+Return type:
+DOUBLE
+
+
+Usage notes:
+
+ If the two input strings are identical, the function returns
+              0.0. 
+ If there is no matching character between the input strings, the
+              function returns 1.0. 
+ The function returns an error in the following cases: 
+ The length of either input string is bigger than 255
+                  characters. 
+
+scaling_factor < 0.0 or
+                    scaling_factor > 0.25 
+
+boost_threshold < 0.0 or
+                    boost_threshold > 1.0 
+
+
+ If either input strings is NULL, the function
+              returns NULL. 
+ The default scaling factor is 0.1. 
+ The prefix weight will only be applied if the Jaro-distance
+              exceeds the optional boost_threshold. By
+              default, the boost_threshold value is 0.7. 
+
+ JARO_WINKLER_SIMILARITY(STRING str1, STRING str2[, DOUBLE
+            scaling_factor, DOUBLE boost_threshold])
+JARO_SIM(STRING str1, STRING str2[, DOUBLE scaling_factor, DOUBLE
+            boost_threshold]) 
+
+Purpose: Returns the Jaro-Winkler Similarity
+            between two input strings. The Jaro-Winkler similarity uses a prefix
+            weight, specified by scaling factor, which gives
+            more favorable ratings to strings that match from the beginning for
+            a set prefix length, up to a maximum of four characters.  Use
+              Jaro or Jaro-Winkler functions to perform fuzzy matches on
+              relatively short strings, e.g. to scrub user inputs of names
+              against the records in the database. 
+
+Return type:
+DOUBLE
+
+
+Usage notes:
+
+ If the two input strings are identical, the function returns
+              1.0. 
+ If there is no matching character between the input strings, the
+              function returns 0.0. 
+ The function returns an error in the following cases: 
+ The length of either input string is bigger than 255
+                  characters. 
+
+scaling_factor < 0.0 or
+                    scaling_factor > 0.25 
+
+boost_threshold < 0.0 or
+                    boost_threshold > 1.0 
+
+
+ If either input strings is NULL, the function
+              returns NULL. 
+ The default scaling factor is 0.1. 
+ The prefix weight will only be applied if the Jaro-similarity
+              exceeds the optional boost_threshold. By
+              default, the boost_threshold value is 0.7. 
+
+
+LEFT(STRING a, INT num_chars)
+
+
+          See the STRLEFT() function.
+        
+
+LENGTH(STRING a)
+
+
+Purpose: Returns the length in characters of the argument string.
+          
+Return type: INT
+
+
+
+
+          LEVENSHTEIN(STRING str1, STRING str2), LE_DST(STRING
+          str1, STRING str2)
+
+
+Purpose: Returns the Levenshtein distance between two input strings. The
+          Levenshtein distance between two strings is the minimum number of single-character
+          edits required to transform one string to other. The function indicates how different
+          the input strings are.
+          
+Return type: INT
+
+Usage notes:
+
+            If input strings are equal, the function returns 0.
+          
+
+            If either input exceeds 255 characters, the function returns an error.
+          
+
+            If either input string is NULL, the function returns
+            NULL.
+          
+
+            If the length of one input string is zero, the function returns the length of the
+            other string.
+          
+
+Example:
+
+
+LEVENSHTEIN ('welcome', 'We come') returns 2, first change to
+            replace 'w' to 'W', and then to replace
+            'l' to a space character.
+          
+
+
+
+LOCATE(STRING substr, STRING str[, INT pos])
+
+
+Purpose: Returns the position (starting from 1) of the first occurrence of a
+          substring within a longer string, optionally after a particular position.
+          
+Return type: INT
+
+
+
+LOWER(STRING a), LCASE(STRING a)
+
+
+Purpose: Returns the argument string converted to all-lowercase.
+          
+Return type: STRING
+
+
+Usage notes:
+
+ In Impala 2.5 and higher,
+        you can simplify queries that use many UPPER() and LOWER()
+        calls to do case-insensitive comparisons, by using the ILIKE or
+          IREGEXP operators instead. 
+
+
+LPAD(STRING str, INT len, STRING pad)
+
+
+Purpose: Returns a string of a specified length, based on the first argument
+          string. If the specified string is too short, it is padded on the left with a
+          repeating sequence of the characters from the pad string. If the specified string is
+          too long, it is truncated on the right.
+          
+Return type: STRING
+
+
+
+LTRIM(STRING a [, STRING chars_to_trim])
+
+
+Purpose: Returns the argument string with all occurrences of characters
+          specified by the second argument removed from the left side. Removes spaces if the
+          second argument is not specified.
+          
+Return type: STRING
+
+
+
+PARSE_URL(STRING urlString, STRING partToExtract [, STRING keyToExtract])
+
+
+Purpose: Returns the portion of a URL corresponding to a specified part. The
+          part argument can be 'PROTOCOL', 'HOST',
+          'PATH', 'REF', 'AUTHORITY',
+          'FILE', 'USERINFO', or 'QUERY'.
+          Uppercase is required for these literal values. When requesting the
+          QUERY portion of the URL, you can optionally specify a key to
+          retrieve just the associated value from the key-value pairs in the query string.
+          
+Return type: STRING
+
+
+Usage notes: This function is important for the traditional Hadoop use case
+            of interpreting web logs. For example, if the web traffic data features raw URLs not
+            divided into separate table columns, you can count visitors to a particular page by
+            extracting the 'PATH' or 'FILE' field, or analyze
+            search terms by extracting the corresponding key from the 'QUERY'
+            field.
+          
+
+
+REGEXP_ESCAPE(STRING source)
+
+
+Purpose: The REGEXP_ESCAPE function returns a string escaped
+          for the special character in RE2 library so that the special characters are
+          interpreted literally rather than as special characters. The following special
+          characters are escaped by the function:
+.\+*?[^]$(){}=!<>|:-
+
+Return type: string
+
+ In Impala 2.0 and later, the Impala regular expression syntax
+        conforms to the POSIX Extended Regular Expression syntax used by the Google RE2 library. For
+        details, see the RE2 documentation. It has most idioms familiar from regular
+        expressions in Perl, Python, and so on, including .*? for non-greedy
+        matches. 
+ In Impala 2.0 and later, a change
+        in the underlying regular expression library could cause changes in the
+        way regular expressions are interpreted by this function. Test any
+        queries that use regular expressions and adjust the expression patterns
+        if necessary.
+
+        Because the impala-shell interpreter uses the \ character for escaping,
+        use \\ to represent the regular expression escape character in any regular expressions
+        that you submit through impala-shell . You might prefer to use the equivalent character
+        class names, such as [[:digit:]] instead of \d which you would have to
+        escape as \\d.
+      
+
+Examples:
+
+
+            This example shows escaping one of special characters in RE2.
+          
+
++------------------------------------------------------+
+| regexp_escape('Hello.world')                         |
++------------------------------------------------------+
+| Hello\.world                                         |
++------------------------------------------------------+
+
+
+            This example shows escaping all the special characters in RE2.
+          
+
++------------------------------------------------------------+
+| regexp_escape('a.b\\c+d*e?f[g]h$i(j)k{l}m=n!o<p>q|r:s-t')  |
++------------------------------------------------------------+
+| a\.b\\c\+d\*e\?f\[g\]h\$i\(j\)k\{l\}m\=n\!o\<p\>q\|r\:s\-t |
++------------------------------------------------------------+
+
+
+
+
+REGEXP_EXTRACT(STRING subject, STRING pattern, INT index)
+
+
+Purpose: Returns the specified () group from a string based on a regular
+          expression pattern. Group 0 refers to the entire extracted string, while group 1, 2,
+          and so on refers to the first, second, and so on (...) portion.
+          
+Return type: STRING
+
+ In Impala 2.0 and later, the Impala regular expression syntax
+        conforms to the POSIX Extended Regular Expression syntax used by the Google RE2 library. For
+        details, see the RE2 documentation. It has most idioms familiar from regular
+        expressions in Perl, Python, and so on, including .*? for non-greedy
+        matches. 
+ In Impala 2.0 and later, a change
+        in the underlying regular expression library could cause changes in the
+        way regular expressions are interpreted by this function. Test any
+        queries that use regular expressions and adjust the expression patterns
+        if necessary.
+
+        Because the impala-shell interpreter uses the \ character for escaping,
+        use \\ to represent the regular expression escape character in any regular expressions
+        that you submit through impala-shell . You might prefer to use the equivalent character
+        class names, such as [[:digit:]] instead of \d which you would have to
+        escape as \\d.
+      
+
+Examples:
+
+
+            This example shows how group 0 matches the full pattern string, including the
+            portion outside any () group:
+          
+[localhost:21000] > select regexp_extract('abcdef123ghi456jkl','.*?(\\d+)',0);
++------------------------------------------------------+
+| regexp_extract('abcdef123ghi456jkl', '.*?(\\d+)', 0) |
++------------------------------------------------------+
+| abcdef123ghi456                                      |
++------------------------------------------------------+
+Returned 1 row(s) in 0.11s
+
+            This example shows how group 1 matches just the contents inside the first
+            () group in the pattern string:
+          
+[localhost:21000] > select regexp_extract('abcdef123ghi456jkl','.*?(\\d+)',1);
++------------------------------------------------------+
+| regexp_extract('abcdef123ghi456jkl', '.*?(\\d+)', 1) |
++------------------------------------------------------+
+| 456                                                  |
++------------------------------------------------------+
+Returned 1 row(s) in 0.11s
+
+            Unlike in earlier Impala releases, the regular expression library used in Impala 2.0
+            and later supports the .*? idiom for non-greedy matches. This
+            example shows how a pattern string starting with .*? matches the
+            shortest possible portion of the source string, returning the rightmost set of
+            lowercase letters. A pattern string both starting and ending with
+            .*? finds two potential matches of equal length, and returns the
+            first one found (the leftmost set of lowercase letters).
+          
+[localhost:21000] > select regexp_extract('AbcdBCdefGHI','.*?([[:lower:]]+)',1);
++--------------------------------------------------------+
+| regexp_extract('abcdbcdefghi', '.*?([[:lower:]]+)', 1) |
++--------------------------------------------------------+
+| def                                                    |
++--------------------------------------------------------+
+[localhost:21000] > select regexp_extract('AbcdBCdefGHI','.*?([[:lower:]]+).*?',1);
++-----------------------------------------------------------+
+| regexp_extract('abcdbcdefghi', '.*?([[:lower:]]+).*?', 1) |
++-----------------------------------------------------------+
+| bcd                                                       |
++-----------------------------------------------------------+
+
+
+
+REGEXP_LIKE(STRING source, STRING pattern[, STRING options])
+
+
+Purpose: Returns true or false to indicate
+          whether the source string contains anywhere inside it the regular expression given by
+          the pattern. The optional third argument consists of letter flags that change how the
+          match is performed, such as i for case-insensitive matching.
+          
+Syntax:
+
+
+            The flags that you can include in the optional third argument are:
+          
+
+
+c: Case-sensitive matching (the default).
+            
+
+i: Case-insensitive matching. If multiple instances of
+              c and i are included in the third argument, the
+              last such option takes precedence.
+            
+
+m: Multi-line matching. The ^ and
+              $ operators match the start or end of any line within the source
+              string, not the start and end of the entire string.
+            
+
+n: Newline matching. The . operator can match
+              the newline character. A repetition operator such as .* can match
+              a portion of the source string that spans multiple lines.
+            
+
+
+Return type: BOOLEAN
+
+ In Impala 2.0 and later, the Impala regular expression syntax
+        conforms to the POSIX Extended Regular Expression syntax used by the Google RE2 library. For
+        details, see the RE2 documentation. It has most idioms familiar from regular
+        expressions in Perl, Python, and so on, including .*? for non-greedy
+        matches. 
+ In Impala 2.0 and later, a change
+        in the underlying regular expression library could cause changes in the
+        way regular expressions are interpreted by this function. Test any
+        queries that use regular expressions and adjust the expression patterns
+        if necessary.
+
+        Because the impala-shell interpreter uses the \ character for escaping,
+        use \\ to represent the regular expression escape character in any regular expressions
+        that you submit through impala-shell . You might prefer to use the equivalent character
+        class names, such as [[:digit:]] instead of \d which you would have to
+        escape as \\d.
+      
+
+Examples:
+
+
+            This example shows how REGEXP_LIKE() can test for the existence of
+            various kinds of regular expression patterns within a source string:
+          
+
+-- Matches because the 'f' appears somewhere in 'foo'.
+select regexp_like('foo','f');
++-------------------------+
+| regexp_like('foo', 'f') |
++-------------------------+
+| true                    |
++-------------------------+
+
+-- Does not match because the comparison is case-sensitive by default.
+select regexp_like('foo','F');
++-------------------------+
+| regexp_like('foo', 'f') |
++-------------------------+
+| false                   |
++-------------------------+
+
+-- The 3rd argument can change the matching logic, such as 'i' meaning case-insensitive.
+select regexp_like('foo','F','i');
++------------------------------+
+| regexp_like('foo', 'f', 'i') |
++------------------------------+
+| true                         |
++------------------------------+
+
+-- The familiar regular expression notations work, such as ^ and $ anchors...
+select regexp_like('foo','f$');
++--------------------------+
+| regexp_like('foo', 'f$') |
++--------------------------+
+| false                    |
++--------------------------+
+
+select regexp_like('foo','o$');
++--------------------------+
+| regexp_like('foo', 'o$') |
++--------------------------+
+| true                     |
++--------------------------+
+
+-- ...and repetition operators such as * and +
+select regexp_like('foooooobar','fo+b');
++-----------------------------------+
+| regexp_like('foooooobar', 'fo+b') |
++-----------------------------------+
+| true                              |
++-----------------------------------+
+
+select regexp_like('foooooobar','fx*y*o*b');
++---------------------------------------+
+| regexp_like('foooooobar', 'fx*y*o*b') |
++---------------------------------------+
+| true                                  |
++---------------------------------------+
+
+
+
+
+REGEXP_REPLACE(STRING initial, STRING pattern, STRING replacement)
+
+
+Purpose: Returns the initial argument with the regular expression pattern
+          replaced by the final argument string.
+          
+Return type: STRING
+
+ In Impala 2.0 and later, the Impala regular expression syntax
+        conforms to the POSIX Extended Regular Expression syntax used by the Google RE2 library. For
+        details, see the RE2 documentation. It has most idioms familiar from regular
+        expressions in Perl, Python, and so on, including .*? for non-greedy
+        matches. 
+ In Impala 2.0 and later, a change
+        in the underlying regular expression library could cause changes in the
+        way regular expressions are interpreted by this function. Test any
+        queries that use regular expressions and adjust the expression patterns
+        if necessary.
+
+        Because the impala-shell interpreter uses the \ character for escaping,
+        use \\ to represent the regular expression escape character in any regular expressions
+        that you submit through impala-shell . You might prefer to use the equivalent character
+        class names, such as [[:digit:]] instead of \d which you would have to
+        escape as \\d.
+      
+
+Examples:
+
+
+            These examples show how you can replace parts of a string matching a pattern with
+            replacement text, which can include backreferences to any () groups
+            in the pattern string. The backreference numbers start at 1, and any
+            \ characters must be escaped as \\.
+          
+
+            Replace a character pattern with new text:
+          
+[localhost:21000] > select regexp_replace('aaabbbaaa','b+','xyz');
++------------------------------------------+
+| regexp_replace('aaabbbaaa', 'b+', 'xyz') |
++------------------------------------------+
+| aaaxyzaaa                                |
++------------------------------------------+
+Returned 1 row(s) in 0.11s
+
+            Replace a character pattern with substitution text that includes the original
+            matching text:
+          
+[localhost:21000] > select regexp_replace('aaabbbaaa','(b+)','<\\1>');
++----------------------------------------------+
+| regexp_replace('aaabbbaaa', '(b+)', '<\\1>') |
++----------------------------------------------+
+| aaa<bbb>aaa                                  |
++----------------------------------------------+
+Returned 1 row(s) in 0.11s
+
+            Remove all characters that are not digits:
+          
+[localhost:21000] > select regexp_replace('123-456-789','[^[:digit:]]','');
++---------------------------------------------------+
+| regexp_replace('123-456-789', '[^[:digit:]]', '') |
++---------------------------------------------------+
+| 123456789                                         |
++---------------------------------------------------+
+Returned 1 row(s) in 0.12s
+
+
+REPEAT(STRING str, INT n)
+
+
+Purpose: Returns the argument string repeated a specified number of times.
+          
+Return type: STRING
+
+
+
+REPLACE(STRING initial, STRING target, STRING replacement)
+
+
+Purpose: Returns the initial argument with all occurrences of the target string
+          replaced by the replacement string.
+          
+Return type: STRING
+
+
+Usage notes:
+
+
+            Because this function does not use any regular expression patterns, it is typically
+            faster than REGEXP_REPLACE() for simple string substitutions.
+          
+
+            If any argument is NULL, the return value is NULL.
+          
+
+            Matching is case-sensitive.
+          
+
+            If the replacement string contains another instance of the target string, the
+            expansion is only performed once, instead of applying again to the newly constructed
+            string.
+          
+
+Examples:
+
+-- Replace one string with another.
+select replace('hello world','world','earth');
++------------------------------------------+
+| replace('hello world', 'world', 'earth') |
++------------------------------------------+
+| hello earth                              |
++------------------------------------------+
+
+-- All occurrences of the target string are replaced.
+select replace('hello world','o','0');
++----------------------------------+
+| replace('hello world', 'o', '0') |
++----------------------------------+
+| hell0 w0rld                      |
++----------------------------------+
+
+-- If no match is found, the original string is returned unchanged.
+select replace('hello world','xyz','abc');
++--------------------------------------+
+| replace('hello world', 'xyz', 'abc') |
++--------------------------------------+
+| hello world                          |
++--------------------------------------+
+
+
+
+REVERSE(STRING a)
+
+
+Purpose: Returns the argument string with characters in reversed order.
+          
+Return type: STRING
+
+
+
+RIGHT(STRING a, INT num_chars)
+
+
+          See the STRRIGHT function.
+        
+
+RPAD(STRING str, INT len, STRING pad)
+
+
+Purpose: Returns a string of a specified length, based on the first argument
+          string. If the specified string is too short, it is padded on the right with a
+          repeating sequence of the characters from the pad string. If the specified string is
+          too long, it is truncated on the right.
+          
+Return type: STRING
+
+
+
+RTRIM(STRING a [, STRING chars_to_trim])
+
+
+Purpose: Returns the argument string with all occurrences of characters
+          specified by the second argument removed from the right side. Removes spaces if the
+          second argument is not specified.
+          
+Return type: STRING
+
+
+
+SPACE(INT n)
+
+
+Purpose: Returns a concatenated string of the specified number of spaces.
+          Shorthand for repeat(' ',n).
+          
+Return type: STRING
+
+
+ SPLIT_PART(STRING source, STRING delimiter, BIGINT index) 
+
+Purpose: Returns the requested indexth part
+            of the input source string split by the
+              delimiter. 
+ If index is a positive number, returns the
+                  indexth part from the left within the
+                  source string. 
+ If index is a negative number, returns the
+                  indexth part from the right within the
+                  source string. 
+ If index is 0, returns an error. 
+
+ The delimiter can consist of multiple
+              characters, not just a single character. 
+ All matching of the delimiter is done exactly, not using any
+              regular expression patterns. 
+
+Return type:
+STRING
+
+
+Examples:
+
+
+SPLIT_PART('x,y,z',',',2) returns
+                'y'. 
+
+SPLIT_PART('one***two***three','***',2) returns
+                'two'. 
+
+SPLIT_PART('abc@@def@@ghi', '@@', 3) returns
+                'ghi'. 
+
+SPLIT_PART('abc@@def@@ghi', '@@', -3) returns
+                'abc'. 
+
+
+STRLEFT(STRING a, INT num_chars)
+
+
+Purpose: Returns the leftmost characters of the string. Shorthand for a call to
+          substr() with 2 arguments.
+          
+Return type: STRING
+
+
+
+STRRIGHT(STRING a, INT num_chars)
+
+
+Purpose: Returns the rightmost characters of the string. Shorthand for a call
+          to substr() with 2 arguments.
+          
+Return type: STRING
+
+
+
+SUBSTR(STRING a, INT start [, INT len]), SUBSTRING(STRING a, INT start [,
+          INT len])
+
+
+Purpose: Returns the portion of the string starting at a specified point,
+          optionally with a specified maximum length. The characters in the string are indexed
+          starting at 1.
+          
+Return type: STRING
+
+
+
+TRANSLATE(STRING input, STRING from, STRING to)
+
+
+Purpose: Returns the input string with each character in the
+          from argument replaced with the corresponding character in the
+          to argument. The characters are matched in the order they appear in
+          from and to.
+          
+            For example: translate ('hello world','world','earth') returns
+            'hetta earth'.
+          
+
+Return type: STRING
+
+
+Usage notes:
+
+
+            If from contains more characters than to, the
+            from characters that are beyond the length of to
+            are removed in the result.
+          
+
+            For example:
+          
+
+translate('abcdedg', 'bcd', '1') returns 'a1eg'.
+          
+
+translate('Unit Number#2', '# ', '_') returns
+            'UnitNumber_2'.
+          
+
+            If from is NULL, the function returns
+            NULL.
+          
+
+            If to contains more characters than from, the
+            extra characters in to are ignored.
+          
+
+            If from contains duplicate characters, the duplicate character is
+            replaced with the first matching character in to.
+          
+
+            For example: translate ('hello','ll','67') returns
+            'he66o'.
+          
+
+
+TRIM(STRING a)
+
+
+Purpose: Returns the input string with both leading and trailing spaces
+          removed. The same as passing the string through both LTRIM() and
+          RTRIM().
+          
+Usage notes: Often used during data cleansing operations during the ETL
+            cycle, if input values might still have surrounding spaces. For a more
+            general-purpose function that can remove other leading and trailing characters
+            besides spaces, see BTRIM().
+          
+
+Return type: STRING
+
+
+
+UPPER(STRING a), UCASE(STRING a)
+
+
+Purpose: Returns the argument string converted to all-uppercase.
+          
+Return type: STRING
+
+
+Usage notes:
+
+ In Impala 2.5 and higher,
+        you can simplify queries that use many UPPER() and LOWER()
+        calls to do case-insensitive comparisons, by using the ILIKE or
+          IREGEXP operators instead. 
+
+
+Related informationGeneral information on Base64 encodingGROUP_CONCAT function

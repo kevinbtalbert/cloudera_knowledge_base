@@ -1,0 +1,130 @@
+Importing RDBMS data to HDFSCloudera Docs
+Importing RDBMS data to
+      HDFS
+In CDP Private Cloud Base, you
+      create a single Sqoop import command that imports data from a relational database into
+      HDFS.
+You enter the Sqoop import command on the command line of your cluster to import data
+         into HDFS. The import command needs to include the database URI, database name, and
+         connection protocol, such as jdbc:mysql:m and the data to import.
+         Optionally, the command can include parallel processing directives for fast data
+         transfer, the HDFS destination directory for imported data, data delimiters, and other
+         information. The default HDFS directory is used if you do not specify another location.
+         Fields are comma-delimited and rows are line-delimited.You can test the import statement
+         before actually executing it. 
+
+Apache Sqoop is installed and configured.
+
+
+Create an import command that specifies the Sqoop connection to the data source you
+               want to import.
+
+If you want to enter a password for the data source on the command line, use
+                  the -P option in the connection string.
+If you want to specify a file where the password is stored, use the
+                     --password-file option.
+
+Password on command line:
+               sqoop import --connect jdbc:mysql://db.foo.com/bar \
+<data to import> \
+--username <username> \
+-P
+Specify password file:
+               sqoop import --connect jdbc:mysql://db.foo.com/bar \
+--table EMPLOYEES \
+--username <username> \
+--password-file ${user.home}/.password
+
+Specify the data to import in the command.
+
+Import an entire table.
+Import a subset of the columns.
+Import data using a free-form query.
+
+Entire table:
+               sqoop import \
+--connect jdbc:mysql://db.foo.com/bar \
+--table EMPLOYEES
+Subset of columns:
+               sqoop import \
+--connect jdbc:mysql://db.foo.com/bar \
+--table EMPLOYEES \
+--columns "employee_id,first_name,last_name,job_title"
+Free-form query to import the latest data:
+               sqoop import \
+--connect jdbc:mysql://db.foo.com/bar \
+--table EMPLOYEES \
+--where "start_date > '2018-01-01'"
+
+
+Specify the destination of the imported data using the
+                  --target-dir option.
+This command appends data imported from the MySQL EMPLOYEES table to the output
+               files in the HDFS target directory using default text file delimiters.
+               sqoop import \
+--connect jdbc:mysql://db.foo.com:3600/bar \
+--table EMPLOYEES \
+--where "id > 100000" \
+--target-dir /incremental_dataset \
+--append
+This command splits imported data by column and specifies importing the data
+               into output files in the HDFS target directory.
+               sqoop import \
+--connect jdbc:mysql://db.foo.com:3600/bar \
+--query 'SELECT a.*, b.* \
+FROM a JOIN b on (a.id == b.id) \
+WHERE $CONDITIONS' \
+--split-by a.id \
+--target-dir /user/foo/joinresults
+This command executes once and imports data serially using a single map task as
+               specified by the -m 1 options:
+               sqoop import \
+--connect jdbc:mysql://db.foo.com:3600/bar \
+--query \
+'SELECT a.*, b.* \
+FROM a \
+JOIN b on (a.id == b.id) \
+WHERE $CONDITIONS' \
+-m 1 \
+--target-dir /user/foo/joinresults
+
+Optionally, specify write parallelism in the import statement to run a
+               number of map tasks in parallel:
+
+Set mappers: If the source table has a primary key, explicitly set the number
+                  of mappers using --num-mappers.
+Split by: If primary keys are not evenly distributed, provide a split key
+                  using --split-by
+Sequential: If you do not have a primary key or split key, import data
+                  sequentially using --num-mappers 1 or
+                     --autoreset-to-one-mapper in query.
+
+
+
+Set mappers:
+                     sqoop import --connect jdbc:mysql://db.foo.com:3306/bar \
+--table EMPLOYEES \
+--num-mappers 8
+Split by:
+                     sqoop import --connect jdbc:mysql://db.foo.com:3306/bar \
+--table EMPLOYEES \
+--split-by dept_id
+
+
+
+
+Setting mappers evenly splits the primary key range of the source table.
+Split by evenly splits the data using the split key instead of a primary
+                     key.
+
+
+
+Optionally, test the import command before execution using the eval option.
+
+sqoop eval --connect jdbc:mysql://db.foo.com:3306/bar \
+--query "SELECT * FROM employees LIMIT 10"
+
+The output of the select statement appears.
+
+
+Related informationApache Sqoop Documentation (v1.4.7.7.1.6)                     Parent topic: HDFS to Apache Hive data migration

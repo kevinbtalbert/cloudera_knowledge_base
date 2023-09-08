@@ -1,0 +1,361 @@
+
+
+
+
+Summary of Security Best Practices | 1.0 | Cloudera Documentation
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Documentation
+
+
+Products
+Services & Support
+Solutions
+
+
+
+
+
+
+
+
+
+
+
+
+
+Security on AWS: Best Practices
+
+
+
+
+
+
+
+
+View All Categories
+
+Cloudera Enterprise in the Cloud
+Cloudera SDX for Altus: Best Practices and Supported Configuration
+Data Engineering on AWS: Best Practices
+Data Warehouse on AWS: Best Practices
+Operational Database on AWS: Best Practices
+Security on AWS: Best Practices
+
+Summary of Security Best Practices
+
+
+Get Started with Amazon S3
+
+
+
+
+
+To read this documentation, you must turn JavaScript on.
+
+
+
+
+Summary of Security Best Practices
+
+
+This page summarizes the recommendations made in Security on AWS: Best
+Practices:
+
+Basics
+Networking (Setting Up the VPC)
+Transient Cluster, Users with Same Privileges
+Persistent Clusters, Users with Different Privileges
+
+
+
+
+Basics
+
+Your organization’s Amazon Web Services account is the root account. Amazon recommends creating a user in IAM (AWS Identity and Access Management) and then creating the VPC under that user’s identity
+for your clusters, rather than using the root account. Here are some other tips:
+
+Evaluate your cluster’s security regularly. Visit the Cloudera Security Bulletins page and the Cloudera Community to find out about known security issues.
+Change any and all default passwords throughout the system after it has been set up and before putting into production.
+
+
+Fastpath: Most all Amazon Web Services set up tasks start from the AWS
+Management Console.
+
+
+
+Networking (Setting Up the VPC)
+
+
+Set up a Virtual Private Cloud (VPC) on Amazon into which to create an Amazon EC2 instance and deploy your Cloudera cluster.
+Create a VPN (virtual private network) from your on-premises
+network to your VPC. Amazon offers several choices, so use the one that makes most sense for the type of deployment.
+
+Use AWS Direct Connect for a permanent connection between your
+organization’s network and your Amazon VPC. Direct Connect requires coordination between your organization and Amazon, but is most secure and extends your corporate network into the Amazon cloud. If
+you want to federate your on-premises Active Directory instance with authentication in the Amazon cloud, use AWS Direct Connect as your VPN.
+
+
+Create at least two subnets in the VPC, one private, one public.
+Create two different security groups in the VPC:
+
+Create one security group for the edge node (or nodes) that will support the gateway roles of the cluster, for example, YARN gateway, Flume gateway, and so on. Use public IP addresses
+(create a public subnet) for the edge node to provide external access to the cluster.
+Create another security group for the other nodes in the cluster. Use private IP addresses and configure the security group to allow outbound access for all protocols.
+
+
+Use a private IP address (an address from the range of your VPC’s private subnet) for Cloudera Manager Server.
+Create a persistent EC2 instance for Altus Director
+server. Altus Director is used to instantiate and control other EC2 instances in this VPC.
+Assign public IP addresses to the gateway node in
+the cluster (the node configured with various gateway roles, which provide client access to cluster functionality). For example, the gateway node includes HDFS, Hive, Spark 2 on YARN, and YARN
+gateway role instances.
+
+
+
+
+Transient Cluster, Users with Same Privileges
+
+These recommendations apply mostly to transient clusters and also to any cluster that has no need for granular user permissions or auditing. Assuming all users can have equivalent
+privileges on the cluster:
+
+
+Identity, Authentication, and Authorization
+
+When all users can have equivalent privileges to launch a cluster and run a particular workload, especially for transient single-user clusters, using Amazon Identity and Access Management (IAM) takes care of identity, authentication, and authorization from a single service:
+
+Using the Amazon AWS Console, create an IAM role and configure that role with the permissions needed to
+create the necessary EC2 instances in the VPC.
+Give this IAM role access to the necessary Amazon S3 bucket.
+In the VPC configuration, give this IAM role access to the edge security group so that it can launch the EC2 instances when needed.
+Give each user group its own Altus Director instance and grant permissions to the
+IAM role to use Director and create clusters.
+
+
+
+
+Encryption (Data at Rest)
+
+The data at rest encryption mechanisms depend on the type of storage, as follows:
+
+
+Amazon S3 Data
+
+
+For Amazon Simple Storage Service (S3), use Amazon’s server-side encryption using S3-managed encryption keys (SSE-S3) or using SSE-KMS. For SSE-KMS, you must also use Amazon’s AWS Key Management Service.
+
+
+
+
+Amazon EBS Data
+
+
+Use Amazon’s AWS Key Management Service to create encryption keys and specify that want an
+encrypted EBS volume (using that key) when you create the volume. See Amazon’s Amazon EBS
+Encryption and How Amazon Elastic Block Store (Amazon EBS) Uses AWS KMS for more
+information.
+
+
+
+
+HDFS Storage
+
+
+Use native HDFS Transparent Encryption (aka, HDFS Data
+At Rest Encryption) for client-side transparent end-to-end data encryption for HDFS data.
+
+
+
+
+
+
+Persistent Clusters, Users with Different Privileges
+
+These recommendations assume that your organization has Microsoft Active Directory (or other LDAP-compliant directory service) and that you want to leverage the user identity as well as
+the authentication services available (Kerberos, Active Directory).
+
+
+Identity
+
+
+Use your organization’s Microsoft Active Directory or other LDAP-compliant directory service as the basis for identity and authentication.
+Integrate the local hosts’ UIDs to the LDAP identity with Linux SSSD (System Security Services daemon), Centrify, or FreeIPA (Identity, Policy, and Audit).
+
+
+
+
+Authentication
+
+
+Use Kerberos (Microsoft Active Directory, MIT Kerberos) for internal authentication among the nodes and services in the cluster, and for end-user authentication.
+
+
+
+
+Authorization
+
+
+Use Sentry to set role-based access controls on Apache Hive, Apache Solr, and Apache Impala data, and to Hive table data stored in HDFS. Currently, Sentry controls are applied on a
+per-cluster basis.
+
+
+
+
+Encryption
+
+Encryption needs to be applied to both data in transit and data at rest. Data at rest encryption protects data stored within the cluster.
+
+
+
+Encryption (Data in Transit)
+
+Data in transit encrypts network communications between nodes in the cluster and between all the endpoints that need to connect to the cluster. Cloudera clusters use industry standard
+TLS/SSL to encrypt network communications between RPC client and server processes and between Web components (HTTP/S for browser-based access to Cloudera Manager Admin Console, for example).
+
+Obtain and install certificates (X.509) for all hosts (EC2 instances) that comprise the cluster, for encrypted communications among the nodes in the cluster
+
+
+
+
+Encryption (Data at Rest)
+
+Encryption mechanisms vary, depending on where the data is stored.
+
+To manage your own encryption keys, outside Amazon Web Services, use a persistent cluster with local storage (the EC2 instance storage) and manage the cluster using Cloudera Manager
+rather than Altus Director.
+
+
+
+Amazon S3 Data
+
+
+Use Amazon server-side encryption (SSE-S3).
+
+
+
+
+HDFS Storage
+
+
+Use Transparent Encryption.
+
+
+
+
+
+Auditing
+
+
+Use Cloudera Navigator to track the logs on your Amazon S3 buckets.
+
+
+
+
+
+Categories: AWS | Best Practices | Cloud | Security | Summary | All Categories
+
+
+
+Security on AWS: Best Practices
+
+
+Get Started with Amazon S3
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+About Cloudera
+Resources
+Contact
+Careers
+Press
+Documentation
+
+United States: +1 888 789 1488
+Outside the US: +1 650 362 0488
+
+
+
+© 2019 Cloudera, Inc. All rights reserved. Apache Hadoop and associated open source project names are trademarks of the Apache Software Foundation. For a complete list of trademarks, click here.
+If this documentation includes code, including but not limited to, code examples, Cloudera makes this available to you under the terms of the Apache License, Version 2.0, including any required
+notices. A copy of the Apache License Version 2.0 can be found here.
+
+
+
+
+
+
+
+
+
+
+Terms & Conditions  |  Privacy Policy
+
+Page generated February 22, 2019.
+
+
+
+
+
+
+
+
+
+
+
+

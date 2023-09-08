@@ -1,0 +1,160 @@
+Cloud storageCloudera Docs
+Cloud storage
+
+Providing custom extensions / NARs
+
+Cloudera Maven Repository
+The binary that is deployed for running the Google Cloud function does not include the
+            full NiFi deployment with all NARs / extensions, as it would result in very long startup
+            times and would require more expensive configurations for the Cloud function. Instead,
+            it packages only the NARs necessary to run Stateless NiFi. If any other extension is
+            needed to run the data flow, it is automatically downloaded from the Cloudera Maven
+            Repository by default when the Function App is initialized on a cold start.
+Nexus repository
+You can configure an alternative Nexus repository by setting the
+              NEXUS_URL environment variable to the URL of the Nexus Repository
+            where extensions should be downloaded. For example, to use Google's mirror of the Maven
+            Central repository, set the NEXUS_URL environment variable to:
+            https://maven-central.storage-download.googleapis.com/maven2noteAny configured URL must
+              either be accessible via http or be served over
+                https with a trusted certificate.
+
+
+Providing extensions from file share
+This process is different depending on the Plan Type and Operating System. For
+        every type except Linux on a Consumption plan, the file share is already created, and you
+        can simply create a directory in the file share containing all NAR files that are
+        needed.
+For Linux on a Consumption plan, you need to create a file share and mount it as
+          follows:
+In the storage account attached to the Function App, click the
+              File shares blade, and then click + File
+              share on the top left.
+Name the File share, and click Create.
+Click the Access keys blade of the Storage account,
+            and then click Show keys.
+Copy the Key from key1. You will need to paste it in the place of [Copied
+              access key].
+Click the Cloud Shell icon at the top-right, and
+            accept any prompts needed to set up the shell.
+When the shell is running, run the following
+            command:az webapp config storage-account add      \
+   --resource-group [Resource Group Name] \
+   --name [Function App Name]             \
+   --custom-id [Pick a unique mount ID]   \
+   --storage-type AzureFiles              \
+   --share-name [File share Name]         \   
+   --account-name [Storage account Name]  \  
+   --mount-path /data                     \
+   --access-key [Copied access key]
+
+
+The mount path can be different, but should not be /home or /tmp.
+Now you can create a directory in the File share, and upload any NAR files to the
+        directory.
+Regardless of OS or plan type, you need to tell the Function App where to look
+        for the extensions. You can do this by adding another Application Setting whose name starts
+        with EXTENSIONS_DIR_. You can add multiple of these, such as EXTENSIONS_DIR_1,
+          EXTENSIONS_DIR_2, EXTENSIONS_DIR_MY_CUSTOM_LIBS. The name of the Application
+        Setting is the path where the Function App should look for the extensions.
+
+
+In Linux Consumption, the File share is mounted where you specified it in the
+            Cloud Shell. For example, if you upload the NARs to the File share under a directory
+            called extensions/custom, and the File share is mounted under
+              /data, you can add an Application Setting called
+              EXTENSIONS_DIR_CUSTOM with a value of
+            /data/extensions/custom.
+
+
+In all other plans, since the File share is mounted at
+            /home, this should always start with /home. For
+            example, if you upload our NARs to the File share under a directory called
+              extensions/custom, you could add an Application Setting called
+              EXTENSIONS_DIR_CUSTOM with a value of
+            /home/extensions/custom.
+
+
+Adding many extensions will result in the Function App configuration taking a bit
+        longer to load on a cold start, and it takes more memory to load the additional classes. So
+        it is not recommended to upload an extremely large set of files if they are not needed.
+
+Providing extensions / resources with storage containers
+If extensions or resources are to be shared among many Function Apps, it is
+        easier to have a single Container in a Storage account with one copy of the extensions or
+        resources. To integrate with an arbitrary Storage Container, specify the Storage account's
+        endpoint in the STORAGE_ENDPOINT Application Setting (e.g.,
+          https://<storageAcount>.blob.core.windows.net), and the Container name
+        in the STORAGE_CONTAINER Application Setting.
+Your Function App will need permission to access the container. Assuming you have
+        created a Managed Identity for your Function App:
+
+
+Edit your Function App and click the Identity blade on
+            the left.
+
+
+Click the Azure role assignments button under
+              Permissions, and click Add role
+              assignment.
+
+
+Under Scope, select Storage, and then
+            select the desired Storage account under Resource.
+Storage Blob Data Reader should be sufficient to download Blobs.
+
+
+Click Save.
+
+
+Next, you need to upload any extensions to a directory in the Container and
+        specify the directory name in the STORAGE_EXTENSIONS_DIRECTORY Application
+        Setting. Upload any data flow resources to another directory in the Container and specify
+        the directory name in the STORAGE_RESOURCES_DIRECTORY Application Setting.
+        Now when your App Function is restarted, it will download any extensions or resources from
+        these locations.
+If you are using the Storage Container approach, you may see the following errors
+        in the log at function startup, which can be safely
+        ignored:2022-01-21T18:36:33.976 [Error] [pool-2-thread-4] ERROR com.azure.identity.EnvironmentCredential - 
+Azure Identity => ERROR in EnvironmentCredential: Missing required environment variable AZURE_CLIENT_ID
+2022-01-21T18:36:34.460 [Error] [pool-2-thread-4] ERROR com.azure.identity.implementation.IntelliJCacheAccessor - IntelliJ Authentication not available. Please log in with Azure Tools for IntelliJ plugin in the IDE.
+2022-01-21T18:36:34.917 [Error] [parallel-2] ERROR com.azure.identity.EnvironmentCredential - EnvironmentCredential authentication unavailable. Environment variables are not fully configured.To mitigate this issue, 
+please refer to the troubleshooting guidelines here at https://aka.ms/azsdk/net/identity/environmentcredential/troubleshoot
+2022-01-21T18:36:35.779 [Error] [pool-2-thread-4] ERROR com.azure.identity.EnvironmentCredential - Azure Identity => ERROR in EnvironmentCredential: Missing required environment variable AZURE_CLIENT_ID
+2022-01-21T18:36:36.142 [Error] [pool-2-thread-4] ERROR com.azure.identity.implementation.IntelliJCacheAccessor - IntelliJ Authentication not available. Please log in with Azure Tools for IntelliJ plugin in the IDE.
+2022-01-21T18:36:36.451 [Error] [parallel-2] ERROR com.azure.identity.EnvironmentCredential - EnvironmentCredential authentication unavailable. Environment variables are not fully configured.To mitigate this issue, 
+please refer to the troubleshooting guidelines here at https://aka.ms/azsdk/net/identity/environmentcredential/troubleshoot
+
+
+Providing additional resources
+In addition to NiFi extensions, some data flows may also require additional
+        resources in order to function properly. For example, a JDBC driver may be required for
+        establishing a database connection, or a CSV file to provide data enrichment. The
+        recommended approach for providing such resources to your Function App is using the attached
+        Storage account's File share. To set this up, follow the instructions in the File share
+        section.
+
+Create a directory for your resources.
+Upload all resources required for the data flow to run to this directory.
+
+The directory will be mapped under the mapped File share directory for access by
+        the data flow.
+Because each deployment of a given data flow may need to reference files in a
+        different location, depending on its environment, it is generally considered a best practice
+        to parameterize any resource that needs to be accessed by the data flow. For example, if the
+        data flow contains a DBCPConnectionPool Controller Service for accessing a database, it is
+        recommended to use a Parameter for the "Database Driver Location(s)" property of the
+        Controller Service. This allows each deployment to specify the location of the JDBC driver
+        independently.
+So, for example, you can set the "Database Driver Location(s)" property to a
+        value of #{JDBC_DRIVER_LOCATION}. Then, in your Storage File share, you can
+        create a directory called something like resources, which contains your JDBC driver
+        database-jdbc-driver.jar. And you can add an Application Setting named
+          JDBC_DRIVER_LOCATION with a value of
+          /home/resources/database-jdbc-driver.jar (or
+          /data/resources/database-jdbc-driver.jar for Linux Consumption
+        plans).
+By taking this approach, your data flow is more reusable, as it can be deployed
+        in many different environments.
+
+

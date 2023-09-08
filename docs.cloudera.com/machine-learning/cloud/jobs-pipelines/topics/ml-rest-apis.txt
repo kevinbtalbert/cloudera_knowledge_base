@@ -1,0 +1,170 @@
+Legacy Jobs API (Deprecated)Cloudera Docs
+Legacy Jobs API (Deprecated)
+This topic demonstrates how to use the legacy API to launch jobs.
+Cloudera Machine Learning exposes a legacy REST API that allows you to schedule jobs from
+        third-party workflow tools. You must authenticate yourself before you can use the legacy API
+        to submit a job run request. The Jobs API supports HTTP Basic Authentication, accepting the
+        same users and credentials as Cloudera Machine Learning. 
+noteThe Jobs API is now deprecated. See CML API v2 and API v2 usage for
+        the successor API.
+
+Legacy API Key Authentication
+Cloudera recommends using your legacy API key for requests instead of your actual
+        username/password so as to avoid storing and sending your credentials in plaintext. The
+        legacy API key is a randomly generated token that is unique to each user. It must be treated
+        as highly sensitive information because it can be used to start jobs via the API. To look up
+        your Cloudera Machine Learning legacy API key:
+Sign in to Cloudera Machine Learning.
+From the upper right drop-down menu, switch context to your personal account. 
+Click Settings.
+Select the API Key tab.
+
+The following example demonstrates how to construct an HTTP request using the
+        standard basic authentication technique. Most tools and
+        libraries, such as Curl and Python Requests, support basic authentication and can set the
+        required Authorization header for you. For example, with curl you
+        can pass the legacy API key to the --user flag and leave the password field
+        blank. 
+curl -v -XPOST http://cdsw.example.com/api/v1/<path_to_job> --user "<LEGACY_API_KEY>:"
+To access the API using a library that does not provide Basic Authentication convenience
+        methods, set the request's Authorization header to Basic
+            <LEGACY_API_KEY_encoded_in_base64>. For example, if
+        your API key is uysgxtj7jzkps96njextnxxmq05usp0b, set Authorization
+        to Basic dXlzZ3h0ajdqemtwczk2bmpleHRueHhtcTA1dXNwMGI6. 
+
+Starting a Job Run Using the API
+Once a job has been created and configured through the Cloudera Machine Learning
+        web application, you can start a run of the job through the legacy API. This will constitute
+        sending a POST request to a job start URL of the form:
+          http://cdsw.example.com/api/v1/projects/<$USERNAME>/<$PROJECT_NAME>/jobs/<$JOB_ID>/start. 
+To construct a request, use the following steps to derive the
+        username, project name, and job ID from the job's URL in the web
+        application. 
+Log in to the Cloudera Machine Learning web
+            application.
+Switch context to the team/personal account where the parent
+            project lives.
+Select the project from the list.
+From the project's Overview, select the job
+            you want to run. This will take you to the job
+              Overview page. The URL for this page is of
+            the form:
+              http://cdsw.example.com/<$USERNAME>/<$PROJECT_NAME>/jobs/<$JOB_ID>. 
+Use the $USERNAME,
+            $PROJECT_NAME, and $JOB_ID
+            parameters from the job Overview URL to create the following job
+            start URL:
+              http://cdsw.example.com/api/v1/projects/<$USERNAME>/<$PROJECT_NAME>/jobs/<$JOB_ID>/start.
+              For example, if your job Overview page has the URL
+                http://cdsw.example.com/alice/sample-project/jobs/123,
+              then a sample POST request would be of the
+              form:curl -v -XPOST http://cdsw.example.com/api/v1/projects/alice/sample-project/jobs/123/start    \
+--user "<API_KEY>:" --header "Content-type: application/json"Note
+              that the request must have the Content-Type header set to
+                application/json, even if the request body is
+              empty.
+
+
+Setting Environment Variables
+You can set environment variables for a job run by passing
+        parameters in the API request body in a JSON-encoded object with the
+        following format.
+{
+    "environment": {
+        "ENV_VARIABLE": "value 1",
+        "ANOTHER_ENV_VARIABLE": "value 2"
+    }
+}
+The values set here will override the defaults set for the project and
+        the job in the web application. This request body is optional and can be
+        left blank.
+Be aware of potential conflicts with existing defaults for environment variables that are
+        crucial to your job, such as PATH and the CML variables.
+
+Sample Job Run
+As an example, let’s assume user Alice has created a project
+        titled Risk Analysis. Under the Risk Analysis project, Alice has created
+        a job with the ID, 208. Using curl, Alice can use her
+        API Key (uysgxtj7jzkps96njextnxxmq05usp0b) to create an
+        API request as
+        follows:curl -v -XPOST http://cdsw.example.com/api/v1/projects/alice/risk-analysis/jobs/208/start      \
+--user "uysgxtj7jzkps96njextnxxmq05usp0b:" --header "Content-type: application/json"           \
+--data '{"environment": {"START_DATE": "2017-01-01", "END_DATE": "2017-01-31"}}'In
+        this example, START_DATE and END_DATE
+        are environment variables that are passed as parameters to the API
+        request in a JSON object.
+In the resulting HTTP request, curl automatically
+        encodes the Authorization request header in base64 format.
+* Connected to cdsw.example.com (10.0.0.3) port 80 (#0)
+* Server auth using Basic with user 'uysgxtj7jzkps96njextnxxmq05usp0b'
+> POST /api/v1/projects/alice/risk-analysis/jobs/21/start HTTP/1.1
+> Host: cdsw.example.com
+> Authorization: Basic dXlzZ3h0ajdqemtwczk2bmpleHRueHhtcTA1dXNwMGI6
+> User-Agent: curl/7.51.0
+> Accept: */*
+> Content-type: application/json
+> 
+< HTTP/1.1 200 OK
+< Access-Control-Allow-Origin: *
+< Content-Type: application/json; charset=utf-8
+< Date: Mon, 10 Jul 2017 12:00:00 GMT
+< Vary: Accept-Encoding
+< Transfer-Encoding: chunked
+< 
+{
+  "engine_id": "cwg6wclmg0x482u0"
+}
+You can confirm that the job was started by going to the
+        Cloudera Machine Learning web application.
+
+Starting a Job Run Using Python
+To start a job run using Python, Cloudera recommends using Requests, an HTTP library for Python; it comes
+        with a convenient API that makes it easy to submit job run requests to
+        Cloudera Machine Learning. Extending the Risk Analysis example
+        from the previous section, the following sample Python code creates
+        an HTTP request to run the job with the job ID, 208. 
+Python
+        2# example.py
+
+import requests
+import json
+
+HOST = "http://cdsw.example.com"
+USERNAME = "alice"
+API_KEY = "uysgxtj7jzkps96njextnxxmq05usp0b"
+PROJECT_NAME = "risk-analysis"
+JOB_ID = "208"
+
+url = "/".join([HOST, "api/v1/projects", USERNAME, PROJECT_NAME, "jobs", JOB_ID, "start"])
+job_params = {"START_DATE": "2017-01-01", "END_DATE": "2017-01-31"}
+res = requests.post(
+    url,
+    headers = {"Content-Type": "application/json"},
+    auth = (API_KEY,""),
+    data = json.dumps({"environment": job_params})
+)
+
+print "URL", url
+print "HTTP status code", res.status_code
+print "Engine ID", res.json().get('engine_id')
+When you run the code, you should see output of the form:
+python example.py
+URL http://cdsw.example.com/api/v1/projects/alice/risk-analysis/jobs/208/start
+HTTP status code 200
+Engine ID r11w5q3q589ryg9o
+
+Limitations
+
+
+
+Cloudera Machine Learning does not support changing your legacy API key, or having
+              multiple API keys.
+
+
+Currently, you cannot create a job, stop a job, or get the status
+              of a job using the Jobs API.
+
+
+
+
+Related informationAPI v2 usageBasic Access AuthenticationCreating a PipelineEnvironment VariablesCML API v2

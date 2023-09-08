@@ -1,0 +1,120 @@
+Read operations (scans)Cloudera Docs
+Read operations (scans)
+Scans are read operations performed by clients that may span one or more rows across
+      one or more tablets. When a server receives a scan request, it takes a snapshot of the MVCC
+      state and then proceeds in one of two ways depending on the read mode selected by the
+      user.
+The mode
+         may be selected as follows: 
+
+
+            Java Client
+          
+
+
+              Call KuduScannerBuilder#ReadMode(…​)
+
+
+
+            C++ Client
+          
+
+
+              Call KuduScanner::SetReadMode()
+
+
+
+
+        The following modes are available in both clients:
+      
+
+
+READ_LATEST
+
+
+
+              This is the default read mode. The server takes a snapshot of the MVCC state and
+              proceeds with the read immediately. Reads in this mode only yield 'Read Committed'
+              isolation.
+            
+
+
+READ_AT_SNAPSHOT
+
+
+
+              In this read mode, scans are consistent and repeatable. A timestamp for the
+              snapshot is selected either by the server, or set explicitly by the user through
+              KuduScanner::SetSnapshotMicros(). Explicitly setting the
+              timestamp is recommended.
+            
+ The server waits until this timestamp is 'safe'; that is,
+                  until all write operations that have a lower timestamp have completed and are
+                  visible). This delay, coupled with an external consistency method, will eventually
+                  allow Kudu to have full strict-serializable semantics for reads and writes. However, this is
+                  still a work in progress and some anomalies are still possible. Only scans in this
+                  mode can be fault-tolerant. 
+
+READ_YOUR_WRITES
+This read mode relies on the state of a Kudu client to issue subsequent scan
+               requests. When issuing a scan request in this read mode, a Kudu client provides the
+               latest timestamp it observed so far. The server selects a timestamp higher than the
+               timestamp provided by the client, that is also guaranteed to have all prior write
+               operations committed and applied to the data. That translates into read-your-writes
+               and read-your-reads behavior which is useful in scenarios where subsequent scan
+               requests should contain the data the client has seen so far while reading and writing
+               during its current session. To summarize, this read mode
+
+ensures read-your-writes and read-your-reads session guarantees
+
+
+minimizes the latency caused by waiting for outstanding write operations at
+                        the server side to complete
+
+
+does not guarantee linearizability
+
+
+
+
+        Selecting between read modes requires balancing the trade-offs and making a choice that
+        fits your workload. For instance, a reporting application that needs to scan the entire
+        database might need to perform careful accounting operations, so that scan may need to
+        be fault-tolerant, but probably doesn’t require a to-the-microsecond up-to-date view
+        of the database. In that case, you might choose READ_AT_SNAPSHOT and
+        select a timestamp that is a few seconds in the past when the scan starts. On the other
+        hand, a machine learning workload that is not ingesting the whole data set and is
+        already statistical in nature might not require the scan to be repeatable, so you might
+        choose READ_LATEST instead for better scan performance.
+      
+note
+
+          Kudu also provides replica selection API for you to choose at which replica the scan
+          should be performed:
+          
+
+                Java Client
+              
+
+
+                  Call KuduScannerBuilder#replicaSelection(...)
+
+
+
+                C++ Client
+              
+
+
+                  Call KuduScanner::SetSelection(...)
+
+
+
+
+
+          This API is a means to control locality and, in some cases, latency. The replica
+          selection API has no effect on the consistency guarantees, which will hold no matter
+          which replica is selected.
+        
+
+
+Related informationKnown issues and limitationsParent topic: Kudu transaction semantics

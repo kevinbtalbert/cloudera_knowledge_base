@@ -1,0 +1,188 @@
+Accessing Avro data files from Spark SQL applicationsCloudera Docs
+Accessing Avro data files from Spark SQL applications
+
+ Spark SQL supports loading and saving DataFrames from and to a variety
+      of data sources. With the spark-avro library, you can
+      process data encoded in the Avro format using Spark. 
+
+      The spark-avro library supports most conversions between Spark SQL and Avro records,
+      making Avro a first-class citizen in Spark. The library automatically performs the schema
+      conversion. Spark SQL reads the data and converts it to Spark's internal representation;
+      the Avro conversion is performed only during reading and writing data.
+    
+ By default, when pointed at a directory, read methods silently skip
+      any files that do not have the .avro extension. To
+      include all files, set the
+        avro.mapred.ignore.inputs.without.extension property to
+      false. See Configuring Spark Applications. 
+Writing Compressed Data Files
+
+        To set the compression type used on write, configure the
+        spark.sql.avro.compression.codec property:
+sqlContext.setConf("spark.sql.avro.compression.codec","codec")
+
+
+ The supported codec values are
+          uncompressed, snappy, and
+          deflate. Specify the level to use with
+          deflate compression in
+          spark.sql.avro.deflate.level. 
+
+Accessing Partitioned Data Files
+ The spark-avro library supports writing and
+        reading partitioned data. You pass the partition columns to the writer. 
+
+Specifying Record Name and Namespace
+ Specify the record name and namespace to use when writing to disk
+        by passing recordName and
+          recordNamespace as optional parameters. 
+
+Spark SQL
+
+        You can write SQL queries to query a set of Avro files. First, create a temporary table
+        pointing to the directory containing the Avro files. Then query the temporary table:
+      
+sqlContext.sql("CREATE TEMPORARY TABLE table_name
+  USING com.databricks.spark.avro OPTIONS (path "input_dir"))
+df = sqlContext.sql("SELECT * FROM table_name")
+
+
+Avro to Spark SQL Conversion
+
+        The spark-avro library supports conversion for all Avro data types:
+      
+
+
+          boolean -> BooleanType
+
+
+          int -> IntegerType
+
+
+          long -> LongType
+
+
+          float -> FloatType
+
+
+          double -> DoubleType
+
+
+          bytes -> BinaryType
+
+
+          string -> StringType
+
+
+          record -> StructType
+
+
+          enum -> StringType
+
+
+          array -> ArrayType
+
+
+          map -> MapType
+
+
+          fixed -> BinaryType
+
+
+
+        The spark-avro library supports the following union types:
+      
+
+
+          union(int, long) -> LongType
+
+
+          union(float, double) -> DoubleType
+
+
+          union(any, null) -> any
+        
+
+
+        The library does not support complex union types.
+      
+
+        All doc, aliases, and other fields are stripped when
+        they are loaded into Spark.
+      
+
+Spark SQL to Avro Conversion
+
+        Every Spark SQL type is supported:
+      
+
+
+BooleanType -> boolean
+        
+
+IntegerType -> int
+        
+
+LongType -> long
+        
+
+FloatType -> float
+        
+
+DoubleType -> double
+        
+
+BinaryType -> bytes
+        
+
+StringType -> string
+        
+
+StructType -> record
+        
+
+ArrayType -> array
+        
+
+MapType -> map
+        
+
+ByteType -> int
+        
+
+ShortType -> int
+        
+
+DecimalType -> string
+        
+
+BinaryType -> bytes
+        
+
+TimestampType -> long
+        
+
+
+Limitations
+
+        Because Spark is converting data types, keep the following in mind:
+      
+
+
+          Enumerated types are erased - Avro enumerated types become strings when they are read
+          into Spark, because Spark does not support enumerated types.
+        
+
+          Unions on output - Spark writes everything as unions of the given type along with a
+          null option.
+        
+
+          Avro schema changes - Spark reads everything into an internal representation. Even if
+          you just read and then write the data, the schema for the output is different.
+        
+ Spark schema reordering - Spark reorders the elements in its
+          schema when writing them to disk so that the elements being
+          partitioned on are the last elements. 
+
+
+

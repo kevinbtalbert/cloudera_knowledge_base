@@ -1,0 +1,36 @@
+File counts and file sizeCloudera Docs
+File counts and file size
+The number of files and their size are crucial to effective table partitioning.
+By: Balazs Jeszenszky, Field Engineer, Cloudera, Inc.
+Impala uses as many nodes to scan an HDFS table as the number of files being scanned. For
+      example, to scan a 150-file HDFS table, Impala can use up to 150 nodes. Due
+      to this, Cloudera recommends having at least as many files in a table or set
+      of partitions, depending on what is queried more frequently, as the number
+      of nodes in the cluster.
+Limiting concurrency by having fewer files than the number of nodes
+      affects both table scans and all other operations running on the same query
+      fragment. For heavily used tables, this makes “hotspotting” more likely to
+      occur. In this situation, hotspotting occurs when a cluster’s overall
+      performance is limited due to a few nodes performing most of the operations.
+On the other hand, having too many small files also hurts overall
+      performance because Impala must make costly remote procedure calls (RPCs)
+      to the HDFS Namenode to open each file for reading. The exact level of
+      degradation depends on several factors, such as overall Namenode load, file
+      count, network latency, and the query SQL. Small files also add excess
+      pressure to both the Namenode and Impala’s Catalog Service (catalogd). Also
+      see Scalability Considerations for File Handle Caching,
+      which addresses file handle caching as a means of addressing performance
+      issues. If you are using CDH 5.14 or earlier versions, try adjusting the
+      file handle caching before you try adjusting your partitioning strategy.
+The goal is to strike a balance between file size and count. Generally,
+      optimal file size is 256 MBs. For tables where this file size might limit
+      parallelism because you have fewer files than the number of nodes on the
+      cluster, reduce the file size to take full advantage of the cluster. File
+      sizes of 64 MBs or even 32 MBs can be useful in these cases.
+When a table reaches 10-15,000 files with 256 MBs average file size,
+      either compact further or split the table while retaining the 256 MBs
+      file size if the table access patterns permit it. The latter strategy is
+      more desirable. For example, if most operations against the table access
+      only the more recent partitions, it makes sense to create a separate
+      history table with a larger file size.
+

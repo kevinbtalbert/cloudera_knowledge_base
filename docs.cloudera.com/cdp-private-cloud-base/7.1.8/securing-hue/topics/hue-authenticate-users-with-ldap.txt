@@ -1,0 +1,164 @@
+Authenticating Hue users with LDAPCloudera Docs
+Authenticating Hue users with LDAP
+Configuring Hue for Lightweight Directory Access Protocol (LDAP) enables you to
+    import users and groups from a directory service,
+    synchronize group membership manually or automatically at login,
+    and authenticate with an LDAP server.
+Hue supports Microsoft Active Directory (AD) and open standard LDAP such as OpenLDAP and
+      Forgerock OpenDJ Directory Services.
+Integrating Hue with LDAP
+When Hue is integrated with LDAP, users can use their existing credentials to authenticate
+        and inherit their existing groups transparently. There is no need to save or duplicate any
+        employee password in Hue.
+When authenticating using LDAP, Hue validates login credentials against an LDAP directory
+        service if Hue is  configured with the LDAP authentication backend
+          (desktop.auth.backend.LdapBackend) in Cloudera Manager.
+The LDAP authentication backend automatically creates users that do not exist in Hue by
+        default. Hue needs to import users to properly perform the authentication. Passwords are
+        never imported when importing users. You can disable automatic import of users by setting
+        the create_users_on_login property in the Cloudera Manager > Clusters > Hue service > Configuration >  Hue Service Advanced Configuration Snippet (Safety Valve) for
+            hue_safety_valve.ini  field to
+        false.[desktop] 
+[[ldap]] 
+create_users_on_login=false
+The purpose of disabling the automatic import is to allow only a predefined list of
+        manually imported users to login.
+
+Preserving the case of the usernames
+If you are using mixed case, upper case, or Camel case for usernames in your LDAP
+        directory, then you must add the following configurations in Hue's Advanced Configuration
+        Snippet ( Hue Service Advanced Configuration Snippet (Safety Valve) for
+          hue_safety_valve.ini ), so that the user names are not over written in lower
+        case in the Hue's database. Set the values of these properties to true or false depending on
+        your requirement:[desktop]
+[[auth]]
+ignore_username_case=true
+force_username_uppercase=true/false
+force_username_lowercase=true/false
+[[ldap]]
+ignore_username_case=true
+force_username_uppercase=true/false
+force_username_lowercase=true/false
+
+Binding Hue with LDAP
+There are two ways to bind Hue with an LDAP directory service:
+
+Search Bind
+The search bind mechanism for authenticating will perform an ldapsearch against the
+            directory service and bind using the found distinguished name (DN) and password
+            provided. This is the default method of authentication used by Hue with LDAP.
+You can restrict the search process by configuring the following two properties under
+            the  Hue Service Advanced Configuration Snippet (Safety Valve) for
+              hue_safety_valve.ini  [desktop] > [[ldap]] > [[[users]]] section.
+
+Property
+Description
+
+
+
+user_filter
+General LDAP filter to restrict the search. Default:
+                        "objectclass=*"
+
+
+user_name_attr
+The attribute that will be considered the username to be searched
+                      against. Typical attributes to search for include: uid, sAMAccountName.
+                      Default: sAMAccountName
+
+
+With the above configuration, the LDAP search filter takes the following
+              form:(&(objectClass=*)(sAMAccountName=[***USERNAME-ENTERED-BY-USER***]))noteSetting
+                search_bind_authentication=true tells Hue to perform an LDAP search
+              using the bind credentials specified for the bind_dn and
+                bind_password configuration properties. Hue will start searching
+              the subtree starting from the base DN specified for the base_dn property. It will then
+              search the base DN for an entry whose attribute, specified in
+                user_name_attr, has the same value as the short name provided on
+              login. The search filter, defined in user_filter will also be used to
+              limit the search. 
+Direct Bind
+The direct bind mechanism for authenticating binds to the LDAP server using the
+            username and password provided at login.
+Hue authenticates (without searching) in one of two ways:
+NT Domain (nt_domain): (Only for use with Microsoft Active
+                Directory) Hue binds to the AD with username@domain using the User Principal Names
+                (UPN) to bind to the LDAP service. This AD-specific property allows Hue to
+                authenticate with AD without having to follow LDAP references to other partitions.
+                This typically maps to the email address of the user or the user's ID in conjunction
+                with the domain. Default: mycompany.com.
+Username Pattern (ldap_username_pattern): Bind to open standard
+                LDAP with full path of directory information tree (DIT). It provides a template for
+                the DN that is ultimately sent to the directory service when authenticating. The
+                  [***USERNAME***] parameter is replaced with the username provided
+                at login.Default:
+                  "uid=[***USERNAME***],ou=People,dc=mycompany,dc=com"
+noteSetting search_bind_authentication=false tells Hue to
+              perform a direct bind to LDAP using the credentials provided (not
+                bind_dn and bind_password specified in the
+              Advanced Configuration Snippet). There are two ways direct bind works depending on
+              whether the nt_domain property is specified in the  Hue
+                Service Advanced Configuration Snippet (Safety Valve) for hue_safety_valve.ini
+                :
+nt_domain is specified: This is used to connect to an Active Directory service.
+                  In this case, the UPN is used to perform a direct bind. Hue forms the UPN by
+                  concatenating the short name provided at login with the
+                  nt_domain. For example,
+                    [***SHORT-NAME***]@[***NT-DOMAIN***]. The
+                    ldap_username_pattern property is ignored.
+nt_domain is not specified: This is used to connect to all other directory
+                  services (can handle AD, but nt_domain is the preferred way for AD). In this case,
+                    ldap_username_pattern is used and takes the following form:
+                  cn=[***USERNAME-PROVIDED-AT-LOGIN***],dc=example,dc=com
+
+
+
+noteUsername pattern does not work with AD because AD inserts spaces into the UID which Hue
+        cannot process. 
+
+Encryption
+To prevent credentials from transmitting in the clear, encrypt with LDAP over SSL, using
+        the LDAPS protocol on the LDAPS port, which uses port 636 by default. An alternative, is to
+        encrypt with the StartTLS operation using the standard LDAP protocol, which uses port 389 by
+        default. Cloudera recommends LDAPS. You must have a CA Certificate in either case. 
+Table 1. Hue Supported LDAP authentication and encryption methods
+
+LDAP Auth Action
+Encrypted (LDAPS)
+Encrypted (LDAP+TLS)
+Not Encrypted (LDAP)
+
+
+
+Search Bind
+AD, LDAP
+AD, LDAP
+AD, LDAP
+
+
+Direct Bind - NT Domain
+AD
+AD
+AD
+
+
+Direct Bind - User Pattern
+LDAP
+LDAP
+LDAP
+
+
+
+Prerequisites
+To authenticate Hue users with LDAP, you must have:
+LDAP server
+Bind account (or support for anonymous binds)
+Cloudera Manager access with Full Administrator permissions
+[optional] LDAP server with LDAPS or StartTLS encryption.
+
+importantTo authenticate securely, configure your LDAP server with either LDAP
+        over SSL (LDAPS) or StartTLS encryption. Both methods require a Certificate Authority (CA)
+        chain in a .pem file.
+
+
+Configuring authentication with LDAP and Search BindSearch Bind authentication executes ldapsearch against one or more     directory services and binds with the distinguished name (DN) and password. Hue searches the     subtree from the base distinguished name. If the LDAP Username Attribute is set, Hue looks for     an entry whose attribute has the same value as the short name given at login.Configuring authentication with LDAP and Direct BindTo authenticate with Direct Binding, Hue needs either the User Principal Name (UPN) for     Active Directory, or the full path to the LDAP user in the Directory Information Tree (DIT) for     open standard LDAP.Configuring Hue for authentication against multiple LDAP/Active Directory serversSome organizations have more than one LDAP or Active Directory (AD), and users in one         LDAP/AD may not be present in the other. Hue supports the ability to authenticate users         against multiple LDAP/AD servers.Testing the LDAP configurationYou can test your Hue LDAP configuration without restarting the Hue service. Add the       values and save your changes.Configuring group permissionsYou can configure permissions for members of groups on the       Groups tab of the Hue User Admin application.Enabling LDAP authentication with HiveServer2 and ImpalaLDAP authentication with HiveServer2 and Impala can be enabled by setting the     auth_username and auth_password properties under the [beeswax] section for Hive     and the [impala] section for Impala in a Cloudera Manager safety valve     configuration property.LDAP propertiesThese are the properties you can use to configure LDAP for Hue in Cloudera Manager or     in the hue.ini file for unmanaged clusters.Configuring LDAP on unmanaged clustersIf your clusters are not managed with Cloudera Manager, you must     manually set the LDAP configuration properties in the hue.ini file.Parent topic: User authentication in Hue

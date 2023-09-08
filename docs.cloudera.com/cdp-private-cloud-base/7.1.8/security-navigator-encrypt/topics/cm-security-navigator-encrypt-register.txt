@@ -1,0 +1,243 @@
+Registering Cloudera Navigator Encrypt with Key Trustee ServerCloudera Docs
+Registering Cloudera Navigator Encrypt with Key Trustee Server
+
+Prerequisites
+
+Functioning Key Trustee Server
+After installing Navigator Encrypt on a host, you must register the host with Key Trustee
+          Server. If you have not yet installed Key Trustee Server, see Installing Ranger KMS backed with a Key Trustee Server and HA.
+
+Key Trustee Server Organization
+To register with Key Trustee Server, you must have an existing organization. See Managing Key Trustee Server Organizations for
+          information about creating and viewing organizations in Key Trustee Server.
+
+Master Password
+The Master Key is the primary Navigator Encrypt administrator access code and is
+          configured by the Navigator Encrypt administrator during installation. The Master Key can
+          take any one of three different forms:
+If you choose a passphrase (single), it must be between 15 and 32 characters
+              long.
+If you choose passphrase (dual), both must be between 15 and 32 characters
+              long.
+If you choose the RSA option, enter a path to the RSA key file, and if it has RSA
+              passphrase, enter it for this private key.
+
+warningIt is extremely important that you
+          keep your master password secret and safe. In the event that you lose
+          your master password, you will never be able to recover it,
+          leaving your encrypted data irretrievably locked away.
+
+
+
+
+Registering with Key Trustee Server
+
+After installing Navigator Encrypt on a host, you must register the host with Key Trustee
+        Server in order to encrypt and decrypt data. The following section lists the command options
+        for registering your Navigator Encrypt client.
+noteDo not run Navigator Encrypt commands with the
+          screen utility.
+If the TLS certificate is signed by an internal CA that is not publicly recognized, then
+        you must add the root certificate to the host certificate truststore of each Navigator
+        Encrypt client. 
+Example
+        command:sudo navencrypt register --server=https://keytrustee01.example.com:11371 --passive-server=https://keytrustee02.example.com:11371 --org=your_keytrustee_org --auth=org_auth_token
+Table 1. Registration Options
+
+Command Option
+Explanation
+
+
+
+--clientname=my_client_name
+User-defined unique name for this client to be used for
+                administration and reports. You can verify your client name in
+                the /etc/navencrypt/keytrustee/clientname
+                file.
+
+
+--server=https://keytrustee01.example.com:11371
+Target Active Key Trustee Server for key storage. Replace
+                  keytrustee01.example.com:11371 with the
+                hostname and port of the Active Key Trustee Server. The default
+                port is 11371.
+
+
+--passive-server=https://keytrustee02.example.com:11371
+Target Passive Key Trustee Server for key storage. Replace
+                  keytrustee02.example.com:11371 with the
+                hostname and port of the Passive Key Trustee Server. The default
+                port is 11371.
+
+
+--org=your_keytrustee_org
+Key Trustee organization name configured by the Key Trustee
+                Server administrator
+
+
+--auth=org_auth_token
+Organization authorization token, a pre-shared secret by the Key Trustee Server
+                administrator
+
+
+--skip-ssl-check
+Skip SSL certificate verification. Use with self-signed certificates on the Key
+                Trustee Server
+
+
+--trustee
+Add trustees for retrieval of the master key
+
+
+--votes
+Configure voting policy for trustees
+
+
+--recoverable
+Master Key will be uploaded without encrypting it with your local GPG Key
+                Trustee Server
+
+
+--scheme
+                "<scheme>"
+Key Trustee Server scheme that Navigator Encrypt uses for
+                public key operations. Specify "http" or
+                  "https".
+
+
+--port
+Key Trustee Server port that Navigator Encrypt uses for
+                public key operations.
+
+
+Registering with Previous Versions of Key Trustee Server
+By default, new installations of  Key Trustee Server use a single HTTPS port for key
+          storage and public key operations. Previous versions and upgrades use separate ports for
+          key storage and public key operations. For backward compatibility, Navigator Encrypt 3.7.0
+          introduces the --scheme and --port parameters for the
+            navencrypt register command.
+For example, to register a version 3.7.0 Navigator Encrypt client with Key Trustee Server
+          using HTTPS over port 443 for key storage and HTTP over port 80 for public key operations,
+          run the following
+          command:sudo navencrypt register --server=https://keytrustee.example.com:443 --org=key_trustee_org --auth=auth_token --scheme "http" --port 80
+Navigator Encrypt versions lower than 3.7.0 do not support the
+            --scheme and --port parameters.
+          For these versions of Navigator Encrypt, you must ensure that the Key
+          Trustee Server is configured to use port 443 (HTTPS) for key storage
+          and port 80 (HTTP) for public key operations.
+Navigator Encrypt versions lower than 3.8.0 do not support the
+            --passive-server parameter.
+
+Updating Key Trustee Server Ports
+The navencrypt register command does not provide the
+          ability to change the ports for existing registrations. If the Key
+          Trustee Server ports are changed, you must update
+            /etc/navencrypt/keytrustee/ztrustee.conf with the
+          new port and scheme parameters (HKP_PORT and
+            HKP_SCHEME, respectively).
+For example, see the following ztrustee.conf excerpt
+          from a registered client that has been upgraded to Navigator Encrypt
+          3.7.0:{
+        "LOCAL_FINGERPRINT":    "2048R/182AAA838DC300AC334258D8E7F299BFB68A6F6F",
+        "REMOTES":      {
+                "kts01.example.com": {
+                        "REMOTE_FINGERPRINT":   "4096R/AF6400E12DC149799CA8CE6BF1604C34D830DE20",
+                        "REMOTE_SERVER":        "https://kts01.example.com",
+                        "DEFAULT":      true,
+                        "SSL_INSECURE": false,
+                        "PROTOCOL":     "json-encrypt"
+                }
+        }
+}
+In this example, the Key Trustee Server
+            (keytrustee.example.com) is using the default
+          configuration of port 443 (HTTPS) for key storage and port 80 (HTTP)
+          for public key operations.
+If the Key Trustee Server is then updated to use port 11371 (HTTPS)
+          for both key storage and public key operations, you must update
+            ztrustee.conf as follows (changes in
+          bold):{
+        "LOCAL_FINGERPRINT":    "2048R/182AAA838DC300AC334258D8E7F299BFB68A6F6F",
+        "REMOTES":      {
+                "kts01.example.com": {
+                        "REMOTE_FINGERPRINT":   "4096R/AF6400E12DC149799CA8CE6BF1604C34D830DE20",
+                        "REMOTE_SERVER":        "https://kts01.example.com:11371",
+                        "HKP_PORT":     11371,
+                        "HKP_SCHEME":   "https",
+                        "DEFAULT":      true,
+                        "SSL_INSECURE": false,
+                        "PROTOCOL":     "json-encrypt"
+                }
+        }
+}
+
+Updating Navigator Encrypt for Highly Available Key Trustee Server
+If you registered a Navigator Encrypt client with a highly available (HA) Key Trustee
+          Server, you can edit /etc/navencrypt/keytrustee/ztrustee.conf to enable
+          the client to take advantage of the high availability features. The following example
+          shows the contents of ztrustee.conf after adding the required
+            REMOTE_SERVERS entry (changes in bold):
+{
+        "LOCAL_FINGERPRINT":    "2048R/182AAA838DC300AC334258D8E7F299BFB68A6F6F",
+        "REMOTES":      {
+                "kts01.example.com": {
+                        "REMOTE_FINGERPRINT":   "4096R/AF6400E12DC149799CA8CE6BF1604C34D830DE20",
+                        "REMOTE_SERVER":        "https://kts01.example.com:11371",
+                        "HKP_PORT":     11371,
+                        "HKP_SCHEME":   "https",
+                        "DEFAULT":      true,
+                        "REMOTE_SERVERS":       ["https://kts01.example.com:11371", "https://kts02.example.com:11371"],
+                        "SSL_INSECURE": true,
+                        "PROTOCOL":     "json-encrypt"
+                }
+        }
+}
+
+Configuration Files
+The installer creates the /etc/navencrypt directory. All configuration settings are saved in this directory. Do not delete any file from /etc/navencrypt. These files provide the necessary information for the Navigator Encrypt application to function properly.
+warningPerform backups of encrypted data, mount-points,
+          and Navigator Encrypt configuration directories on a regular basis. To
+          do this, ensure you have a backup of /etc/navencrypt.
+            Failure to backup this directory will make your backed up
+            encrypted data unrecoverable in the event of data loss.
+
+Change Master Key by UUID
+It is possible to re-use a previously used Master Key by its UUID. For example, if you
+          currently have a Master key with a single passphrase, you can see the corresponding Key
+          Trustee Server UUID in the /etc/navencrypt/control
+          file:$ cat /etc/navencrypt/control
+{
+	"app":	{
+		"name":	"navencrypt",
+		"version":	"3.5"
+	},
+	"keys":	{
+		"master":	{
+			"type":	"single-passphrase",
+			"uuid":	"qMAKRMdk4HVbhfzR79cp9w92YBmNHJ5nSLhfd8ZVo6L"
+		},
+		"targets":	[]
+	}
+}
+noteIf the control file is accidentally deleted, you can restore it
+          using the navencrypt control --restore-control-file
+          command.
+You can copy the UUID (qMAKRMdk4HVbhfzR79cp9w92YBmNHJ5nSLhfd8ZVo6L in
+          this example) and run navencrypt key --change with option
+            --new-master-key-uuid to change a Master Key by using its UUID
+          only:$ sudo navencrypt key --change --new-master-key-uuid=qMAKRMdk4HVbhfzR79cp9w92YBmNHJ5nSLhfd8ZVo6L
+>> Type your OLD Master key
+Type MASTER passphrase 1:
+Type MASTER passphrase 2:
+Verifying Master Key against Key Trustee Server (wait a moment)...
+OK
+Changing Master key (wait a moment)...
+ * Setting up EXISTING MASTER key...
+ * Uploading CONTROL content...
+ * Re-encrypting local keys...
+Master key successfully changed.
+noteThe navencrypt key command fails if no volumes
+          are encrypted or the kernel module is not loaded.
+
+
+

@@ -1,0 +1,107 @@
+Backing up a collection from local file systemCloudera Docs
+Backing up a collection from local file system
+Back up Solr collections to a shared file system to minimize data loss caused by
+        accidental or malicious administrative actions. Learn how to create backup of a collection
+        from the local file system (FS).
+
+If you use local FS to store backups, each Solr host stores its backup directory
+                locally, that is, server X contains the backup directory snapshots.shard1, server Y
+                contains snapshots.shard2 and you need to copy those to a shared location in order
+                to be able to restore them later. Because of this, Cloudera recommends to target
+                backups to a shared file system, even if your Solr collection uses local FS.
+
+
+If you are using a secure (Kerberos-enabled) cluster,
+                    specify your jaas.conf file by adding the following parameter
+                    to each
+                    command:--jaas [***/PATH/TO/JAAS.CONF***]
+
+Optional: 
+Create a snapshot. On a host running Solr
+                    Server, run the following command:
+
+solrctl collection --create-snapshot [***USER_DEFINED_NAME_OF_THE_SNAPSHOT***] -c [***NAME_OF_THE_COLLECTION_TO_BE_BACKED_UP***]
+
+This step is optional. You can back up this snapshot by specifying the
+                        [***USER_DEFINED_NAME_OF_THE_SNAPSHOT***] as the value of
+                        commitName parameter. If you do not create and specify a
+                    snapshot, the backup exports the index state corresponding to the current latest
+                    finished commit. 
+For example, for a collection named
+                            tweets the
+                    command:solrctl collection --create-snapshot tweets-$(date +%Y%m%d%H%M) -c tweetscreates
+                    the snapshot tweets-202103281043.
+
+Create the backup. The destination directory must exist and be writable by the
+                    Solr superuser (solr by default).
+
+To back up a snapshot, use the following
+                            command:curl -k --negotiate -u : 'http://[***HOST***]:[***PORT***]/solr/admin/collections?action=BACKUP&name=[***BACKUP_NAME***]&commitName=[***SNAPSHOT_NAME***]&collection=[***COLLECTION_NAME***]&location=***BACKUP_LOCATION***'For
+                            example:curl -k --negotiate -u : 'http://host1.example.com:8983/solr/admin/collections?action=BACKUP&name=mybackup&commitName=tweets-202103281043&collection=tweets&location=/tmp'The
+                        example URL targets one (any one) of the Solr servers and creates a backup
+                        of the entire collection.
+To back up the current state of the
+                            index:curl -k --negotiate -u : 'http://[***HOST***]:[***PORT***]/solr/admin/collections?action=BACKUP&name=[***BACKUP_NAME***]&collection=tweets&location=/tmp'For
+                            example:curl -k --negotiate -u : 'http://host1.example.com:8983/solr/admin/collections?action=BACKUP&name=mybackup&collection=tweets&location=/tmp'The
+                        example URL targets one (any one) of the Solr servers and creates a backup
+                        of the entire collection.
+
+
+
+[***HOST***]
+is a host name or IP address valid in your environment
+[***PORT***]
+is the port where you can access your Solr instance
+[***BACKUP_LOCATION***]
+specifies the directory (for example, /tmp) of the
+                                backup target defined in solr.xml where the backup
+                                is to be stored. If you have defined a HDFS target backup
+                                repository, the backup is stored on HDFS at
+                                    [***BACKUP_LOCATION***]
+[***BACKUP_NAME***]
+specifies the name of the backup - the backup is created in the
+                                subdirectory [***BACKUP_NAME***] of the backup
+                                repository directory
+                                [***BACKUP_LOCATION***].
+[***SNAPSHOT_NAME***]
+is the name of the snapshot you want to back up
+[***COLLECTION_NAME***]
+specifies the collection that you want to back up
+
+tipTo use a specific repository as a backup
+                        target, use the repository parameter.
+
+
+<?xml version="1.0" encoding="UTF-8"?>
+<response>
+<lst name="responseHeader"><int name="status">0</int><int name="QTime">3636</int></lst>
+</response>
+
+After completing a backup, the data is stored in the standard backup
+                        format:
+
+
+To check the backup files, run the following command:
+
+hdfs dfs -ls /tmp/mybackup
+
+
+Found 4 items
+-rw-rw-rw-   2 solr supergroup        181 2021-01-13 21:33 /tmp/mybackup/backup.properties
+drwxrwxrwx   - solr supergroup          0 2021-01-13 21:33 /tmp/mybackup/snapshot.shard1
+drwxrwxrwx   - solr supergroup          0 2021-01-13 21:33 /tmp/mybackup/snapshot.shard2
+drwxrwxrwx   - solr supergroup          0 2021-01-13 21:33 /tmp/mybackup/zk_backup
+
+
+
+Delete the snapshot after exporting: 
+
+solrctl collection --delete-snapshot [***NAME_OF_THE_SNAPSHOT_TO_BE_DELETED***] -c [***COLLECTION_NAME***]
+
+
+For example:
+solrctl collection --delete-snapshot tweets-202103281043 -c tweets
+
+
+
+Related tasksDefining a backup target in solr.xmlRelated informationBackup/Restore Storage RepositoriesBACKUP: Backup Collection

@@ -1,0 +1,433 @@
+Set up Luna 7 HSM for Ranger KMS w/databaseCloudera Docs
+Set up Luna 7 HSM for Ranger KMS w/database
+ How to integrate Cloudera Ranger Key Management System (KMS) software with the Luna
+        7 HSM appliance supplied by SafeNet. 
+
+This task describes how to set up the Luna 7 hardware security moudule (HSM) supplied
+                by SafeNet. The process inlcudes setting up Luna 7 HSM on a client (host) and using
+                Cloudera Manager to add configuration properties that enable Ranger KMS and Luna 7
+                HSM to interact.
+
+You must:
+Acquire the Luna 7 HSM from SafeNet. 
+Have both Ranger KMS and a backend database to store keys installed in your
+                    environment.
+See related topics for more information about installing Ranger KMS and a
+                database to store keys.
+
+Set Up the Luna 7 Client
+
+Download Luna 7 client on the host where Ranger KMS service resides.
+
+610-013144-006_SW_Client_SDK_SafeNet_HSM_7.3.0_Linux_RevA.tar
+
+ 
+
+Untar the Luna 7 client.
+
+tar -xf 610-013144-006_SW_Client_SDK_SafeNet_HSM_7.3.0_Linux_RevA.tar
+
+
+the LunaClient_7.3.0-165_Linux/ folder gets created.
+
+Navigate to the Luna client folder.
+
+cd LunaClient_7.3.0-165_Linux/64/
+
+
+In the Luna clent folder, install Luna products and components.
+
+bash install.sh
+
+
+
+At the (y/n) prompt, choose y.
+
+If you select no or
+                                        n, this product will not be
+                                    installed.
+
+
+
+At the Products prompt, choose Luna products to be installed:
+
+
+[1]: Luna Network HSM
+[2]: Luna PCIe HSM
+[3]: Luna USB HSM
+[4]: Luna Backup HSM
+[N|n]: Next
+[Q|q]: Quit
+
+
+ Enter selection: 1, then enter
+                                selection n.
+
+
+At the Components prompt, choose Luna Components to be
+                                installed
+
+
+[1]: Luna SDK
+[2]: Luna JSP (Java)
+[3]: Luna JCProv (Java)
+[B|b]: Back to Products selection
+[I|i]: Install
+[Q|q]: Quit
+
+
+ Enter selection: i, then enter
+                                selection Q.
+ Enter selection:
+                                    1,2,and
+                                    3 then type
+                                i.
+
+
+
+Navigate to the Luna SA command directory.
+
+cd /usr/safenet/lunaclient/bin
+
+
+You should see the following:
+                            ls ckdemo cmu common
+                            configurator lunacm multitoken openssl.cnf plink pscp
+salogin uninstall.sh vtl
+
+
+Add a user to the hsmusers group.
+
+sudo gpasswd --add kms hsmusers
+
+
+Copy the Luna appliance server certificate to the client.
+
+scp admin@<LunaBoxHostname>:server.pem
+
+
+ scp e02paruser115@elab2.safenet-inc.com:server.pem . 
+(grant permission chmod 777 and chown kms:kms)
+The authenticity of host 'elab2.safenet-inc.com (192.43.161.62)' can't be established.
+ECDSA key fingerprint is SHA256:Lz36zjWHh3BMtI9TVHUBGoHffxgA6azFtPSGRBCkiYU.
+
+Are you sure you want to continue connecting (yes/no)? yes
+
+Warning: Permanently added 'elab2.safenet-inc.com,192.43.161.62' (ECDSA) to the list of known hosts.
+e02paruser115@elab2.safenet-inc.com's password:  SafeNetPSG95 (given by the luna hsm team)
+  press enter
+server.pem                                       100% 1155      1.1KB/s             00:00 
+
+
+Confirm that server.pem is added to the client.
+
+ls
+
+
+ckdemo cmu common configurator lunacm multitoken openssl.cnf plink pscp salogin server.pem uninstall.sh vtl
+
+server.pem is added
+
+As the KMS user, register the server with the client.
+
+su -l kms
+./vtl addServer -n <LunaBoxHostname> -c server.pem
+
+
+ ./vtl addserver -n elab2.safenet-inc.com -c server.pem                    
+
+vtl (64-bit) v7.3.0-165. Copyright (c) 2018 SafeNet. All rights
+                    reserved.
+New server elab2.safenet-inc.com successfully added to server
+                    list.
+
+Generate a client certificate.
+
+./vtl  createCert -n  <ClientHostname>
+
+
+ ./vtl createcert -n e02paruser115                    
+
+vtl (64-bit) v7.3.0-165. Copyright (c) 2018 SafeNet. All rights
+                    reserved.
+Private Key created and written to:
+                        /usr/safenet/lunaclient/cert/client/e02paruser115Key.pem.
+                    Certificate created and written to:
+                        /usr/safenet/lunaclient/cert/client/e02paruser115.pem
+                        .(grant permission chmod 777 and chown kms:kms)
+
+Copy the client certificate to the server.
+
+scp /usr/safenet/lunaclient/cert/client/<ClientHostname>.pem admin@<LunaBoxHostname>:
+
+
+scp /usr/safenet/lunaclient/cert/client/e02paruser115.pem e02paruser115@elab2.safenet-inc.com:
+e02paruser115@elab2.safenet-inc.com's password: SafeNetPSG95
+e02paruser115.pem                                                  100% 1172   201.7KB/s   00:00                     
+
+
+Login to luna hsm.
+
+ssh admin@<lunaboxhostname>
+
+
+ssh e02paruser115@elab2.safenet-inc.com
+e02paruser115@elab2.safenet-inc.com's password: SafeNetPSG95
+Last login: Fri Jul 19 03:59:38 2019 from 114.143.87.94
+Luna Network HSM Command Line Shell v7.3.0-165.
+Copyright (c) 2018 SafeNet. All rights reserved.
+[elab2] lunash:>                    
+
+
+Register the client with the server, then assign the client to a server
+                    partition.
+
+lunash:> client register -client <ClientHostname> -hostname <ClientHostname>
+
+
+client register -client e02paruser115 -hostname e02paruser115                    
+
+
+Check the existing partitions.
+
+lunash:> partition list
+
+
+lunash:> partition list
+                        Storage (bytes)
+                        ----------------------------
+                        Partition            Name                   Objects   Total    Used    Free
+                        ===========================================================================
+                        1254277068838        elab2par058                  0  325896       0  325896
+                    
+
+
+Assign client to the partition.
+
+lunash:> client assignPartition -client <ClientHostname> -partition <GatewayPartition>
+
+
+lunash:> client assignPartition -client e02paruser115 -partition elab2par058                    
+
+
+client show -client e02paruser115
+
+ClientID:     e02paruser115
+Hostname:     e02paruser115
+Partitions:   "elab2par058"                    
+
+
+Log out from the Luna HSM.
+
+lunash:> exit
+
+
+Set the read permissions for the certificate files in the following
+                    directories.
+
+noteMake sure to log in as root user.
+
+
+chmod a+r /usr/safenet/lunaclient/cert/server/*.pem
+chmod a+r /usr/safenet/lunaclient/cert/client/*.pem
+(grant permission chmod 777 and chown kms:kms to above .pem files)                  
+
+
+Verify that the client is connected to its assigned partition.
+
+noteMake sure to log in as kms user.
+
+
+cd /usr/safenet/lunaclient/bin/
+./vtl verify
+
+
+[root@os-mv-711-1 bin]# ./vtl verify
+vtl (64-bit) v7.3.0-165. Copyright (c) 2018 SafeNet. All rights reserved.
+                        
+The following Luna SA Slots/Partitions were found:
+                       
+Slot            Serial #                   Label
+===========================================================================
+0                1254277068842             elab2par115
+
+
+./lunacm
+
+./lunacm
+
+
+[root@os-mv-711-1 bin]# ./lunacm
+lunacm (64-bit) v7.3.0-165. Copyright (c) 2018 SafeNet. All rights reserved.
+                        
+Available HSMs:
+                        
+Slot ID ->           0
+Label ->             elab2par115
+Serial # ->          1254277068842
+Model ->             LunaSA 7.3.0
+Firmware version ->  7.3.0
+Configuration ->     Luna User Partition with SD (PW) Key Export with Cleaning Mode
+Slot Description ->  Net Token Slot
+                        
+Current Slot ID:  0
+
+
+role login -n co
+
+enter password: hanuman123
+
+
+par con
+
+If Master Key RangerKMSKey exists, then the following
+                        will be visible:
+
+
+lunacm:>par con
+
+    The 'Crypto Officer' is currently logged in. 
+    Looking for objects accessible to the 'Crypto Officer'.
+    
+    Object List:
+
+    Label:             RangerKMSKey
+    Handle:            131 
+    Object Type:       Symmentric Key
+    Object UID:        ba8e00002e00000554380800
+
+    Number of Objects: 1    
+
+Command Result: No Error
+Else
+lunacm:>par con
+
+    The 'Crypto Officer' is currently logged in. 
+    Looking for objects accessible to the 'Crypto Officer'.
+    
+    No objects viewable to 'Crypto Officer' are currently stored in the partition.
+
+Command Result: No Error
+
+
+Navigate to the following directory on the Gateway.
+
+# cd /usr/safenet/lunaclient/jsp/lib/
+(grant permission chmod 777 and chown kms:kms to all the at this location)                
+
+
+Copy the Luna .JAR files over to the Gateway.
+
+cp libLunaAPI.so Luna*.jar {JAVA_HOME}/jre/lib/ext/
+
+
+cp libLunaAPI.so Luna*.jar /usr/java/jdk1.8.0_232-cloudera/jre/lib/ext
+
+
+Set the file permissions for the JDK library as follows:
+
+chmod a+r {JAVA_HOME}/jre/lib/
+
+
+chmod a+r /usr/java/jdk1.8.0_232-cloudera/jre/lib/
+
+
+Open the following file in a text editor:
+
+vim {JAVA_HOME}/jre/lib/security/java.security
+
+
+vim /usr/java/jdk1.8.0_232-cloudera/jre/lib/security/java.security
+
+
+
+Add these two lines:
+
+security.provider.6=com.safenetinc.luna.provider.LunaProvider
+com.safenetinc.luna.provider.createExtractableKeys=true                            
+
+
+
+replacing the line highlighted below:
+                    Java SDK/JRE 1.6.x or 1.7.x installation to read as follows:
+security.provider.1=sun.security.provider.Sun 
+security.provider.2=sun.security.rsa.SunRsaSign 
+security.provider.3=sun.security.ec.SunEC 
+security.provider.4=com.sun.net.ssl.internal.ssl.Provider 
+security.provider.5=com.sun.crypto.provider.SunJCE 
+security.provider.6=com.safenetinc.luna.provider.LunaProvider 
+security.provider.7=sun.security.jgss.SunProvider 
+security.provider.8=com.sun.security.sasl.Provider 
+security.provider.9=org.jcp.xml.dsig.internal.dom.XMLDSigRI 
+security.provider.10=sun.security.smartcardio.SunPCSC
+
+Set the file permissions for the Luna client as follows:
+
+chmod -R 777 /usr/safenet
+chown kms:kms                
+
+
+Set KMS Configuration Properties.
+
+In Cloudera Manager > Ranger KMS > Configs edit the following properties:
+
+note For CM-7.1.1 and CM-7.1.2 you
+                        must add properties to the dbks-site.xml, also known as Ranger
+                                KMS Server Advanced Configuration Snippet (Safety Valve) for
+                                conf/dbks-site.xml .
+
+
+ranger.ks.hsm.type = LunaProvider
+ranger.ks.hsm.enabled = true
+ranger.ks.hsm.partition.name=elab2par115
+ranger.ks.hsm.partition.password=hanuman123
+(CM-7.1.1 & CM-7.1.2 password will be in plain text)
+noteFor CM-7.1.3 and higher, update
+                        the configuration as shown in:
+
+
+
+Figure 1. Adding Ranger KMS Configuration for Luna 7 HSM
+
+
+
+
+
+Restart Ranger KMS from Cloudera Manager.
+
+Login to Luna client and validate whether the master key is successfully
+                    created.
+
+cd /usr/safenet/lunaclient/bin/
+./lunacm
+role login -n co
+
+enter password: hanuman123
+
+par con
+
+
+lunacm:>par con
+
+    The 'Crypto Officer' is currently logged in. 
+    Looking for objects accessible to the 'Crypto Officer'.
+    
+    Object List:
+
+    Label:             RangerKMSKey
+    Handle:            131 
+    Object Type:       Symmentric Key
+    Object UID:        ba8e00002e00000554380800
+
+    Number of Objects: 1    
+
+Command Result: No Error
+
+
+
+Ranger KMS is successfully started. 
+
+You can now create Encryption zone keys using hadoop
+            command or from Ranger UI using credentials of keyadmin user.
+
+Parent topic: Integrating Components for Encrypting Data at Rest

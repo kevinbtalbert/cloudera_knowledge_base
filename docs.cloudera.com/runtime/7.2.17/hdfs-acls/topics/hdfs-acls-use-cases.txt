@@ -1,0 +1,126 @@
+Use cases for ACLs on HDFSCloudera Docs
+Use cases for ACLs on HDFS
+Depending on your requirements, you can configure ACLs on HDFS to ensure that the
+            right users and groups have the required access permissions to your data.
+The following examples indicate different use cases for
+                  configuring ACLs on HDFS:
+Multiple Users
+In this use case, multiple users require Read access to a file. None of the
+                        users are the owner of the file. The users are not members of a common
+                        group, so it is impossible to use group Permission Bits.
+This use case can be addressed by setting an access ACL containing multiple
+                        named user entries:
+ACLs on HDFS supports the following use cases:
+
+Multiple Groups
+In this use case, multiple groups require Read and Write access to a file.
+                        There is no group containing all of the group members, so it is impossible
+                        to use group Permission Bits.
+This use case can be addressed by setting an access ACL containing multiple
+                        named group entries:
+group:sales:rw-
+group:execs:rw-
+
+Hive Partitioned Tables
+In this use case, Hive contains a partitioned table of sales data. The
+                        partition key is "country". Hive persists partitioned tables using a
+                        separate subdirectory for each distinct value of the partition key, so the
+                        file system structure in HDFS looks like this:
+user
+`-- hive
+ `-- warehouse
+ `-- sales
+ |-- country=CN
+ |-- country=GB
+ `-- country=US
+All of these files belong to the "salesadmin" group. Members of this group have
+                        Read and Write access to all files. Separate country groups can run Hive
+                        queries that only read data for a specific country, such as "sales_CN",
+                        "sales_GB", and "sales_US". These groups do not have Write access.
+This use case can be addressed by setting an access ACL on each subdirectory
+                        containing an owning group entry and a named group entry:
+country=CN
+group::rwx
+group:sales_CN:r-x
+
+country=GB
+group::rwx
+group:sales_GB:r-x
+
+country=US
+group::rwx
+group:sales_US:r-x
+Note that the functionality of the owning group ACL entry (the group entry with
+                        no name) is equivalent to setting Permission Bits.
+note
+Storage-based authorization in Hive does not currently consider the ACL
+                              permissions in HDFS. Rather, it verifies access using the traditional
+                              POSIX permissions model.
+
+
+Default ACLs
+In this use case, a file system administrator or sub-tree owner would like to
+                        define an access policy that will be applied to the entire sub-tree. This
+                        access policy must apply not only to the current set of files and
+                        directories, but also to any new files and directories that are added
+                        later.
+This use case can be addressed by setting a default ACL on the directory. The
+                        default ACL can contain any arbitrary combination of entries. For
+                        example:
+default:user::rwx
+default:user:bruce:rw-
+default:user:diana:r--
+default:user:clark:rw-
+default:group::r--
+default:group:sales::rw-
+default:group:execs::rw-
+default:others::---
+It is important to note that the default ACL gets copied from the directory to
+                        newly created child files and directories at time of creation of the child
+                        file or directory. If you change the default ACL on a directory, that will
+                        have no effect on the ACL of the files and subdirectories that already exist
+                        within the directory. Default ACLs are never considered during permission
+                        enforcement. They are only used to define the ACL that new files and
+                        subdirectories will receive automatically when they are created.
+
+Minimal ACL/Permissions Only
+HDFS ACLs support deployments that may want to use only Permission Bits and not
+                        ACLs with named user and group entries. Permission Bits are equivalent to a
+                        minimal ACL containing only 3 entries. For example:
+user::rw-
+group::r--
+others::---
+
+Block Access to a Sub-Tree for a Specific User
+In this use case, a deeply nested file system sub-tree was created as
+                        world-readable, followed by a subsequent requirement to block access for a
+                        specific user to all files in that sub-tree.
+This use case can be addressed by setting an ACL on the root of the sub-tree
+                        with a named user entry that strips all access from the user.
+For this file system structure:
+dir1
+`-- dir2
+ `-- dir3
+ |-- file1
+ |-- file2
+ `-- file3
+Setting the following ACL on "dir2" blocks access for Bruce to
+                        "dir3,""file1,""file2," and "file3":
+user:bruce:---
+More specifically, the removal of execute permissions on "dir2" means that
+                        Bruce cannot access "dir2", and therefore cannot see any of its children.
+                        This also means that access is blocked automatically for any new files added
+                        under "dir2". If a "file4" is created under "dir3", Bruce will not be able
+                        to access it.
+
+ACLs with Sticky Bit 
+In this use case, multiple named users or named groups require full access to a
+                        shared directory, such as "/tmp". However, Write and Execute permissions on
+                        the directory also give users the ability to delete or rename any files in
+                        the directory, even files created by other users. Users must be restricted
+                        so that they are only allowed to delete or rename files that they
+                        created.
+This use case can be addressed by combining an ACL with the sticky bit. The
+                        sticky bit is existing functionality that currently works with Permission
+                        Bits. It will continue to work as expected in combination with ACLs.
+

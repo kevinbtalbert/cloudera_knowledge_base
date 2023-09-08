@@ -1,0 +1,81 @@
+Configuring SAML authentication on managed clustersCloudera Docs
+Configuring SAML authentication on managed clusters
+To configure Hue for SAML authentication on managed clusters, you must add the
+      SAML authentication properties to the Hue Service Advanced Configuration Snippet
+        (Safety Valve) for hue_safety_valve.ini in Cloudera Manager.
+
+These instructions assume that you have an Identity
+            Provider set up and running. You can use any identity provider of your choice. For
+            example, Okta, Ping Identity, and OpenAM.
+
+
+Log on to Cloudera Manager and go to
+                Hue > Configuration.
+
+In the search text box, enter hue_safety_valve.ini to
+              locate the Hue Service Advanced Configuration Snippet
+              (Safety Valve) for hue_safety_valve.ini.
+
+Enter the SAML parameters into the Hue Service Advanced Configuration Snippet
+              (Safety Valve) for hue_safety_valve.ini text box. For example:
+
+## Example Settings using Open AM:
+[desktop]
+redirect_whitelist="^\/.*$,^https:\/\/idp.example.com:8080\/.*$"
+[[auth]]
+backend=libsaml.backend.SAML2Backend
+[libsaml]
+want_response_signed=True
+want_assertions_signed=True
+xmlsec_binary=/usr/bin/xmlsec1
+metadata_file=/opt/cloudera/security/saml/idp-metadata.xml
+key_file=/opt/cloudera/security/saml/host.key
+cert_file=/opt/cloudera/security/saml/host.pem
+key_file_password=Config(
+  key="key_file_password",
+  help=_t("key_file_password password of the private key"),
+  default=None) ## If using encrypted private key
+username_source=nameid
+name_id_format="urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified"
+entity_id=[***HOST-BASE-NAME***]
+logout_enabled=false
+
+If you are using an encrypted private key file, then you must specify the password in
+          the key_file_password property. Or you can use an unencrypted private key
+            file.To create an unencrypted private key file from an encrypted key:
+SSH into a terminal as a root user.
+Change to the directory where you have stored the ssl certificate key.
+Run the following
+                command:openssl rsa -in ssl_certificate.key -out ssl_certificate-nocrypt.key
+When prompted, enter the password that you use to access the
+                  ssl_certificate.key file.The output file
+                    (ssl_certificate-nocrypt.key) is an unencrypted PEM-formatted
+                  key.
+
+
+noteFor SLES distributions, the xmlsec binary may be located in
+              /usr/local/bin/. If so:
+Set xmlsec_binary=/usr/local/bin/xmlsec1 in the Hue
+                  Service Advanced Configuration Snippet. 
+Set LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib/ in the
+                  Hue Service Environment Advanced Configuration Snippet.
+              
+
+
+
+Go to Hue Service Advanced Configuration Snippet (Safety Valve) for
+            hue_safety_valve.ini) and comment or remove any Knox-SSO configurations, if
+          present.
+
+cautionKnox-SSO and SAML are incompatible and mutually exclusive. Hue
+            authetication may fail with a redirection loop if you have the Knox-SSO and SAML
+            configurations present in the Hue Advanced Configuration Snippet at the same time, as it
+            confuses the authentication redirect to the IdP and back to Hue.
+
+
+Click Save Changes, then select,
+              Actions > Restart
+                Hue.
+
+
+Parent topic: Authenticating Hue users with SAML

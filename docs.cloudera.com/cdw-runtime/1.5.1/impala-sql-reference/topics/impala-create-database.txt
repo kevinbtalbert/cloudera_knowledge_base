@@ -1,0 +1,129 @@
+CREATE DATABASE statementCloudera Docs
+CREATE DATABASE statement
+The CREATE DATABASE statement is used to create a new database.  In Impala, a database is both:
+
+        A logical construct for grouping together related tables, views, and functions within their own namespace.
+        You might use a separate database for each application, set of related tables, or round of experimentation.
+      
+
+        A physical construct represented by a directory tree in HDFS. Tables (internal tables), partitions, and
+        data files are all located under this directory. You can perform HDFS-level operations such as backing it up and measuring space usage,
+        or remove it with a DROP DATABASE statement.
+      
+
+Syntax:
+CREATE (DATABASE|SCHEMA) [IF NOT EXISTS] database_name[COMMENT 'database_comment']
+  [LOCATION hdfs_path];
+Statement type: DDL
+      
+Usage notes:
+
+      A database is physically represented as a directory in HDFS, with a filename extension .db,
+      under the main Impala data directory. If the associated HDFS directory does not exist, it is created for you.
+      All databases and their associated directories are top-level objects, with no physical or logical nesting.
+    
+      After creating a database, to make it the current database within an impala-shell session,
+      use the USE statement. You can refer to tables in the current database without prepending
+      any qualifier to their names.
+    
+      When you first connect to Impala through impala-shell, the database you start in (before
+      issuing any CREATE DATABASE or USE statements) is named
+      default.
+     Impala includes another predefined database,
+          _impala_builtins, that serves as the location for the built-in functions.
+        To see the built-in functions, use a statement like the following:
+        show functions in _impala_builtins;
+show functions in _impala_builtins like '*substring*';
+
+
+      After creating a database, your impala-shell session or another
+      impala-shell connected to the same node can immediately access that database. To access
+      the database through the Impala daemon on a different node, issue the INVALIDATE METADATA
+      statement first while connected to that other node.
+    
+      Setting the LOCATION attribute for a new database is a way to work with sets of files in an
+      HDFS directory structure outside the default Impala data directory, as opposed to setting the
+      LOCATION attribute for each individual table.
+     If you connect to different Impala nodes within an
+          impala-shell session for load-balancing purposes, you can enable the
+          SYNC_DDL query option to make each DDL statement wait before returning,
+        until the new or changed metadata has been received by all the Impala nodes.
+Hive considerations:
+
+      When you create a database in Impala, the database can also be used by Hive.
+      When you create a database in Hive, issue an INVALIDATE METADATA
+      statement in Impala to make Impala permanently aware of the new database.
+     The SHOW DATABASES statement lists all databases, or the databases whose name
+        matches a wildcard pattern. In Impala 2.5 and higher, the SHOW
+            DATABASES output includes a second column that displays the associated comment,
+          if any, for each database.
+
+Amazon S3 considerations:
+ To specify that any tables created within a database reside on
+        the Amazon S3 system, you can include an s3a:// prefix on the
+          LOCATION attribute. In Impala 2.6 and higher, Impala automatically
+        creates any required folders as the databases, tables, and partitions are created, and
+        removes them when they are dropped.  In Impala 2.6 and higher, Impala DDL
+        statements such as CREATE DATABASE, CREATE TABLE,
+          DROP DATABASE CASCADE, DROP TABLE, and ALTER
+          TABLE [ADD|DROP] PARTITION can create or remove folders as needed in the Amazon
+        S3 system. Prior to Impala 2.6, you had to create folders yourself and point Impala
+        database, tables, or partitions at them, and manually remove folders when no longer needed.
+Cancellation: Cannot be cancelled.
+      
+HDFS permissions:
+
+      The user ID that the impalad daemon runs under,
+      typically the impala user, must have write
+      permission for the parent HDFS directory under which the database
+      is located.
+    
+Examples:
+create database first_db;
+use first_db;
+create table t1 (x int);
+
+create database second_db;
+use second_db;
+-- Each database has its own namespace for tables.
+-- You can reuse the same table names in each database.
+create table t1 (s string);
+
+create database temp;
+
+-- You can either USE a database after creating it,
+-- or qualify all references to the table name with the name of the database.
+-- Here, tables T2 and T3 are both created in the TEMP database.
+
+create table temp.t2 (x int, y int);
+use database temp;
+create table t3 (s string);
+
+-- You cannot drop a database while it is selected by the USE statement.
+drop database temp;
+ERROR: AnalysisException: Cannot drop current default database: temp
+
+-- The always-available database 'default' is a convenient one to USE
+-- before dropping a database you created.
+use default;
+
+-- Before dropping a database, first drop all the tables inside it,
+-- or in Impala 2.3 and higher use the CASCADE clause.
+drop database temp;
+ERROR: ImpalaRuntimeException: Error making 'dropDatabase' RPC to Hive Metastore:
+CAUSED BY: InvalidOperationException: Database temp is not empty
+show tables in temp;
++------+
+| name |
++------+
+| t3   |
++------+
+
+-- Impala 2.3 and higher:
+drop database temp cascade;
+
+-- Earlier releases:
+drop table temp.t3;
+drop database temp;
+
+Parent topic: Impala SQL statements

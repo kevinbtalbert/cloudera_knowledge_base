@@ -1,0 +1,212 @@
+Importing Ranger AWS S3 policiesCloudera Docs
+Importing Ranger AWS S3 policies
+Learn how to import the transformed HDFS native permissions into the Ranger AWS S3
+        service of the target CDP cluster using the Authzmigrator tool.
+
+
+You must have extracted, converted, and transformed the native HDFS permissions
+                    into Ranger AWS S3 policy format.
+Ensure that the RANGER_ADMIN role is up and running in the Cloudera Manager/CDP One portal of the target environment.
+
+
+
+Log in to the RANGER_ADMIN portal with administrator user credentials or user
+                    privileges as ADMIN.
+
+
+From Settings >  User/Groups/Roles >  Search, search for the "ranger" user.
+
+
+Click the "ranger" user and change its role to "Admin", and save the
+                            changes.
+
+
+
+Download and copy the authz-ingest.zip
+                    file to the /opt directory of the migration cluster node
+                    (or a Data Lake node of the cloud cluster).
+
+Extract the authz-ingest.zip file into the
+                        /opt directory.
+
+note/opt is referred to as an example
+                        directory.
+
+The authz-ingest file contains the following
+                        directories:
+config-files
+scripts
+
+
+If Ranger is TLS/SSL enabled using Cloudera Manager AUTO-TLS, then copy the
+                        cm-auto-global-truststore.jks file from the Ranger
+                    admin process directory of the Ranger admin host to
+                        /opt/authz-ingest/config-files/ of the migration tool host.
+                    Perform these steps to find the location of the Ranger admin process
+                    directory:
+
+
+Run the following command to get to the Ranger admin process:
+ps -ef | grep proc_rangeradmin
+
+
+Search for the -cp option from the output of the above
+                            command and look for
+                                "/var/run/cloudera-scm-agent/process/<ID>-ranger-RANGER_ADMIN"
+
+
+If you have set up SSL manually or using a different method, then copy the
+                    file that you have created for trust stores to the
+                        /opt/authz-ingest/config-files directory.For example,
+                            cp /path/to/cm-auto-global_truststore.jks
+                            /opt/authz-ingest/config-files/
+
+Export the following environment variables to the target cluster Ranger:
+
+
+JAVA_HOME - Java home path used on the cluster
+RANGER_ADMIN_URL - URL of the Ranger Admin portal
+RANGER_ADMIN_SSL_ENABLED - Indicates if SSL is enabled
+                            or disabled
+RANGER_ADMIN_TRUSTORE_PASSWORD - If Ranger is TLS/SSL
+                            enabled using Cloudera Manager AUTO-TLS, then the password can be found
+                            in the Ranger host file,
+                                /etc/hadoop/conf/ssl-client.xml, property —
+                                'ssl.client.truststore.password'
+
+
+
+export JAVA_HOME=/usr/java/jdk1.8.0_232-cloudera/
+export RANGER_ADMIN_URL=<ranger admin url with port>
+export RANGER_ADMIN_SSL_ENABLED=<true or false>
+export RANGER_ADMIN_TRUSTORE_PASSWORD=<ssl.client.truststore.password>
+
+
+Go to /opt/authz-ingest/config-files and open the
+                        authorization-migration-site.xml file.
+The authorization-migration-site.xml contains the
+                    following
+                    properties:<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <property>
+    <name>authorization.migration.export.target_services</name>
+    <value>HIVE,KAFKA</value>
+  </property>
+  <property>
+    <name>authorization.migration.export.migration_objects</name>
+    <value />
+  </property>
+  <property>
+    <name>authorization.migration.export.output_file</name>
+    <value>hdfs:///user/sentry/export-permissions/permissions.json</value>
+  </property>
+  <property>
+    <name>authorization.migration.ingest.is_dry_run</name>
+    <value>false</value>
+  </property>
+  <property>
+    <name>authorization.migration.role.permissions</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>authorization.migration.translate.url.privileges</name>
+    <value>false</value>
+  </property>
+  <property>
+    <name>authorization.migration.ingest.merge.ifexists</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>authorization.migration.migrate.url.privileges</name>
+    <value>true</value>
+  </property>
+</configuration>
+
+
+Search for the
+                        authorization.migration.ranger.import.input_file property
+                    in the authorization-migration-site.xml file and provide
+                    the location of the transformed HDFS permissions file as the property
+                    value.
+
+<property>
+	<name>authorization.migration.ranger.import.input_file</name>
+<value>file:///tmp/HDFS_Permissions_Export_<timestamp>_convert_transform.json</value>
+</property>
+
+
+If you are unable to find this property, then add the property in the
+                    file.
+
+For Kerberos-based authentication, perform the following steps:
+
+importantIf the Key Distribution Center
+                        (KDC) server is not installed in your environment or imported without the
+                        Kerberos authentication, you can skip this procedure and use the process
+                        provided for non-Kerberos authentication. Also, if PAM authentication is
+                        enabled in the target cluster, then Kerberos authentication is recommended
+                        to import ranger policies quickly.
+
+
+
+Find the Ranger admin keytab location and provide it in the following
+                            command:
+export
+                                RANGER_ADMIN_KEYTAB_PATH=/path/to/ranger.keytab
+In the CDEP cluster, ranger keytab is available in the ranger host
+                            location /cdep/keytabs/rangeradmin.keytab or under the
+                            ranger admin process directory —
+                                /var/run/cloudera-scm-agent/process/<ranger-process-ID>-ranger-RANGER_ADMIN
+
+
+If your ranger node and migration node are different, copy the ranger
+                            keytab to the migration node.
+
+
+Run the klist command on the migration node to view the list of
+                            Kerberos principals available in the keytab —
+                                ${RANGER_ADMIN_KEYTAB_PATH}
+klist -kt ${RANGER_ADMIN_KEYTAB_PATH}
+
+
+Run the following kinit command and update
+                                _HOST and REALM correctly.
+kinit -kt ${RANGER_ADMIN_KEYTAB_PATH}
+                                rangeradmin/_HOST@REALM
+
+
+
+For non-Kerberos authentication, add the following properties in the
+                        /opt/authz-ingest/config-files/authorization-migration-site.xml
+                    file with the appropriate values, and then save and close the file.
+
+<property>
+    <name>ranger.admin.username</name>
+    <value>admin</value>
+</property>
+
+<property>
+    <name>ranger.admin.passwd</name>
+    <value>admin123</value>
+</property>
+
+<property>
+<name>authorization.migration.kerberos.authentication</name>
+<value>false</value>
+</property>
+
+
+
+Go to the /opt/authz-ingest/scripts directory and run the
+                        import script.
+sh authz-import.sh
+If the import operation fails, look for details in the output of the command
+                    printed in the terminal window or see the target Ranger admin log files.
+
+After the import operation is complete, the authzmigrator
+            tool displays the total policies count, created, skipped, and failed policies count. You
+            can refer to the console output logs to verify if policies are imported or not.
+
+
+
+Related informationExtracting HDFS native permissionsConverting HDFS native permissions into Ranger HDFS policiesTransforming Ranger HDFS policies into Ranger S3 policiesParent topic: Migrating HDFS native permissions to CDP One

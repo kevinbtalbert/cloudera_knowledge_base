@@ -1,0 +1,84 @@
+Validating external table replicationCloudera Docs
+Validating external table replication
+You need to validate external table replication before migration to CDP. You run the
+        external table validation commands on the CDP cluster. 
+You run the external table validation commands using the command syntax and options
+            below: Command Syntax
+hive --replMigration -dumpFilePath <path to external table info file>  \
+[-dirLevelCheck] [-fileLevelCheck] [-verifyOpenFiles] [-verifyChecksum] [-filters] \
+[-conf] [-queueSize] [-numThreads]
+Options
+
+
+-dumpFilePath: The fully qualified path to the external
+                        table info file.
+
+
+-dirLevelCheck: Validate at directory level.
+
+
+-fileLevelCheck: Validate at file level.
+
+
+ -verifyOpenFiles: Validate there are no open files on the
+                        source path. Requires superuser privileges.
+
+
+ -verifyChecksum: Whether the checksum needs to be validated
+                        for each file. Cannot be used with -dirLevelCheck. Will fail if the source
+                        and target are in different encryption zones or use different checksum
+                        algorithms.
+
+
+-filters: Comma separated list of filters, cannot be used
+                        along with -dirLevelCheck.
+
+
+-conf: Semi-Colon separated list of additional
+                        configurations in key1=value1;key2=value2 format.
+
+
+-queueSize: Queue size for the thread pool executor for
+                        table level validation. Default: 200
+
+
+-numThreads: Number of threads for thread pool executor for
+                        table level validation. Default: 10
+
+
+-checksumQueueSize: Queue size for the thread pool executor
+                        for checksum computation. Default: 200
+
+
+-checksumNumThreads: Number of threads for thread pool
+                        executor for checksum computation. Default:5
+
+
+Running the external table validation commands can take a significant amount of time,
+                and writes to the HDP database can occur. You need to check the checkpoint ID again
+                after validating external table replication to determine if any writes did indeed
+                happen. To validate external table replication, perform the following
+                steps:
+
+In CDP, run the external table validation commands as described above.
+
+If validation is successful, proceed to the next step; otherwise, complete the
+                    replication.
+External table validation fails if external data has not been fully replicated; another replication and verification cycle is required to sync the data.
+
+On the HDP cluster backend RDBMS for Hive metastore (HMS), check that the checkpoint id has not changed since the last time you recorded it. For example: 
+select NEXT_EVENT_ID - 1 as last_event_id from  NOTIFICATION_SEQUENCE;
+Output looks something like this:
+
+Based on your comparison of the last_event_id and the checkpoint ID, proceed in one of the following ways:
+                
+
+If the HDP last_event_id does not match the checkpoint id you recorded,
+                        handle a failed verification.
+If the HDP last_event_id does match the checkpoint id, the validation is
+                        successful. Migrate users to CDP and enable background threads. You are
+                        done.
+
+
+
+Parent topic: Verifying the Hive data replication from HDP 3.1.5 to 7.1.6

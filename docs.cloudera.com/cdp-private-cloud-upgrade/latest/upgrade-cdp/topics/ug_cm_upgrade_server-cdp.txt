@@ -1,0 +1,660 @@
+Step 3: Upgrading the Cloudera Manager ServerCloudera Docs
+Step 3: Upgrading the Cloudera Manager Server
+
+
+
+
+
+Loading Filters ...
+
+ 
+7.0.3 7.1.1 7.1.2 7.1.3 7.1.4
+          7.2.4 7.3.1 7.4.4 7.5.1 7.6.1 7.6.7 7.7.1
+          7.7.3
+
+
+7.1.8 7.1.7.1000 7.1.7 7.1.6 7.1.5
+          7.1.4 7.1.3 7.1.2 7.1.1
+7.1.7.2000
+7.7.3 7.7.1 7.6.7 7.6.1
+          7.5.1 7.4.4 7.4.3 7.3.1 7.2.4 7.1.4 7.1.3 7.1.2
+          7.1.1
+
+You can also use the procedures on this page to install Cloudera Manager
+      patches. You must obtain the download URL for the patch before proceeding
+      – you will use this information later in this procedure. 
+
+importantUpgrades to Cloudera Manager 7.0.3 are not
+        supported.
+
+
+noteUpgrades from CDH 6.x are supported only for upgrades to Cloudera
+        Manager 7.4.4 or higher and Cloudera Runtime 7.1.7 or higher. Upgrades
+        from CDH 6.0 are not supported.  For a full list of supported upgrades,
+        see Upgade Paths.
+warningUpgrading to Cloudera Manager version 7.7.1
+        and above introduces a new service called CORE_SETTINGS-2 which leads to stale
+        configurations on different services in the cluster.
+
+This topic provides procedures for backing up the Cloudera Manager
+      Server.
+Minimum Required Role:
+Cluster
+            Administrator (also provided by Full
+          Administrator) This feature is not available when using Cloudera
+            Manager to manage Data Hub clusters.
+After you complete the steps in Step 1: Getting Started Upgrading Cloudera Manager 7 and Step 2: Backing Up Cloudera Manager 7, continue
+      with the following:
+
+
+noteCloudera Manager 7.7.3 should only be used when
+          you need to use Python 3.8 for the Cloudera Manager agents. You must install Python 3.8 on
+          all hosts before installing or upgrading to Cloudera Manager 7.7.3. Cloudera Manager
+          7.7.3-CHF4 supports only RHEL 8.4, RHEL 8.6, RHEL 7.9, and SLES 15 SP4. See the CDP Private Cloud Base Installation Guide for more
+          information.
+
+
+warningUpgrades from Cloudera Manager 5.12 and lower to
+          Cloudera Manager 7.1.1 or higher are not supported 
+
+
+importantUpgrading Cloudera Manager to version 7.7.1 or
+          higher from clusters where CDH 5.x is deployed is not supported. To
+          upgrade such clusters: 
+Upgrade Cloudera Manager to version 6.3.4.
+Upgrade CDH to version 6.3.4
+Upgrade Cloudera Manager to version 7.6.5 or higher 
+
+
+
+warningFor upgrades from CDH clusters with Cloudera
+          Navigator to Cloudera Runtime 7.1.1 (or higher) clusters where
+          Navigator is to be migrated to Apache Atlas, the cluster must have
+          Kerberos enabled before upgrading. 
+
+
+warningBefore upgrading CDH 5 clusters with Sentry to Cloudera Runtime 7.1.x
+        clusters where Sentry privileges are to be transitioned to Apache Ranger:
+The cluster must have Kerberos enabled. 
+Verify that HDFS gateway roles exist on the hosts that runs the Sentry service. 
+
+importantIf HDFS ACL sync is enabled (hdfs_sentry_sync_enable=true) on the CDH
+        cluster, then you must install Ranger RMS to support the same functionality. For steps to
+        install Ranger RMS, see Installing Ranger RMS. 
+
+
+noteIf the cluster you are upgrading will include Atlas, Ranger, or
+          both, the upgrade wizard deploys one infrastructure Solr service to
+          provide a search capability of the audit logs through the Ranger Admin
+          UI and/or to store and serve Atlas metadata. Cloudera recommends that
+          you do not use this service for customer workloads to avoid
+          interference with audit and timeline performance. 
+
+
+
+
+importantPlease note the following:
+A valid Cloudera Enterprise license file and a username and
+              password are required to download and install the software. You
+              can obtain the username and password from the Cloudera CDH Download page. See Your
+              license file must be current and uploaded to Cloudera Manager.
+                To upload a license: 
+Download the license file and save it locally.
+In Cloudera Manager, go to the Home
+                    page.
+Select
+                        Administration > License.
+Click Upload License.
+Browse to the license file you downloaded. 
+Click Upload.
+
+If you are using Cloudera Express, you cannot upgrade Cloudera
+              Manager or CDH. 
+Several steps in the procedures have changed and now require the
+              username and password.
+Download URLs have changed.
+
+
+importantIf you encounter problems, see the following: 
+Troubleshooting a Cloudera Manager Upgrade
+Reverting a Failed Cloudera Manager Upgrade
+
+
+
+
+Parent topic: Upgrading Cloudera Manager 7
+Establish Access to the Software
+
+Cloudera Manager needs access to a package repository that contains the
+        updated software packages. You can choose to access the Cloudera public
+        repositories directly, or you can download those
+          repositories and set up a local repository to access them from
+        within your network. If your cluster hosts do not have connectivity to
+        the Internet, you must set up a local repository. 
+If you have enabled high availability for Cloudera Manager, perform the
+        following steps on the hosts for both the active and passive instances
+        of the Cloudera Manager server.
+
+ Log in to the Cloudera Manager Server host.
+          ssh my_cloudera_manager_server_host
+
+Remove any older files in the existing
+        repository directory:
+RHEL / CentOS
+
+sudo rm /etc/yum.repos.d/cloudera*manager.repo*
+
+SLES
+
+sudo rm /etc/zypp/repos.d/cloudera*manager.repo*
+
+Ubuntu
+
+sudo rm /etc/apt/sources.list.d/cloudera*.list*
+
+
+Fill in the form at the top of this page.
+Create a repository file so that the package
+          manager can locate and download the binaries. noteIf you are
+            upgrading to a Cloudera Manager patch, substitute the download URL
+            for the patch when creating the repository file
+              (cloudera-manager.repo or
+              cloudera_manager.list).Do one of the
+            following, depending on whether or not you are using a local package
+            repository:
+
+Use a local package repository. (Required when cluster
+                hosts do not have access to the internet.) See Configuring a Local Package epository.
+
+
+Use the Cloudera public repository
+
+
+RHEL / CentOS
+
+
+Create a file named
+                          /etc/yum.repos.d/cloudera-manager.repo
+                        with the following
+                          content:[cloudera-manager]
+name=Cloudera Manager 
+baseurl=https://archive.cloudera.com/p/cm7/<Cloudera Manager version>/redhat<OS major version>/yum/
+gpgkey =https://archive.cloudera.com/p/cm7/<Cloudera Manager version>/redhat<OS major version>/yum/RPM-GPG-KEY-cloudera
+username=changeme
+password=changeme
+gpgcheck=1
+enabled=1
+autorefresh=0
+type=rpm-mdReplace
+                                changeme
+                          with your username
+                          and password in
+                          the
+                            /etc/yum.repos.d/cloudera-manager.repo
+                          file.
+
+
+SLES
+
+
+Create a file named
+                          /etc/zypp/repos.d/cloudera-manager.repo
+                        with the following
+                        content:[cloudera-manager]
+name=Cloudera Manager 
+baseurl=https://archive.cloudera.com/p/cm7/<Cloudera Manager version>/sles<OS major version>/yum/
+gpgkey =https://archive.cloudera.com/p/cm7/<Cloudera Manager version>/sles<OS major version>/yum/RPM-GPG-KEY-cloudera
+username=changeme
+password=changeme
+gpgcheck=1
+enabled=1
+autorefresh=0
+type=rpm-md
+
+Replace changeme
+                          with your username
+                          and password in
+                          the
+                            /etc/zypp/repos.d/cloudera-manager.repo
+                          file.
+
+
+
+Ubuntu
+
+Debian is not a supported operating system for Cloudera
+                      Manager 6.x.
+
+Create a file named
+                          /etc/apt/sources.list.d/cloudera_manager.list
+                        with the following
+                        content:# Cloudera Manager <Cloudera Manager version>
+deb [arch=amd64] http://username:password@archive.cloudera.com/p/cm7/<Cloudera Manager version>/ubuntu1804/apt -cm<Cloudera Manager version> contrib
+Run the following
+                        command:sudo apt-get update
+
+Replace changeme
+                          with your username
+                          and password in
+                          the
+                            /etc/apt/sources.list.d/cloudera_manager.list
+                          file.
+
+
+
+
+
+tip If you have a mixed operating system
+            environment, adjust the Operating System filter at the top of
+            the page for each operating system. The guide will generate the repo
+            file for you automatically here. 
+A Cloudera Manager upgrade can introduce
+          new package dependencies. Your organization may have restrictions or
+          require prior approval for installation of new packages. You can
+          determine which packages may be installed or upgraded: 
+RHEL / CentOS
+
+yum deplist cloudera-manager-agent
+
+SLES
+
+zypper info --requires cloudera-manager-agent
+
+Ubuntu
+
+apt-cache depends cloudera-manager-agent
+
+
+
+
+
+
+Install Java (JDK)
+
+Oracle JDK 1.8 is required on
+        all cluster hosts managed by Cloudera Manager 6.0.0 or higher. If it is supported for your version of Cloudera Manager, you can also
+        install OpenJDK 1.8 or OpenJDK 11. See Manually
+          Installing OpenJDK. If JDK 1.8 is already installed on your hosts, skip the steps
+        in this section.
+If you are
+        upgrading to Cloudera Manager 6.0.0 or higher, you can manually install
+        JDK 8 on the Cloudera Manager server host, and then, as part of the
+        Cloudera Manager upgrade process, you can specify that Cloudera Manager
+        upgrade the JDK on the remaining hosts. 
+A supported JDK is required on all
+        hosts. During a Cloudera Manager upgrade, you can install OpenJDK 8 on
+        the Cloudera Manager server host, and then Cloudera Manager can install
+        the new JDK on the managed hosts. You can also choose to install Oracle
+        JDK 8, OpenJDK 8, or OpenJDK 11 manually, on all hosts before beginning
+        the upgrade.noteCloudera Manager no longer installs Oracle
+          JDKs.
+
+ Log in to the Cloudera Manager Server host.
+          ssh my_cloudera_manager_server_host
+
+Stop the Cloudera Manager
+        Server.sudo systemctl stop cloudera-scm-server
+
+Remove the JDK:
+Perform the following steps on all hosts managed by Cloudera Manager:
+Run the following command to remove the JDK, using the
+                      package names from Step 1: (If you do not delete these files, Cloudera Manager
+              and other components may continue to use the old version of the
+              JDK.)
+RHEL
+
+yum remove <JDK package name>
+
+Ubuntu
+
+apt-get remove <JDK package name>
+
+SLES
+
+zypper rm <JDK package name>
+
+
+Confirm that the package has been removed: 
+RHEL
+
+yum list installed |grep -i oracle
+
+Ubuntu
+
+apt list --installed | grep -i oracle
+
+SLES
+
+zypper search --installed-only |grep -i oracle
+
+
+
+
+Install OpenJDK
+RHEL
+OpenJDK
+                  8sudo yum install java-1.8.0-openjdk-develOpenJDK
+                11sudo yum install java-11-openjdk
+Ubuntu
+OpenJDK
+                  8sudo apt-get install openjdk-8-jdkOpenJDK
+                11sudo apt install openjdk-11-jdk
+SLES
+OpenJDK
+                  8sudo zypper install java-1_8_0-openjdk-develOpenJDK
+                11zypper install java-11-openjdk
+
+Start the Cloudera Manager
+        Server.sudo systemctl start cloudera-scm-server
+
+
+
+
+
+Upgrade the Cloudera Manager Server
+
+
+Log in to the Cloudera Manager server host. 
+Stop the Cloudera Manager
+        Server.sudo systemctl stop cloudera-scm-server
+
+Open the CLI for the Cloudera
+          Manager database using one of the following commands:
+MySQL/MariaDB: mysql -u root -p
+PostgreSQL: sudo -u postgres psql
+Oracle: sqlplus system@localhost
+
+Run the following SQL queries:
+select ROLE_ID from ROLES where ROLE_TYPE='STORAGEOPERATIONS';The
+              query returns a set of ROLD_ID values. For each ROLE_ID, run the
+              following SQL
+              commands:delete from CONFIGS where ROLE_ID=<ROLE_ID>;
+delete from ROLE_STALENESS_STATUS where ROLE_ID=<ROLE_ID>;
+delete from ROLES where ROLE_TYPE='STORAGEOPERATIONS';
+
+The Core Configuration service commonly has the default name
+                'core_settings'. Validate this by checking the
+              NAME returned by the following
+              query:neselect NAME,DISPLAY_NAME from SERVICES where SERVICE_TYPE='CORE_SETTINGS'In
+              the next two steps, substitute the NAME returned from the above
+              query for
+                '[***core_settings***]' in
+              the queries.
+The following query returns a list of services that are dependent on the Core
+              Configuration service. Note the services listed. You will need this information later
+              in the Cloudera Manager upgrade process to reset the dependent services, after the
+              Cloudera Manager agents are installed. (See Step 5: After You Upgrade Cloudera Manager.)select c.SERVICE_ID,NAME from CONFIGS c join SERVICES s on c.SERVICE_ID=s.SERVICE_ID where value='[***core_settings***]';
+
+
+delete from CONFIGS where value='[***core_settings***]';
+
+
+
+Start the Cloudera Manager
+        Server.sudo systemctl start cloudera-scm-server
+
+ If your cluster is running the
+          embedded PostgreSQL database, stop all services that are using the
+          embedded database. These can include: 
+Hive service and all services such as Impala and Hue that use
+              the Hive metastore
+Oozie
+Sentry
+Sqoop
+
+
+Stop the Cloudera Management Service.
+Log in to the Cloudera Manager Admin Console.
+Select
+                Clusters > Cloudera
+                Management Service.
+Select
+                Actions > Stop.
+
+importantNot stopping the Cloudera Management Service at
+            this point might cause management roles to crash or the Cloudera
+            Manager Server might fail to restart. 
+Ensure that you have disabled any scheduled replication or
+            snapshot jobs and wait for any running commands from the
+          Cloudera Manager Admin Console to complete before proceeding with the
+          upgrade. importantIf there are replication jobs,
+            snapshot jobs, or other commands running when you stop Cloudera
+            Manager Server, Cloudera Manager Server might fail to start after
+            the upgrade. 
+If you have any Hive Replication Schedules that replicate to a cloud
+          destination, delete these replication clusters before continuing with
+          the upgrade. You can re-create these Replication Schedules after the
+          Cloudera Manager upgrade is complete.
+If your cluster
+          is running Ubuntu version 18, stop all clusters before upgrading
+          Cloudera Manager. (For each cluster, go to
+                Cluster
+              Name > Actions > Stop.)
+Stop the Cloudera Manager server host, agent, and embedded database
+          (if installed). If you have enabled high availability for Cloudera
+          Manager, perform the following steps on the hosts for both the
+            active and passive instances of Cloudera Manager:
+ Log in to the Cloudera Manager Server
+              host:ssh my_cloudera_manager_server_host
+
+Stop the Cloudera Manager
+        Server.sudo systemctl stop cloudera-scm-server
+
+If you are using the embedded PostgreSQL
+        database, stop the Cloudera Manager Embedded PostgreSQL database:
+RHEL 7, SLES 12, Ubuntu 18.04 and higher
+
+sudo systemctl stop cloudera-scm-server-db
+
+RHEL 5 or 6, SLES 11, Debian 6 or 7, Ubuntu
+          12.04 or 14.04
+
+sudo service cloudera-scm-server-db stop
+
+If you are not using the embedded PostgreSQL database and you
+          attempt to stop it, you might see a message indicating that the
+          service cannot be found. If you see a message that the shutdown
+          failed, then the embedded database is still running, probably because
+          services are connected to the Hive metastore. If the database shutdown
+          fails due to connected services, issue the following command:
+          RHEL-compatible 7 and higher, Ubuntu
+          16.04sudo service cloudera-scm-server-db next_stop_fast
+sudo service cloudera-scm-server-db stop
+
+All other Linux
+          distributionssudo service cloudera-scm-server-db fast_stop
+
+Stop the Cloudera Manager Agent.
+        
+RHEL 7, SLES 12, Ubuntu 18.04 and higher
+
+sudo systemctl stop cloudera-scm-agent
+
+RHEL 5 or 6, SLES 11, Debian 6 or 7, Ubuntu
+          12.04 or 14.04
+
+sudo service cloudera-scm-agent stop
+
+
+
+
+Upgrade the Cloudera Manager software. If you have enabled high
+          availability for Cloudera Manager, perform the following steps on the
+          hosts for both the active and passive instances of the Cloudera
+          Manager server. 
+ Upgrade the packages. Include the
+            cloudera-manager-server-db-2 package in the command
+          only if you are using the embedded PostgreSQL database.
+
+RHEL / CentOS
+
+sudo yum clean all
+sudo yum upgrade cloudera-manager-server cloudera-manager-daemons cloudera-manager-agent cloudera-manager-server-db-2
+
+SLES
+
+sudo zypper clean --all
+sudo zypper up cloudera-manager-server cloudera-manager-daemons cloudera-manager-agent cloudera-manager-server-db-2
+
+Ubuntu
+
+sudo apt-get clean
+sudo apt-get update
+sudo apt-get dist-upgrade
+sudo apt-get install cloudera-manager-server cloudera-manager-daemons cloudera-manager-agent cloudera-manager-server-db-2
+
+
+You might be prompted about your configuration file version:
+
+Configuration file '/etc/cloudera-scm-agent/config.ini'
+==> Modified (by you or by a script) since installation.
+==> Package distributor has shipped an updated version.
+What would you like to do about it ? Your options are:
+Y or I : install the package maintainer's version
+N or O : keep your currently-installed version
+D : show the differences between the versions
+Z : start a shell to examine the situation
+The default action is to keep your current version.
+You may receive a similar prompt for
+          /etc/cloudera-scm-server/db.properties. Answer
+          N to both prompts.
+You may be prompted to accept the GPG key. Answer y.
+
+Retrieving key from https://archive.cloudera.com/.../cm/RPM-GPG-KEY-cloudera
+Importing GPG key ...
+ Userid     : "Yum Maintainer <webmaster@cloudera.com>"
+ Fingerprint: ...
+ From       : https://archive.cloudera.com/.../RPM-GPG-KEY-cloudera
+noteIf you receive the following error message when running these
+          commands: [Errno 14] HTTP Error 404 - Not Found, make sure the
+          URL in the cloudera-manage.list cloudera-manager.repo file is correct and
+          is reachable from the Cloudera Manager server host.
+
+ If you customized the
+          /etc/cloudera-scm-agent/config.ini file, your
+        customized file is renamed with the extension .rpmsave
+        or .dpkg-old. Merge any customizations into the
+          /etc/cloudera-scm-agent/config.ini file that is
+        installed by the package manager. 
+
+Verify that you have the correct packages installed.
+
+Ubuntu
+
+dpkg-query -l 'cloudera-manager-*'
+
+Desired=Unknown/Install/Remove/Purge/Hold
+| Status=Not/Inst/Conf-files/Unpacked/halF-conf/Half-inst/trig-aWait/Trig-pend
+|/ Err?=(none)/Reinst-required (Status,Err: uppercase=bad)
+||/ Name                   Version                Description
++++-======================-======================-============================================================
+ii  cloudera-manager-agent 5.15.0-0.cm...~sq The Cloudera Manager Agent
+ii  cloudera-manager-daemo 5.15.0-0.cm...~sq Provides daemons for monitoring Hadoop and related tools.
+ii  cloudera-manager-serve 5.15.0-0.cm...~sq The Cloudera Manager Server
+
+
+RHEL / CentOS / SLES
+
+rpm -qa 'cloudera-manager-*'
+
+cloudera-manager-server-5.15.0-...
+cloudera-manager-agent-5.15.0-...
+cloudera-manager-daemons-5.15.0-...
+cloudera-manager-server-db-2-5.15.0-...
+
+
+If you are using the embedded PostgreSQL
+        database, start the
+        database:sudo systemctl start cloudera-scm-server-db
+
+
+Start the Cloudera Manager agent and server. If you have enabled
+          high availability for Cloudera Manager, start only the host for the
+            active instance of Cloudera Manager:
+Start the Cloudera Manager Agent.
+        
+RHEL 7, SLES 12, Ubuntu 18.04 and higher
+
+sudo systemctl start cloudera-scm-agent
+              If the agent starts without errors, no response displays. 
+RHEL 5 or 6, SLES 11, Debian 6 or 7, Ubuntu
+          12.04 or 14.04
+
+sudo service cloudera-scm-agent start
+              You should see the following: Starting cloudera-scm-agent: [ OK ]
+importantA restart of Cloudera Manager Agents is
+                required on all hosts in the cluster.
+
+
+The
+              Cloudera Manager server now requires 4GB of heap. On the Cloudera
+              Manager server host, edit the
+                /etc/default/cloudera-scm-server file and
+              change the line that begins with export
+                CMF_JAVA_OPTS=. Change the -Xmx2G
+              parameter to -Xmx4G. 
+Start the Cloudera Manager
+        Server.sudo systemctl start cloudera-scm-server
+
+If you have problems starting the server or the agent, such as
+              database permissions problems, you can use log files to
+              troubleshoot the problem:Server
+                log:tail -f /var/log/cloudera-scm-server/cloudera-scm-server.log
+                Agent
+              log:tail -f /var/log/cloudera-scm-agent/cloudera-scm-agent.log
+              or
+              tail -f /var/log/messages
+
+Verify that all cluster hosts appear in the Cloudera Manager Admin
+          Console. 
+Use a Web browser to open the Cloudera Manager Admin Console
+              using the following
+              URL:http://cloudera_Manager_server_hostname:7180/cmf/upgradeIt
+              can take several minutes for the Cloudera Manager Server to start,
+              and the Cloudera Manager Admin Console is unavailable until the
+              server startup is complete and the Upgrade Cloudera
+                Manager page displays. 
+Verify that all cluster hosts are visible. (Go to
+                  Hosts > All
+                  Hosts.)
+
+If you have enabled high availability for Cloudera Manager, start
+          the host for the passive instance of Cloudera Manager: 
+Start the Cloudera Manager Agent.
+        
+RHEL 7, SLES 12, Ubuntu 18.04 and higher
+
+sudo systemctl start cloudera-scm-agent
+              If the agent starts without errors, no response displays. 
+RHEL 5 or 6, SLES 11, Debian 6 or 7, Ubuntu
+          12.04 or 14.04
+
+sudo service cloudera-scm-agent start
+              You should see the following: Starting cloudera-scm-agent: [ OK ]
+importantA restart of Cloudera Manager Agents is
+                required on all hosts in the cluster.
+
+
+The
+              Cloudera Manager server now requires 4GB of heap. On the Cloudera
+              Manager server host, edit the
+                /etc/default/cloudera-scm-server file and
+              change the line that begins with export
+                CMF_JAVA_OPTS=. Change the -Xmx2G
+              parameter to -Xmx4G. 
+Start the Cloudera Manager
+        Server.sudo systemctl start cloudera-scm-server
+
+If you have problems starting the server or the agent, such as
+              database permissions problems, you can use log files to
+              troubleshoot the problem:Server
+                log:tail -f /var/log/cloudera-scm-server/cloudera-scm-server.log
+                Agent
+              log:tail -f /var/log/cloudera-scm-agent/cloudera-scm-agent.log
+              or
+              tail -f /var/log/messages
+
+
+To complete the Cloudera Manager upgrade, continue with Step 4: Upgrading the Cloudera Manager Agents.
+
+

@@ -1,0 +1,101 @@
+Configuring alert notifications, no UICloudera Docs
+Configuring alert notifications, no UI
+You learn to use the Kubernetes configuration method of configuring alert
+        notifications that appear in the user notification system. Configuring notifications using
+        this method has the same effect as using the UI method. The notifications supplement alert
+        information in charts on the Manage/Hive/Compaction Observability dashboard in Grafana. 
+ In this task, you see how to funnel alerts into a user notification system using a
+            Kubernetes configuration available from your Database Catalog. 
+
+In the Data Warehouse service, expand the Environments
+                    column.
+
+Click  and locate an environment
+                    having a Database Catalog you activated for CDW.
+
+Click the environment options , and select Show
+                    Kubeconfig.
+
+
+
+
+
+
+Click COPY and paste the configuration into a file, and save the file as a YML
+                    file, for example, kube_env.yml
+
+On the command line of the cluster, set the KUBECONFIG environment variable to
+                    the path of the YML file.
+$ export KUBECONFIG=<the-absolute-path-to>/kube_env.yml
+
+Download the alert configuration using a command to fetch the configuration
+                    into the alertmanager.yml local file.
+$ kubectl \
+    -n istio-system \
+    get configmap \
+    alertmanager \
+    -o "jsonpath={.data['alertmanager\.yml']}" > alertmanager.yml
+global:
+  resolve_timeout: 5m
+ 
+route:
+  group_by: ['alertname', 'namespace', 'service']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 3h
+  receiver: notification_system
+ 
+receivers:
+  - name: 'notification_system'
+ 
+inhibit_rules:
+  - source_match:
+      severity: 'error'
+    target_match:
+      severity: 'warning'
+    equal: ['alertid', 'namespace', 'service']
+
+Edit the alert configuration to configure the receiver object by following
+                    instructions in the Prometheus AlertManager v.0.20.0
+                    documentation.
+For example, a simple WebHook configuration looks something like this:
+                    global:
+  resolve_timeout: 5m
+ 
+route:
+  group_by: ['alertname', 'namespace', 'service']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 3h
+  receiver: notification_system
+ 
+receivers:
+  - name: 'notification_system'
+    webhook_configs:
+      - url: https://co-alerting.prod.mycompany.com
+        send_resolved: true
+ 
+inhibit_rules:
+  - source_match:
+      severity: 'error'
+    target_match:
+      severity: 'warning'
+    equal: ['alertid', 'namespace', 'service']
+For information about integration possibilities, see the receiver section.
+
+Check that your configuration conforms to YAML syntax.
+
+Update the related configmap.
+For example:
+                    $ kubectl \  
+    -n istio-system \
+    create configmap \
+    alertmanager \
+    --from-file=alertmanager.yml=./alertmanager.yml \
+    --dry-run=client -o yaml \
+ | kubectl apply -f -
+The alertmanager recognizes the change and automatically updates the
+                    configuration. 
+
+
+Parent topic: Compaction observability

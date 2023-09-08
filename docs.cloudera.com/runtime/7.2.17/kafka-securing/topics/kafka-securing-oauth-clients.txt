@@ -1,0 +1,79 @@
+Configuring OAuth2 authentication for Kafka clientsCloudera Docs
+Configuring OAuth2 authentication for Kafka clients
+Learn how to enable and configure OAuth authentication for Kafka clients. 
+In order for the clients to successfully establish a connection with a
+        broker that has OAuth2 authentication enabled, you must configure OAuth2 related properties
+        for the client. Configuring these properties instructs the client to acquire a signed JSON
+        Web Token (JWT) and present that token to the broker when requesting access.The
+      following steps demonstrate configuration for console clients. This is done by creating a
+      client.properties configuration file that includes the required properties. If you are
+      configuring a custom developed client, see Java client security examples or
+        .Net client security examples for code examples.
+
+
+Ensure that the authorization server is reachable from the client host.
+Obtain the authorization server's token  endpoint URL.
+Obtain the necessary credentials (client ID, client secret) and other parameters (for
+          example, scope) from the authorization server. 
+Cloudera recommends that you configure your authorization servers
+          as well as your Kafka brokers to use TLS/SSL. This is recommended so that JWT tokens and
+          client credentials do not get exposed.
+
+
+Create a client.properties file containing the following properties:
+security.protocol=[***SECURITY PROTOCOL***]
+sasl.mechanism=OAUTHBEARER
+sasl.login.callback.handler.class=org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler
+sasl.oauthbearer.token.endpoint.url=http://[***OAUTH SERVER***]/[***TOKEN ENDPOINT***]
+Replace [***SECURITY PROTOCOL***] with either SASL_SSL or
+            SASL_PLAINTEXT. The security protocol you specify depends on whether TLS/SSL encryption
+            is enabled on the broker. 
+Optional:  If TLS/SSL is enabled on the broker, add all required
+          TLS/SSL properties to the client.properties file. For example:
+ssl.truststore.location= [***PATH TO CLIENT TRUSTSTORE***]
+ssl.truststore.password=[***PASSWORD***]
+This example contains the minimum required TLS/SSL properties. Depending on your
+            requirements and how TLS/SSL is configured on the broker, other properties might be
+            required. For more information regarding TLS/SSL configuration, see Channel
+              Encryption.
+Configure the JAAS.You have two options when configuring the JAAS. You
+          can either embed the full JAAS configuration in the client.properties file or use a
+          separate JAAS configuration file.
+Embed the required properties in the client.properties file
+              with the sasl.jaas.config property.
+sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId="[***CLIENT ID***]" clientSecret="[***CLIENT SECRET***]" scope="[***SCOPE***]";
+
+
+Use a separate JAAS config file:
+
+Add a KafkaClient entry with a login module item to your JAAS configuration
+                    file.You can also create a new JAAS configuration file if you do not have an
+                    existing one available.
+KafkaClient {
+  org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required
+  clientId="[***CLIENT ID***]"
+  clientSecret="[***CLIENT SECRET***]"
+  scope="[***SCOPE***]";
+};
+
+Pass the location of your JAAS configuration file as a JVM parameter through a
+                  command line
+                  interfaceexport KAFKA_OPTS="-Djava.security.auth.login.config=[***PATH TO JAAS.CONF***]"
+
+
+
+
+Clients that you run with the configuration file you created authenticate themselves
+      to the Kafka broker with OAuth2.
+Run a client:
+Console consumer
+
+kafka-console-consumer --bootstrap-server [***HOST1:PORT1***] --topic [***TOPIC***] --consumer.config client.properties
+
+Console producer
+
+kafka-console-producer --bootstrap-server [***HOST1:PORT1***] --topic [***TOPIC***] --producer.config client.properties
+
+
+
+Related informationJava client security examples.Net client security examplesChannel encryptionParent topic: OAuth2 authentication

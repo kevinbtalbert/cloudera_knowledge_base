@@ -1,0 +1,30 @@
+Query rewrite exampleCloudera Docs
+Query rewrite example
+You examine a materialized view definition and see how an example query that matches a materialized view is rewritten transparently.
+The following materialized view definition uses dynamic partitioning by year:
+   CREATE MATERIALIZED VIEW mat_view
+PARTITIONED ON (d_year)
+AS SELECT d_year, d_moy, d_dom, SUM(ss_sales_price) AS sum_sales
+FROM store_sales, date_dim
+WHERE ss_sold_date_sk = d_date_sk AND d_year > 2017
+GROUP BY d_year, d_moy, d_dom;
+
+ With this materialized view in place, when the following query runs, transparent rewriting to
+   speed up the execution occurs.
+SELECT SUM(ss_sales_price) AS sum_sales
+FROM store_sales, date_dim
+WHERE ss_sold_date_sk = d_date_sk AND d_year = 2018 AND d_mon IN (1,2,3);
+The query matches most of the constructs, but not the filter, in the materialized view. Calcite
+   recognizes this query as a full, mapped query, minus the predicate. Calcite rewrites the query as
+   a select from the materialized view. Calcite also recognizes that the materialized view is
+   partitioned, and does partition elimination:
+SELECT SUM(sum_sales) AS sum_sales
+FROM mat_view
+WHERE d_year = 2018 AND d_mon IN (1,2,3);
+The final rewrite selects from the partition, and applies the predicate to the eliminated
+   partition.
+SELECT SUM(sum_sales) AS sum_sales
+ FROM mat_view(d_year = 2018)
+ WHERE d_mon IN (1,2,3);
+
+Parent topic: Creating and using a materialized view

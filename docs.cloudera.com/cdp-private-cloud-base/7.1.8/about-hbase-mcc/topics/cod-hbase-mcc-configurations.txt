@@ -1,0 +1,78 @@
+HBase MCC ConfigurationsCloudera Docs
+HBase MCC Configurations
+HBase Multi-cluster Client (MCC) provides various configuration parameters to set up
+  clusters, mode, and different connection related properties.
+hbase.mcc.failover.clusters
+This is a comma separated list of cluster names that represent the clusters available when
+    running MCC. The first cluster in the list is the primary cluster. If this cluster fails to
+    respond, the requests are routed to the next cluster in line. This configuration is
+    automatically generated based on N+ number of clusters in the submission.
+The following example shows an uber
+    configuration.hbase.failover.clusters=hbase.mcc.cluster0,hbase.mcc.cluster1
+hbase.mcc.cluster0.hbase.zookeeper.quorum=1.0.0.2
+hbase.mcc.cluster1.hbase.zookeeper.quorum=1.0.0.3
+
+
+noteAuto-configuration does not support building uber
+     configuration.
+
+
+hbase.mcc.failover.mode
+The default value is set to true, this means that if the primary cluster fails, the code
+    automatically attempts to execute on failover clusters until all failover clusters are
+    exhausted. If set to false, the only attempt is on the primary or first cluster. If you are
+    executing a put or delete when set to true and culter failover happens, HBase MCC executes the
+    put or delete on the failover cluster.
+This configuration is not applicable for the read or scan methods.
+
+noteThis configuration does not apply to reads or scans. This is applied
+     to puts or deletes.
+
+
+hbase.mcc.connection.pool.size
+The default value is set as 20. Part of java.util.concurrent.Executors
+    creates a thread pool that reuses a fixed number of threads operating from a shared unbounded
+    queue.
+
+hbase.mcc.allow.check.and.mutate
+The default value is false that disables the checkAndMutate function on the
+    Table class.
+
+hbase.mcc.wait.time.before.trying.primary.after.failure
+The default value is 30000 milliseconds (30 seconds). This is the default amount of time in
+    milliseconds that the application waits before re-attempting the primary cluster after a failure
+    and executing against a failover cluster. The cluster tracker uses this thread to check and
+    ensure that a cluster is available before calls are routed to that cluster.
+
+hbase.mcc.wait.time.before.enable.cluster
+The default value is 10000 milliseconds (10 seconds). This represents the wait time to read
+    the metadata for a cluster before the region server is actually available to read. If this
+    number is too low, the system detects that the cluster is available from the metastore, tries to
+    read or write from the cluster because the region server is decoupled from the meta and is not
+    yet available. This additional buffer allows some time before the metadata is available for the
+    region to become fully online.
+
+hbase.mcc.buffered.mutator.behavior
+The supported values are failover, replicate, and replay. The default value is failover. When
+     BufferedMutator is used, there might be a data loss. When set to failover,
+    HBase MCC writes to a single cluster connection. When a flush fails for that connection, it
+    starts writing new mutations to the new connection. Any mutations that are part of the failure
+    flush are lost. Data loss in BufferedMutator is caused when HBase puts are
+    stored in client memory up until the point that a flush takes place. If that flush fails when a
+    region server is down, data is not be persisted.
+The second option is to configure BufferedMutator with replicate, which
+    replicates all calls for mutations to all connections. When a connection fails, data is not lost
+    because we are writing to another connection automatically.
+The third option is to configure replay, this operation stores data in a cache until flush is
+    called. When flush is called, HBase MCC attempts to write all data from the cache into the first
+    available and active connection’s BufferedMutator followed by an immediate
+    flush. If the flush is a success, the cache is cleared. If the flush fails, HBase MCC pushes the
+    data to the next connection's BufferedMutator. This also helps to prevent
+    data loss with BufferedMutator while not pushing to each cluster by default
+    as an alternative to the replicate option.
+In all cases with BufferedMutator, you could still have data loss on the
+    cluster when services go down or if no cluster is available to write the data. You need to
+    ensure that your application is ready to handle the failures as they happen.
+
+
+Parent topic: Introduction to HBase Multi-cluster Client

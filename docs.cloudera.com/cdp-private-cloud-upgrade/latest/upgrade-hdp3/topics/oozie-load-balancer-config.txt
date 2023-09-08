@@ -1,0 +1,88 @@
+Oozie Load Balancer configurationCloudera Docs
+Oozie Load Balancer configuration
+To enable Oozie High Availability, you must manually configure a Load
+        Balancer.
+Cloudera recommends using the HAProxy Load Balancer. These steps explain how to
+            configure the HAProxy load balancer. However, you can choose to configure a different
+            Load Balancer.
+
+Install HAProxy on the host where you are setting up and configuring the Oozie
+                    load balancer. For more information, see the HAProxy
+                        documentation.
+
+You must configure the Oozie load balancer for both HTTP and HTTPS ports.
+
+This is an example:
+global
+    log         127.0.0.1 local2
+    pidfile     /var/run/haproxy.pid
+    maxconn     4000
+    user        haproxy
+    group       haproxy
+    daemon
+    stats       socket /tmp/haproxy
+
+defaults
+    mode                    http
+    log                     global
+    option                  httplog
+    option                  dontlognull
+    option forwardfor       except 127.0.0.0/8
+    option                  redispatch
+    retries                 3
+    timeout http-request    10s
+    timeout queue           1m
+    timeout connect         10s
+    timeout client          10m
+    timeout server          10m
+    timeout check           10s
+    maxconn                 3000
+
+listen admin
+        bind *:8000
+        stats enable
+
+#---------------------------------------------------------------------
+# main frontend which proxys to the backends
+#---------------------------------------------------------------------
+frontend                        oozie_front
+    bind                        *:5000 ssl crt /var/lib/cloudera-scm-agent/agent-cert/cdep-host_key_cert_chain_decrypted.pem
+    default_backend             oozie
+
+#---------------------------------------------------------------------
+# round robin balancing between the various backends
+#---------------------------------------------------------------------
+backend oozie
+    balance                     roundrobin
+    server  oozie1 my-oozie-host-1:11443/oozie check ssl ca-file /var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_cacerts.pem
+    server  oozie2 my-oozie-host-2:11443/oozie check ssl ca-file /var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_cacerts.pem
+    server  oozie3 my-oozie-host-3:11443/oozie check ssl ca-file /var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_cacerts.pem
+
+#---------------------------------------------------------------------
+# main frontend which proxys to the http backends
+#---------------------------------------------------------------------
+frontend                        oozie_front_http
+    bind                        *:5002
+    default_backend             oozie_http
+
+#---------------------------------------------------------------------
+# round robin balancing between the various http backends
+#---------------------------------------------------------------------
+backend oozie_http
+    balance                     roundrobin
+    server  oozie_http1 my-oozie-host-1:11000/oozie check
+    server  oozie_http2 my-oozie-host-2:11000/oozie check
+    server  oozie_http3 my-oozie-host-3:11000/oozie check
+
+Using the example, the load balancer is setup for three Oozie instances.
+                    The load balancer listens on port 5002 for HTTP connections and forwards it to
+                    Oozie’s port 11000. The load balancer listens on port 5000 for HTTPS connections
+                    and forwards it to Oozie’s port 11443. If you not enabled SSL in Oozie, then
+                        you do not need the HTTPS load balancer. For HTTPS load balancing, ensure
+                        that you set up the certificate.
+
+Continue to configure the load balancer by enabling Oozie High Availability.
+                    For information about enabling Oozie High Availability, see  Enabling Oozie High Availability .
+
+
+Parent topic: Oozie

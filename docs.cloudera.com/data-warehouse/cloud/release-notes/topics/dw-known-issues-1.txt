@@ -1,0 +1,434 @@
+June 22, 2022Cloudera Docs
+June 22, 2022
+This release of the Cloudera Data Warehouse (CDW) service on CDP Public Cloud has the
+  following known issues:
+New known Issues in this release
+
+Do not upgrade to AKS 1.22
+The latest version of Cloudera Data Warehouse (CDW) provisions AKS 1.22 by default; however upgrading your activated environments to AKS 1.22 or later is not supported. Do not upgrade your AKS clusters to AKS 1.22.
+
+
+DWX-12758 DBC upgrade fails for some source versions
+In this release, if you are using a Database Catalog that was created in CDW 2022.0.7.0-80 (released April 27, 2022) or 2022.0.7.1-2 (released May 10, 2022) a failure can occur when you try to upgrade the Database Catalog.
+
+
+DWX-12528 Tags are not removed for environment activated in reduced permissions mode
+You see a DWX server log error, "... error delete tags" when in reduced permissions mode. You can ignore this error.
+
+
+DWX-12658 Rebuild materialized view after Database Catalog upgrade
+You must rebuild materialized views created in version of the Database Catalog that is older than the version of your Virtual Warehouse. This is expected behavior. 
+Workaround: Run the following command to rebuild a materialized view after moving to a
+      Virtual Warehouse based on a later version of the Database Catalog:
+      ALTER MATERIALIZED VIEW mv1 REBUILD;
+
+
+DWX-12598 DESCRIBE EXTENDED does not show bucketing information about an Iceberg table.
+This issue affects the Hive and Impala Virtual Warehouses. The Hive Virtual Warehouse, which supports DESCRIBE FORMATTED of Iceberg talble, has the same problem 
+
+
+CDPD-40749 IMPALA-11346 Iceberg query failure
+When a partitioned legacy table is converted to Iceberg, Impala queries of the table might fail.
+      The problem occurs when the query contains a WHERE clause plus a predicate on the partition columns.
+Workaround: Replace Iceberg tables created prior to this GA release with new tables. Create a new table in Iceberg by selecting the old table as shown in Test driving Iceberg from Impala.
+
+
+Carried over from the previous release: General
+
+DWX-6619 Browser auto-close not working on some browsers after token-Based
+      authentication for accessing CDW 
+ The Firefox and Edge browser window does not close automatically after successful
+      authentication. 
+DWX-9774 Database Catalog or Virtual Warehouse image version problem
+Background: In Cloudera Data Warehouse 2021.0.3-b27 - 2021.0.5-b36, you can choose
+      any supported image version when you create a Database Catalog or Virtual Warehouse,
+      assuming you have the CDW_VERSIONED_DEPLOY entitlement.
+Problem: In Cloudera Data Warehouse 2021.0.6-b96, you can choose an image version
+      other than 2021.0.6-b96 when you create a Database Catalog or Virtual Warehouse only if
+      you use an existing environment. An existing environment is one you created in
+      2021.0.3-b27 - 2021.0.5-b36. 
+Workaround:  In 2021.0.6-b96, use an environment you created before this release to
+      choose an image version other than 2021.0.6-b96 when you create a Database Catalog or
+      Virtual Warehouse.
+DWX-5841: Virtual Warehouse endpoints are now restricted to TLS 1.2
+Problem: TLS 1.0 and 1.1 are no longer considered secure, so now Virtual Warehouse
+      endpoints must be secured with TLS 1.2 or later, and then the environment that the Virtual
+      Warehouse uses must be reactivated in CDW. This includes both Hive and Impala Virtual
+      Warehouses. To reactivate the environment in the CDW UI:
+      
+Deactivate the environment. See Deactivating AWS environments or Deactivating Azure environments.
+Activate the environment. See Activating AWS environments or Activating Azure environments
+
+
+Workaround: If environment reactivation is not possible, you can perform manual
+      steps using the kubectl command line tool to pick up the TLS 1.2 endpoint
+      change. Open a terminal window on a system where the kubectl command line
+      tool is installed, log in, and run the following commands:
+      kubectl edit svc nginx-service -n <cluster-name>
+       
+       # Add the following under the metadata.annotations field
+       service.beta.kubernetes.io/aws-load-balancer-ssl-negotiation-policy: "ELBSecurityPolicy-TLS-1-2-2017-01"
+       
+       # Save and quit the editor, and then run the following command to check your changes.
+       
+       kubectl get svc nginx-service -n <cluster-name> -o yaml
+       
+       # Make sure that the annotation you added is present.
+
+DWX-5742: Upgrading multiple Hive and Impala Virtual Warehouses or Database Catalogs at
+      the same time fails
+Problem: Upgrading multiple Hive and Impala Virtual Warehouses or Database Catalogs
+      at the same time fails.
+Workaround: If you need to upgrade or create multiple Hive and Impala Virtual
+      Warehouses or Database Catalogs, perform the upgrade or creation sequentially one at a time.
+
+
+Carried over from the previous release: AWS
+
+AWS availability zone inventory issue
+In this release, you can select a preferred availability zone when you create a Virtual Warehouse; however, AWS might not be able to provide enough compute instances of the type that Cloudera Data Warehouse needs.
+Workaround: If you experience this AWS issue, try recreating the Virtual Warehouse and choosing a different availability zone.
+DWX-8573: EKS upgrade from DWX UI to K8s v1.20 fails in reduced permissions mode
+In reduced permissions mode, attempting to update Amazon Elastic Kubernetes Service (EKS) to
+      Kubernetes version 1.20 fails with an AccessDenied error.
+Workaround:In AWS, add the following permissions to your reduced permissions mode JSON IAM permissions
+      policy right after
+      "iam:PutRolePolicy":{
+       ...
+       "cloudformation:GetTemplate",
+       "cloudformation:GetTemplateSummary",
+       "iam:GetRole",
+       "eks:ListUpdates",
+       "ec2:CreateLaunchTemplateVersion",
+       "ec2:DescribeLaunchTemplateVersions",
+       "ec2:DescribeLaunchTemplates",
+       "autoscaling:UpdateAutoScalingGroup",
+       "autoscaling:DeleteAutoScalingGroup",
+       "ec2:RunInstances",
+       "autoscaling:DescribeScalingActivities",
+       "autoscaling:TerminateInstanceInAutoScalingGroup",
+       "autoscaling:DescribeScheduledActions",
+       "autoscaling:SetDesiredCapacity",
+       "iam:PassRole",
+       "rds:DescribeDBInstances",
+       "ec2:DescribeInstances"
+       ...
+
+DWX-7613: CloudFormation stack creation using AWS CLI broken for CDW Reduced Permissions
+      Mode
+Problem: If you use the AWS CLI to create a CloudFormation stack to activate an
+      AWS environment for use in Reduced Permissions Mode, it fails and returns the following
+      error:
+      An error occurred (ValidationError) when calling the CreateStack
+       operation: Parameters: [SdxDDBTableName] must have values
+      The default value of SdxDDBTableName is not being set.
+      If you create the CloudFormation stack using the AWS Console, there is no problem.
+     
+Workaround: If you must use the AWS CLI, edit the CloudFormation stack template
+      file as follows:
+      SdxDDBTableName:
+       Description: DynamoDB table name for the SDX S3 file listings, created through S3Guard
+       Type: String
+       Default: " "
+      Then rerun the CloudFormation stack creation command using the AWS CLI.
+     
+ENGESC-8271: Helm 2 to Helm 3 migration fails on AWS environments where the overlay
+      network feature is in use and namespaces are stuck in a terminating state
+Problem: While using the overlay network feature for AWS environments and after
+      attempting to migrate an AWS environment from Helm 2 to Helm 3, the migration process
+      fails.
+Workaround: Run the following kubectl command to determine
+      whether you have any namespaces stuck in a terminating state:
+      kubectl get ns
+      Then contact Cloudera Technical Support to report and get help on this issue.
+     
+DWX-6970: Tags do not get applied in existing CDW environments
+Problem: You may see the following error while trying to apply tags to Virtual
+      Warehouses in an existing CDW environment: An error occurred
+       (UnauthorizedOperation) when calling the CreateTags operation: You are not authorized to
+       perform this operation and Compute node tagging was
+        unsuccessful. This happens because the ec2:CreateTags
+      privilege is missing from your AWS cluster-autoscaler inline policy for the
+      NodeInstanceRole role.
+Workaround: Add the ec2:CreateTags privilege to the
+      cluster-autoscaler inline policy as follows:
+Log into the AWS IAM console at https://console.aws.amazon.com/iam/.
+In the navigation panel, choose Roles.
+Search the list of roles for NodeInstanceRole.
+Click Permissions.
+Select cluster-autoscaler and click Edit
+        policy.
+Add the ec2:CreateTags line in the
+        Actions
+        section after the ec2:DescribeLaunchTemplateVersions line as shown:
+"Version": "2012-10-17",
+          "Statement": [
+          {
+          "Action": [
+          "autoscaling:DescribeAutoScalingGroups",
+          "autoscaling:DescribeAutoScalingInstances",
+          "autoscaling:DescribeTags",
+          "autoscaling:DescribeLaunchConfigurations",
+          "autoscaling:SetDesiredCapacity",
+          "autoscaling:TerminateInstanceInAutoScalingGroup",
+          "ec2:DescribeLaunchTemplateVersions",
+          "ec2:CreateTags"
+          ],
+
+Save changes.
+
+
+
+Carried over from the previous release: Azure
+
+Incorrect diagnostic bundle location
+Problem:The path you see to the diagnostic bundle is wrong when you create a Virtual
+      Warehouse, collect a diagnostic bundle of log files for troubleshooting, and click 
+Edit > Diagnostic Bundle. Your storage account name is missing from the beginning of the path.
+Workaround:To find your diagnostic bundle, add your storage account name to the
+      beginning of the path, for example:
+      my-storage-account-name/log-files/clusters/my-env/my-warehouse-xx-yy/warehouse/debug-artifacts/hive/compute-zz-mvvf/compute-zz-mvvf-0926210111-0927090111-01234.zipTo
+      get your storage account name, in Cloudera Management Console, click Environments, select your
+      environment, and scroll down to Logs Storage and Audits. The first part of the path is your
+      storage account name. 
+
+
+Changed environment credentials not propagated to AKS
+
+Problem: When you change the credentials of a running cloud environment using the
+       Management Console, the changes are not automatically propagated to the corresponding active
+       Cloudera Data Warehouse (CDW) environment. As a result, the Azure Kubernetes Service (AKS)
+       uses old credentials and may not function as expected resulting in inaccessible Hive or Impala
+       Virtual Warehouses.
+Workaround: To resolve this issue, you must manually synchronize the changes with the
+       CDW AKS resources. To synchronize the updated credentials, see Update AKS cluster with new service principal
+        credentials in the Azure product documentation.
+
+
+
+Carried over from the previous release: Hue Query Editor
+
+IMPALA-11447 Selecting certain complex types in Hue crashes Impala
+Queries that have structs/arrays in the select list crash Impala if initiated by Hue.
+Workaround: Do not select structs/arrays in Hue.
+
+
+DWX-8460: Unable to delete, move, or rename directories within the S3 bucket from
+      Hue
+Problem: You may not be able to rename, move, or delete directories within your
+      S3 bucket from the Hue web interface. This is because of an underlying issue, which will
+      be fixed in a future release.
+Workaround: You can move, rename, or delete a directory using the HDFS commands
+      as follows:
+SSH into your CDP environment host.
+To delete a directory within your S3 bucket, run the following
+        command:hdfs dfs -rm -r [***COMPLETE-PATH-TO-S3-BUCKET***]/[***DIRECTORY-NAME***]
+To rename a folder, create a new directory and run the following command to move
+        files from the source directory to the target
+        directory:hdfs dfs -mkdir [***DIRECTORY-NAME***]hdfs dfs -mv [***COMPLETE-PATH-TO-S3-BUCKET***]/[***SOURCE-DIRECTORY***] [***COMPLETE-PATH-TO-S3-BUCKET***]/[***TARGET-DIRECTORY***]
+
+
+
+DWX-6674: Hue connection fails on cloned Impala Virtual Warehouses after upgrading
+Problem: If you clone an Impala Virtual Warehouse from a
+      recently upgraded Impala Virtual Warehouse, and then try to connect to Hue, the connection
+      fails.
+Workaround: Create a new Impala Virtual Warehouse and do not clone from a recently
+      upgraded warehouse. Then the connection to Hue from the new Impala Virtual Warehouse
+      succeeds.
+DWX-5650: Hue only makes the first user a superuser for all Virtual Warehouses within a
+      Data Catalog
+Problem: Hue marks the user that logs in to Hue from a Virtual
+      Warehouse for the first time as the Hue superuser. But if multiple Virtual Warehouses are
+      connected to a single Data Catalog, then the first user that logs in to any one of the
+      Virtual Warehouses within that Data Catalog is the Hue superuser.For example, consider
+       that a Data Catalog DC-1 has two Virtual Warehouses VW-1 and VW-2. If a user named John
+       logs in to Hue from VW-1 first, then he becomes the Hue superuser for all the Virtual
+       Warehouses within DC-1. At this time, if Amy logs in to Hue from VW-2, Hue does not make
+       her a superuser within VW-2. 
+None.
+
+
+Carried over from the previous release: Database Catalog
+
+DWX-7349: In reduced permissions mode, default Database Catalog name does not include the
+      environment name
+Problem:
+When you activate an AWS environment in reduced permissions mode, the
+       default Database Catalog name does not include the environment name:
+
+
+
+This does not cause collisions because each Database Catalog named "default" is associated
+       with a different environment. For more information about reduced
+       permissions mode, see Reduced permissions mode for AWS environments.
+
+Workaround: None available.
+DWX-6167: Maximum connections reached when creating multiple Database Catalogs
+Problem:After creating 17 Database Catalogs on one AWS environment, Virtual
+      Warehouses failed to start.
+Workaround: Limit the number of Database Catalogs created on one environment
+      to 5. This applies to both AWS and Azure environments.
+
+
+Carried over from the previous release: Hive Virtual Warehouse
+
+DWX-10271: Missing log section in Hive query results
+In a Hive Virtual Warehouse, when you run a query in Hue, the query results do not contain a
+      logs section.
+DWX-8118: INSERT INTO command fails under certain circumstances
+This problem affects users who have a PostgreSQL database as the backend Hive database. If
+      you create a table A and create a table B as select (CTAS) from an empty table A,
+      inserting values into table B fails as follows:
+      Error while compiling statement: FAILED: Execution Error, return code 1 from 
+       org.apache.hadoop.hive.ql.exec.StatsTask.org.apache.thrift.transport.TTransportException
+Workaround: Disable auto-stats gathering: Go to Cloudera Manager Data Warehouse > Virtual Warehouses, and click the Hive VW name in the list. In Configuration > HiveServer2, set hive.cbo.enable to false. 
+DWX-5841: Virtual Warehouse endpoints are now restricted to TLS 1.2
+Problem: TLS 1.0 and 1.1 are no longer considered secure, so now Virtual Warehouse
+      endpoints must be secured with TLS 1.2 or later, and then the environment that the Virtual
+      Warehouse uses must be reactivated in CDW. This includes both Hive and Impala Virtual
+      Warehouses. To reactivate the environment in the CDW UI:
+      
+Deactivate the environment. See Deactivating AWS environments or Deactivating Azure environments.
+Activate the environment. See Activating AWS environments or Activating Azure environments
+
+
+Workaround: If environment reactivation is not possible, you can perform manual
+      steps using the kubectl command line tool to pick up the TLS 1.2 endpoint
+      change. Open a terminal window on a system where the kubectl command line
+      tool is installed, log in, and run the following commands:
+      kubectl edit svc nginx-service -n <cluster-name>
+       
+       # Add the following under the metadata.annotations field
+       service.beta.kubernetes.io/aws-load-balancer-ssl-negotiation-policy: "ELBSecurityPolicy-TLS-1-2-2017-01"
+       
+       # Save and quit the editor, and then run the following command to check your changes.
+       
+       kubectl get svc nginx-service -n <cluster-name> -o yaml
+       
+       # Make sure that the annotation you added is present.
+
+DWX-5926: Cloning an existing Hive Virtual Warehouse fails
+Problem: If you have an existing Hive Virtual Warehouse that you clone by selecting
+      Clone from the drop-down menu, the cloning
+      process fails. This does not apply to creating a new Hive Virtual Warehouse.
+Workaround: Make the following configuration change to resolve this issue: 
+In the Hive Virtual Warehouse tile, click the edit icon. This launches the Virtual
+       Warehouse details page.
+In the details page for the Virtual Warehouse, click the
+       Configurations tab.
+Click the Hiveserver2 sub-tab.
+Select hive-site from the configuration file drop-down list
+       menu.
+Search for the configuration property
+       hive.metastore.sasl.enabled.
+Set the hive.metastore.sasl.enabled configuration property to
+       true. noteIf the hive.metastore.sasl.enabled
+        configuration property is already set to true, delete the setting
+        and re-enter it.
+ Click Apply in the upper right corner of the page to save
+       the configuration. 
+Click the Actions menu and select
+       Clone to clone the Hive Virtual Warehouse: 
+
+
+
+DWX-2690: Older versions of Beeline return SSLPeerUnverifiedException when submitting a
+      query
+
+Problem: When submitting queries to Virtual Warehouses that use Hive, older Beeline
+       clients return an SSLPeerUnverifiedException error:
+javax.net.ssl.SSLPeerUnverifiedException: Host name ‘ec2-18-219-32-183.us-east-2.compute.amazonaws.com’ does not
+       match the certificate subject provided by the peer (CN=*.env-c25dsw.dwx.cloudera.site) (state=08S01,code=0)
+
+
+Workaround: Only use Beeline clients from CDP Runtime version 7.0.1.0 or later.
+
+
+
+Carried over from the previous release: Impala Virtual Warehouse
+
+IMPALA-11045 Impala Virtual Warehouses might produce an error when querying transactional
+      (ACID) table even after you enabled the automatic metadata refresh (version DWX
+      1.1.2-b2008)
+Problem: Impala doesn't open a transaction for select queries, so you might get a FileNotFound error after compaction even though you refreshed the metadata automatically.
+Workaround: Run the INVALIDATE METADATA statement on the
+      transactional (ACID) table to refresh the metadata. This fixes the problem until the next
+      compaction occurs. For information about running this statement, see INVALIDATE METADATA statement.
+
+
+Impala Virtual Warehouses might produce an error when querying transactional (ACID) tables
+       (DWX 1.1.2-b1949 or earlier)
+Problem: If you are querying transactional (ACID) tables with an Impala Virtual
+      Warehouse and compaction is run on the compacting Hive Virtual Warehouse, the query might
+      fail. The compacting process deletes files and the Impala Virtual Warehouse might not be
+      aware of the deletion. Then when the Impala Virtual Warehouse attempts to read the deleted
+      file, an error can occur. This situation occurs randomly.
+Workaround: Run the INVALIDATE METADATA statement on the
+      transactional (ACID) table to refresh the metadata. This fixes the problem until the next
+      compaction occurs. For information about running this statement, see INVALIDATE METADATA statement.
+Do not use the start/stop icons in Impala Virtual Warehouses version 7.2.2.0-106 or
+      earlier
+Problem: If you use the stop/start icons in Impala Virtual Warehouses version
+      7.2.2.0-106 or earlier, it might render the Virtual Warehouse unusable and make it necessary
+      for you to re-create it.
+Workaround: Do not use the stop/start icons in these older Virtual Warehouses.
+      Instead, these older versions automatically suspend and resume the Impala executors
+      depending on the absence or presence of queries, making manual start or stop unnecessary.
+DWX-6674: Hue connection fails on cloned Impala Virtual Warehouses after upgrading
+Problem: If you clone an Impala Virtual Warehouse from a recently upgraded Impala
+      Virtual Warehouse, and then try to connect to Hue, the connection fails.
+Workaround: Create a new Impala Virtual Warehouse and do not clone from a recently
+      upgraded warehouse. Then the connection to Hue from the new Impala Virtual Warehouse
+      succeeds.
+DWX-5841: Virtual Warehouse endpoints are now restricted to TLS 1.2
+Problem: TLS 1.0 and 1.1 are no longer considered secure, so now Virtual Warehouse
+      endpoints must be secured with TLS 1.2 or later, and then the environment that the Virtual
+      Warehouse uses must be reactivated in CDW. This includes both Hive and Impala Virtual
+      Warehouses. To reactivate the environment in the CDW UI:
+      
+Deactivate the environment. See Deactivating AWS environments or Deactivating Azure environments.
+Activate the environment. See Activating AWS environments or Activating Azure environments
+
+
+Workaround: If environment reactivation is not possible, you can perform manual
+      steps using the kubectl command line tool to pick up the TLS 1.2 endpoint
+      change. Open a terminal window on a system where the kubectl command line
+      tool is installed, log in, and run the following commands:
+      kubectl edit svc nginx-service -n <cluster-name>
+       
+       # Add the following under the metadata.annotations field
+       service.beta.kubernetes.io/aws-load-balancer-ssl-negotiation-policy: "ELBSecurityPolicy-TLS-1-2-2017-01"
+       
+       # Save and quit the editor, and then run the following command to check your changes.
+       
+       kubectl get svc nginx-service -n <cluster-name> -o yaml
+       
+       # Make sure that the annotation you added is present.
+
+DWX-5276: Upgrading an older version of an Impala Virtual Warehouse can result in error
+      state
+Problem: If you upgrade an older version of an Impala Virtual Warehouse (DWX
+      1.1.1.1-4) to the latest version, the Virtual Warehouse can get into an Updating or Error
+      state.
+Workaround: none
+DWX-3914: Collect Diagnostic Bundle option does not work on older
+      environments
+The Collect Diagnostic Bundle menu option in Impala Virtual
+      Warehouses does not work for older environments: 
+
+
+
+Data caching:
+This feature is limited to 200 GB per executor, multiplied by the total number of
+      executors.
+Sessions with Impala continue to run for 15 minutes after the connection is
+      disconnected.
+When a connection to Impala is disconnected, the session continues to run for 15 minutes in
+      case so the user or client can reconnect to the same session again by presenting the
+      session_token. After 15 minutes, the client must re-authenticate to Impala to
+      establish a new connection.
+
+
+
+Parent topic: Known issues and limitations in Cloudera Data Warehouse Public Cloud

@@ -1,0 +1,105 @@
+Backup HDFSCloudera Docs
+Backup HDFS
+You can roll back an upgrade from CDP Private Cloud Base 7 to HDP 3. The rollback
+        restores your HDP cluster to the state it was in before the upgrade. This means any change
+        that happened after taking the backups as instructed from points 4 to 7 will be reverted
+        from the HDFS cluster. You must perform additional steps before upgrading your HDP cluster
+        if you have configured the NameNode HA. 
+
+If you have configured the NameNode HA, then locate the Active NameNode from
+                        Ambari Web > Services > HDFS in the Summary
+                    area.
+
+Check the NameNode directory to ensure that there is no snapshot of any prior
+                    HDFS upgrade. Specifically, using Ambari Web, browse to Services >
+                        HDFS > Configs, and examine the
+                        dfs.namenode.name.dir in the NameNode Directories
+                    property. Make sure that only a /current directory exists
+                    and remove /previous directory on the NameNode host.
+
+Create the following log and other files. The commands below back up additional
+                    state from the file system in addition to what fsImage contains. This
+                    information can be used to validate the filesystem state after the upgrade by
+                    comparing the output before or after the upgrade. This is helpful, but it is not
+                    required for troubleshooting any issues that arise during the upgrade.
+
+
+noteThe fsck or ls command may take a significant amount of time if the
+                            number of blocks or files in HDFS is in the ten to a hundred million or
+                            more range.Authenticate as the HDFS user su -l
+                                    [HDFS_USER]
+
+noteIf the cluster is Kerberized, then you must kinit as the service
+                        principal. If the cluster is not Kerberized, then you must run as a cluster
+                        administrator user or log in as the service user.Run the following, where
+                            [HDFS_USER] is the HDFS Service user. For example, hdfs: 
+
+
+
+Run fsck with the following flags and send the results to a log. The
+                            resulting file contains a complete block map of the file system.  Use
+                            this log later to confirm the upgrade.
+
+hdfs fsck / -files -blocks -locations > dfs-old-fsck-1.log
+
+
+
+Create a list of all the DataNodes in the cluster.
+
+hdfs dfsadmin -report > dfs-old-report-1.log
+
+
+
+Capture the complete namespace of the file system. The following
+                            command does a recursive listing of the root file system:
+
+hdfs dfs -ls -R / > dfs-old-lsr-1.log
+
+
+
+Take a backup of the HDFS data to the backup instance of your HDFS, if
+                            you have such a system.
+
+
+
+Create a backup from the configuration directory under
+                        /etc/hadoop/conf into a backup directory on all of your
+                    hosts.
+
+Save the namespace. As the HDFS user, " su -l [HDFS_USER] ", you must put the
+                    cluster in Safe Mode.
+
+hdfs dfsadmin -safemode enter
+hdfs dfsadmin -saveNamespace
+noteIn a highly-available NameNode configuration, the command hdfs
+                            dfsadmin -saveNamespace sets a checkpoint in the first
+                        NameNode specified in the configuration, in
+                            dfs.ha.namenodes.[nameserviceID]. You can also use the
+                            dfsadmin -fs.
+
+
+Create a backup from the directory located in
+                        $[dfs.namenode.name.dir]/ current into a backup directory.
+                
+
+Create a backup from the directory located in
+                        $[dfs.journalnode.edits.dir]/current into a backup
+                    directory.
+
+As the HDFS user, su -l [HDFS_USER], take the NameNode out of
+                    Safe Mode. hdfs dfsadmin -safemode leave
+
+From this point, you have all the data that might be required to restore HDFS
+                    to the state where it was at the time when HDFS entered safe mode. 
+A few points to consider regarding the backups:
+fsck ls, and other command outputs happened before entering safe mode if
+                            you went step by step over the guide. The guide initiates safe mode
+                            before the commands that require safe mode, however you can enter safe
+                            mode earlier. 
+If you come out of safe mode, and leave the cluster running, then you
+                            are allowing mutations on the filesystem that are not saved in the
+                            backup.
+
+
+
+Parent topic: Backup HDP Cluster

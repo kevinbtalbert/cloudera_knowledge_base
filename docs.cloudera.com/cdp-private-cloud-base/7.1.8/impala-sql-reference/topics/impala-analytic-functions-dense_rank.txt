@@ -1,0 +1,154 @@
+DENSE_RANKCloudera Docs
+DENSE_RANK
+Returns an ascending sequence of integers, starting with 1. The
+              output sequence produces duplicate integers for duplicate values
+              of the ORDER BY expressions. After generating
+              duplicate output values for the tied input values, the
+              function continues the sequence with the next higher integer.
+              Therefore, the sequence contains duplicates but no gaps when the
+              input contains duplicates. Starts the sequence over for each group
+              produced by the PARTITIONED BY clause.
+
+
+Syntax:
+
+DENSE_RANK() OVER([partition_by_clause] order_by_clause)
+ The PARTITION BY clause is optional. The
+                ORDER BY clause is required. The window clause
+              is not allowed. 
+
+Usage notes:
+
+ Often used for top-N and bottom-N queries. For example, it could
+              produce a top 10 report including all the items with the 10
+              highest values, even if several items tied for 1st place. 
+ Similar to ROW_NUMBER and
+              RANK. These functions differ in how they treat
+              duplicate combinations of values. 
+
+Examples:
+
+ The following example demonstrates how the
+                DENSE_RANK() function identifies where each
+              value places in the result set, producing the same result
+              for duplicate values, but with a strict sequence from 1 to the
+              number of groups. For example, when results are ordered by the
+                X column, both 1 values are
+              tied for first; both 2 values are tied for
+              second; and so on. 
+select x, dense_rank() over(order by x) as rank, property from int_t;
++----+------+----------+
+| x  | rank | property |
++----+------+----------+
+| 1  | 1    | square   |
+| 1  | 1    | odd      |
+| 2  | 2    | even     |
+| 2  | 2    | prime    |
+| 3  | 3    | prime    |
+| 3  | 3    | odd      |
+| 4  | 4    | even     |
+| 4  | 4    | square   |
+| 5  | 5    | odd      |
+| 5  | 5    | prime    |
+| 6  | 6    | even     |
+| 6  | 6    | perfect  |
+| 7  | 7    | lucky    |
+| 7  | 7    | lucky    |
+| 7  | 7    | lucky    |
+| 7  | 7    | odd      |
+| 7  | 7    | prime    |
+| 8  | 8    | even     |
+| 9  | 9    | square   |
+| 9  | 9    | odd      |
+| 10 | 10   | round    |
+| 10 | 10   | even     |
++----+------+----------+
+
+ The following examples show how the
+                DENSE_RANK() function is affected by the
+                PARTITION property within the ORDER
+                BY clause. 
+ Partitioning by the PROPERTY column groups all
+              the even, odd, and so on values together, and
+                DENSE_RANK() returns the place of each value
+              within the group, producing several ascending sequences. 
+select x, dense_rank() over(partition by property order by x) as rank, property from int_t;
++----+------+----------+
+| x  | rank | property |
++----+------+----------+
+| 2  | 1    | even     |
+| 4  | 2    | even     |
+| 6  | 3    | even     |
+| 8  | 4    | even     |
+| 10 | 5    | even     |
+| 7  | 1    | lucky    |
+| 7  | 1    | lucky    |
+| 7  | 1    | lucky    |
+| 1  | 1    | odd      |
+| 3  | 2    | odd      |
+| 5  | 3    | odd      |
+| 7  | 4    | odd      |
+| 9  | 5    | odd      |
+| 6  | 1    | perfect  |
+| 2  | 1    | prime    |
+| 3  | 2    | prime    |
+| 5  | 3    | prime    |
+| 7  | 4    | prime    |
+| 10 | 1    | round    |
+| 1  | 1    | square   |
+| 4  | 2    | square   |
+| 9  | 3    | square   |
++----+------+----------+
+
+ Partitioning by the X column groups all the
+              duplicate numbers together and returns the place each value within
+              the group; because each value occurs only 1 or 2 times,
+                DENSE_RANK() designates each X
+              value as either first or second within its group. 
+select x, dense_rank() over(partition by x order by property) as rank, property from int_t;
++----+------+----------+
+| x  | rank | property |
++----+------+----------+
+| 1  | 1    | odd      |
+| 1  | 2    | square   |
+| 2  | 1    | even     |
+| 2  | 2    | prime    |
+| 3  | 1    | odd      |
+| 3  | 2    | prime    |
+| 4  | 1    | even     |
+| 4  | 2    | square   |
+| 5  | 1    | odd      |
+| 5  | 2    | prime    |
+| 6  | 1    | even     |
+| 6  | 2    | perfect  |
+| 7  | 1    | lucky    |
+| 7  | 1    | lucky    |
+| 7  | 1    | lucky    |
+| 7  | 2    | odd      |
+| 7  | 3    | prime    |
+| 8  | 1    | even     |
+| 9  | 1    | odd      |
+| 9  | 2    | square   |
+| 10 | 1    | even     |
+| 10 | 2    | round    |
++----+------+----------+
+
+ The following example shows how DENSE_RANK() produces a continuous
+              sequence while still allowing for ties. In this case, Croesus and Midas both have the
+              second largest fortune, while Crassus has the third largest. (In the RANK
+                function section, you see a similar query with the RANK()
+              function that shows that while Crassus has the third largest fortune, he is the fourth
+              richest person.) 
+select dense_rank() over (order by net_worth desc) as placement, name, net_worth from wealth order by placement, name;
++-----------+---------+---------------+
+| placement | name    | net_worth     |
++-----------+---------+---------------+
+| 1         | Solomon | 2000000000.00 |
+| 2         | Croesus | 1000000000.00 |
+| 2         | Midas   | 1000000000.00 |
+| 3         | Crassus | 500000000.00  |
+| 4         | Scrooge | 80000000.00   |
++-----------+---------+---------------+
+
+
+

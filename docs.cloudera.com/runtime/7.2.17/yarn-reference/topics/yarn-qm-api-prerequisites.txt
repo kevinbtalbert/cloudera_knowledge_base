@@ -1,0 +1,109 @@
+PrerequisitesCloudera Docs
+Prerequisites
+You must first authenticate and obtain the cookies to send a request. 
+
+
+Authenticate and obtain cookie
+
+Log in to Cloudera Manager and get the cookie to send a request. This generates a
+            session cookie that must be provided with every request. If you are using an HTTP client
+            such as Postman, you can copy the cookie value from your browser and add it as a header
+            to your requests. You can also authenticate and obtain the cookie using the command line
+            using cURL, as follows:
+            curl -i -k -v -c cookies.txt -u admin:admin
+http://<cm_host>:7180/api/v41/clusters
+
+This command saves the resulting cookie in cookies.txt. You can
+            use the cookie to make the requests. Run the following command to make the initial
+            validation request.
+            curl -v -k -b cookies.txt -u <username>:<password> -H 'Content-Type: application/json' -X POST -H 'referer:
+http://<cm_host>:7180/cmf/clusters/Cluster%201/queue-manager/'
+http://<cm_host>:7180/cmf/clusters/Cluster%201/queue-manager-api/api/v1/environments/dev/clusters/Cluster%201/resources/scheduler/partitions/default/queues/root.default -d '<request_body>'
+
+
+
+
+Secure cluster (SSL and Kerberos enabled)
+If you are using a cluster secured with SSL and Kerberos, obtain the required
+               certificates.
+ Create a directory on your machine to copy the certificates from the Queue
+                  Manager node. The following command creates the apiCerts
+                  directory. mkdir apiCerts
+
+SSH to your Queue Manager node to obtain the WebApp folder information.
+                  cd /var/run/cloudera-scm-agent/process/
+
+ Copy the certificates from the Queue Manager node to the “apiCerts” directory.
+                  scp -i <your_keypair>
+root@<qm_host>:/var/run/cloudera-scm-agent/process/{12}-queuemanager-QUEUEMANAGER_WEBAPP/cm-auto-host_cert_chain.pem apiCerts/
+
+ Copy the following certificates from the Queue Manager node.
+                  scp -i <your_keypair> 
+root@<qm_host>:/var/run/cloudera-scm-agent/process/12-queuemanager-QUEUEMANAGER_WEBAPP/cm-auto-global_cacerts.pem apiCerts/
+
+scp -i <your_keypair> 
+root@<qm_host>:/var/run/cloudera-scm-agent/process/12-queuemanager-QUEUEMANAGER_WEBAPP/cm-auto-host_cert_chain.pem apiCerts/
+
+scp -i <your_keypair> 
+root@<qm_host>:/var/run/cloudera-scm-agent/process/12-queuemanager-QUEUEMANAGER_WEBAPP/cm-auto-host_key.pem apiCerts/
+
+scp -i <your_keypair> 
+root@<qm_host>:/var/run/cloudera-scm-agent/process/12-queuemanager-QUEUEMANAGER_WEBAPP/cm-auto-host_key.pw apiCerts/
+
+ Decrypt the certificate so that you can use it later in the cURL call.
+                  openssl rsa -passin file:cm-auto-host_key.pw -in cm-auto-host_key.pem -out
+cm-auto-host_key_decrypted.pem
+chmod 644 cm-auto-host_key_decrypted.pem
+ Save the cookie for the API calls.
+                  curl --key cm-auto-host_key_decrypted.pem --cert cm-auto-host_cert_chain.pem --cacert cm-auto-global_cacerts.pem -v -c cookies_ssl.txt -u admin:admin https://<cm_host>:7183/api/v41/clusters 
+
+Make the initial validation
+                     request.curl --key cm-auto-host_key_decrypted.pem --cert cm-auto-host_cert_chain.pem --cacert cm-auto-global_cacerts.pem -v -b cookies_ssl.txt -u admin:admin -H 'Content-Type: application/json' -X POST -H 'referer: https://<cm_host>:7183/cmf/clusters/Cluster%201/queue-manager/' https://<cm_host>:7183/cmf/clusters/Cluster%201/queue-manager-api/api/v1/environments/dev/clusters/Cluster%201/resources/scheduler/partitions/default/queues/root.default\?validate=true\&startsafemode=60 -d '<request_body>
+
+
+
+
+
+
+Initialization
+Before using Queue Manager, you must initialize the back-end with information about the
+          cluster. This is usually done using a POST request from the UI with information obtained
+          from the Cloudera Manager, which you can find in various places in the Cloudera Manager
+          UI.The information can also be found in session storage after navigating to the
+          Queue Manager UI. Refer your browser documentation for information about viewing session
+          storage. For example, to view session storage in Chrome, see View Session Storage.
+          POST http://<cm_host>:7180/cmf/clusters/Cluster%201/queue-manager-api/api/v1/environments/dev/clusters
+
+{
+  "provisioner": "CLOUDERA_MANAGER",
+  "provisionerUrl": "<cm_host>:<port (7180 or if secure cluster, 7183)>",
+  "clusters": [
+    {
+      "rmUrl": <resource manager URL(s)>,
+      "clusterId": <cluster id>,
+      "yarnServiceName": <service name>,
+      "rmRoleConfigGroup": <resource manager group name>
+    }
+  ]
+}
+Sample request
+POST http://my-cluster-1.my-cluster.root.hwx.site:7180/cmf/clusters/Cluster%201/queue-manager-api/api/v1/environments/dev/clusters
+
+{
+  "provisioner": "CLOUDERA_MANAGER",
+  "provisionerUrl": "my-cluster-1.my-cluster.root.hwx.site:7180",
+  "clusters": [
+    {
+      "rmUrl": "my-cluster-2.my-cluster.root.hwx.site:7180",
+      "clusterId": "Cluster 1",
+      "yarnServiceName": "YARN-1",
+      "rmRoleConfigGroup": "YARN-1-RESOURCEMANAGER-BASE"
+    }
+  ]
+}You
+          can use a comma separated list to add multiple URLs of the Resource Manager.noteYou must
+            initialize the Queue Manager backend with information about the cluster whenever the
+            Queue Manager service is restarted. 
+
+
+Parent topic: Configuring and using Queue Manager REST API

@@ -1,0 +1,72 @@
+Checking that Atlas is up-to-dateCloudera Docs
+Checking that Atlas is up-to-date
+Follow the steps below to ensure that Atlas is up-to-date and has processed all the
+    lineage data in Kafka.
+SSH into the master node of your light duty Data Lake.Switch to the super user for the node by running sudo
+        su.Copy over the following script into a file called
+            check_atlas_updated.sh:
+#!/usr/bin/env bash
+
+# Determine Atlas keytab path.
+ATLAS_KT=$(find / -wholename "*atlas-ATLAS_SERVER/atlas.keytab" 2>/dev/null | head -n 1)
+
+# Setup required configuration files if needed.
+if [[ ! -f jaas.conf ]]; then
+	ATLAS_PRINCIPAL=$(klist -kt "${ATLAS_KT}" | grep -o -m 1 "atlas\/\S*")
+	printf "KafkaClient {
+	\tcom.sun.security.auth.module.Krb5LoginModule required
+	\tuseKeyTab=true
+	\tkeyTab=\"%s\"
+	\tprincipal=\"%s\";\n};\n" "${ATLAS_KT}" "${ATLAS_PRINCIPAL}" > jaas.conf
+fi
+
+if [[ ! -f client.config ]]; then
+	printf "security.protocol=SASL_SSL\nsasl.kerberos.service.name=kafka\n" > client.config
+fi
+
+# Determine the Kafka bootstrap server to use.
+KAFKA_SERVER=$(grep --line-buffered -oP "atlas.kafka.bootstrap.servers=\K.*" \
+	/etc/atlas/conf/atlas-application.properties | awk -F',' '{print $1}')
+
+# Export Kafka-specific environment variables.
+export KAFKA_HEAP_OPTS="-Xms512m -Xmx1g"
+export KAFKA_OPTS="-Djava.security.auth.login.config=${PWD}/jaas.conf"
+
+# Kinit into Atlas keytab as Atlas user.
+kinit -kt "$ATLAS_KT" "atlas/$(hostname -f)" 2>/dev/null
+
+# Obtain Atlas lineage information.
+LINEAGE_INFO=$(/opt/cloudera/parcels/CDH/lib/kafka/bin/kafka-consumer-groups.sh \
+	--bootstrap-server "${KAFKA_SERVER}" --describe --group atlas \
+	--command-config="${PWD}/client.config" 2>/dev/null \
+	| awk '{print $2, $6}')
+
+if [[ -z "$LINEAGE_INFO" ]]; then
+	echo "*ERROR*: Unable to get lineage info for Atlas. Please look at the created configuration files to make sure they look correct."
+	exit 1
+fi
+
+# Parse lineage information and determine if Atlas is out of date.
+LINEAGE_LAG_VALS=($LINEAGE_INFO)
+NUM_LAG_VALS=${#LINEAGE_LAG_VALS[@]}
+OUT_OF_DATE_TOPICS=""
+for (( i = 2; i < ${NUM_LAG_VALS}; i += 2 )); do
+	if [[ ${LINEAGE_LAG_VALS[${i} + 1]} != '-' && ${LINEAGE_LAG_VALS[${i} + 1]} != '0' ]]; then
+    	OUT_OF_DATE_TOPICS="${OUT_OF_DATE_TOPICS}${LINEAGE_LAG_VALS[$i]}, "
+	fi
+done
+
+if [[ -z "$OUT_OF_DATE_TOPICS" ]]; then
+	echo "Atlas is up to date! Feel free to continue with the migration."
+else
+	echo "The following Atlas topics are not up to date: ${OUT_OF_DATE_TOPICS%??}!"
+	echo "Please wait until Atlas is entirely up to date before continuing with the migration."
+fi
+
+Allow the new script to be run by running chmod +x
+            check_atlas_updated.shRun the script with ./check_atlas_updated.sh. The script will tell
+          you if Atlas is up to date or not. If it isn’t, wait a while and check again. You should
+          only begin the scaling process if the script tells you that Atlas is up to
+        date.
+
+Parent topic: Data Lake Scaling

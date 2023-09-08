@@ -1,0 +1,164 @@
+Upgrade FreeIPACloudera Docs
+Upgrade FreeIPA
+To ensure that your FreeIPA nodes are running with the latest patches, you should
+  periodically upgrade your FreeIPA cluster.
+FreeIPA is the core component of an environment that runs on one or more
+   instances.
+To ensure that your FreeIPA nodes are running with the latest patches, you should periodically
+   upgrade your FreeIPA cluster. CDP currently allows you to upgrade all FreeIPA clusters, updating
+   OS-level security patches on the cluster nodes. The upgrade process includes launching entirely
+   new instances with the new OS image.
+The upgrade process is a rolling upgrade consisting of the following steps: 
+
+
+A new instance is provisioned from a newer image.
+
+
+CDP validates that the new node is reachable, all services are up, and that
+     replication works. 
+
+
+The old instance is removed. 
+
+
+If there is more than one instance in the cluster, the previous 3 steps are
+     repeated for the second instance only after the first instance has been successfully upgraded.
+    
+
+
+Your environment remains functional during the upgrade process, with an exception of
+   a short (one minute or less) downtime. 
+During FreeIPA provisioning a full backup is performed and there are periodic
+   incremental backups afterwards. These backups can be used in case a recovery is needed.
+Use either the CDP web interface or CDP CLI to initiate an upgrade. The upgrade
+   process takes about one hour; The duration varies depending on the cloud provider and the number
+   of nodes.
+Performing a FreeIPA upgrade
+
+You can trigger the FreeIPA upgrade via CDP web interface or CDP CLI. The upgrade option from the Actions menu is always available, but once you click on
+      it, you will get to the page that actually allows you to upgrade. On this page, the button
+      that allows you to upgrade is only enabled when there are updates available. Required
+      roles: EnvironmentAdmin or Owner of the environment 
+
+Steps
+CDP UICDP CLI
+
+
+Log in to the CDP web interface.
+
+
+From the navigation pane, select Environments.
+
+
+Click on your environment.
+
+
+Click on the Summary tab.
+
+
+Scroll down to the FreeIPA section.
+
+
+Click on Actions > Upgrade FreeIPA:
+
+
+
+Review the information presented on the FreeIPA Upgrade page. This page shows information
+       related to your current base image and the target base image that will be used for
+       provisioning new instances during the upgrade process. Once you’ve reviewed the information,
+       click on Upgrade.
+
+
+The upgrade process starts. During the upgrade, FreeIPA status switches to “Update in
+       progress”, but the environment remains available. A new instance is provisioned, then the old
+       instance is removed: 
+
+
+
+
+
+If more than one instance is present, the process is repeated for the additional
+       instances. 
+Once the upgrade is completed, the FreeIPA status changes to “Running”: 
+
+
+
+Note that environment status does not change during the FreeIPA upgrade process and
+      environment’s Event History does not include any related updates. 
+
+Use the following command to trigger FreeIPA
+      upgrade:cdp environments upgrade-freeipa --environment-name <ENVIRONMENT_NAME_OR_CRN>For
+      example: cdp environments upgrade-freeipa --environment-name my-env
+The command will return a JSON including target and original image information and the
+      operation ID.
+{
+    "targetImage": {
+        "catalog": "https://gist.githubusercontent.com/lacikaaa/c096c999ade874a60bf15be897220eed/raw/e30ed12b14c77175b82ceb9caf26500ab1340f26/freeipa-test-catalog.json",
+        "id": "9c1c8959-86a7-4b7d-af5a-be252f8b395d",
+        "os": "centos7",
+        "imageName": "ami-0dfafedeed3a4474f",
+        "date": "2021-06-10"
+    },
+    "originalImage": {
+        "catalog": "https://gist.githubusercontent.com/lacikaaa/c096c999ade874a60bf15be897220eed/raw/e30ed12b14c77175b82ceb9caf26500ab1340f26/freeipa-test-catalog.json",
+        "id": "0b73e149-6e22-4667-acc5-1d0ba82f8245",
+        "os": "centos7",
+        "imageName": "ami-030e1d907cfa5ca33",
+        "date": "2021-06-04"
+    },
+    "operationId": "28432209-a4ff-4aea-a8ec-4604d67cdb7c"
+}Use
+      the following command to track the progress of the upgrade
+      process:cdp environments get-repair-freeipa-status --operation-id <OPERATION-ID-FROM-UPGRADE-FREEIPA-COMMAND-OUTPUT>The
+      operation ID can be obtained from the output of the upgrade-freeipa
+      command.
+
+In rare cases, the FreeIPA upgrade process might fail. In such cases, you should trigger a
+    retry of the FreeIPA upgrade. 
+
+Retry a FreeIPA upgrade
+In rare cases, the FreeIPA upgrade process might fail. In such cases, you should
+    trigger a retry of the FreeIPA upgrade.
+Steps
+CDP UICDP CLI
+If you are performing the upgrade via CDP web interface, you can find the retry
+    option in the same FreeIPA Actions menu where the upgrade option is located: 
+
+
+The Retry option is grayed out if there is no reason to trigger the repair
+    and is only enabled when FreeIPA upgrade encounters problems. 
+
+If you would like to trigger the repair via CDP CLI, use the following
+    command:cdp environments retry-freeipa –environment <MY-ENVIRONMENT-NAME-OR-CRN>
+The command returns an operation ID that you can pass in the following command to track the
+    status of the repair:
+    cdp environments get-repair-freeipa-status --operation-id <OPERATION-ID-FROM-UPGRADE-FREEIPA-COMMAND-OUTPUT>
+
+
+Troubleshooting
+
+
+
+Issue
+Workaround
+
+
+
+After performing a FreeIPA upgrade, CDW VMs are broken due to the new FreeIPA server
+         instances' IP addresses not being reflected in CDW.
+Manually restart every cdp-coredns-updater pod running in your CDW
+         Kubernetes cluster namespace.
+
+
+After performing a FreeIPA upgrade, CML workspaces are broken because the IP addresses 
+         of the new FreeIPA 
+         server instances are not reflected in CML.
+Restart the cdp-coredns-updater pod by running kubectl delete -n kube-system 
+         $(kubectl get pods -n kube-system -l app.kubernetes.io/name=cdp-coredns-updater --no-headers 
+         -o name) against your CML kubernetes cluster as soon as the FreeIPA upgrade has completed.
+
+
+
+
+
+Related informationRepair FreeIPA

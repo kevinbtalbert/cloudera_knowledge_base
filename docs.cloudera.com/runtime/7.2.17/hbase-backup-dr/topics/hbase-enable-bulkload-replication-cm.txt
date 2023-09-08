@@ -1,0 +1,112 @@
+Enable bulk load replication using Cloudera ManagerCloudera Docs
+Enable bulk load replication using Cloudera Manager
+You can enable bulk load replication using Cloudera Manager.
+
+If you have enabled Kerberos cross-realm authentication:
+
+At the command line, use the list_principals command to list
+                    the kdc, admin_server, and
+                        default_domain for each realm.
+Add this information to each cluster using Cloudera Manager. For each cluster,
+                    go to HDFS > Configuration > Trusted Kerberos Realms. Add the target and source realms. This requires a restart of
+                    HDFS.
+Enter a Reason for change, and then click Save Changes to
+                    commit the changes. Restart the role and service when Cloudera Manager prompts
+                    you to restart.
+
+
+
+Go to the source cluster from which you want to replicate the buck loaded
+                    data.
+
+Go to HBase > Configuration.
+
+Select Scope > (Service-Wide). 
+
+Locate the HBase Service Advanced Configuration Snippet (Safety Valve)
+                        for hbase-site.xml property or search for it by typing its name in
+                    the Search box.
+
+Add the following property values:
+
+
+Name: hbase.replication.bulkload.enabledValue:
+                                trueDescription: Enable bulk load replication
+Name: hbase.replication.cluster.id Value: source1Description:
+                                Provide a source cluster-ID. For example, source1. 
+
+
+
+Manually copy and paste the source cluster’s HBase client configuration files
+                    in the target cluster where you want the data to be replicated. Copy
+                        core-site.xml, hdfs-site.xml, and
+                        hbase-site.xml to the target cluster. Do this for all
+                    RegionServers.
+
+Go to the target cluster where you want the data to be replicated. 
+
+Go to HBase > Configuration.
+
+Select Scope > (Service-Wide). 
+
+Locate the HBase Service Advanced Configuration Snippet (Safety Valve)
+                        for hbase-site.xml property or search for it by typing its name in
+                    the Search box.
+
+Add the following property value:
+
+
+Name: hbase.replication.conf.dir Value:
+                                /opt/cloudera/fs_confDescription: Path to the configuration
+                                directory where the source cluster’s configuration files have been
+                                copied. The path for copying the configuration file is
+                                [hbase.replication.conf.dir]/[hbase.replication.cluster.id],
+                                i.e.:/opt/cloudera/fs_conf/source/
+
+
+
+Restart the HBase service on both clusters to deploy the new
+                    configurations.
+
+important
+
+
+In the target cluster, ensure that you copy the
+                                    configuration files to the path set in
+                                    [hbase.replication.conf.dir]. There, you must create a directory
+                                    with the [hbase.replication.cluster.id] name. 
+
+
+Make sure to set the correct file permissions to hbase user using
+                                    the command:
+                                    chown -R hbase:hbase /opt/cloudera/fs_conf/source
+
+
+
+
+
+Add the peer to the source cluster as you would with normal replication.
+
+
+In the HBase shell, add the target cluster as a peer using the following
+                            command:
+                            add_peer '1', CLUSTER_KEY => '<cluster_name>:<hbase_port>:/hbase'
+Enable the replication for the table to which you will be bulk loading
+                            data using the
+                            command:enable_table_replication 'IntegrationTestBulkLoad'
+Alternatively, you can allow replication on a column family using the
+                            command:
+                            disable ‘IntegrationTestBulkLoad’
+alter 'IntegrationTestBulkLoad', {NAME => ‘D’, REPLICATION_SCOPE => '1'}
+enable ‘IntegrationTestBulkLoad’
+
+
+
+
+You can verify if BulkLoad Replication is working in your set up by
+                        following the example in this blog post:
+https://blog.cloudera.com/blog/2013/09/how-to-use-hbase-bulk-loading-and-why/
+
+
+
+Parent topic: Configure bulk load replication

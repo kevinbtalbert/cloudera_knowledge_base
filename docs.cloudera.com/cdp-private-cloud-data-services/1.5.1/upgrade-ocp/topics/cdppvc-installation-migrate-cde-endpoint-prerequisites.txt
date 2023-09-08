@@ -1,0 +1,107 @@
+Prerequisites for upgrading CDE Service with endpoint stabilityCloudera Docs
+Prerequisites for upgrading CDE Service with endpoint stability
+You must first download the docker image and create the
+            cde-upgrade-util.properties file to back up the Cloudera Data
+        Engineering (CDE) service.
+Download the dex-upgrade-utils docker image tarball. The file
+                    naming convention is
+                        dex-upgrade-utils-<version-number>-<build-number>.tar.gz.
+
+Load the downloaded image into the host machine docker runtime:
+
+docker load < dex-upgrade-utils-<version-number>-<build-number>.tar.gz
+Example:
+docker load < dex-upgrade-utils-1.19.1-b184.tar.gz
+
+
+ Create a directory in the host machine and export that path as
+                        BASE_WORK_DIR.
+
+mkdir <host_machine_path>
+export BASE_WORK_DIR=<host_machine_path>
+Example: 
+mkdir /opt/backup-restore
+export BASE_WORK_DIR=/opt/backup-restore
+
+
+Create backup and secrets directories
+                    in the BASE_WORK_DIR directory. The
+                        secrets directory stores the
+                        kubeconfig and CDP DE Admin credentials
+                    files. The backup directory will store the
+                    backup file which will be generated when you backup the CDE Service. 
+
+cd $BASE_WORK_DIR
+mkdir backup secrets
+
+
+Place the CDP credentials file of the
+                        DEAdmin user and administrator
+                    kubeconfig file in the $BASE_WORK_DIR/secrets directory.
+                
+
+Create the cde-upgrade-util.properties file with the
+                    information described below and save it in the
+                        $BASE_WORK_DIR directory. 
+
+cdp_k8s_namespace:<CDP control plane k8s namespace>
+cdp_endpoint:<CDP control plane endpoint>
+credential_file_path:<Path to the DEAdmin user CDP credentials file>
+de_admin_user:<DEAdmin user-id>
+de_admin_password:<DEAdmin user's password must be in base64 encoded format. Use the echo -n <password> | base64  command to encode the password. >
+tls_insecure:<Keep it false if you are using a self-signed certificate>
+auto_unpause_jobs: <Specify it as “true” if you want to automatically resume the jobs that were paused during the backup phase. The jobs will be resumed after you restore the CDE service.>
+platform_type:<Platform type, can be ECS (Embedded Container Service) or OCP (OpenShift Container Platform)>
+Example:
+$ cat $BASE_WORK_DIR/cde-upgrade-util.properties
+
+cdp_k8s_namespace=cdp-test
+cdp_endpoint=https://console-cdp-test.apps.cluster.example.com
+credential_file_path=/home/dex/.cdp/credentials
+de_admin_user=user
+de_admin_password=cGFzc3dvcmQ=
+tls_insecure=true
+auto_unpause_jobs=true
+platform_type=ECS
+noteYou must always set the value of the
+                            credential_file_path property as
+                            /home/dex/.cdp/credentials and should not be
+                        changed. 
+warningYou can specify the
+                            cdp_env_override:<environment-name> optional
+                        property in the cde-upgrade-util.properties file, if
+                        you want to change the environment of the CDE service that is being
+                        restored. But, if you change the environment during restore, it will lead to
+                            loss of old spark jobs’ logs and event logs that were
+                        there in the old virtual clusters. 
+
+
+Make a note of the details of the CDE service that is being migrated. This
+                    information is required if you are using a CDP database that is external and is
+                    not accessible from the container which is running the
+                        cde-upgrade endpoint stability commands. Identify the
+                    cluster endpoint:
+
+
+In the Cloudera Data Platform (CDP) console,
+                            click the Data Engineering tile. The CDE
+                                Home page displays. 
+Click Administration in the left navigation menu.
+                            The Administration page displays. 
+In the Services column on the left, click  icon corresponding to the CDE service whose
+                            endpoint you want to migrate. 
+Make a note of the CDE cluster ID. 
+
+
+
+During the restore operation, both old and the new CDE services use the same
+                    resources allocated to existing CDE service. Hence, you must double the resource
+                    pool size using the Quota Management option. For example, if
+                        root.default.sales is the pool that is used for the old
+                    or existing CDE service, you must double the CPU and memory resources of this
+                    pool. Also, make sure that you have sufficient hardware when doubling the
+                    resource pool size.
+You must now expand the resource pool, and then upgrade your CDP platform before you
+            restore the CDE service. For information about configuring resource pool and capacity,
+            see Managing cluster resources using Quota Management
+Parent topic: Pre-upgrade - Upgrading CDE Service with Endpoint Stability

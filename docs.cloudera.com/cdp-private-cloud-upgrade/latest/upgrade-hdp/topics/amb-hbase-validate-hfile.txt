@@ -1,0 +1,140 @@
+Validate HFileCloudera Docs
+Validate HFile
+Before upgrading to CDP Private Cloud Base, ensure that your
+        HFiles are compatible with the version Apache HBase in CDP.
+
+If your cluster is Kerberized, ensure that you run the
+                    kinit command as a hbase user before running
+                the pre-upgrade commands.
+
+importantEnsure that you complete all the pre-upgrade steps listed in
+                        Preparing HBase for upgrade if you have Apache HBase installed
+                    in your existing HDP cluster.
+
+
+
+After converting all the PREFIX_TREE encoded HFiles to a supported format, there may
+                be HFiles that are not compatible with HBase in CDP. Run the
+                    validate-hfile command again on the cluster that has the HDP
+                intermediate bits. Also check for bad state of HFiles using the
+                    hbck command.
+Use the following pre-upgrade commands to validate HFiles:
+
+hbase pre-upgrade validate-hfile
+
+
+hbase hbck
+
+
+The validate-hfile tool lists all the corrupt HFiles with details.
+                The hbck
+
+
+
+Use the CDP parcel to run the pre-upgrade commands. Cloudera recommends that you run
+                them on an HMaster host.
+
+
+Run the hbase pre-upgrade validate-hfile command on the
+                    cluster that has the HDP intermediate bits.
+This command checks every HFile (including snapshots) to ensure
+                        that the HFiles are not corrupted and have the compatible block encoding. It
+                        opens every HFile, and this operation can take a long time based on the size
+                        and number of HFiles in your cluster.For example, if you are using the
+                    HDP 7.1.2.0-96 intermediate bits, you must run the following command:
+/usr/hdp/7.1.2.0-96/hbase/bin/hbase pre-upgrade validate-hfile
+
+If there are no incompatible HFiles, the following message is displayed:
+Checked 3 HFiles, none of them are corrupted.
+   There are no incompatible HFiles.
+If you have an incompatible HFile, a similar error message to this is
+                        displayed:2018-06-05 16:20:47,322 INFO  [main] tool.HFileContentValidator: Corrupted file: hdfs://example.com:8020/hbase/data/default/t/72ea7f7d625ee30f959897d1a3e2c350/prefix/7e6b3d73263c4851bf2b8590a9b3791e
+2018-06-05 16:20:47,383 INFO  [main] tool.HFileContentValidator: Corrupted file: hdfs://example.com:8020/hbase/archive/data/default/t/56be41796340b757eb7fff1eb5e2a905/f/29c641ae91c34fc3bee881f45436b6d1
+If
+                        you get an error message, continue with Step 2 otherwise skip to Step
+                    5.
+
+Identify what kind of HFiles were reported in the error message.
+ The report can contain two different kinds of HFiles, they differ in their
+                        path:
+If an HFile is in /hbase/data then it belongs to a
+                            table.
+If an HFile is located under /hbase/archive/data then
+                            it belongs to a snapshot.
+
+
+Fix the HFiles that belong to a table.
+
+
+Get the table name from the output.
+Our example output showed the /hbase/data/default/t/…
+                            path, which means that the HFile belongs to the t table
+                            which is in the default namespace.
+
+
+Rewrite the HFiles by issuing a major compaction. Use the old
+                            installation.
+shell> major_compact 't'
+When compaction is finished, the invalid HFile
+                            disappears.
+
+
+
+Fix the HFiles that belong to a snapshot that is needed. Use the old
+                    installation.
+
+
+Find the snapshot which refers the invalid HFile. You can do this using
+                            a shell script and the following example code. In our example output,
+                            the HFile is  29c641ae91c34fc3bee881f45436b6d1:
+
+#!/bin/bash
+# Find the snapshot which referes to the invalid HFile
+for snapshot in $(hbase snapshotinfo -list-snapshots 2> /dev/null | cut -f 1 -d \|); 
+do
+echo "checking snapshot named '${snapshot}'"
+ hbase snapshotinfo -snapshot "${snapshot}" -files 2> /dev/null | grep 29c641ae91c34fc3bee881f45436b6d1
+done
+
+The following output means that the invalid file belongs to the
+                                    t_snap snapshot:
+                                checking snapshot names 't__snap'
+ 1.0 K t/56be41796340b757eb7fff1eb5e2a905/f/29c641ae91c34fc3bee881f45436b6d1 (archive)
+
+
+
+Convert snapshot to another HFile format if data encoding is the issue
+                            using the following command:
+
+# creating a new namespace for the cleanup process
+hbase> create_namespace 'pre_upgrade_cleanup'
+# creating a new snapshot
+hbase> clone_snapshot 't_snap', 'pre_upgrade_cleanup:t'
+hbase> alter 'pre_upgrade_cleanup:t', { NAME => 'f', DATA_BLOCK_ENCODING => 'FAST_DIFF' }
+hbase> major_compact 'pre_upgrade_cleanup:t'
+
+
+importantConfirm if the major compaction is complete
+                                    in the RegionServer Web user interface or the RegionServer logs
+                                    before you run the following commands to remove invalid
+                                    snapshots. If the major compaction process is not completed when
+                                    you delete the snapshot, your files may get corrupted.
+
+# removing the invalid snapshot
+hbase> delete_snapshot 't_snap'
+# creating a new snapshot
+hbase> snapshot 'pre_upgrade_cleanup:t', 't_snap'
+# removing temporary table
+hbase> disable 'pre_upgrade_cleanup:t'
+hbase> drop 'pre_upgrade_cleanup:t'
+hbase> drop_namespace 'pre_upgrade_cleanup'
+
+
+
+
+
+Run the hbck command on to identify HFiles in a bad state and
+                    remedy those HFiles.
+
+
+Parent topic: Preparing HBase for upgrade

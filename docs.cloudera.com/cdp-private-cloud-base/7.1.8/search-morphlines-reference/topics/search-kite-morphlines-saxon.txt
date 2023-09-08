@@ -1,0 +1,407 @@
+kite-morphlines-saxonCloudera Docs
+kite-morphlines-saxon
+This maven module contains morphline commands for reading, extracting and transforming
+    XML and HTML with XPath, XQuery and XSLT.
+convertHTML
+The convertHTML command (source code) converts any HTML to XHTML, using the
+          TagSoup Java library.
+Instead of parsing well-formed or valid XML, this command parses HTML as it is found in the
+        wild: poor, nasty and brutish, though quite often far from short. TagSoup (and hence this
+        command) is designed for people who have to process this stuff using some semblance of a
+        rational application design. By providing this converter, it allows standard XML tools to be
+        applied to even the worst malformed HTML.
+The command reads an InputStream or byte array from the first attachment (field
+        _attachment_body) of the input record, parses it as HTML and replaces the field with UTF-8
+        encoded XHTML.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+supportedMimeTypes
+null
+Optionally, require the input record to match one of the MIME types in this
+                list.
+
+
+charset
+null
+The character encoding to use for parsing input, for example, UTF-8. If none is
+                specified the charset specified in the _attachment_charset input field is used
+                instead.
+
+
+noNamespaces
+true
+A value of false indicates namespace URIs and unprefixed local names for
+                element and attribute names will be available.
+
+
+noCDATA
+false
+A value of true indicates that the parser will treat CDATA elements
+                specially.
+
+
+noBogons
+false
+A value of true indicates that the parser will ignore unknown elements.
+
+
+emptyBogons
+false
+A value of true indicates that the parser will give unknown elements a content
+                model of EMPTY; a value of false, a content model of ANY.
+
+
+noRootBogons
+false
+A value of true indicates that the parser will allow unknown elements to be the
+                root element.
+
+
+noDefaultAttributes
+false
+A value of true indicates that the parser will return default attribute values
+                for missing attributes that have default values.
+
+
+noColons
+false
+A value of true indicates that the parser will translate colons into
+                underscores in names.
+
+
+noRestart
+false
+A value of true indicates that the parser will attempt to restart the
+                restartable elements.
+
+
+suppressIgnorableWhitespace
+true
+A value of false indicates that the parser will transmit whitespace in
+                element-only content via the SAX ignorableWhitespace callback.
+
+
+Example usage:
+convertHTML {
+  charset : UTF-8
+}
+
+xquery
+The xquery command (source code) parses an InputStream that contains an
+        XML document and runs the given W3C XQuery over the XML document, using the Saxon Java library.
+        For each item in the query result sequence, the command emits a corresponding morphline
+        record.
+The command reads an InputStream or byte array from the first attachment (field
+        _attachment_body) of the input record.
+Per the W3C specs, every valid XPath (e.g. //tweets/tweet[@color='blue']) is also a valid
+        XQuery. If you are comfortable with XPath you are already almost there.
+An XQuery result sequence contains zero or more items such as element nodes, attribute
+        nodes, text nodes, atomic values, etc. For each item in the query result sequence, the
+        morphline command converts the item to a record and pipes that record to the next morphline
+        command. For an attribute node the attribute's XPath string value is filled into the record field named after the attribute name.
+        For an element node the attributes and children of the element are treated as follows: The
+        XPath string value of the attribute or child is filled into the record field named after the
+        child's name.
+For example, in order to generate two morphline records, the first morphline record with a
+          firstName field that contains Joe, as well as a
+          lastName field that contains Bubblegum, and the second
+        morphline record with a firstName field that contains
+          Alice, as well as a lastName field that contains
+          Pellegrino, your xquery command should be formulated such that it outputs
+        two XML fragments like this:
+<record>
+ <firstName>Joe</firstName>
+ <lastName>Bubblegum</lastName>
+</record>
+
+<record>
+ <firstName>Alice</firstName>
+ <lastName>Pellegrino</lastName>
+</record>
+The xquery command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+supportedMimeTypes
+null
+Optionally, require the input record to match one of the MIME types in this
+                list.
+
+
+languageVersion
+"1.0"
+Must be "1.0" for XQuery 1.0 or "3.0" for XQuery 3.0.
+
+
+features
+null
+An optional JSON object containing zero or more name-value pairs that represent
+                configuration properties for Saxon features.
+
+
+extensionFunctions
+[]
+An optional list of Java class names that implement custom Saxon extension
+                functions. Each such Java class must implement net.sf.saxon.s9api.ExtensionFunction
+                as described in the Saxon documentation.
+
+
+fragments
+n/a
+An array containing exactly one fragment JSON object, as described
+                below.
+
+
+Each fragment provides the following configuration
+                options:
+
+
+fragmentPath
+n/a
+Currently must be "/"
+
+
+externalVariables
+null
+An optional JSON object containing zero or more name-value pairs that are bound
+                and passed in as external variables to the query. Example: myVar : "hello
+                world"
+
+
+externalFileVariables
+null
+An optional JSON object containing zero or more name-path pairs that refer to
+                XML files on the local file system, and are bound and passed in as external
+                variables to the query. These files are loaded once on program startup and
+                subsequently remain memory resident across queries. This can be used for efficient
+                joins where the join table is static and fits into main memory. Example: myDoc :
+                src/test/resources/testdocuments/helloworld.xml
+
+
+queryFile
+null
+A relative or absolute path of a local file from which to load the
+                query.
+
+
+queryString
+null
+An inline string from which to load the query. One of queryFile or queryString
+                must be present, but not both. Example: """/tweets/tweet"""
+
+
+noteThe morphline configuration file is implemented using the HOCON
+        format (Human Optimized Config Object Notation). HOCON is basically JSON slightly adjusted
+        for the configuration file use case. HOCON syntax is defined at HOCON github page and as such, multi-line strings are similar to
+        Python or Scala, using triple quotes. If the three-character sequence """
+        appears, then all Unicode characters until a closing """ sequence are used
+        unmodified to create a string value.
+Example usage:
+xquery {
+  fragments : [
+    {
+      fragmentPath : "/"
+      externalVariables : {
+        myVariable : "hello world"
+      }            
+      queryString : """
+        (: Example test xquery :)        
+        
+        declare variable $myVariable as xs:string external;
+        
+        for $tweet in /tweets/tweet
+        return 
+        <record>
+          {$tweet/@id} 
+          {$tweet/user/@screen_name} 
+          <myStatusCounts>{string($tweet/user/@statuses_count)}</myStatusCounts>
+          <text>{$tweet/text}</text>
+          <greeting>{$myVariable}</greeting>
+        </record>
+      """
+    }
+  ]
+}
+Here is an example output record for the query above:
+id:11111112
+screen_name:fake_user1
+myStatusCounts:11111
+text:Come, see new hot tub under Redwood Tree!
+greeting:hello world
+More example usage:
+xquery {
+  fragments : [
+    {
+      fragmentPath : "/"
+      queryString : """
+        (: Example xquery :)
+        for $req in /request
+        return
+          <record>
+            <date> { string($req/data/agreementDate) } </date>
+            <tradeId> { string($req/trade/@tradeId) } </tradeId>              
+            <partyId>
+              {
+                for $keyword in $req/trade/keyWords/keyword 
+                  where $keyword/name = "memberId"
+                    return string($keyword/value)                  
+              }
+            </partyId>
+            <fullText> { $req } </fullText>
+        </record>
+      """
+    }
+  ]
+}
+More examples can be found in the unit tests.
+Here is an example extension function along with a
+        corresponding example xquery.
+For more background, see resources such as the XQuery Primer and XQuery FLOWR Tutorial and XQuery: A Guided Tour and Wikipedia.
+
+xslt
+The xslt command (source code) parses an InputStream that contains an
+        XML document and runs the given W3C XSL Transform over the XML document, using the Saxon Java library.
+        For each item in the query result sequence, the command emits a corresponding morphline
+        record.
+The command reads an InputStream or byte array from the first attachment (field
+        _attachment_body) of the input record.
+An XSLT result sequence contains zero or more items such as element nodes, attribute nodes,
+        text nodes, atomic values, etc. For each item in the query result sequence, the morphline
+        command converts the item to a record and pipes that record to the next morphline command.
+        For an attribute node the attribute's XPath string value is filled into the record field named after the attribute name.
+        For an element node the attributes and children of the element are treated as follows: The
+        XPath string value of the attribute or child is filled into the record field named after the
+        child's name.
+For example, in order to generate two morphline records, the first morphline record with a
+          firstName field that contains Joe, as well as a
+          lastName field that contains Bubblegum, and the second
+        morphline record with a firstName field that contains
+          Alice, as well as a lastName field that contains
+          Pellegrino, your xslt command should be formulated such that it outputs
+        two XML fragments like this:
+<record>
+ <firstName>Joe</firstName>
+ <lastName>Bubblegum</lastName>
+</record>
+
+<record>
+ <firstName>Alice</firstName>
+ <lastName>Pellegrino</lastName>
+</record>
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+supportedMimeTypes
+null
+Optionally, require the input record to match one of the MIME types in this
+                list.
+
+
+features
+null
+An optional JSON object containing zero or more name-value pairs that represent
+                configuration properties for Saxon features.
+
+
+extensionFunctions
+[]
+An optional list of Java class names that implement custom Saxon extension
+                functions. Each such Java class must implement net.sf.saxon.s9api.ExtensionFunction
+                as described in the Saxon documentation.
+
+
+fragments
+n/a
+An array containing exactly one fragment JSON object, as described
+                below.
+
+
+Each fragment provides the following configuration
+                options:
+
+
+fragmentPath
+n/a
+Currently must be "/"
+
+
+parameters
+null
+An optional JSON object containing zero or more name-value pairs that are bound
+                and passed in as XSLT parameters to the query. Example: myVar
+                : "hello world"
+
+
+fileParameters
+null
+An optional JSON object containing zero or more name-path pairs that refer to
+                XML files on the local file system, and are bound and passed in as external
+                  variables to the query. These files are loaded once on program startup and
+                subsequently remain memory resident across queries. This can be used for efficient
+                joins where the join table is static and fits into main memory. Example: myDoc :
+                src/test/resources/testdocuments/helloworld.xml
+
+
+queryFile
+null
+A relative or absolute path of a local file from which to load the
+                query.
+
+
+queryString
+null
+An inline string from which to load the query. One of queryFile or queryString
+                must be present, but not both.
+
+
+noteThe morphline configuration file is implemented using the HOCON
+        format (Human Optimized Config Object Notation). HOCON is basically JSON slightly adjusted
+        for the configuration file use case. HOCON syntax is defined at HOCON github page and as such, multi-line strings are similar to
+        Python or Scala, using triple quotes. If the three-character sequence """
+        appears, then all Unicode characters until a closing """ sequence are used
+        unmodified to create a string value.
+Example usage:
+xslt {
+  fragments : [
+    {
+      fragmentPath : "/"
+      parameters : {
+        myVariable : "hello world"
+      }            
+      queryString : """
+        <!-- Example XSLT identity transformation -->
+        <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform" version="1.0">
+        
+        <xsl:template match="@*|node()">
+          <xsl:copy>
+            <xsl:apply-templates select="@*|node()"/>
+          </xsl:copy>
+        </xsl:template>
+        
+        </xsl:stylesheet>
+      """
+    }
+  ]
+}
+More examples can be found in the unit tests.
+For more background, see resources such as the XSLT Tutorial and Wikipedia.
+
+

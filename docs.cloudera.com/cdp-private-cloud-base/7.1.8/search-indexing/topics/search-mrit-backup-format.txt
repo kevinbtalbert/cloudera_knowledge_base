@@ -1,0 +1,69 @@
+Indexing data with MapReduceIndexerTool in Solr backup formatCloudera Docs
+Indexing data with MapReduceIndexerTool in Solr backup format
+MapReduceIndexerTool (MRIT) is capable of batch indexing a dataset and provide the
+        output in the format of Solr backups, using morphlines. This backup can then be ingested
+        into Solr using a backup opration.
+The MapReduceIndexerTool (MRIT) backup format feature addresses the dilemma of
+                ingesting indexes produced by MRIT jobs into Solr:
+Near-real-time (NRT) ingestion using the --go-live option is
+                    resource-intensive and involves merging indexes.
+Batch indexing requires shutting down the Solr server.
+MRIT backup format takes the best of both worlds: by creating the index in the Solr
+            backup format, it can be ingested into Solr as a restore operation, using the
+                solrctl command line utility. This method is significantly less
+            resource intensive on the part of Solr compared to NRT with --go-live.
+            Restoring the backup results in a new collection which can be queried directly or put
+            behind an alias.
+
+To perform a batch indexing job on MRIT with the output in Solr backup format,
+                    run the following command: 
+hadoop jar /opt/cloudera/parcels/CDH/lib/solr/contrib/mr/search-mr-*-job.jar  org.apache.solr.hadoop.MapReduceIndexerTool --morphline-file [***MORPHLINE_FILE***]  --output-dir "[***ABSOLUTE/PATH/TO/OUTPUT/DIRECTORY***]" --use-backup-format --backup-name [***USER_SPECIFIED_NAME_FOR_THE_BACKUP***] --zk-host [***HOSTNAME***]:2181/solr --collection [***COLLECTION_NAME***] "[***ABSOLUTE/PATH/TO/INPUT/FILE***]" Replace
+                        [***MORPHLINE_FILE***],
+                        [***ABSOLUTE/PATH/TO/OUTPUT/DIRECTORY***],
+                        [***USER_SPECIFIED_NAME_FOR_THE_BACKUP***],
+                        [***HOSTNAME***],
+                        [***COLLECTION_NAME***], and
+                        [***ABSOLUTE/PATH/TO/INPUT/FILE***] with values
+                    applicable in your environment.
+For example:To parse the contents of
+                            hdfs://ns1:8020/tmp/inputfile using the morphline file
+                            morphlines.conf and write the resulting index to
+                            
+                    hdfs://ns1:8020/tmp/output/results/backupName:hadoop jar /opt/cloudera/parcels/CDH/lib/solr/contrib/mr/search-mr-*-job.jar  org.apache.solr.hadoop.MapReduceIndexerTool --morphline-file morphlines.conf  --output-dir "hdfs://ns1:8020/tmp/output" --use-backup-format --backup-name backupName --zk-host zk-server:2181/solr --collection collection "hdfs://ns1:8020/tmp/inputfile" 
+
+To create a new collection with the contents of the backup:
+
+solrctl collection --restore [***USER_DEFINED_COLLECTION_NAME***] -b [***NAME_OF_THE_INDEX_IN_BACKUP_FORMAT***] -l [***ABSOLUTE/PATH/TO/RESTORE/TARGET/DIRECTORY***] -i [***REQUEST_ID***]
+Make sure that you use a unique <requestID>  each
+                        time you run this command. 
+note
+ Statuses of historic job runs are stored in ZooKeeper and can be
+                            retrieved using the solrctl collection --request-status
+                                    [***REQUEST_ID***] command. The
+                            number  of async call responses stored in a cluster is limited to
+                            10,000.
+Status information can be removed from ZooKeeper using the  DELETESTATUS
+                            API call.
+
+Replace [***USER_DEFINED_COLLECTION_NAME***],
+                            [***NAME_OF_THE_INDEX_IN_BACKUP_FORMAT***],
+                            [***ABSOLUTE/PATH/TO/RESTORE/TARGET/DIRECTORY***]
+                        with values applicable in your environment.
+
+For example:To create the collection
+                            finalcollectionName from the backup
+                            backupName to the directory
+                            hdfs://ns1:8020/tmp/output/results with the request ID
+                        1234:solrctl collection --restore finalcollectionName -b backupName -l hdfs://ns1:8020/tmp/output/results -i 1234
+
+To monitor the status of the restore step, run the following command:
+
+solrctl collection --request-status [***REQUEST_ID***]
+Replace [***REQUEST_ID***] with the ID of the task you
+                        want to monitor.
+
+For
+                    example:solrctl collection --request-status 1234
+
+
+Related informationCollection aliasingAsynchronous callsParent topic: MapReduceIndexerTool

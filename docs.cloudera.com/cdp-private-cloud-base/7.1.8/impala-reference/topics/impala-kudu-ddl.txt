@@ -1,0 +1,254 @@
+Impala DDL for KuduCloudera Docs
+Impala DDL for Kudu
+ You can use the Impala CREATE TABLE and
+      ALTER TABLE statements to create and fine-tune the
+    characteristics of Kudu tables. Impala supports specific features  and
+    properties that only apply to Kudu tables.
+ To create a Kudu table, use the STORED AS KUDU clause
+      in the CREATE TABLE statement. 
+ The column list in a CREATE TABLE statement can include
+      the following attributes, which only apply to Kudu tables: 
+
+  PRIMARY KEY
+| [NOT] NULL
+| ENCODING codec
+| COMPRESSION algorithm
+| DEFAULT constant_expression
+| BLOCK_SIZE number
+
+PRIMARY KEY Attribute
+ The primary key for a Kudu table is a column, or set of columns, that
+        uniquely identifies every row. The primary key value also is used as the
+        natural sort order for the values from the table. 
+ The notion of primary key only applies to Kudu tables. Every Kudu
+        table requires a primary key.  
+ Because all of the primary key
+        columns must have non-null values, specifying a column in the
+          PRIMARY KEY clause implicitly adds the NOT
+          NULL attribute to that column. 
+ The primary key columns must be the first ones specified in the
+          CREATE TABLE statement.
+ When the primary key is a single column, you can specify the
+          PRIMARY KEY attribute either inline in a single
+        column definition, or as a separate clause at the end of the column
+        list. 
+For example:
+
+CREATE TABLE pk_inline
+(
+  col1 BIGINT PRIMARY KEY,
+  col2 STRING,
+  col3 BOOLEAN
+) PARTITION BY HASH(col1) PARTITIONS 2 STORED AS KUDU;
+
+CREATE TABLE pk_at_end
+(
+  col1 BIGINT,
+  col2 STRING,
+  col3 BOOLEAN,
+  PRIMARY KEY (col1)
+) PARTITION BY HASH(col1) PARTITIONS 2 STORED AS KUDU;
+
+If the primary key consists of more than one column, you must specify
+        the primary key using a separate entry in the column list.
+
+CREATE TABLE pk_multiple_columns
+(
+  col1 BIGINT,
+  col2 STRING,
+  col3 BOOLEAN,
+  PRIMARY KEY (col1, col2)
+) PARTITION BY HASH(col2) PARTITIONS 2 STORED AS KUDU;
+
+ The contents of the primary key columns cannot be changed by an
+          UPDATE or UPSERT statement. 
+Including too many columns in the primary key (more than 5 or 6) can
+        reduce the performance of write operations. Therefore, pick the most
+        selective and most frequently tested non-null columns for the primary
+        key specification. If a column must always have a value, but that value
+        might change later, leave it out of the primary key and use a
+          NOT NULL clause for that column instead. 
+
+NULL | NOT NULL Attribute
+ For Kudu tables, you can specify which columns can contain nulls or
+        not. This constraint offers an extra level of consistency enforcement
+        for Kudu tables. If an application requires a field to always be
+        specified, include a NOT NULL clause in the
+        corresponding column definition, and Kudu prevents rows from being
+        inserted with a NULL in that column. 
+ For example, a table containing geographic information might require
+        the latitude and longitude coordinates to always be specified. Other
+        attributes might be allowed to be NULL. For example, a
+        location might not have a designated place name, its altitude might be
+        unimportant, and its population might be initially unknown, to be filled
+        in later. 
+ For non-Kudu tables, Impala allows any column to contain
+          NULL values, because it is not practical to enforce a
+          not null constraint on HDFS data files that could be prepared
+        using external tools and ETL processes. 
+
+CREATE TABLE required_columns
+(
+  id BIGINT PRIMARY KEY,
+  latitude DOUBLE NOT NULL,
+  longitude DOUBLE NOT NULL,
+  place_name STRING,
+  altitude DOUBLE,
+  population BIGINT
+) PARTITION BY HASH(id) PARTITIONS 2 STORED AS KUDU;
+
+ During performance optimization, Kudu can use the knowledge that nulls
+        are not allowed to skip certain checks on each input row, speeding up
+        queries and join operations. Therefore, specify NOT
+          NULL constraints when appropriate. 
+ The NULL clause is the default condition for all
+        columns that are not part of the primary key. You can omit it, or
+        specify it to clarify that you have made a conscious design decision to
+        allow nulls in a column. 
+ Because primary key columns cannot contain any NULL
+        values, the NOT NULL clause is not required for the
+        primary key columns, but you might still specify it to make your code
+        self-describing. 
+
+DEFAULT Attribute
+ You can specify a default value for columns in Kudu tables. The
+        default value can be any constant expression, for example, a combination
+        of literal values, arithmetic and string operations. It cannot contain
+        references to columns or non-deterministic function calls. 
+ The following example shows different kinds of expressions for the
+          DEFAULT clause. The requirement to use a constant
+        value means that you can fill in a placeholder value such as
+          NULL, empty string, 0, -1, 'N/A' and
+        so on, but you cannot reference functions or column names. Therefore,
+        you cannot use DEFAULT to do things such as
+        automatically making an uppercase copy of a string value, storing
+        Boolean values based on tests of other columns, or add or subtract one
+        from another column representing a sequence number. 
+
+CREATE TABLE default_vals
+(
+  id BIGINT PRIMARY KEY,
+  name STRING NOT NULL DEFAULT 'unknown',
+  address STRING DEFAULT upper('no fixed address'),
+  age INT DEFAULT -1,
+  earthling BOOLEAN DEFAULT TRUE,
+  planet_of_origin STRING DEFAULT 'Earth',
+  optional_col STRING DEFAULT NULL
+) PARTITION BY HASH(id) PARTITIONS 2 STORED AS KUDU;
+
+note
+ When designing an entirely new schema, prefer to use
+            NULL as the placeholder for any unknown or missing
+          values, because that is the universal convention among database
+          systems. Null values can be stored efficiently, and easily checked
+          with the IS NULL or IS NOT NULL
+          operators. The DEFAULT attribute is appropriate when
+          ingesting data that already has an established convention for
+          representing unknown or missing values, or where the vast majority of
+          rows have some common non-null value. 
+
+
+ENCODING Attribute
+ Each column in a Kudu table can optionally use an encoding, a
+        low-overhead form of compression that reduces the size on disk, then
+        requires additional CPU cycles to reconstruct the original values during
+        queries. Typically, highly compressible data benefits from the reduced
+        I/O to read the data back from disk. 
+ The encoding keywords that Impala recognizes are: 
+
+
+AUTO_ENCODING: Use the default encoding based on
+              the column type, which are bitshuffle for the numeric type columns
+              and dictionary for the string type columns. 
+
+
+
+PLAIN_ENCODING: Leave the value in its original
+              binary format. 
+
+
+
+RLE: Compress repeated values (when sorted in
+              primary key order) by including a count. 
+
+
+
+DICT_ENCODING: When the number of different
+              string values is low, replace the original string with a numeric
+              ID. 
+
+
+
+BIT_SHUFFLE: Rearrange the bits of the values to
+              efficiently compress sequences of values that are identical or
+              vary only slightly based on primary key order. The resulting
+              encoded data is also compressed with LZ4. 
+
+
+
+PREFIX_ENCODING: Compress common prefixes in
+              string values; mainly for use internally within Kudu. 
+
+
+
+
+COMPRESSION Attribute
+ You can specify a compression algorithm to use for each column in a
+        Kudu table. This attribute imposes more CPU overhead when retrieving the
+        values than the ENCODING attribute does. Therefore, use
+        it primarily for columns with long strings that do not benefit much from
+        the less-expensive ENCODING attribute. 
+ The choices for COMPRESSION are LZ4,
+          SNAPPY, and ZLIB. 
+note
+ Columns that use the BITSHUFFLE encoding are
+          already compressed using LZ4, and so typically do not
+          need any additional COMPRESSION attribute. 
+
+
+BLOCK_SIZE Attribute
+ Although Kudu does not use HDFS files internally, and thus is not
+        affected by the HDFS block size, it does have an underlying unit of I/O
+        called the block size. The BLOCK_SIZE
+        attribute lets you set the block size for any column. 
+ The block size attribute is a relatively advanced feature. This is an unsupported feature
+        and is considered experimental.
+
+Kudu Replication Factor
+By default, Kudu tables created through Impala use a tablet replication
+        factor of 3. To change the replication factor for a Kudu table, specify
+        the replication factor using the TBLPROPERTIES in the
+          CREATE TABLE statement as below where
+          n is the replication factor you want to use:
+        TBLPROPERTIES ('kudu.num_tablet_replicas' = 'n')
+ The number of replicas for a Kudu table must be odd. 
+ Altering the kudu.num_tablet_replicas property after
+        table creation currently has no effect. 
+
+How Impala Handles Kudu Metadata
+ Much of the metadata for Kudu tables is handled by the
+        underlying storage layer. Kudu tables have less reliance on the
+        Metastore database, and require less metadata caching on the Impala
+        side. For example, information about partitions in Kudu tables is
+        managed by Kudu, and Impala does not cache any block locality metadata
+        for Kudu tables. 
+ The REFRESH and INVALIDATE
+          METADATA statements are needed less frequently for Kudu
+        tables than for HDFS-backed tables. Neither statement is needed when
+        data is added to, removed, or updated in a Kudu table, even if the
+        changes are made directly to Kudu through a client program using the
+        Kudu API. 
+Run REFRESH table_name
+        or INVALIDATE METADATA table_name
+        for a Kudu table only after making a change to the Kudu table schema,
+        such as adding or dropping a column. 
+ Because Kudu manages the metadata for its own tables separately from
+        the Metastore database, there is a table name stored in the Metastore
+        database for Impala to use, and a table name on the Kudu side, and these
+        names can be modified independently through ALTER TABLE
+        statements. 
+ To avoid potential name conflicts, the prefix
+          impala:: and the Impala database name are encoded
+        into the underlying Kudu table name. 
+
+

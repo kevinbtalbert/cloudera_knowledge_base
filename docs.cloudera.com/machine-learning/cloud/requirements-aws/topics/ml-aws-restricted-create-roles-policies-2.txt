@@ -1,0 +1,498 @@
+Create role and policy used to deploy CDP environments for CMLCloudera Docs
+Create role and policy used to deploy CDP environments for CML
+The CML control plane requires a role and policies to create CDP environments. In this
+  step, you create a common policy for creating environments, as well as a policy that is specific
+  to CML environments. 
+The following two policies are created in this step:
+
+Compute infrastructure restricted IAM policy - A common policy for all data services deployed on CDP.
+CML restricted IAM policy - A policy with additional permissions for CML.
+
+There are two options for the timing of attaching the role: during environment creation, or
+   prior to enabling the CML data service.
+Option #1: During environment creation
+The Cloudbreak environment creation UI should be set up as shown here:
+
+note
+For the AWS IAM policy mentioned in the “Create Cross-account Access Policy” section, use
+      the Compute infrastructure Restricted IAM and CML Restricted IAM policies below and create as
+      new policies in AWS IAM. There may be one or more restricted policies already attached to the
+      cross-account role, in addition to the Compute infrastructure and CML restricted policies. For
+      example, there may also be a Data Hub restricted policy.
+For the “Create Cross-account Access Role” section, create the cross-account role as
+      instructed (or update the role if one already exists) and attach the newly created Compute
+      infrastructure Restricted IAM policy and CML Restricted IAM policy. Finally, update the
+      cross-account role to use it.
+
+
+Option #2: Prior to enabling CML data service
+If the Cloudbreak environment has already been created, you can create and attach the Compute
+    infrastructure Restricted IAM policy and CML restricted IAM policy to the existing cross-account
+    role associated with the environment. 
+To view the existing cross-account role, in the Environments section of
+    the CDP management console, on the Summary tab, see
+     Credentials.
+noteThere may be one or more restricted policies already attached to the cross-account role, in
+    addition to the Compute infrastructure and CML restricted policies. For example, there might be
+    a Data Hub restricted policy. These should be left in place.
+
+Compute (Liftie) Restricted IAM policy
+Replace the following placeholders in the JSON file: 
+[YOUR-ACCOUNT-ID] with your account ID in use.
+[YOUR-IAM-ROLE-NAME] with the IAM restricted role associated with this policy.
+[YOUR-SUBNET-ARN-*] supplied during the Cloudbreak Environment(s) creation. Note: Please
+      provide all the subnets present in all the Cloudbreak Environment(s) that you intend to use it
+      for the experience. If at any point a new Cloudbreak Environment is created or an existing one
+      is updated for subnets, the same should be updated here.
+[YOUR-IDBROKER-ROLE-NAME] with the ID Broker Role name in use.
+[YOUR-LOG-ROLE-NAME] with the Log Role name in use.
+[YOUR-KMS-CUSTOMER-MANAGED-KEY-ARN] with KMS key ARN.
+[YOUR-ACCOUNT-REGION] with the AWS region.
+
+{
+  "Version": "2012-10-17",
+  "Id": "ComputePolicy_v7",
+  "Statement": [
+    {
+      "Sid": "SimulatePrincipalPolicy",
+      "Effect": "Allow",
+      "Action": [
+        "iam:SimulatePrincipalPolicy"
+      ],
+      "Resource": [
+        "arn:aws:iam::[YOUR-ACCOUNT-ID]:role/[YOUR-IAM-ROLE-NAME]"
+      ]
+    },
+    {
+      "Sid": "RestrictedPermissionsViaClouderaRequestTag",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:CreateStack",
+        "cloudformation:CreateChangeSet",
+        "ec2:createTags",
+        "eks:TagResource"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringLike": {
+          "aws:RequestTag/Cloudera-Resource-Name": [
+            "crn:cdp:*"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "RestrictedPermissionsViaClouderaResourceTag",
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:DetachInstances",
+        "autoscaling:ResumeProcesses",
+        "autoscaling:SetDesiredCapacity",
+        "autoscaling:SuspendProcesses",
+        "autoscaling:UpdateAutoScalingGroup",
+        "autoscaling:DeleteTags",
+        "autoscaling:TerminateInstanceInAutoScalingGroup",
+        "cloudformation:DeleteStack",
+        "cloudformation:DescribeStacks"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringLike": {
+          "aws:ResourceTag/Cloudera-Resource-Name": [
+            "crn:cdp:*"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "RestrictedPermissionsViaCloudFormation",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateSecurityGroup",
+        "ec2:DeleteSecurityGroup",
+        "ec2:AuthorizeSecurityGroupIngress",
+        "ec2:RevokeSecurityGroupIngress",
+        "ec2:AuthorizeSecurityGroupEgress",
+        "ec2:RevokeSecurityGroupEgress",
+        "ec2:CreateLaunchTemplate",
+        "ec2:DeleteLaunchTemplate",
+        "autoscaling:CreateAutoScalingGroup",
+        "autoscaling:DeleteAutoScalingGroup",
+        "autoscaling:CreateOrUpdateTags",
+        "autoscaling:CreateLaunchConfiguration",
+        "eks:CreateCluster",
+        "eks:DeleteCluster"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "ForAnyValue:StringEquals": {
+          "aws:CalledVia": [
+            "cloudformation.amazonaws.com"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "RestrictedEC2PermissionsViaClouderaResourceTag",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:RebootInstances",
+        "ec2:StartInstances",
+        "ec2:StopInstances",
+        "ec2:TerminateInstances"
+      ],
+      "Resource": [
+        "*"
+      ],
+      "Condition": {
+        "ForAnyValue:StringLike": {
+          "ec2:ResourceTag/Cloudera-Resource-Name": [
+            "crn:cdp:*"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "RestrictedIamPermissionsToClouderaResources",
+      "Effect": "Allow",
+      "Action": [
+        "iam:PassRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::[YOUR-ACCOUNT-ID]:role/[YOUR-IDBROKER-ROLE-NAME]",
+        "arn:aws:iam::[YOUR-ACCOUNT-ID]:role/[YOUR-LOG-ROLE-NAME]",
+        "arn:aws:iam::[YOUR-ACCOUNT-ID]:role/liftie-*-eks-service-role",
+        "arn:aws:iam::[YOUR-ACCOUNT-ID]:role/liftie-*-eks-worker-nodes",
+        "arn:aws:iam::[YOUR-ACCOUNT-ID]:role/cdp-eks-master-role",
+        "arn:aws:iam::[YOUR-ACCOUNT-ID]:role/cdp-liftie-instance-profile"
+      ]
+    },
+    {
+      "Sid": "RestrictedKMSPermissionsUsingCustomerProvidedKey",
+      "Effect": "Allow",
+      "Action": [
+        "kms:CreateGrant",
+        "kms:DescribeKey",
+        "kms:Encrypt",
+        "kms:Decrypt",
+        "kms:ReEncrypt*",
+        "kms:GenerateDataKey*"
+      ],
+      "Resource": [
+        "[YOUR-KMS-CUSTOMER-MANAGED-KEY-ARN]"
+      ]
+    },
+    {
+      "Sid": "AllowCreateDeleteTagsForSubnets",
+      "Effect": "Allow",
+      "Action": [
+        "ec2:CreateTags",
+        "ec2:DeleteTags"
+      ],
+      "Resource": [
+        "arn:aws:ec2:[YOUR-SUBNET-REGION]:[YOUR-ACCOUNT-ID]:subnet/*"
+      ]
+    },
+    {
+      "Sid": "OtherPermissionsViaCloudFormation",
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:DescribeScheduledActions",
+        "autoscaling:DescribeTags",
+        "autoscaling:DescribeAutoScalingInstances",
+        "autoscaling:DescribeLaunchConfigurations",
+        "autoscaling:DeleteLaunchConfiguration",
+        "autoscaling:DescribeScalingActivities",
+        "dynamodb:DescribeTable",
+        "ec2:DeletePlacementGroup",
+        "ec2:DescribeAccountAttributes",
+        "ec2:DescribeImages",
+        "ec2:DescribeInstanceStatus",
+        "ec2:DescribeInstances",
+        "ec2:DescribeKeyPairs",
+        "ec2:DescribeLaunchTemplateVersions",
+        "ec2:DescribeLaunchTemplates",
+        "ec2:DescribePlacementGroups",
+        "ec2:DescribeRegions",
+        "ec2:DescribeRouteTables",
+        "ec2:DescribeSecurityGroups",
+        "ec2:DescribeVolumes"
+      ],
+      "Resource": [
+        "*"
+      ],
+      "Condition": {
+        "ForAnyValue:StringEquals": {
+          "aws:CalledVia": [
+            "cloudformation.amazonaws.com"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "OtherPermissionsViaClouderaResourceTag",
+      "Effect": "Allow",
+      "Action": [
+        "cloudformation:DescribeChangeSet",
+        "cloudformation:DeleteChangeSet",
+        "cloudformation:ExecuteChangeSet",
+        "cloudformation:CancelUpdateStack",
+        "cloudformation:ContinueUpdateRollback",
+        "cloudformation:DescribeStackEvents",
+        "cloudformation:DescribeStackResource",
+        "cloudformation:DescribeStackResources",
+        "cloudwatch:deleteAlarms",
+        "cloudwatch:putMetricAlarm",
+        "ec2:AttachVolume",
+        "ec2:CreateNetworkInterface",
+        "ec2:CreateVolume",
+        "ec2:DeleteVolume",
+        "ec2:ModifyInstanceAttribute",
+        "ec2:RunInstances",
+        "eks:ListUpdates",
+        "eks:UpdateClusterConfig",
+        "eks:UpdateClusterVersion",
+        "eks:DescribeUpdate",
+        "iam:GetRolePolicy",
+        "iam:ListInstanceProfiles",
+        "iam:ListRoleTags",
+        "iam:RemoveRoleFromInstanceProfile",
+        "iam:TagRole",
+        "iam:UntagRole"
+      ],
+      "Resource": [
+        "*"
+      ],
+      "Condition": {
+        "StringLike": {
+          "aws:ResourceTag/Cloudera-Resource-Name": [
+            "crn:cdp:*"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "OtherPermissions",
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:DescribeAutoScalingGroups",
+        "ec2:CreateLaunchTemplateVersion",
+        "ec2:CreatePlacementGroup",
+        "ec2:DeleteKeyPair",
+        "ec2:DeleteNetworkInterface",
+        "ec2:DescribeAvailabilityZones",
+        "ec2:DescribeInstanceTypes",
+        "ec2:DescribeNetworkInterfaces",
+        "ec2:DescribeSubnets",
+        "ec2:DescribeVpcAttribute",
+        "ec2:DescribeVpcs",
+        "ec2:ImportKeyPair",
+        "ec2:UpdateSecurityGroupRuleDescriptionsIngress",
+        "eks:DescribeCluster",
+        "elasticloadbalancing:DescribeLoadBalancers",
+        "iam:GetRole",
+        "iam:ListRoles",
+        "iam:GetInstanceProfile"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Sid": "AllowSsmParams",
+      "Effect": "Allow",
+      "Action": [
+        "ssm:DescribeParameters",
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:GetParameterHistory",
+        "ssm:GetParametersByPath"
+      ],
+      "Resource": [
+        "arn:aws:ssm:*:*:parameter/aws/service/eks/optimized-ami/*"
+      ]
+    },
+    {
+      "Sid": "CfDeny",
+      "Effect": "Deny",
+      "Action": [
+        "cloudformation:*"
+      ],
+      "Resource": [
+        "*"
+      ],
+      "Condition": {
+        "ForAnyValue:StringLike": {
+          "cloudformation:ImportResourceTypes": [
+            "*"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "ForAutoscalingLinkedRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateServiceLinkedRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::[YOUR-ACCOUNT-ID]:role/aws-service-role/autoscaling-plans.amazonaws.com/AWSServiceRoleForAutoScalingPlans_EC2AutoScaling"
+      ],
+      "Condition": {
+        "StringLike": {
+          "iam:AWSServiceName": "autoscaling-plans.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Sid": "ForEksLinkedRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateServiceLinkedRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::[YOUR-ACCOUNT-ID]:role/aws-service-role/eks.amazonaws.com/AWSServiceRoleForEKS"
+      ],
+      "Condition": {
+        "StringLike": {
+          "iam:AWSServiceName": "eks.amazonaws.com"
+        }
+      }
+    }
+  ]
+}  
+   
+
+Supporting Customer Managed CMKs
+Along with providing the KMS Customer Managed Customer Master Key (CMK) for volume encryption
+            in the policy section with Sid:
+               RestrictedKMSPermissionsUsingCustomerProvidedKey, you need to verify that
+            the policy for the Customer Managed Customer Master Key (CMK) at KMS (this is not an IAM
+            policy) has the following three permission blocks defined for
+               AWSServiceRoleForAutoScaling.
+{
+  "Statement": [
+    {
+      "Sid": "AllowAutoscalingServiceLinkedRoleForAttachmentOfPersistentResources",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::[YOUR-ACCOUNT-ID]:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+      },
+      "Action": "kms:CreateGrant",
+      "Resource": "*",
+      "Condition": {
+        "Bool": {
+          "kms:GrantIsForAWSResource": "true"
+        }
+      }
+    },
+    {
+      "Sid": "AllowAutoscalingServiceLinkedRoleUseOfTheCMK",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::[YOUR-ACCOUNT-ID]:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"
+      },
+      "Action": [
+        "kms:Encrypt",
+        "kms:Decrypt",
+        "kms:ReEncrypt*",
+        "kms:GenerateDataKey*",
+        "kms:DescribeKey"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "Allow EKS access to EBS.",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "*"
+      },
+      "Action": [
+        "kms:CreateGrant",
+        "kms:Encrypt",
+        "kms:Decrypt",
+        "kms:ReEncrypt*",
+        "kms:GenerateDataKey*",
+        "kms:DescribeKey"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "kms:CallerAccount": "[YOUR-ACCOUNT-ID]",
+          "kms:viaService": "ec2.[YOUR-ACCOUNT-REGION].amazonaws.com"
+        }
+      }
+    }
+  ]
+}
+After the policy is attached, the KMS service page will show the CMS as having the policy attached,
+   similar to this screen shot: 
+
+
+CML restricted IAM policy
+Replace the following placeholders in the JSON file:
+
+[YOUR-ACCOUNT-ID] with your account ID in use.
+[YOUR-IAM-ROLE-NAME] with the IAM restricted role with which this policy would be associated
+     with.
+
+
+{
+    "Version": "2012-10-17",
+    "Id": "CMLPolicy_v1",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": "iam:SimulatePrincipalPolicy",
+            "Resource": "arn:aws:iam::[YOUR-ACCOUNT-ID]:role/[YOUR-IAM-ROLE-NAME]"
+        },
+        {
+            "Sid": "RestrictedPermissionsViaClouderaRequestTag",
+            "Effect": "Allow",
+            "Action":[
+                "elasticfilesystem:CreateFileSystem"
+            ],
+            "Resource": "*",
+            "Condition": {
+                "StringLike":{
+                    "aws:RequestTag/Cloudera-Resource-Name": "crn:cdp:*"
+                }
+            }
+        },
+        {
+            "Sid": "OtherPermissions",
+            "Effect": "Allow",
+            "Action": [
+                "elasticfilesystem:DescribeMountTargets",
+                "elasticfilesystem:DeleteAccessPoint",
+                "elasticfilesystem:CreateMountTarget",
+                "elasticfilesystem:DescribeAccessPoints",
+                "elasticfilesystem:DescribeFileSystems",
+                "elasticfilesystem:DeleteMountTarget",
+                "elasticfilesystem:CreateAccessPoint",
+                "elasticfilesystem:DeleteFileSystem",
+                "elasticfilesystem:DescribeMountTargetSecurityGroups"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "ForEFSLinkedRole",
+            "Effect": "Allow",
+            "Action": [
+              "iam:CreateServiceLinkedRole"
+            ],
+            "Resource": [
+              "arn:aws:iam::[YOUR-ACCOUNT-ID]:role/aws-service-role/elasticfilesystem.amazonaws.com/AWSServiceRoleForAmazonElasticFileSystem"
+            ],
+            "Condition": {
+              "StringLike": {
+                "iam:AWSServiceName": "elasticfilesystem.amazonaws.com"
+              }
+            }
+          }
+    ]
+}
+   
+
+
+Parent topic: AWS IAM restricted roles and policies for compute and CML

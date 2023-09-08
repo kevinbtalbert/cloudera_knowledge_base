@@ -1,0 +1,378 @@
+Troubleshooting for RAZ-enabled Azure environmentCloudera Docs
+Troubleshooting for RAZ-enabled Azure environment
+This section includes FAQs, and  discusses some common errors that might occur while
+  using a RAZ-enabled Azure environment and the steps to resolve the issues.
+
+How do I view logs and RAZ configuration in a RAZ-enabled Azure environment?
+
+
+You can use the following methods to view logs and RAZ configuration in a RAZ-enabled
+                Azure environment:
+
+
+
+
+To view RAZ server logs, perform the following steps:
+Identify the host on which the RAZ service is installed in
+                                    Cloudera Manager.
+SSH to log into the RAZ server.
+Locate the
+                                            ranger-raz-[***host-name***]-*-rangerraz.log
+                                    file in the /var/log/ranger/raz/
+                                    directory.
+
+To view the RAZ client logs, go to the respective component logs.RAZ
+                                authorization is triggered when a CDP Public Cloud service accesses
+                                the ADLS storage through the HDFS client layer. The logs related to
+                                these calls are stored by the respective service or component
+                                logs.The following table lists some services and
+                                the RAZ client log location:
+
+Service
+RAZ client log location
+
+
+
+HiveServer2
+/var/log/hive/ folder.
+                                                  The associated HS2 and HMS logs in
+                                                  this directory provide the details about the
+                                                  Apache RAZ client calls.
+
+
+
+YARN MapReduce
+Hive on Tez
+Spark
+
+After the job run, you can locate the RAZ
+                                                  client logs in the corresponding application log.
+                                                  The Resource Manager creates the application
+                                                  log. You can access the logs through Resource
+                                                  Manager or use YARN command line
+                                                  tools.
+
+
+To view RAZ server configuration, perform the following steps:
+Identify the host on which the RAZ service is installed in
+                                    Cloudera Manager.
+SSH to log into the RAZ server.
+Run the ps -ef | grep rangerraz | awk '{split($0,
+                                        array,"classpath"); print array[2]}' | cut -d: -f1
+                                    command to identify the RAZ_CONF_DIR
+                                    directory.
+Run the cat
+                                        [***RAZ_CONF_DIR***]/ranger-raz-site.xml
+                                    command to view the RAZ server configuration details.
+
+
+
+
+
+How do I enable the debug level for RAZ server and RAZ client?
+
+
+
+When you enable the DEBUG level for RAZ server and RAZ client, a detailed
+                        verbose log is generated. Alternatively, you can only enable debug on a
+                        package level, so that only the package logs show detailed verbose logs.
+
+To configure debug for RAZ server at package level, perform the
+                            following steps:
+Go to the Cloudera Manager > Ranger RAZ service > Configuration tab.
+Search for the Ranger Raz Server Logging Advanced
+                                        Configuration Snippet (Safety Valve) property
+                                    property, and enter the following information:
+log4j.logger.org.apache.ranger.raz.[***package name***]=DEBUG
+log4j.logger.org.apache.hadoop.security=DEBUG
+log4j.appender.RFA.layout.ConversionPattern=[%p] %d{dd/MM/yyyy HH:mm:ss,SSS} [THREAD ID=%t] [CLASS=(%C{1}:%L)] %m%n
+
+Click Save Changes.
+Restart the Ranger RAZ service.
+
+You can configure the DEBUG level for RAZ clients. For example, to
+                                view the HDFS log in DEBUG level, run the
+                                    HADOOP_ROOT_LOGGER=DEBUG,console hdfs
+                                        [***options***]
+[***arguments***] command.
+
+
+
+
+Is there a checklist to refer while troubleshooting RAZ-enabled Azure
+        environments?
+
+
+You can use the following brief checklist to help you to troubleshoot RAZ-enabled
+                environments:
+
+
+
+
+
+Is Hierarchical NameSpace enabled for ADLS
+                            Gen2?
+Does the Ranger RAZ managed identity have the Storage Blob
+                                Delegator and Storage Blob Data
+                                Owner roles?
+Does the RAZ-enabled Azure environment use a zone-redundant storage
+                            (ZRS)?
+Are the Ranger Admin cloud policies (cm_adls) created with the correct
+                            storage account & paths based on the corresponding environment?
+Do you have sufficient permissions in Ranger Admin cloud policies
+                            (cm_adls) in the corresponding environment?
+Can the RAZ servers in Data Lake and workload clusters download Ranger
+                            policies from the Ranger Admin UI?
+Can the RAZ servers in Data Lake and workload clusters download Ranger
+                            UserStore?
+Can the RAZ servers in Data Lake and workload clusters connect to
+                            IDBroker and download the UserDelegationKey?
+
+
+
+
+
+
+What are the most common errors in RAZ-enabled Azure environments?
+
+
+
+The following table lists the most
+                    common errors, their causes, and solution to resolve the errors:
+
+Error and error location
+Cause and Solution
+
+
+
+Failed to communicate with Ranger Admin
+                                        and Error getting UserStore errors appear in
+                                        RAZ Server logs.
+These errors appear when the RAZ server cannot download
+                                        the latest version of the user-store (user information)
+                                        because the Ranger Admin service cannot reach the RAZ server
+                                            host.To resolve this issue, verify whether
+                                            the Ranger Admin service is up and reachable from the
+                                            RAZ server host. If not, fix the connectivity
+                                        issue.
+
+
+AbfsTokenProvider: IdBroker initialization
+                                            failed error appears in RAZ Server logs.
+This error appears when the RAZ server cannot connect to
+                                        IDBroker to obtain the UserDelegationKey that is used for
+                                        authorizing requests in ADLS paths. To resolve
+                                            this issue, verify whether IDBroker is up and reachable
+                                            for the RAZ server host. If not, fix the connectivity
+                                            issue.
+
+
+DTAwsCredentialsProvider failed when trying to get
+                                            token from idbroker, or
+                                            AbfsTokenProvider: ==>
+                                            AbfsTokeProvider.fetchUserDelegationKey and
+                                            fetchAccessToken(): null response received from
+                                            IDBroker errors appear in RAZ Server
+                                        logs.
+These errors appear when the RAZ server cannot connect to
+                                        IDBroker to obtain the UserDelegationKey that is used for
+                                        authorizing requests in S3 paths. To resolve
+                                            this issue, verify whether IDBroker is up and reachable
+                                            for the RAZ server host. If not, fix the connectivity
+                                            issue.
+
+
+Failed to communicate with all Raz URLs,
+                                            Verify that the URLs are correct and
+                                            corresponding services are running &
+                                            accessible, and Multiple service types
+                                            are not supported messages appear in RAZ client
+                                        logs.
+This issue appears when the RAZ server setup fails
+                                        because the
+                                            ranger.raz.bootstrap.servicetypes
+                                        property in the ranger-raz-site.xml
+                                        file has multiple service-types such as
+                                            adls, s3
+                                        that are not supported. To resolve this issue,
+                                            configure the
+                                                ranger.raz.bootstrap.servicetypes
+                                            property in the ranger-raz-site.xml
+                                            file to the required cluster type, remove the other
+                                            service types, and save the file. For example, enter
+                                                s3 for AWS cluster type and
+                                            enter adls for Azure cluster
+                                            type.
+
+
+Server did not process this request due to
+                                            in-sufficient auth details, Failed to
+                                            acquire a SAS token… AccessControlException:,
+                                            HTTP Status 401 – Unauthorized appear in
+                                        RAZ client logs.
+These error messages appear when the RAZ server denies
+                                        the authorization request because no or incomplete
+                                        authentication details are available. To
+                                            resolve this issue, you must ensure that the Ranger RAZ
+                                            server has Kerberos or RAZ-DT & JWT authentication.
+                                            You must have a valid TGT when the RAZ server supports
+                                            Kerberos authentication.
+
+
+Failed to get DSAS token from Raz,
+                                            HttpStatus: 403, Failed to acquire
+                                            a SAS token … : Permission denied messages
+                                        appear in RAZ client logs.
+These errors might appear because of various reasons, the
+                                        following are a few possible causes and solutions:
+The required Ranger policies are not set.
+                                                To verify, the administrator must check the Ranger
+                                                Admin Access Audits and if required, assign the
+                                                required policies.
+The RAZ server might not be able to fetch
+                                                the User Delegation key from IDBroker. To verify,
+                                                check the Ranger RAZ server logs. To resolve this
+                                                  issue, generate the User Delegation Key manually.
+                                                  If you cannot generate DSAS manually, this
+                                                  indicates that a network connectivity issue
+                                                  exists. To proceed, you must resolve the
+                                                  connectivity issues.
+RAZ server cannot fetch the latest Ranger
+                                                admin policies/users. To verify, download the RAZ
+                                                policies manually. If you cannot
+                                                  download RAZ policies manually, this indicates a
+                                                  network connectivity issue. To proceed, resolve
+                                                  the connectivity issues.
+
+
+
+
+
+
+
+How do I generate a UserDelegationKey manually?
+
+
+Perform the following steps to generate a UserDelegationKey manually:
+
+
+
+
+Identify the host on which the RAZ service is installed in Cloudera
+                            Manager.
+
+SSH to log into the RAZ server.
+
+Run following commands to get the required parameters:
+
+
+ps -ef | grep rangerraz | awk '{split($0,
+                                        array,"classpath"); print array[2]}' | cut -d: -f1
+                                    to identify the RAZ_CONF_DIR directory.
+klist -kt
+                                            [***RAZ_CONF_DIR***]/../ranger_raz.keytab
+                                    to identify the RAZ_PRINCIPLE parameter. The RAZ_PRINCIPLE
+                                    parameter starts with rangerraz.
+cat
+                                        /etc/alternatives/hadoop-conf/core-site.xml | grep -a1
+                                        'fs.azure.ext.cab.address' | grep 'value' to
+                                    identify the complete ID_BROKER_URL.
+
+
+
+Update the expiry date in the sasPost.xml file to
+                            another valid date.
+
+Run following commands:
+
+
+kinit -kt
+                                            [***RAZ_CONF_DIR***]/../ranger_raz.keytab
+                                            [***RAZ_PRINCIPLE***]
+
+DT=$(curl --negotiate -u :
+                                                "[***ID_BROKER_URL***]/dt/knoxtoken/api/v1/token"
+                                            | jq -r '.access_token')
+
+AT=$(curl -k -H "Authorization: Bearer $DT"
+                                            '[***ID_BROKER_URL***]/azure-cab/cab/api/v1/credentials'
+                                        | jq -r '.access_token')
+curl -v -i -X POST -d @sasPost.xml -H
+                                        "x-ms-version: 2018-11-09" -H "Authorization: Bearer $AT"
+                                            "https://[***ACCOUNT***].blob.core.windows.net/?restype=service&comp=userdelegationkey"
+
+
+The UserDelegationKey is generated.
+
+In case, the UserDelegationKey is not generated as expected, run the
+                            following commands to verify whether the identity mappings are
+                            available:
+
+
+SSH to the IDBroker host.
+Go to the cd
+                                        /var/log/knox/idbroker/ IDBroker logs
+                                    directory.
+Run the grep -rl “addIdentitiesToVM”
+                                        * command to view the list of identities. Note that
+                                    the output must not be empty.
+Run the grep . -rnwe
+                                        ‘addIdentitiesToVM’ command to view the
+                                    assumerIdentity, adminIdentity, and rangerraz identities. 
+
+
+
+
+
+
+
+How do I download RAZ policies manually?
+
+
+You can perform the following steps to download the RAZ policies manually:
+
+
+
+
+Identify the host on which the RAZ service is installed in Cloudera
+                            Manager.
+
+SSH to log into the RAZ server.
+
+Run following commands to identify the required parameters:
+
+
+ps -ef | grep rangerraz | awk '{split($0,
+                                        array,"classpath"); print array[2]}' | cut -d: -f1
+                                    to identify the RAZ_CONF_DIR directory. 
+klist -kt
+                                            [***RAZ_CONF_DIR**]/../ranger_raz.keytab
+                                    to identify the RAZ_PRINCIPLE. The RAZ_PRINCIPLE starts with
+                                    rangerraz.
+cat
+                                        /var/run/cloudera-scm-agent/process/1546336485-ranger_raz-RANGER_RAZ_SERVER/ranger-raz-conf/ranger-raz-site.xml
+                                        | grep -a1 'ranger.raz.policy.rest.url' | grep
+                                        'value' to identify the ADMIN_URL. Use the
+                                    ADMIN_URL after you remove any trailing slash.
+
+
+
+Run following commands to download the RAZ policies:
+
+
+kinit -kt
+                                        [***RAZ_CONF_DIR***]/../ranger_raz.keytab
+                                            [***RAZ_PRINCIPLE***]
+curl -ikv --negotiate -u : -X GET -H
+                                        "Accept:application/json" -H "Content-Type:application/json"
+                                            "[***ADMIN_URL***]/service/plugins/secure/policies/download/cm_adls
+
+
+
+The RAZ policies for the ADLS service are downloaded to the
+                                current directory of the logged in host or server.
+
+
+
+
+

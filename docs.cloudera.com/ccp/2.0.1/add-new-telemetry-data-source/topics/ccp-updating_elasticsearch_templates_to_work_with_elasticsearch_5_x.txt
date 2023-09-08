@@ -1,0 +1,41 @@
+Update Elasticsearch Templates to Work with Elasticsearch 5.xCloudera Docs
+Update Elasticsearch
+    Templates to Work with Elasticsearch 5.x
+Cloudera Cybersecurity Platform (CCP) requires that all sensor templates have a nested
+      metron_alert field defined to work with Elasticsearch 5.x.
+Retrieve the template. 
+The following example appends index* to get all indexes for the
+          provided sensor:
+
+export ELASTICSEARCH="node1"
+ export SENSOR="bro"
+ curl -XGET "http://${ELASTICSEARCH}:9200/_template/${SENSOR}_index*?pretty=true" -o "${SENSOR}.template"
+
+ Remove an extraneous JSON field so you can put it back later, and add the alert field:  
+
+sed -i '' '2d;$d' ./${SENSOR}.template
+ sed -i '' '/"properties" : {/ a\
+ "metron_alert": { "type": "nested"},' ${SENSOR}.template
+ Verify your changes:  
+
+python -m json.tool bro.template
+ Add the template back into Elasticsearch:  
+
+curl -XPUT "http://${ELASTICSEARCH}:9200/_template/${SENSOR}_index" -d @${SENSOR}.template
+
+To update existing indexes, update Elasticsearch mappings with the new field for each
+          sensor:
+
+curl -XPUT "http://${ELASTICSEARCH}:9200/${SENSOR}_index*/_mapping/${SENSOR}_doc" -d '
+{
+  "properties" : {
+    "metron_alert" : {
+      "type" : "nested"
+    }
+  }
+}
+'
+rm ${SENSOR}.template
+
+
+Parent topic: Upgrading to Elasticsearch 5.6.x

@@ -1,0 +1,44 @@
+Simple .NET producer exampleCloudera Docs
+Simple .NET producer example
+Review this example code to learn how you can create a simple .NET producer. This
+    producer is capable of producing around 36000 messages every second in development environment. 
+internal class Program
+{
+    private static int _inFlight;
+    private static long _delivered;
+
+    private static void HandleDeliveryResult(int msgid, DeliveryResult<string, string> deliveryResult)
+    {
+        if (msgid % 1024 == 0)  // writing to console on every message would be a bottleneck
+        {
+            Console.WriteLine($"Delivered '{deliveryResult.Value}' to '{deliveryResult.TopicPartitionOffset}', in flight on delivery confirmation: {_inFlight}");
+        }
+        --_inFlight;
+        ++_delivered;
+    }
+
+    private static void Main(string[] args)
+    {
+        using var producer = new ProducerBuilder<string, string>(new ProducerConfig { BootstrapServers = "broker:9092" }).Build();
+        int msgCounter = 0;
+        var start = DateTime.Now;
+        while (!(Console.KeyAvailable && Console.ReadKey().Key == ConsoleKey.Q || (DateTime.Now - start).TotalSeconds >= 60))
+        {
+            int msgid = ++msgCounter;
+            try
+            {
+                producer.Produce("topic", new Message<string, string> { Key = msgid.ToString(), Value = $"{msgid}, in flight on send: {++_inFlight}" },
+                    result => HandleDeliveryResult(msgid, result));
+            }
+            catch (ProduceException<string, string> e)
+            {
+                Console.WriteLine($"Produce failed: {e.Error.Reason}");
+            }
+        }
+        producer.Flush();
+        Console.WriteLine("average throughput: {0:N3} msg/sec", _delivered / (DateTime.Now - start).TotalSeconds);
+    }
+}
+
+
+Parent topic: .Net client examples

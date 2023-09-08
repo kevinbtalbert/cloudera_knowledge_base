@@ -1,0 +1,56 @@
+Unable to alter S3-backed tablesCloudera Docs
+Unable to alter S3-backed tables
+
+Condition
+In CDP Public Cloud on AWS or wherever S3-backed tables are used, an ALTER
+                    TABLE <table-name> RENAME TO <new-table-name> operation might
+                result in an error stating that the new table location already exists.
+
+
+Cause
+A rename operation on an S3-backed table is not instant. It has to move each file
+                    in the table to a new location one at a time. Depending on how many files are in
+                    the table directory, this could take more than 5 minutes, which is the default
+                    timeout specified.
+If the time specified for the connection elapses before the rename completes,
+                    Hive tries again and fails because the new directory already exists (from the
+                    previous attempt).
+Because of this retry behavior, an end-user job or query can result in a
+                    misleading
+                    error:Caused by: java.sql.SQLException: Error while compiling statement: FAILED: Execution Error, return code 1 
+from org.apache.hadoop.hive.ql.ddl.DDLTask. Unable to alter table. New location for this table 
+hive.<dbname>.<tablename> already exists : s3a://<bucket>/warehouse/tablespace/managed/hive/<dbname>.db/<tablename>
+
+
+Solution
+Check the Hive Metastore logs for the time period close to the
+                        failed rename and look for the following timeout
+                            message:ERROR org.apache.hadoop.hive.metastore.RetryingHMSHandler: [pool-7-thread-31549]: Error happens in method alter_table_req: 
+MetaException(message:Timeout when executing method: alter_table_req; 694779ms exceeds 600000ms)If
+                            there is a timeout message, perform the following steps to increase the
+                            value of the timeout property for both Hive clients and Hive
+                            Metastore:
+Log in to Cloudera Manager as an administrator.
+
+Go to Clusters > Hive > Configuration and search for the 'Hive Metastore Connection Timeout'
+                            property.
+
+Modify the value to 1 hour and click Save
+                                Changes.
+
+Go to Clusters > Hive Metastore > Configuration and search for 'Hive Metastore Server Advanced
+                            Configuration Snippet (Safety Valve) for hive-site.xml'.
+
+Click  and add the following property:
+
+Name: hive.metastore.client.socket.timeout
+Value: 3600
+
+
+Click Save Changes.
+
+Restart the Hive and Hive Metastore roles.
+
+
+
+

@@ -1,0 +1,121 @@
+Off-heap BucketCacheCloudera Docs
+Off-heap BucketCache
+If the BucketCache is enabled, it stores data blocks, leaving the on-heap cache free
+      for storing indexes and Bloom filters. The physical location of the BucketCache storage can be either in memory
+      (off-heap) or in a file stored in a fast disk.
+
+
+
+Off-heap: This is the default configuration.
+
+File-based: You can use the file-based storage mode
+               to store the BucketCache on an SSD
+               or FusionIO device, 
+
+
+This table summaries the important configuration properties for the
+            BucketCache. To configure the BucketCache. The table
+         is followed by three diagrams that show the impacts of different blockcache settings.Table 1. BucketCache Configuration Properties
+
+Property
+Default
+Description
+
+
+
+hbase.bucketcache.combinedcache.enabled
+true
+When BucketCache is enabled, use it as a L2 cache for
+                           LruBlockCache. If set to true, indexes and Bloom filters
+                        are kept in the LruBlockCache and the data blocks are kept
+                        in the BucketCache.
+
+
+hbase.bucketcache.ioengine
+none (BucketCache is disabled by default)
+Where to store the contents of the BucketCache. Its
+                        value can be offheap,
+                           file:PATH,
+                              mmap:PATH or
+                              pmem:PATH where PATH is the path
+                        to the file that host the file-based cache. 
+
+
+hfile.block.cache.size
+0.4
+A float between 0.0 and 1.0. This factor multiplied by the Java heap
+                        size is the size of the L1 cache. In other words, the percentage of the Java
+                        heap to use for the L1 cache.
+
+
+hbase.bucketcache.size
+not set
+When using BucketCache, this is a float that represents
+                           one of two different values, depending on whether it is a
+                        floating-point decimal less than 1.0 or an integer greater than 1.0.
+If less than 1.0, it represents a percentage of total heap memory
+                              size to give to the cache. 
+If greater than 1.0, it represents the capacity of the cache in
+                              megabytes
+
+
+
+hbase.bucketcache.bucket.sizes
+4, 8, 16, 32, 40, 48, 56, 64, 96, 128, 192, 256, 384,
+                           512 KB
+A comma-separated list of sizes for buckets for the
+                           BucketCache if you prefer to use multiple sizes. The
+                        sizes should be multiples of the default blocksize, ordered from smallest to
+                        largest. The sizes you use will depend on your data patterns. This
+                           parameter is experimental.
+
+
+-XX:MaxDirectMemorySize
+MaxDirectMemorySize = BucketCache + 1
+A JVM option to configure the maximum amount of direct memory available
+                        for the JVM. It is automatically calculated and configured based on the
+                        following formula: MaxDirectMemorySize = BucketCache size + 1
+                           GB for other features using direct memory, such as DFSClient.
+                        For example, if the BucketCache size is 8 GB, it will be
+                           -XX:MaxDirectMemorySize=9G.
+
+
+Figure 1. Default LRUCache, L1 only block cache
+               hbase.bucketcache.ioengine=NULL
+
+
+20% minimum reserved for operations and rpc call queues
+hbase.regionserver.global.memstore.size: default is 0.4, which
+               means 40%
+hbase.regionserver.global.memstore.size +
+                  hfile.block.cache.size ≤0.80, which means 80%
+hfile.block.cache.size: default is 0.4, which means 40%
+slack reserved for HDFS SCR/NIO: number of open HFiles *
+                  hbase.dfs.client.read.shortcircuit.buffer.size, where
+                  hbase.dfs.client.read.shortcircuit.buffer.size is set to
+               128k.
+
+
+Figure 2. Default LRUCache, L1 only block cache
+               hbase.bucketcache.ioengine=offheap
+
+
+20% minimum reserved for operations and rpc call queues
+hbase.regionserver.global.memstore.size: default is 0.4, which
+               means 40%
+hbase.regionserver.global.memstore.size +
+                  hfile.block.cache.size ≤0.80, which means 80%
+hfile.block.cache.size: default is 0.4 which means 40%
+slack reserved for HDFS SCR/NIO: number of open HFiles *
+                  hbase.dfs.client.read.shortcircuit.buffer.size, where
+                  hbase.dfs.client.read.shortcircuit.buffer.size is set to
+               128k.
+hbase.bucketcache.size: default is 0.0If
+                     hbase.bucketcache.size is float <1, it represents the
+                  percentage of total heap size.If hbase.bucketcache.size is
+                  ≥1, it represents the absolute value in MB. It must be <
+                  HBASE_OFFHEAPSIZE
+
+
+
+Parent topic: About the Off-heap BucketCache

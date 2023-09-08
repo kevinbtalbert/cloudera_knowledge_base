@@ -1,0 +1,75 @@
+Major changes when migrating to MapReduce 2Cloudera Docs
+Major changes when migrating to MapReduce 2
+Reviewing the differences between MapReduce version 1 (MRv1) and MapReduce version 2 (MRv2) helps you to understand the changes to the capabilities and services that have replaced the deprecated ones.
+Architectural changes
+MapReduce in Hadoop 2 is split into two components:
+YARN (Yet Another Resource Negotiator): cluster resource management capabilities
+MapReduce: MapReduce-specific capabilities
+
+In the MapReduce version 1 (MRv1) architecture, the cluster is managed by a service called the
+    JobTracker. TaskTracker services lived on each host and would launch tsks on behalf of jobs. The
+    JobTracker would serve information about completed jobs.
+In MapReduce version 2 (MRv2), the functions of the JobTracker are split between four
+    services:
+
+ResourceManager
+ApplicationMaster
+JobHistory Server
+NodeManager
+
+
+Configuration options with new name
+Many configuration options have new names to reflect the shift. As JobTrackers and
+    TaskTrackers no longer exist in MRv2, all configuration options pertaining to them no longer
+    exist, although many of them have corresponding options for the ResourceManager, NodeManager,
+    and JobHistoryServer.
+The vast majority of job configuration options that were available in MRv1 work in MRv2 as
+    well. For consistency and clarity, many options have been given new names. The older names are
+    deprecated, but will still work for the time being. The exceptions to this are
+    mapred.child.ulimit and all options relating to JVM reuse, as these are no longer supported.
+
+Managing resources
+One of the larger changes in MRv2 is the way that resources are managed. In MRv1, each host
+    was configured with a fixed number of map slots and a fixed number of reduces slots. Under YARN,
+    there is no distinction between resources available for maps and resources available for reduces
+    - all resources are available for both.
+The notion of slots has been discarded, and resources are now configured in terms of amounts
+    of memory (in megabytes) and CPU (in “virtual cores”, which are described below).
+In MRv1, the mapred.tasktracker.map.tasks.maximum and
+     mapred.tasktracker.reduce.tasks.maximum properties dictated how many map and
+    reduce slots each TaskTracker had. These properties no longer exist in YARN. Instead, YARN uses
+     yarn.nodemanager.resource.memory-mb and
+     yarn.nodemanager.resource.cpu-vcores, which control the amount of memory and
+    CPU on each host, both available to both maps and reduces.
+
+Administration commands
+The jobtracker and tasktracker commands, which start the
+    JobTracker and TaskTracker, are no longer supported because these services no longer exist. They
+    are replaced with yarn resourcemanager and yarn nodemanager,
+    which start the ResourceManager and NodeManager respectively. hadoop mradmin is
+    no longer supported. Instead, yarn rmadmin can be used.
+
+Secure cluster setup
+As in MRv1, a configuration must be set to have the user that submits a job own its task
+    processes. The equivalent of the MRv1 LinuxTaskController is the LinuxContainerExecutor. In a
+    secure setup, NodeManager configurations should set
+     yarn.nodemanager.container-executor.class to
+     org.apache.hadoop.yarn.server.nodemanager.LinuxContainerExecutor. Properties
+    set in the taskcontroller.cfg configuration file should be transitioned to
+    their analogous properties in the container-executor.cfg file.
+Queue access control lists (ACLs) are now placed in the Capacity Scheduler configuration file
+    instead of the JobTracker configuration.
+
+High Availability
+The underlying architecture of active-standby pair is similar to JobTracker HA in MRv1. A
+    major improvement over MRv1 is: in YARN, the completed tasks of in-flight MapReduce jobs are not
+    re-run on recovery after the ResourceManager is restarted or failed over. Further, the
+    configuration and setup has also been simplified. The main differences are:
+Failover controller is moved from a separate ZKFC daemon to be a part of the
+      ResourceManaget itself, meaning that there is no need to run an additional daemon.
+Clients, applications, and NodeManagers do not requre configuring a proxy-provider to talk
+      to the active ResourceManager.
+
+
+
+Parent topic: Transitioning from MapReduce 1 to MapReduce 2

@@ -1,0 +1,123 @@
+Configuring Flow Management clusters to hot load custom NARsCloudera Docs
+Configuring Flow Management clusters to hot load custom NARs
+Hot loading custom NARs means that you can store the NARs for your NiFi custom
+  processors in an external folder, and load them from that directory for use on the NiFi canvas.
+  This makes it easy to edit custom processors and add new ones without having to restart your Flow
+  Management cluster.
+
+
+Collect your Kerberos information.
+
+
+In Management Console, click Environments. 
+From the Actions drop-down, click Manage
+         Access.
+Create a Machine User with the EnvironmentUser Resource Role
+        and set its Workload password.note
+It is best practice to have a dedicated Machine User in this role. This Machine User is
+          in charge of accessing the object store resources for NiFi, having a dedicated user
+          ensures that there is least privilege access and separation of duties.
+
+Note down the user you create there and password, for your safety valves.
+
+
+
+You have created an ID Broker mapping.
+
+
+Access IDBroker mappings.
+To access IDBroker mappings in your environment, click Actions > Manage
+          Access.
+Choose the IDBroker Mappings tab where you can provide mappings for users or
+          groups and click Edit.
+
+Add your CDP Machine User and the corresponding AWS role that provides write
+        access to your folder in your S3 bucket to the Current Mappings section by clicking the blue
+        + sign.noteYou can get the AWS IAM role ARN from the Roles Summary page in AWS and can
+         copy it into the IDBroker role field. The selected AWS IAM role must have a trust policy
+         allowing IDBroker to assume this role.
+Click Save and Sync.
+
+
+
+
+
+
+You can configure NiFi to hot load custom NARs in all supported cloud providers.
+You can only access resources in the object store of the cloud provider in which you
+     environment is running. But but you can have a development and a production environment, for
+     example, and configure both environments to access the same location to hot load custom
+     NARs
+
+It is possible to define multiple locations if desired by repeating the
+      configuration properties with a different [***custom-name***] for each
+      location. But all locations should be in the object store of the underlying cloud provider of
+      where the NiFi cluster is located.
+
+
+NiFi polls for new NARs in the configured location(s) every 5 minutes.
+
+
+
+
+In Management Console, select Data Hub Clusters, then go to the Flow Management cluster,
+     then NiFi Service.
+
+Click Configuration.
+
+Search for Safety Valve and then Find: NiFi Node Advanced Configuration Snippet (Safety
+      Valve) for staging/nifi.properties.xml
+
+Create the following new properties:
+
+Name: nifi.nar.library.provider.[***custom-name***].implementation
+Example: nifi.nar.library.provider.narstorage1.implementation
+Value: org.apache.nifi.nar.hadoop.HDFSNarProvider
+
+Path to the configuration files
+Name: nifi.nar.library.provider.[***custom-name***].resources
+Example: nifi.nar.library.provider.narstorage1.resources
+Value, by default: /etc/hadoop/conf.cloudera.core_settings/core-site.xml
+
+Storage location for the NARs (the bucket name in S3 for example)
+Name: nifi.nar.library.provider.[***custom-name***].storage.location
+Example: nifi.nar.library.provider.narstorage1.storage.location
+Value: s3a://my-custom-nars-bucket
+
+Directory library with path to the NARs relative to the storage location
+Name: nifi.nar.library.provider.[***custom-name***].source.directory
+Example: nifi.nar.library.provider.narstorage1.source.directory
+Value: /myNARs
+
+Workload username and password of the machine user to use to access the resources
+
+Name: nifi.nar.library.provider.[***custom-name***].kerberos.principal
+Example: nifi.nar.library.provider.narstorage1.kerberos.principal
+Value: srv_my_s3_nar_user
+
+Name: nifi.nar.library.provider.[***custom-name***].kerberos.password
+Example: nifi.nar.library.provider.narstorage1.kerberos.password
+Value: myPassword123
+
+note
+Cloudera recommends that the workload user name and password that you configure above is
+       strictly dedicated to accessing custom NARs, and that the only permissions granted to this
+       user are to access the custom NAR object store location. 
+Alternately, you can also use the keytab file. However, this file must be distributed on
+       all NiFi nodes. This becomes problematic when scaling up a NiFi cluster in DataHub. In
+       addition, the file permissions must be properly changed to ensure the file is readable by the
+        nifi user. However, if desired, the below configuration can be used:
+Name: nifi.nar.library.provider.[***custom-name***].kerberos.keytab
+Example: nifi.nar.library.provider.narstorage1.kerberos.keytab
+Value: /path/to/my/file.keytab
+
+
+
+
+Restart the NiFi service in the Cloudera Manager.
+
+
+Refresh the NiFi UI and then drag and drop a new processor to the NiFi canvas and search for
+    your custom processor. 
+
+

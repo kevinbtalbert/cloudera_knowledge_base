@@ -1,0 +1,129 @@
+Factors to Consider for Capacity PlanningCloudera Docs
+Factors to Consider for Capacity Planning
+Choosing the right size of your cloud environment before migrating your workload from
+  CDH to CDP Public Cloud is critical for preserving performance characteristics. There are several
+  factors from your query workload to consider when choosing the CDP capacity for your
+  environment.
+
+Query memory requirements
+CPU utilizations
+Disk bandwidth
+Working set size
+Concurrent query execution
+
+Before getting into sizing specifics, it is important to understand the core hardware
+   differences between PC and on-prem hosts:
+
+
+
+CDH Host Recommendation
+AWS R5D.4xlarge Instance
+
+
+
+CPU cores
+20-80
+16
+
+
+Memory
+128GB min. 256GB+ recommended
+128
+
+
+Network
+10Gbps min. 40Gbps recommended
+Up to 10Gbps
+
+
+Ephemeral Storage
+12 x 2TB drives (1000MBps sequential)
+2 x 300GB NVMe SSD (1100MBps sequential)
+
+
+Network Storage
+N/A
+gp2 250 MB/s per volume
+
+
+An R5D.4xlarge instance closely matches the CDH recommended CPU, memory, and bandwidth specs
+   and so it is recommended as the instance type for CDP. However, AWS ephemeral storage cannot be
+   used as primary database storage since it is transient and lacks sufficient capacity. This core
+   difference requires a different strategy for achieving good scan performance.
+CDP Sizing and Scaling
+Before migration, scaling and concurrency must be planned. In a public cloud environment, the
+    ability to acquire better scaling and concurrency elastically in response to workload demand
+    enables the system to operate at a lower cost than the maximum limits you plan for. If you
+    configure your target environment to accommodate your peak workload as a constant default
+    configuration, you might have cost overruns when system demand falls below that level.
+In CDP, the T-Shirt size defines the number of executor instances for an individual cluster
+    and hence determines memory limits and performance of individual queries. Conversely, the
+    warehouse sizing parameter and auto-scaling determine how many clusters are allocated to support
+    concurrent query execution.
+
+
+Sizes
+Number of Executors
+
+
+
+X-Small
+2
+
+
+Small
+10
+
+
+Medium
+20
+
+
+Large
+40
+
+
+The T-shirt size must be at least large enough to support the highest memory usage by a single
+    query. In most cases, the size will not need to be larger but may provide better data caching if
+    there is commonality in working sets between queries. Increasing the T-Shirt size can directly
+    increase single-user capacity and also increase multi-user capacity. This is because the
+    additional memory and resources from the larger cluster allows larger datasets to be processed
+    and can also support concurrent query execution by sharing resources. Choosing a size that is
+    too small can lead to poor data caching, spilling of intermediate results, or memory paging.
+    Choosing a size this is too large can incur excessive PC run cost due to idle executors.
+One caveat to consider when choosing a T-shirt size based on existing hardware is what other
+    processes are running on the same host in your on-prem environment. In particular HDFS or other
+    locally hosted filesystems may be consuming significant resources. You may be able to choose a
+    smaller size for CDP since these processes will be isolated in their own pod in the CDP
+    environment. It may be helpful to look at CM per-process metrics to isolate impalad and Impala
+    frontend java processes that CDP will put on executor instances and to aggregate these metrics
+    across your cluster. The java processes can accumulate significant memory usage due to metadata
+    caching.
+
+Concurrency
+The size of your target environment corresponds to the peak concurrency the system can handle.
+    Concurrency is the number of queries that can be run at the same time.
+Each executor group can run 12 queries concurrently and occasional peaks can be handled
+    transparently using the auto scaling feature. An autoscaling leading to add one more executor
+    group doubles the query conncurrency to 24. Scaling the warehouse by adding more clusters allows
+    for additional concurrent queries to run but will not improve single-user capacity or
+    performance. This is because executors from the additional clusters are private to that cluster.
+    Concurrently executed queries will be routed to the different clusters and run
+    independently. The number of clusters can be changed to match concurrent usage by changing the
+    autoscaling parameters.
+
+Caching Hot Dataset
+Currently CDH supports caching mechanisms on the compute nodes to cache the working set that
+    is read from remote filesystems, such as, remote HDFS data node, S3, ABFS, and ADLS. This
+    offsets the input/output performance difference.
+In CDP Public Cloud, frequently accessed data is cached in a storage layer on SSD so that it
+    can be quickly retrieved for subsequent queries, which boosts the performance. Each executor can
+    have upto 200 GB of cache. So a medium-size can keep 200 * 20 = 4 TB of data in cache. For
+    columnar formats (for example, ORC) data in cache is decompressed but not decoded. If the
+    expected size of the hot dataset is 6 TB, which requires approximately 30 executors, you can
+    choose to overprovision (choose a large) to ensure full cache coverage; or underprovision
+    (choose a medium) to reduce cost at the expense of a lower rate of finding in the cache (cache
+    hit rate). 
+noteImpala data cache uses LIRS based algorithm.
+
+

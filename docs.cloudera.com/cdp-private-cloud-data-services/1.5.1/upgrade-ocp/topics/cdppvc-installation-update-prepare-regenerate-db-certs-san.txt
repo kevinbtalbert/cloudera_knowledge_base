@@ -1,0 +1,107 @@
+Pre-upgrade - Regenerate external DB cert as SAN (if applicable)Cloudera Docs
+Pre-upgrade - Regenerate external DB cert as SAN (if applicable)
+If you are upgrading from CDP Private Cloud Data Services 1.4.1
+        or 1.5.0 to 1.5.1, and you were previously using an external Control Plane metadata
+        database, you must regenerate the DB certificate with SAN before upgrading to CDP Private
+        Cloud Data Services 1.5.1.
+
+Generate certificates with SAN for the external Control Plane metadata
+                    database, for example server.crt and
+                        server.key.
+
+Take a backup of the previous certificates and copy them to
+                        postgres.
+
+The certificates will be available in the
+                            /var/lib/pgsql/12/data directory on the Private Cloud
+                        Base cluster host. 
+
+
+Use the following command format to change the owner to
+                        postgres:
+
+chown postgres:postgres <file_name>
+For example: 
+
+chown postgres:postgres server.crt
+chown postgres:postgres server.key
+
+
+
+Restart postgres:
+
+systemctl restart postgresql-12
+
+
+Update the certificates in all Cloudera Manager agents and restart the
+                    agents:
+
+Get the truststore password from the
+                            /etc/hadoop/conf.cloudera.HDFS-1/ssl-client.xml file.
+                    
+
+
+
+To view the certificates in the truststore: 
+
+keytool -list -rfc -keystore /var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_truststore.jks -storetype JKS -storepass <truststore_password>
+
+
+
+Delete the existing postgres certificate:
+
+
+keytool -delete -alias postgresql -rfc -keystore /var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_truststore.jks -storetype JKS -storepass <truststore_password>
+
+
+
+
+Import the new certificate into the truststore:
+
+
+keytool -import -file <cert_location> -alias postgresql -rfc -keystore /var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_truststore.jks -storetype JKS -storepass <truststore_password>
+
+
+
+
+Restart the agent:
+
+
+systemctl restart cloudera-scm-agent
+
+
+
+
+
+In the Private Cloud Management Console UI, update the certificate via:
+                        Administration > CA Certificates > Certificate type = External
+                        Database.
+
+Perform the following additional steps for CDW and CML:
+
+
+CDW:
+
+When any certificate is updated using the Management console, you
+                                must perform a refresh DBC operation.
+On the CDW Overview page, select Default DBC Options >
+                                    Refresh. 
+
+
+
+CML:
+
+Once the certificate is updated, the MLX service should be restarted
+                                at the K8s level. Restart the following pods in the
+                                    <CDP> namespace:
+
+dp-mlx-control-plane-app-XXX
+dp-cadence-worker-XXX
+dp-health-poller-XXX
+
+
+
+
+
+
+Parent topic: Update from 1.4.1 or 1.5.0 to 1.5.1 (OCP)

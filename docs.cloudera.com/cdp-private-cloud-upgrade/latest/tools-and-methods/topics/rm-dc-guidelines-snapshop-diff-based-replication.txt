@@ -1,0 +1,81 @@
+Guidelines to use snapshot diff-based replicationCloudera Docs
+Guidelines to use snapshot diff-based replication
+By default, Replication Manager uses snapshot differences ("diff") to improve
+        performance by comparing HDFS snapshots and only replicating the files that are changed in
+        the source directory. While Hive metadata requires a full replication, the data stored in
+        Hive tables can take advantage of snapshot diff-based replication. 
+After every replication, the Replication Manager retains a snapshot on the
+            source cluster. Replication Manager uses the snapshot copy on the source cluster to
+            perform incremental backup for the next replication cycle. 
+Replication Manager retains snapshots on the source cluster and uses snapshot
+            diff-based replication only if:
+Source and target clusters are managed by Cloudera Manager 5.15 and
+                    higher. 
+Source cluster is managed by Cloudera Manager 5.15.0 or higher when the
+                    destination is Amazon S3 or Microsoft ADLS.importantSnapshot-diff-based replication from S3/ABFS to HDFS is not
+                        supported because S3/ABFS does not support snapshots. 
+Source and target CDH versions are 5.13.3 or higher, 5.14.2 or higher,
+                    and 5.15 or higher.
+
+The following guidelines must be met to use snapshot diff-based replication
+            efficiently in replication policies:
+
+Source and target clusters are managed by Cloudera Manager 5.15.0 or
+                higher.
+Source and target clusters run CDH version 5.15.0 or higher, 5.14.2 or
+                higher, or 5.13.3 or higher.
+HDFS snapshots are immutable.tipSearch
+                    for Enable Immutable Snapshots option in the  Cloudera Manager > Clusters > HDFS service > Configuration tab.
+Snapshot root directory is set as low in the hierarchy as possible.
+User used to create and run the replication policy is a super user or the
+                owner of the snapshottable root. This is because the run-as-user
+                (specified in the replication policy) must have the required permissions
+                to list the snapshots.
+Paths from both source and destination clusters in the replication
+                policy must be present under a snapshottable root, or must be snapshottable. tipAn HDFS directory is referred to as
+                    snapshottable if an administrator - having superuser privilege or having owner
+                    access to the directory - has enabled snapshots for the directory in Cloudera
+                    Manager.
+All the HDFS paths for the tables in a database is snapshottable or under
+                a snapshottable root for a Hive replication policy to replicate the database
+                    successfully.For example, if the database being replicated has
+                    external tables, all the external table HDFS data locations should be
+                    snapshottable. This is because if the external table locations are not
+                    snapshottable, Replication Manager does not generate a diff report. The
+                    Replication Manager needs a diff report to use the snapshot diff feature.
+                
+
+importantDo not use snapshot diff for globbed paths
+            because it is not optimized for globbed paths.
+FAQs
+
+What do I do when snapshot diff-based replication fails because an encrypted
+                        subdirectory exists in the source data?
+To resolve this issue, create an exclusion regex in the replication policy
+                        to exclude the subdirectory during replication. Create another replication
+                        policy to replicate the encrypted subdirectory.
+During what circumstances does the Replication Manager initiate a complete
+                        data replication?
+Replication Manager initiates a complete replication for the following
+                            scenarios:
+When you do not choose Abort on Snapshot Diff
+                                    Failures (when you create a replication policy in
+                                Replication Manager) and errors appear during the replication
+                                process. In this case, the Replication Manager continues to
+                                    replicate and performs a complete replication after it
+                                    encounters an error. 
+When one or more of the following parameters that you set
+                                in the replication policy changes: 
+Delete Policy
+Preserve Policy
+Target Path
+Exclusion Path.
+
+When a change in the target directories is detected.
+                                    Replication Manager ensures that the next HDFS snapshot
+                                    replication is a complete replication.
+
+
+
+
+Parent topic: HDFS replication policy considerations

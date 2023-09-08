@@ -1,0 +1,95 @@
+Enable CgroupsCloudera Docs
+Enable Cgroups
+You can enable CPU Scheduling to enable cgroups. You must configure certain properties
+      in yarn-site.xml on the ResourceManager and NodeManager hosts to enable
+      cgroups.
+
+cgroups is a Linux kernel feature. cgroups is supported on the following Linux operating
+            systems:
+
+
+CentOS 6.9, 7.3
+
+
+RHEL 6.9, 7.3
+
+
+SUSE 12
+
+
+Ubuntu 16
+
+
+At this time there is no cgroups equivalent for Windows. cgroups are not enabled by
+            default on CDP. cgroups require that the CDP cluster be Kerberos enabled.
+important
+The yarn.nodemanager.linux-container-executor.cgroups.mount property
+               must be set to false. Setting this value to true is
+               not currently supported.
+
+
+
+Enable cgroups
+The following commands must be run on every reboot of the
+               NodeManager hosts to set up the cgroup hierarchy. Note that operating systems use
+               different mount points for the cgroup interface. Replace
+                  /sys/fs/cgroup with your operating system equivalent.
+mkdir -p /sys/fs/cgroup/cpu/yarn
+chown -R yarn /sys/fs/cgroup/cpu/yarn
+mkdir -p /sys/fs/cgroup/memory/yarn
+chown -R yarn /sys/fs/cgroup/memory/yarn
+mkdir -p /sys/fs/cgroup/blkio/yarn
+chown -R yarn /sys/fs/cgroup/blkio/yarn
+mkdir -p /sys/fs/cgroup/net_cls/yarn
+chown -R yarn /sys/fs/cgroup/net_cls/yarn
+mkdir -p /sys/fs/cgroup/devices/yarn
+chown -R yarn /sys/fs/cgroup/devices/yarn
+
+In Cloudera Manager, select the YARN service.
+
+Click the Configuration tab.
+
+Search for Always Use Linux Container Executor and select YARN-1 (Service-Wide) option.
+
+Search for NodeManager Advanced Configuration and set the below property in the NodeManager Advanced Configuration Snippet (Safety Valve) for yarn-site.xml field.
+Name:  yarn.nodemanager.linux-container-executor.group
+Value: hadoop
+
+Search for CGroups and select YARN-1 (Service-Wide) option in the Use CGroups for Resource Management field.
+
+Search for CGroups Hierarchy and set the NodeManager Default Group value to /hadoop-yarn.
+
+Search for NodeManager Advanced Configuration and set the below property in the NodeManager Advanced Configuration Snippet (Safety Valve) for yarn-site.xml field.
+Name:  yarn.nodemanager.linux-container-executor.cgroups.mount
+Value: false
+Name:  yarn.nodemanager.linux-container-executor.cgroups.mount-path
+Value: /sys/fs/cgroup
+
+(Optional) Set the percentage of CPU to be used by YARN. Search for
+                  Containers CPU Limit and set the value in the
+                  Containers CPU Limit Percentage field.
+Set the percentage of CPU that can be allocated for YARN containers. In most
+               cases, the default value of 100% should be used. If you have another process that
+               needs to run on a node that also requires CPU resources, you can lower the percentage
+               of CPU allocated to YARN to free up resources for the other process.
+
+(Optional) Set flexible or strict CPU limits. Search for Strict CGroup
+                  Resource Usage and select the  NodeManager Default
+                  Group field.
+
+CPU jobs are constrained with CPU scheduling and cgroups enabled, but by default
+                  these are flexible limits. If spare CPU cycles are available, containers are
+                  allowed to exceed the CPU limits set for them. With flexible limits, the amount of
+                  CPU resources available for containers to use can vary based on cluster usage --
+                  the amount of CPU available in the cluster at any given time. 
+You can use cgroups to set strict limits on CPU usage. When strict limits are
+                  enabled, each process receives only the amount of CPU resources it requests. With
+                  strict limits, a CPU process will receive the same amount of cluster resources
+                  every time it runs. 
+Strict limits are not enabled (set to false) by default.
+noteIrrespective of whether this property is true or false, at no point will total container CPU usage exceed the limit set in yarn.nodemanager.resource.percentage-physical-cpu-limit. 
+noteCPU resource isolation leverages advanced features in the Linux kernel. At this time, setting yarn.nodemanager.linux-container-executor.cgroups.strict-resource-usage to true is not recommended due to known kernel panics. In addition, with some kernels, setting yarn.nodemanager.resource.percentage- physical-cpu-limit to a value less than 100 can result in kernel panics. If you require either of these features, you must perform scale testing to determine if the in-use kernel and workloads are stable. As a starting point, Linux kernel version 4.8.1 works with these features. However, testing the features with the desired workloads is very important.
+
+
+
+Related informationConfigure CPU scheduling and isolationParent topic: Limit CPU usage with Cgroups

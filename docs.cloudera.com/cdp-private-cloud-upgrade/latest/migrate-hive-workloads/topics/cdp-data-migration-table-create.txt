@@ -1,0 +1,77 @@
+Understanding CREATE TABLE behaviorCloudera Docs
+Understanding CREATE TABLE behavior
+Hive table creation has changed significantly since Hive 3 to improve useability and
+  functionality. If you are upgrading from CDH or HDP, you must understand the changes affecting
+  legacy table creation behavior.
+Hive has changed table creation in the following ways:
+Creates ACID-compliant table, which is the default in CDP
+Supports simple writes and inserts
+Writes to multiple partitions
+Inserts multiple data updates in a single SELECT statement
+Eliminates the need for bucketing.
+
+If you have an ETL pipeline that creates tables in Hive, the tables will be created as ACID.
+   Hive now tightly controls access and performs compaction periodically on the tables. Using
+   ACID-compliant, transactional tables causes no performance or operational overload. The way you
+   access managed Hive tables from Spark and other clients changes. In CDP, access to external
+   tables requires you to set up security access permissions.
+You must understand the behavior of the CREATE TABLE statement in legacy platforms like CDH or
+   HDP and how the behavior changes after you upgrade to CDP.
+Before upgrading to CDP
+In CDH 5, CDH 6, and HDP 2, by default CREATE TABLE creates a non-ACID managed table in plain
+    text format.
+In HDP 3 and CDP 7.1.0 through 7.1.7.x, by default CREATE TABLE creates either a full ACID
+    transactional table in ORC format or insert-only ACID transactional tables for all other table
+    formats.
+
+After upgrading to CDP
+
+If you are upgrading from HDP 2, CDH 5, or CDH 6 to CDP 7.1.0 through CDP 7.1.8, by default
+     CREATE TABLE creates a full ACID transactional table in ORC format or insert-only ACID
+     transactional tables for all other table formats.
+If you are upgrading from HDP 3 or CDP 7.1.0 through 7.1.7.x to CDP 7.1.8, the existing
+     behavior persists and CREATE TABLE creates either a full ACID transactional table in ORC format
+     or insert-only ACID transactional tables for all other table formats.
+
+Now that you understand the behavior of the CREATE TABLE statement, you can choose to modify
+    the default table behavior by configuring certain properties. The order of preference for
+    configuration is as follows:
+
+Override default behavior when creating the table
+Irrespective of the database, session, or site-level settings, you can override the default
+      table behavior by using the MANAGED or EXTERNAL keyword in the CREATE TABLE
+      statement.CREATE [MANAGED][EXTERNAL] TABLE foo (id INT);
+Set the default table type at a database level
+You can use the database property, defaultTableType=EXTERNAL or ACID to
+      specify the default table type to be created using the CREATE TABLE statement. You can specify
+      this property when creating the database or at a later point using the ALTER DATABASE
+      statement. For
+       example:CREATE DATABASE test_db WITH DBPROPERTIES ('defaultTableType'='EXTERNAL');In
+       this example, tables created under the test_db database using the CREATE
+       TABLE statement creates external tables with the purge fucntionality enabled
+        (external.table.purge = 'true').You can also choose to configure a
+       database to allow only external tables to be created and prevent creation of ACID tables.
+       While creating a database, you can set the database property,
+        EXTERNAL_TABLES_ONLY=true to ensure that only external tables are created in the
+       database. For
+       example:CREATE DATABASE test_db WITH DBPROPERTIES ('EXTERNAL_TABLES_ONLY'='true');
+Set the default table type at a session level
+You can configure the CREATE TABLE behavior within an existing beeline session by setting
+       hive.create.as.external.legacy to true or false. Setting the value to true
+      results in configuring the CREATE TABLE statement to create external tables by default.When
+       the session ends, the default CREATE TABLE behavior also ends. 
+Set the default table type at a site level
+You can configure the CREATE TABLE behavior at the site level by configuring the
+       hive.create.as.insert.only and hive.create.as.acid
+      properties in Cloudera Manager. When configured at the site level, the behavior persists from
+      session to session. For more information, see Configuring CREATE TABLE behavior.
+
+If you are a Spark user, switching to legacy behavior is unnecessary. Calling ‘create table’
+    from SparkSQL, for example, creates an external table after upgrading to CDP as it did before
+    the upgrade. You can connect to Hive using the Hive Warehouse Connector (HWC) to read Hive ACID
+    tables from Spark. To write ACID tables to Hive from Spark, you use the HWC and HWC API. Spark
+    creates an external table with the purge property when you do not use the HWC API. For more
+    information, see Hive Warehouse Connector for accessing Spark data.
+
+
+Related informationHDFS ACLSHive Warehouse Connector for accessing Apache Spark dataSpark Direct Reader for accessing Spark dataApache Hive 3 Key FeaturesApache Hive 3 TablesParent topic: Key semantic changes and workarounds

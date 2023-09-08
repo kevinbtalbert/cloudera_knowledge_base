@@ -1,0 +1,134 @@
+Example: fieldTransformation ConfigurationCloudera Docs
+Example: fieldTransformation Configuration
+The fieldTransformation is a complex object which defines a transformation that can be
+      done to a message.
+In this example, the host name is extracted from the URL by way of the URL_TO_HOST
+          function. Domain names are removed by using DOMAIN_REMOVE_SUBDOMAINS, thereby creating two
+          new fields (full_hostname and
+            domain_without_subdomains) and adding them to each message.
+
+Configuration File with Transformation Information
+
+
+The format of a fieldTransformation is as follows:
+
+input
+
+An array of fields or a single field representing the input. This is optional;
+                if unspecified, then the whole message is passed as input.
+
+output
+
+The outputs to produce from the transformation. If unspecified, it is assumed to
+                be the same as inputs.
+
+transformation
+
+The fully qualified class name of the transformation to be used. This is either
+                a class which implements FieldTransformation or a member of the FieldTransformations
+                enum.
+
+config
+
+A String to Object map of transformation specific configuration.
+
+
+CCP currently implements the
+            following fieldTransformations options: 
+REMOVE
+
+This transformation removes the specified input fields. If you want a
+                        conditional removal, you can pass a Metron Query Language statement to
+                        define the conditions under which you want to remove the fields.
+The following example removes field1 unconditionally:
+{
+...
+    "fieldTransformations" : [
+          {
+            "input" : "field1"
+          , "transformation" : "REMOVE"
+          }
+                      ]
+}
+The following example removes field1 whenever field2 exists and has a
+                        corresponding value equal to 'foo':
+{
+...
+  "fieldTransformations" : [
+          {
+            "input" : "field1"
+          , "transformation" : "REMOVE"
+          , "config" : {
+              "condition" : "exists(field2) and field2 == 'foo'"
+                       }
+          }
+                      ]
+}
+
+IP_PROTOCOL
+
+This transformation maps IANA protocol numbers to consistent string
+                        representations.
+The following example maps the protocol field to a textual
+                        representation of the protocol:
+{
+...
+    "fieldTransformations" : [
+          {
+            "input" : "protocol"
+          , "transformation" : "IP_PROTOCOL"
+          }
+                      ]
+}
+
+STELLAR
+lo
+
+This transformation executes a set of transformations expressed as Stellar
+                        Language statements.
+The following example adds three new fields to a message:
+
+utc_timestamp
+
+The UNIX epoch timestamp based on the timestamp field, a dc field
+                                 which is the data center the message comes from and a dc2tz map
+                                 mapping data centers to timezones.
+
+url_host
+
+The host associated with the url in the url field.
+
+url_protocol
+
+The protocol associated with the url in the url field.
+
+
+{
+...
+    "fieldTransformations" : [
+          {
+           "transformation" : "STELLAR"
+          ,"output" : [ "utc_timestamp", "url_host", "url_protocol" ]
+          ,"config" : {
+            "utc_timestamp" : "TO_EPOCH_TIMESTAMP(timestamp, 'yyyy-MM-dd
+HH:mm:ss', MAP_GET(dc, dc2tz, 'UTC') )"
+           ,"url_host" : "URL_TO_HOST(url)"
+           ,"url_protocol" : "URL_TO_PROTOCOL(url)"
+                      }
+          }
+                      ]
+   ,"parserConfig" : {
+      "dc2tz" : {
+                "nyc" : "EST"
+               ,"la" : "PST"
+               ,"london" : "UTC"
+                }
+    }
+}
+Note that the dc2tz map is in the parser config, so it is accessible in the
+                        functions.
+
+
+
+
+Parent topic: Parser Configuration

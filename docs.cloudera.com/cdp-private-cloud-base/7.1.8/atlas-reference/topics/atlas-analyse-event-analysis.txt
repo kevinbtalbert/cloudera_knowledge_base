@@ -1,0 +1,47 @@
+Analysing event analysisCloudera Docs
+Analysing event analysis
+To create lineage describing which NiFi component interacts with what datasets,
+        dataset entity, and Process entity need to be created in Atlas. Specifically, at least three
+        entities are required to draw a lineage graph on Atlas UI.
+A Process entity, and a dataset which is referred by a Process 'inputs'
+            attribute, and a dataset referred from an 'outputs' attribute. For example:
+# With following entities
+            guid: 1
+            typeName: fs_path (extends dataset)
+            qualifiedName: /data/A1.csv@BranchOffice1
+
+            guid: 2
+            typeName: nifi_flow_path (extends Process)
+            name: GetFile, PutHDFS
+            qualifiedName: 529e6722-9b49-3b66-9c94-00da9863ca2d@BranchOffice1
+            inputs: refer guid(1)
+            outputs: refer guid(3)
+
+            guid: 3
+            typeName: hdfs_path (extends dataset)
+            qualifiedName: /data/input/A1.csv@Analytics
+            # Atlas draws lineage graph
+            /data/A1.csv -> GetFile, PutHDFS -> /data/input/A1.csv
+
+To identify such Process and dataset Atlas entities, this reporting task uses
+            NiFi Provenance Events. At the minimum, the reporting task needs to derive the following
+            details from a NiFi Provenance event record:
+
+typeName (for example: fs_path, hive_table)
+qualifiedName in uniqueId@namespace (for example: /data/A1.csv@ns1)
+
+'namespace' in 'qualifiedName' attribute is resolved by mapping an IP address
+            or hostname available at the NiFi Provenance event 'transitUri' to a namespace. 
+For 'typeName' and 'qualifiedName', different analysis rules are needed for
+            different datasets. ReportLineageToAtlas provides an extension point called
+            'NiFiProvenanceEventAnalyzer' to implement such analysis logic for particular
+            datasets.
+When a Provenance event is analyzed, registered NiFiProvenanceEventAnalyzer
+            implementations are searched in the following order to find a best matching analyzer
+                implementation:
+By component type (for example: KafkaTopic)
+By transit URI protocol (for example: HDFSPath)
+By event type, if none of above analyzers matches (for example: Create)
+
+
+Parent topic: NiFi metadata collection

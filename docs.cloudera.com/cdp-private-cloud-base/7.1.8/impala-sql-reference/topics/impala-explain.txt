@@ -1,0 +1,156 @@
+EXPLAIN statementCloudera Docs
+EXPLAIN statement
+The EXPLAIN statement returns the execution plan for a statement,
+    showing the low-level mechanisms that Impala will use to read the data, divide the work among
+    nodes in the cluster, and transmit intermediate and final results across the
+    network.Use explain followed by a complete SELECT query. For example: 
+Syntax:
+EXPLAIN { select_query | ctas_stmt | insert_stmt }
+ The select_query is a SELECT statement, optionally prefixed
+        by a WITH clause. The insert_stmt is an INSERT statement that inserts into or
+        overwrites an existing table. It can use either the INSERT ... SELECT or
+          INSERT ... VALUES syntax. The ctas_stmt is a CREATE TABLE statement using the
+          AS SELECT clause, typically abbreviated as a CTAS operation.
+Usage notes:
+
+      You can interpret the output to judge whether the query is performing efficiently, and adjust the query
+      and/or the schema if not. For example, you might change the tests in the WHERE clause, add
+      hints to make join operations more efficient, introduce subqueries, change the order of tables in a join, add
+      or change partitioning for a table, collect column statistics and/or table statistics in Hive, or any other
+      performance tuning steps.
+    
+      The EXPLAIN output reminds you if table or column statistics are missing from any table
+      involved in the query. These statistics are important for optimizing queries involving large tables or
+      multi-table joins. See COMPUTE STATS statement for how to gather statistics,
+      and Table and column statistics for how to use this information for query tuning.
+    
+Read the EXPLAIN plan from bottom to top: 
+ The last part of the plan shows the low-level details such as the
+            expected amount of data that will be read, where you can judge the
+            effectiveness of your partitioning strategy and estimate how long it
+            will take to scan a table based on total data size and the size of
+            the cluster. 
+ As you work your way up, next you see the operations that will be
+            parallelized and performed on each Impala node. 
+ At the higher levels, you see how data flows when intermediate
+            result sets are combined and transmitted from one node to another. 
+ The EXPLAIN_LEVEL query option lets you
+            customize how much detail to show in the EXPLAIN
+            plan depending on whether you are doing high-level or low-level
+            tuning, dealing with logical or physical aspects of the query. 
+
+      If you come from a traditional database background and are not familiar with data warehousing, keep in mind
+      that Impala is optimized for full table scans across very large tables. The structure and distribution of
+      this data is typically not suitable for the kind of indexing and single-row lookups that are common in OLTP
+      environments. Seeing a query scan entirely through a large table is common, not necessarily an indication of
+      an inefficient query. Of course, if you can reduce the volume of scanned data by orders of magnitude, for
+      example by using a query that affects only certain partitions within a partitioned table, then you might be
+      able to optimize a query so that it executes in seconds rather than minutes.
+    
+Extended EXPLAIN output:
+
+      For performance tuning of complex queries, and capacity planning (such as using the admission control and
+      resource management features), you can enable more detailed and informative output for the
+      EXPLAIN statement. In the impala-shell interpreter, issue the command
+      SET EXPLAIN_LEVEL=level, where level is an integer
+      from 0 to 3 or corresponding mnemonic values minimal, standard,
+      extended, or verbose.
+     When extended EXPLAIN output is enabled,
+        EXPLAIN statements print information about estimated
+      memory requirements, minimum number of virtual cores, and so on. Starting in Impala 3.2, if the EXPLAIN_LEVEL option is set to
+          EXTENDED level or VERBOSE, the output contains the
+        following additional information.
+The analyzed query, in the output header. The analyzed query may
+          have been rewritten to include various optimizations and implicit
+          casts. See the example below.
+The predicates in the plan output includes the same implicit casts and
+        literals printed with a cast to show the type.
+
+Examples:
+
+      This example shows how the standard EXPLAIN output moves from the lowest (physical) level to
+      the higher (logical) levels. The query begins by scanning a certain amount of data; each node performs an
+      aggregation operation (evaluating COUNT(*)) on some subset of data that is local to that
+      node; the intermediate results are transmitted back to the coordinator node (labelled here as the
+      EXCHANGE node); lastly, the intermediate results are summed to display the final result.
+    [impalad-host:21000] > explain select count(*) from customer_address;
++----------------------------------------------------------+
+| Explain String                                           |
++----------------------------------------------------------+
+| Estimated Per-Host Requirements: Memory=42.00MB VCores=1 |
+|                                                          |
+| 03:AGGREGATE [MERGE FINALIZE]                            |
+| |  output: sum(count(*))                                 |
+| |                                                        |
+| 02:EXCHANGE [PARTITION=UNPARTITIONED]                    |
+| |                                                        |
+| 01:AGGREGATE                                             |
+| |  output: count(*)                                      |
+| |                                                        |
+| 00:SCAN HDFS [default.customer_address]                  |
+|    partitions=1/1 size=5.25MB                            |
++----------------------------------------------------------+
+The following example shows an extended EXPLAIN output.
+      Note that the analyzed query was rewritten to include:
+The 'constant folding' optimization, which simplified the expression
+        in the original query, '1000 / 100' to
+          '10'.
+The implicit casts in the WHERE clause.
+EXPLAIN SELECT * FROM functional_kudu.alltypestiny WHERE bigint_col < 1000 / 100;
++----------------------------------------------------------+
+| Explain String                                           |
++----------------------------------------------------------+
+| ...
+| Analyzed query: SELECT * FROM mytable WHERE CAST(bigint_col AS DOUBLE) < CAST(10 AS DOUBLE)
+| ...
+| 00:SCAN KUDU [functional_kudu.alltypestiny]
+| predicates: CAST(bigint_col AS DOUBLE) < CAST(10 AS DOUBLE)
+...
+Security considerations:
+ If these statements in your environment contain sensitive
+        literal values such as credit card numbers or tax identifiers, Impala can redact this
+        sensitive information when displaying the statements in log files and other administrative
+        contexts.
+Cancellation: Cannot be cancelled.
+      
+HDFS permissions:
+
+      
+      The user ID that the impalad daemon runs under,
+      typically the impala user, must have read
+      and execute permissions for all applicable directories in all source tables
+      for the query that is being explained.
+      (A SELECT operation could read files from multiple different HDFS directories
+      if the source table is partitioned.)
+    Kudu considerations:
+      The EXPLAIN statement displays equivalent plan
+      information for queries against Kudu tables as for queries
+      against HDFS-based tables.
+    
+      To see which predicates Impala can push down to Kudu for
+      efficient evaluation, without transmitting unnecessary rows back
+      to Impala, look for the kudu predicates item in
+      the scan phase of the query. The label kudu predicates
+      indicates a condition that can be evaluated efficiently on the Kudu
+      side. The label predicates in a SCAN KUDU
+      node indicates a condition that is evaluated by Impala.
+      For example, in a table with primary key column X
+      and non-primary key column Y, you can see that
+      some operators in the WHERE clause are evaluated
+      immediately by Kudu and others are evaluated later by Impala:
+    
+EXPLAIN SELECT x,y from kudu_table WHERE
+  x = 1 AND y NOT IN (2,3) AND z = 1
+  AND a IS NOT NULL AND b > 0 AND length(s) > 5;
++----------------
+| Explain String
++----------------
+...
+| 00:SCAN KUDU [kudu_table]
+|    predicates: y NOT IN (2, 3), length(s) > 5
+|    kudu predicates: a IS NOT NULL, b > 0, x = 1, z = 1
+ Only binary predicates, IS NULL and IS NOT
+          NULL (in Impala 2.9 and higher), and IN predicates containing
+        literal values that exactly match the types in the Kudu table, and do not require any
+        casting, can be pushed to Kudu. 
+Related informationEXPLAIN_LEVEL query optionTable and column statisticsUnderstanding performance using Explain planParent topic: Impala SQL statements

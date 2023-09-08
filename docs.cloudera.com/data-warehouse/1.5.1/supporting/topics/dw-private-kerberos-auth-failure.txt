@@ -1,0 +1,53 @@
+Resolving Kerberos authentication failureCloudera Docs
+Resolving Kerberos authentication failure
+
+Condition
+When you use impala-shell or a JDBC connection with Kerberos as the authentication
+                mechanism, an unauthorized response is received from Impala Virtual Warehouse and
+                the following warning message is visible in the logs of the impala coordinator pod:
+                    W0530 12:08:09.118422 21760 authentication.cc:783] Failed to
+                    authenticate request from <ip-address>:57978 via SPNEGO: Not authorized:
+                    Unspecified GSS failure. Minor code may provide more information: Request ticket
+                    server hive/dwx-env-<env-name>.cdp.local@ROOT.HWX.SITE kvno 2 found in keytab
+                    but not with enctype des3-hmac-sh.
+
+
+Cause
+DES and DES3 encryption types are deprecated. This error occurs when these
+                    deprecated encryption types are in the list of enabled Kerberos encryption
+                    types, but the Impala Virtual Warehouse pods are running on a cluster where
+                    these insecure encryption types are not supported by the operating system
+                    running on the cluster nodes.
+
+Solution
+
+To resolve this problem, you can disable using DES and DES3 encryption types
+                        in the Kerberos configuration. On test or development environments, you can
+                        include and use deprecated encryption types such as rc4-hmac, but you
+                        must omit DES and DES3 from the list of the allowed encryption types. Modify
+                        the Kerberos configuration of the CDP Private Cloud Base cluster by setting
+                        appropriate values for the default_tgs_enctypes,
+                            default_tkt_enctypes, and permitted_enctypes
+                        parameters in the libdefaults block of the
+                            /etc/krb5.conf file.
+For
+                            example:default_tgs_enctypes = rc4-hmac aes256-cts aes128-cts
+default_tkt_enctypes = rc4-hmac aes256-cts aes128-cts
+permitted_enctypes = rc4-hmac aes256-cts aes128-cts
+allow_weak_crypto = truenoteThe
+                                allow_weak_crypto setting is also required to use
+                            the deprecated encryption types. 
+Cloudera recommends that you do not use deprecated encryption types in
+                        production environments. Use stronger encryption types such as AES 256 and
+                        AES 128. For
+                        example:default_tgs_enctypes = aes256-cts aes128-cts
+default_tkt_enctypes = aes256-cts aes128-cts
+permitted_enctypes = aes256-cts aes128-cts
+After modifying the Kerberos configuration of the CDP Private Cloud Base
+                        cluster, go to the CDW web interface and refresh the Dtabase Catalog and the
+                        Virtual Warehouse by clicking  > Refresh. This copies configurations from the base cluster to CDW.
+
+
+
+
+Parent topic: Troubleshooting issues in CDW Private Cloud

@@ -1,0 +1,85 @@
+Hive Metastore leader electionCloudera Docs
+Hive Metastore leader election
+To avoid running the same tasks across all Hive Metastore (HMS) instances, you can
+  configure a HMS leader manually or enable dynamic election.
+HMS performs housekeeping tasks, such as execution of compaction tasks, auto-discovering
+   partitions for external tables, generation of compaction tasks, and so on. When there are
+   multiple HMS instances, it is essential to have a single leader HMS elected to avoid running the
+   same tasks across all the instances. The elected leader then performs the housekeeping tasks.
+The leader is configured through the metastore.housekeeping.leader.hostname
+   property. The value of this property is an empty string by default, which indicates that the
+   current HMS will run the housekeeping tasks. To configure a leader, specify the host name of the
+   HMS service. However, configuring a leader HMS has the following disadvantages:
+
+Not useful when the leader HMS goes down in some environments
+Configuring a leader HMS in cloud environments is not easy
+All the tasks are expected to be performed by the leader HMS, which can overburden the HMS
+    instance
+
+Dynamic leader election
+You can enable dynamic leader election for HMS to overcome the challenges listed above. This
+    feature uses Hive locks to dynamically elect a leader. When a HMS instance owns a lock, it is
+    elected as the leader and performs the housekeeping tasks. The HMS regularly sends heartbeats to
+    prevent the lock from timing out. If the leader loses the lock, the in-progress housekeeping
+    tasks are stopped. The other HMS instances should monitor the lock periodically and acquire the
+    lock to claim leadership.
+The leader election event is audited and the details of the leader are stored in a Hive table.
+    There are listeners that keep track of the leader election and notify if a HMS instance wins or
+    loses a leader election.
+To enable dynamic leader election for HMS, configure the following properties in Cloudera
+    Manager using the 'Hive Metastore Server Advanced Configuration Snippet (Safety Valve) for
+     hive-site.xml':
+Configuration Key
+Value
+Description
+
+metastore.housekeeping.leader.election
+Default: host
+By default, HMS chooses a leader based on the configured
+        metastore.housekeeping.leader.hostname. Set the value to 'lock' if you want
+       HMS to use Hive locks to elect a leader. 
+
+metastore.housekeeping.leader.auditTable
+Default: "" (empty string)
+
+Optional. Specify a Hive table name if you want to capture HMS leader changes in
+        the specified audit table. The table should be of Text format with JSON serialized. The
+        table is created automatically if it does not already exist.
+In a production environment, it is recommended that you set this property to view the
+        leader change history by running a Hive query against the table.
+
+
+metastore.housekeeping.leader.newAuditFile
+Default: False
+Optional. Specifies whether to create a new audit file in response to the new
+       election event when metastore.housekeeping.leader.auditTable is not empty.
+       Set the value to True to create a new file, else set it to False.
+
+metastore.housekeeping.leader.auditFiles.limit
+Default: 10
+Optional. Enables you to limit the number of small event files. This property is
+       useful when metastore.housekeeping.leader.newAuditFile is set to True or if
+       the underlying file system does not support the append operation.If the number of the
+        event files exceeds the limit, the oldest file is deleted.
+
+metastore.lock.numretries
+Default: 100
+Optional. The number of times you want to try to get all the locks in case of
+       failure.
+
+metastore.lock.sleep.between.retries
+Default: 60 seconds
+Optional. The maximum sleep time between various retries in case of
+       failure.
+
+Additionally, ensure that you enable the following properties to support the HMS dynamic
+    leader election feature:
+hive.compactor.initiator.on=true
+hive.metastore.housekeeping.threads.on=trueLook for the above
+       properties in Cloudera Manager under Clusters > Hive Metastore > Configuration.
+hive.compactor.cleaner.on=trueSet this property using the 'Hive
+       Metastore Server Advanced Configuration Snippet (Safety Valve) for hive-site.xml' in Cloudera
+       Manager.
+
+
+

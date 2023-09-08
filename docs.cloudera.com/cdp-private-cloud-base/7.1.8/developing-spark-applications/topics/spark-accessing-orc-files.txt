@@ -1,0 +1,58 @@
+Accessing ORC files from SparkCloudera Docs
+Accessing ORC files from Spark
+Use the following steps to access ORC files from Apache Spark. 
+
+To start using ORC, you can define a SparkSession instance:
+import org.apache.spark.sql.SparkSession
+val spark = SparkSession.builder().getOrCreate()
+import spark.implicits._
+The following example uses data structures to demonstrate working with complex types.
+            The Person struct data type has a name, an age, and a sequence of contacts, which are
+            themselves defined by names and phone numbers.
+
+
+Define Contact and Person data structures: 
+
+case class Contact(name: String, phone: String)
+case class Person(name: String, age: Int, contacts: Seq[Contact])
+
+
+Create 100 Person records:
+val records = (1 to 100).map { i =>;
+  Person(s"name_$i", i, (0 to 1).map { m => Contact(s"contact_$m", s"phone_$m") })
+}In
+               the physical file, these records are saved in columnar format. When accessing ORC
+               files through the DataFrame API, you see rows.
+
+To write person records as ORC files to a directory named “people”, you can use the
+               following command:
+
+records.toDF().write.format("orc").save("people")
+
+
+Read the objects back:
+
+val people = sqlContext.read.format("orc").load("people.json")
+
+
+For reuse in future operations, register the new "people" directory as temporary
+               table “people”:
+
+people.createOrReplaceTempView("people")
+
+
+After you register the temporary table “people”, you can query columns from the
+               underlying table:
+
+spark.sql("SELECT name FROM people WHERE age < 15").count()
+
+
+
+In this example the physical table scan loads only columns name and age at
+            runtime, without reading the contacts column from the file system. This improves
+            read performance.
+You can also use Spark DataFrameReader and
+               DataFrameWriter methods to access ORC files.
+
+
+Related informationApache Spark DataFrameReader MethodsApache Spark DataFrameWriter MethodsParent topic: Accessing ORC Data in Hive Tables

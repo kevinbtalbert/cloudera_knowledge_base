@@ -1,0 +1,192 @@
+Performing a Data Hub major/minor version upgradeCloudera Docs
+Performing a Data Hub major/minor version upgrade
+A major/minor version upgrade initiates an upgrade of the major/minor Cloudera
+    Manager and Runtime versions, as well as the required additional parcels (Spark3, Flink,
+    Profiler, and Cloudera Flow Management). After you perform a major/minor upgrade on a Data Lake,
+    you should in most cases perform a major/minor version upgrade on each Data Hub attached to the
+    Data Lake. The Data Hubs must run the same major/minor Runtime version as the Data Lake--with
+    the exception of Data Hubs on Runtime 7.2.16+, which are compatible with Data Lake versions
+    7.2.17+.
+Note that for major/minor version upgrades, the cluster can only be upgraded to the
+      same major/minor version as the Data Lake, so you must first upgrade the Data Lake. For
+      instructions, see Data Lake upgrades. Complete the steps for each Data Hub
+        cluster that you are upgrading.Required role:
+DatahubAdmin or Owner over the Data Hub
+
+Start the cluster.Before you begin the Data Hub upgrade, check if the current version of Cloudera
+          Runtime is <= 7.1.0.0. If yes, then verify the memory settings for Cloudera Manager in
+          the /etc/default/cloudera-scm-server file on the Cloudera Manager server
+          host. If you find the value “-Xmx2G” in CMF_JAVA_OPTS, update it to “-Xmx4G” and restart
+          the Cloudera Manager server after the change.For clusters that contain the Hive service in Cloudera Runtime versions prior to
+          version 7.2.2, it is required to terminate all running YARN applications before starting
+          the upgrade. So, if the current Cloudera Runtime version is < 7.2.2:
+SSH to any Hive node (master or worker).
+Get an initial ticket-granting ticket for YARN principal. This passes the
+              Kerberos authentication so that you can run the YARN application in shell. YARN
+              principals are installed in
+                /run/cloudera-scm-agent/process/xxxxx-yarn-RESOURCEMANAGER/yarn.keytab
+Enter the directory and run klist command to display the Kerberos
+                principals in YARN keytab (sample command):
+klist -kt yarn.keytab
+Sample Kerberos principal output: <format:
+                userid/host@domain>
+yarn/nightly-7x-1-1.nightly-7x-1.root.hwx.site@ROOT.HWX.SITE
+From the above directory, run kinit command in this format (sample
+                command): kinit -kt yarn.keytab <kerberos-principal format:
+                  userid/host@domain>
+kinit -kt yarn.keytab yarn/nightly-7x-1-1.nightly-7x-1.root.hwx.site@ROOT.HWX.SITE
+
+Run the command: yarn application -list
+For each running YARN application, run the command: yarn application
+                -kill <appId>
+Run the command (to verify that no apps are running): yarn
+                application -list
+For Streams Messaging clusters, if you are upgrading from Runtime version 7.2.12 to
+          7.2.14, complete the following steps:
+Open the CM UI for the Streams Messaging cluster.
+Click on the Cruise Control service, then click on
+                Configurations.
+Search for 'RackAwareGoal' in the search bar and remove the entry for
+              'com.linkedin.kafka.cruisecontrol.analyzer.goals.RackAwareGoal' for 'Default goals,'
+              'Hard Goals,' 'Support Goals,' ‘Self-Healing Goals, and 'Anomaly
+            Goals.'
+Save the changes and restart the Cruise Control service.
+Proceed with the upgrade, but note that once the upgrade is complete, add
+              the entries back to 'Default goals', 'Hard Goals', 'Support Goals,' ‘Self-Healing
+              Goals,’ and 'Anomaly Goals.' This time rename the value to
+                'com.linkedin.kafka.cruisecontrol.analyzer.goals.RackAwareDistributionGoal'
+If you use autoscaling, disable autoscaling on the cluster.Upgrade the cluster. To upgrade the cluster with the UI:
+In the left-hand menu, click Data Hubs and then
+              select the Data Hub to upgrade.
+Scroll to the bottom of the Data Hub details page and select the
+                Upgrade tab.
+From the drop-down menu, select the Target Runtime
+                Version.
+Click Validate and Prepare to check for any configuration issues and
+              begin the Cloudera Runtime parcel download and distribution. Using the validate and
+              prepare option does not require downtime and makes the maintenance window for an
+              upgrade shorter. Validate and prepare also does not make any changes to your cluster
+              and can be run independently of the upgrade itself. Although you can begin the upgrade
+              without first running the validate and prepare option, using it will make the process
+              smoother and the downtime shorter.
+When the validate and prepare process is complete, click
+                Upgrade.
+
+
+Monitor the upgrade progress using the Data Hub Event History
+          tab.When the upgrade is complete, verify the new version. Note that the new version is
+          reflected in the Platform Version, and not the version displayed in the cluster template
+          name (which will remain the same):
+
+If you disabled autoscaling on the cluster, you can re-enable it after
+          upgrade.
+If the upgrade is successful, proceed to the topic Post-upgrade tasks.
+      If the upgrade fails, check the Troubleshooting section and re-try the
+        upgrade.importantOnce you have upgraded the Data Lake and started the Data Hub
+        upgrade process, you must repeat the upgrade procedure for every Data Hub in the
+        environment. Do not conduct a major/minor version update asynchronously. 
+
+Related informationData Lake upgradeTroubleshooting upgradeParent topic: Upgrading Data Hubs
+Post-upgrade tasks
+After a successful major/minor version upgrade, complete the following tasks if they
+    apply to the cluster you upgraded.
+Flow Management clusters
+If doing a software-only upgrade for your Flow Management Data Hub clusters and later
+        repairing one of the NiFi nodes after the upgrade, you may be in a situation where the JDK
+        used by NiFi is not the same across the nodes. This may cause issues in the NiFi UI and you
+        may get an "Unexpected error" message.
+After you upgrade a Flow Management cluster and repair a node, ensure that the same JDK is
+        used across the NiFi nodes and if there is a JDK version mismatch, manually upgrade the JDK
+        to match the JDK version being installed on the node that has been repaired.
+
+Data Engineering upgrades to 7.2.11
+Upgrading a cluster with the Spark service from Runtime version 7.2.6 or 7.2.7 to version
+        7.2.11 may cause Spark cluster mode to fail. To workaround this issue, add the following
+        configuration to the /etc/spark/conf/atlas-application.properties file:
+          atlas.kafka.sasl.kerberos.service.name=kafka
+
+Streams Messaging clusters
+Clusters that contain the Streams Replication Manager service require a configuration
+        change following a successful upgrade from Cloudera Runtime 7.2.11 or lower to 7.2.12 or
+        higher. You must configure SRM to use its latest internal changelog data format and intra
+        cluster hostname format. If this configuration is not completed, the SRM Service will not be
+        able to target multiple clusters. 
+This post upgrade step is required because during an upgrade, SRM is configured to use a
+        legacy version of its changelog data format and intra cluster hostname format. This is done
+        to ensure backward compatibility so that if necessary, a rollback is possible.
+Complete the following steps:
+
+Verify that the SRM Service is up and running. This can be done by testing the REST API
+          endpoints using the Swagger UI. If there are any issues, and a rollback is necessary,
+          complete the rollback. No backward incompatible changes occurred up until this point.
+In Cloudera Manager, select the Streams Replication Manager
+          service.
+Go to Configuration.
+Find and disable the following properties:
+Use Legacy Internal Changelog Data Format
+Use Legacy Intra Cluster Host Name Format
+
+Restart Streams Replication Manager.
+
+
+
+
+Adding configs manually
+The major/minor Runtime upgrade does not install additional configs available in the
+    newer versions of the Data Engineering cluster templates. This topic contains a list of configs
+    added over different template versions. Use the CM UI to add them manually, if the config
+    doesn’t already exist.
+
+
+Clusters -> HDFS ->
+          Configuration:hdfs_verify_ec_with_topology_enabled=false
+erasure_coding_default_policy=” “
+
+Clusters -> HDFS -> Configuration -> Cluster-wide Advanced Configuration Snippet
+            (Safety Valve) for
+          core-site.xml:fs.s3a.buffer.dir=${env.LOCAL_DIRS:-${hadoop.tmp.dir}}/s3a
+HADOOP_OPTS="-Dorg.wildfly.openssl.path=/usr/lib64 ${HADOOP_OPTS}"
+
+Clusters -> Yarn ->
+            Configuration:yarn_admin_acl=yarn,hive,hdfs,mapred
+Clusters -> Yarn ->
+            Configuration -> YARN Service MapReduce Advanced Configuration Snippet (Safety
+            Valve):mapreduce.fileoutputcommitter.algorithm.version=1
+mapreduce.input.fileinputformat.list-status.num-threads=100
+
+Clusters -> Tez ->
+            Configuration:tez.grouping.split-waves=1.4
+tez.grouping.min-size=268435456
+tez.grouping.max-size=268435456
+
+Clusters -> Tez ->
+            Configuration -> Tez Client Advanced Configuration Snippet (Safety Valve) for
+            tez-conf/tez-site.xml:tez.runtime.pipelined.sorter.lazy-allocate.memory=true
+Clusters -> Hive ->
+            Configuration -> Hive Service Advanced Configuration Snippet (Safety Valve) for
+            hive-site.xml:fs.s3a.ssl.channel.mode=openssl
+hive.txn.acid.dir.cache.duration=0
+hive.server2.tez.session.lifetime=30m
+hive.blobstore.supported.schemes=s3,s3a,s3n,abfs,gs
+hive.orc.splits.include.fileid=false
+hive.hook.proto.events.clean.freq=1h
+hive.metastore.try.direct.sql.ddl=true
+hive.privilege.synchronizer=false
+
+Clusters -> Hive ->
+            Configuration:hiveserver2_idle_session_timeout=14400000
+spark_on_yarn ->
+            Configuration -> Spark Client Advanced Configuration Snippet (Safety Valve) for
+            spark-conf/spark-defaults.conf:spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version=1
+spark.hadoop.fs.s3a.ssl.channel.mode=openssl
+
+Clusters -> Hive
+            Metastore -> Configuration -> Hive Metastore Server Advanced Configuration Snippet
+            (Safety Valve) for
+          hive-site.xmlhive.metastore.try.direct.sql.ddl=true
+Clusters -> <your
+            cluster name> -> Configuration -> Suppressed Health and Configuration
+          Issues:role_config_suppression_namenode_java_heapsize_minimum_validator=true
+
+
+

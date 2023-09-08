@@ -1,0 +1,147 @@
+Configuring OAuth2 authentication for Kafka brokersCloudera Docs
+Configuring OAuth2 authentication for Kafka brokers
+Learn how to enable and configure OAuth2 authentication for Kafka
+    brokers.
+
+You can enable Kafka to use OAuth2 for client to broker authentication. Broker
+        configuration is done by configuring OAuth2 related properties. OAuth2 related properties
+        can be configured using Cloudera Manager. However, there are two distinct paths of
+        configuration. Which configuration path you take depends on whether the Kafka service is
+        Kerberos enabled. 
+If Kerberos is enabled, you can use the OAuth2 related properties directly available in
+        Cloudera Manager to enable and configure OAuth2. If Kerberos is not enabled, you must use an
+        advanced configuration snippet to enable and configure OAuth2.
+In addition, when configuring OAuth2 you can choose how the broker gets access to the JSON
+        Web Key Set (JWKS) used to verify tokens. Kafka brokers can be provided access to a JWKS in
+        two different ways. They can be configured to retrieve the JWKS from the authorization
+        server’s JWKS endpoint (HTTPS) at startup. This is called online JWKS access. Alternatively,
+        it is also possible to provide the broker directly with the JWKS used by the authorization
+        server using an advanced configuration snippet. This is called local JWKS access.
+noteThe two JWKS access options are mutually exclusive. If you configure the broker for both
+        online and local JWKS access, the broker uses local JWKS access.
+
+
+
+If you want to configure online JWKS access, ensure that the broker can open a network
+          connection to the authorization server. Otherwise the broker will fail to start. 
+If you want to configure local JWKS access, acquire the JWKS JSON from the authorization
+          server.
+
+
+In Cloudera Manager, select the Kafka service. Go to Configuration.Enable and configure Oauth2 authentication. 
+OAuth2 related properties are configured in either of two ways. If Kerberos is enabled
+            for the Kafka service, you can use the properties directly available in Cloudera
+            Manager. In a case like this follow the instructions in the Using dedicated properties
+            tab. If Kerberos is not enabled for the Kafka service, you must use an advanced
+            configuration snippet. In a case like this, follow the instruction in the Using an
+            advanced configuration snippet tab.
+
+Using dedicated propertiesUsing an advanced configuration snippet
+Find and configure the following properties:noteThe following properties do not
+                  take effect if Kerberos is not enabled for the Kafka service. Follow the
+                  instructions in the Using an advanced configuration snippet tab if you do not have
+                  Kerberos enabledTable 1. OAuth properties
+
+Cloudera Manager Property
+Description
+
+
+
+
+Enable OAuth Authentication
+oauth.enabled
+
+Enables authentication using the SASL OAUTHBEARER mechanism for this
+                          Kafka service. Clients must present a signed JSON Web Token (JWT) when
+                          authenticating with OAuth2. Kerberos must be enabled for this property to
+                          take effect.
+
+
+
+JWKS URL For OAuth2
+oauth.jwks.url
+
+The endpoint URL that returns the authorization server's public keys
+                          in JWKS format. Configure a valid JWKS endpoint URL if you want to
+                          configure the broker for online JWKS access. If you want to configure the
+                          broker for local JWKS access, leave this property empty and instead
+                          configure the Kafka Broker Advanced Configuration Snippet
+                            (Safety Valve) for oauth_jwks.json property.
+
+
+
+Kafka Broker Advanced Configuration Snippet (Safety Valve)
+                              for oauth_jwks.json
+oauth_jwks.json_role_safety_valve
+
+Specifies the JWKS used by this Kafka service to verify JWTs
+                          presented by clients. Add the JWKS JSON you obtained from the
+                          authorization server’s JWKS endpoint. Set this property if you want to
+                          configure the broker for local JWKS access. If you want to configure the
+                          broker for online JWKS access, leave this property empty and instead
+                          configure the JWKS URL For OAuth2 propert.
+
+
+
+JWT Expected Audience For OAuth2
+oauth.expected.audience
+
+The JWT token can optionally contain an"aud"
+                          (audience/intended receiver) claim. When this claim is present, the same
+                          audience value must be specified for the broker, otherwise the token will
+                          be considered invalid. This property specifies what the value of the
+                            "aud" claim is. Configuring this property is only
+                          required if the “aud” claim is present in the tokens
+                          presented to the broker.
+
+
+
+JWT Expected Issuer For OAuth2
+oauth.expected.issuer
+
+The JWT token can optionally contain an "iss"
+                          (issuer) claim. This property specifies what the value of the
+                            "iss" claim is. Specifying an "iss"
+                          claim configures the broker to only accept tokens issued by a
+                          specific issuer. Leave this property empty if you do not want the broker
+                          to validate the "iss" claim.
+
+
+
+JWT Principal Claim Name For OAuth2
+oauth.principal.claim.name
+
+A JWT token must contain a user ID (principal) that can be used for
+                          Ranger authorization. This property specifies the name (or key) of the
+                          claim in the JWT token that contains the user ID. The
+                            "sub" (subject) claim is used if this property is left
+                          empty. Configuring this property is mandatory if the JWT token does not
+                          include a “sub” claim.
+
+
+Optional: Configure additional properties.If required, additional OAuth2
+                  related properties can be configured with the Kafka Broker Advanced
+                    Configuration Snippet (Safety Valve) for kafka.properties property.
+                  See Broker Configs in the Apache Kafka documentation for a full list
+                  of these properties.
+
+Find and configure the Kafka Broker Advanced Configuration Snippet
+                  (Safety Valve) for kafka.properties property. Use the following
+                  example as a template and make changes as necessary. The following example
+                  contains all minimum required OAuth2 properties. If required, additional OAuth2
+                  related properties can be configured as well. See Broker Configs in
+                  the Apache Kafka documentation for a full list of these properties. Example
+                  configuration:listeners=PLAINTEXT://:9092,SASL_PLAINTEXT://:34343
+listener.name.sasl_plaintext.sasl.enabled.mechanisms=OAUTHBEARER
+listener.name.sasl_plaintext.oauthbearer.sasl.server.callback.handler.class=org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerValidatorCallbackHandler
+listener.name.sasl_plaintext.oauthbearer.sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required;
+sasl.oauthbearer.jwks.endpoint.url=https://my-authorization-server/jwks
+
+Click Save Changes.Restart the Kafka service.
+The broker is ready to accept connections authenticated with OAuth2. Depending on
+      how you configured the broker, it either retrieves the JWKS from the authorization server at
+      startup, or loads the JWKS keys from local storage.
+Configure your Kafka clients to use OAuth2 authentication. Continue with
+        Configuring OAuth authentication for Kafka clients.
+
+Related information Broker ConfigsConfiguring OAuth2 authentication for Kafka clientsParent topic: OAuth2 authentication

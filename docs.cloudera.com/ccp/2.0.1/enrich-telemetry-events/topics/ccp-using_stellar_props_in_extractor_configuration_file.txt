@@ -1,0 +1,171 @@
+Using Stellar Properties to Transform Enrichment DataCloudera Docs
+Using Stellar Properties to
+      Transform Enrichment Data
+You can transform and filter enrichment data as it is loaded into HBase by using
+      Stellar extractor properties in the extractor configuration file. This feature is available to
+      all extractor types. This task is optional.
+Transform and filter the enrichment data as it is loaded into HBase by using the
+               following Stellar extractor properties in theextractor_config.json
+               file at $METRON_HOME/config:
+
+
+
+Extractor Property
+Description
+Example
+
+
+
+
+value_transform
+
+
+Transforms fields defined in the columns mapping
+                                 with Stellar transformations. New keys introduced in the transform
+                                 are added to the key metadata.
+
+
+"value_transform" : {
+   "domain" : "DOMAIN_REMOVE_TLD(domain)"
+
+
+
+
+value_filter
+
+
+Allows additional filtering with Stellar predicates based on
+                                 results from the value transformations. In the following example,
+                                 records whose domain property is empty after removing the TLD are
+                                 omitted.
+
+
+"value_filter" : "LENGTH(domain) > 0",
+  "indicator_column" : "domain",
+
+
+
+
+indicator_transform
+
+
+Transforms the indicator column independent of the
+                                 value transformations. You can refer to the original indicator
+                                 value by using indicator as the variable name, as
+                                 shown in the following example. In addition, if you prefer to
+                                 piggyback your transformations, you can refer to the variable
+                                    domain, which allows your indicator transforms
+                                 to inherit transformations done to this value during the value
+                                 transformations.
+
+
+"indicator_transform" : {
+   "indicator" : "DOMAIN_REMOVE_TLD(indicator)"
+
+
+
+
+indicator_filter
+
+
+Allows additional filtering with Stellar predicates based on
+                                 results from the value transformations. In the following example,
+                                 records whose indicator value is empty after removing the TLD are
+                                 omitted.
+
+
+"indicator_filter" : "LENGTH(indicator) > 0",
+  "type" : "top_domains",
+
+
+
+
+If you include all of the supported Stellar extractor properties in the extractor
+               configuration file, it will look similar to the following:
+
+{
+  "config" : {
+    "zk_quorum" : "node1:2181",
+    "columns" : {
+       "rank" : 0,
+       "domain" : 1
+    },
+    "value_transform" : {
+       "domain" : "DOMAIN_REMOVE_TLD(domain)"
+    },
+    "value_filter" : "LENGTH(domain) > 0",
+    "indicator_column" : "domain",
+    "indicator_transform" : {
+       "indicator" : "DOMAIN_REMOVE_TLD(indicator)"
+    },
+    "indicator_filter" : "LENGTH(indicator) > 0",
+    "type" : "top_domains",
+    "separator" : ","
+  },
+  "extractor" : "CSV"
+}
+
+For example, if you have a top-list.csv containing the following
+               information:
+
+1,google.com
+2,youtube.com
+...
+
+when you run a file import with the above data and extractor configuration you
+               should receive the following results in two extracted data records:
+
+
+
+Indicator
+Type
+Value
+
+
+
+google
+top_domains
+{ "rank" : "1", "domain" : "google" }
+
+
+yahoo
+top_domains
+{ "rank" : "2", "domain" : "yahoo" }
+
+
+
+ Remove any non-ASCII invisible characters that might have been included if you copy and
+               pasted:  
+
+iconv -c -f utf-8 -t ascii extractor_config_temp.json -o extractor_config.json
+
+
+noteThe extractor_config.json file is not stored anywhere by the
+                  loader. This file is used once by the bulk loader to parse the enrichment dataset.
+                  If you would like to keep a copy of this file, be sure to save a copy to another
+                  location.
+
+To access properties that reside in the global configuration file, provide a
+               ZooKeeper quorum via the zk_quorum property.
+For example, if the global configuration looks like the following:
+
+{
+    "global_property" : "metron-ftw"
+}
+
+enter the following to expand the value_transform:
+
+"value_transform" : {
+    "domain" : "DOMAIN_REMOVE_TLD(domain)",
+     "a-new-prop" : "global_property"
+ },
+
+The resulting value data will look like the following:
+
+Indicator	Type	Value
+google	top_domains	{ "rank" : "1", "domain" : "google", "a-new-prop" : "metron-ftw" }
+yahoo	top_domains	{ "rank" : "2", "domain" : "yahoo", "a-new-prop" : "metron-ftw" }
+
+
+
+Parent topic: Bulk Loading Enrichment Information

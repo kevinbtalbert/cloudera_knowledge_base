@@ -1,0 +1,52 @@
+HWC API ExamplesCloudera Docs
+HWC API Examples
+Examples of using the HWC API include how to create the DataFrame from any data source
+    and include an option to write the DataFrame to an Apache Hive table. 
+Write a DataFrame from Spark to Hive example
+You specify one of the following Spark SaveMode modes to write a
+        DataFrame to Hive:
+Append
+ErrorIfExists
+Ignore
+Overwrite
+In Overwrite mode, HWC does not explicitly drop and recreate the table. HWC queries Hive to
+          overwrite an existing table using LOAD DATA...OVERWRITE or INSERT OVERWRITE...
+When you write the DataFrame, the Hive Warehouse Connector creates the Hive table if it
+        does not exist.
+importantSpark 3 does not support automatic table creation
+        using the Append and Overwrite modes. The table that you are writing to must exist in order
+        to append or overwrite data in it. Instead, you can use the ErrorIfExists or Ignore
+        modes.
+The following example uses Append mode.
+df = //Create DataFrame from any source
+        
+
+val hive = com.hortonworks.hwc.HiveWarehouseSession.session(spark).build()
+        
+df.write.format(HIVE_WAREHOUSE_CONNECTOR)
+.mode("append")
+.option("table", "my_Table")
+.save()
+
+ETL example (Scala)
+Read table data from Hive, transform it in Spark, and write to a new Hive table.
+import com.hortonworks.hwc.HiveWarehouseSession
+import com.hortonworks.hwc.HiveWarehouseSession._
+val hive = HiveWarehouseSession.session(spark).build()
+hive.setDatabase("tpcds_bin_partitioned_orc_1000")
+val df = hive.sql("select * from web_sales")
+df.createOrReplaceTempView("web_sales")
+hive.setDatabase("testDatabase")
+hive.createTable("newTable")
+.ifNotExists()
+.column("ws_sold_time_sk", "bigint")
+.column("ws_ship_date_sk", "bigint")
+.create()
+sql("SELECT ws_sold_time_sk, ws_ship_date_sk FROM web_sales WHERE ws_sold_time_sk > 80000)
+.write.format(HIVE_WAREHOUSE_CONNECTOR)
+.mode("append")
+.option("table", "newTable")
+.save()
+
+
+Related informationHMS storageParent topic: Introduction to HWC and DataFrame APIs

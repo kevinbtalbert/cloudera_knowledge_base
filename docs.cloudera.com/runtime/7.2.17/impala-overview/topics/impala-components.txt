@@ -1,0 +1,89 @@
+Components of ImpalaCloudera Docs
+Components of Impala
+The Impala service is a distributed, massively parallel processing
+    (MPP) database engine. It consists of different daemon processes that run on
+    specific hosts within your Hadoop cluster.
+Impala service consists of the following categories of processes,
+      referred as roles.
+
+Impala Daemon
+
+ The core Impala component is the Impala daemon, physically
+            represented by the impalad process. A few of the
+            key functions that an Impala daemon performs are:
+Reads and writes to data files.
+Accepts queries transmitted from the
+                  impala-shell command, Hue, JDBC, or
+                ODBC.
+Parallelizes the queries and distributes work across the
+                cluster.
+Transmits intermediate query results back to the central
+                coordinator. 
+
+Impala daemons can be deployed in one of the following ways:
+HDFS and Impala are co-located, and each Impala daemon runs on
+                the same host as a DataNode.
+Impala is deployed separately in a compute cluster and reads
+                remotely from HDFS, S3, ADLS, etc.
+
+ The Impala daemons are in constant communication with StateStore,
+            to confirm which daemons are healthy and can accept new work. 
+ They also receive broadcast messages from the Catalog
+            Server daemon whenever an Impala daemon in the cluster creates,
+            alters, or drops any type of object, or when an
+              INSERT or LOAD DATA statement is
+            processed through Impala. This background communication minimizes
+            the need for REFRESH or INVALIDATE
+              METADATA statements that were needed to coordinate
+            metadata across Impala daemons.
+ You can control
+            which hosts act as query coordinators and which act as query
+            executors, to improve scalability for highly concurrent workloads on
+            large clusters.
+noteImpala Daemons should be deployed on nodes using the same Glibc version since
+            different Glibc version supports different Unicode standard version and also ensure that
+            the en_US.UTF-8 locale is installed in the nodes. Not using the same Glibc version might
+            result in inconsistent UTF-8 behavior when UTF8_MODE is set to true.
+
+Impala StateStore
+
+ The Impala StateStore checks on the health of all Impala daemons
+            in a cluster, and continuously relays its findings to each of those
+            daemons. It is physically represented by a daemon process named
+              statestored. You only need such a process on one
+            host in a cluster. If an Impala daemon goes offline due to hardware
+            failure, network error, software issue, or other reason, the
+            StateStore informs all the other Impala daemons so that future
+            queries can avoid making requests to the unreachable Impala daemon. 
+ Because the StateStore's purpose is to help when things go wrong
+            and to broadcast metadata to coordinators, it is not always critical
+            to the normal operation of an Impala cluster. If the StateStore is
+            not running or becomes unreachable, the Impala daemons continue
+            running and distributing work among themselves as usual when working
+            with the data known to Impala. The cluster just becomes less robust
+            if other Impala daemons fail, and metadata becomes less consistent
+            as it changes while the StateStore is offline. When the StateStore
+            comes back online, it re-establishes communication with the Impala
+            daemons and resumes its monitoring and broadcasting functions. 
+ If you issue a DDL statement while the StateStore is down, the
+            queries that access the new object the DDL created will fail. 
+
+Impala Catalog Server
+
+ The Catalog Server relays the metadata changes from Impala SQL
+            statements to all the Impala daemons in a cluster. It is physically
+            represented by a daemon process named catalogd. You
+            only need such a process on one host in a cluster. Because the
+            requests are passed through the StateStore daemon, it makes sense to
+            run the statestored and
+              catalogd services on the same host. 
+ The catalog service avoids the need to issue
+              REFRESH and INVALIDATE METADATA
+            statements when the metadata changes are performed by statements
+            issued through Impala. When you create a table, load data, and so on
+            through Hive, you do need to issue REFRESH or
+              INVALIDATE METADATA on an Impala node before
+            executing a query there. 
+
+
+

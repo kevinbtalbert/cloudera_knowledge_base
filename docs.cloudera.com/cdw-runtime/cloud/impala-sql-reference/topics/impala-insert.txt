@@ -1,0 +1,629 @@
+INSERT statementCloudera Docs
+INSERT statement
+Impala supports inserting into tables and partitions that you create with the Impala
+      CREATE TABLE statement, or pre-defined tables and partitions created through
+    Hive.
+Syntax:
+[with_clause]
+  INSERT [hint_clause] { INTO | OVERWRITE } [TABLE] table_name
+  [(column_list)]
+  [ PARTITION (partition_clause)]
+{
+    [hint_clause] select_statement
+  | VALUES (value [, value ...]) [, (value [, value ...]) ...]
+}
+
+partition_clause ::= col_name [= constant] [, col_name [= constant] ...]
+
+hint_clause ::=
+  hint_with_dashes |
+  hint_with_cstyle_delimiters |
+  hint_with_brackets
+
+hint_with_dashes ::= -- +SHUFFLE | -- +NOSHUFFLE -- +CLUSTERED
+
+hint_with_cstyle_comments ::= /* +SHUFFLE */ | /* +NOSHUFFLE */ | /* +CLUSTERED */
+
+hint_with_brackets ::= [SHUFFLE] | [NOSHUFFLE]
+  (With this hint format, the square brackets are part of the syntax.)
+note
+        The square bracket style of hint is now deprecated and might be removed in
+        a future release. For that reason, any newly added hints are not available
+        with the square bracket syntax.
+      
+Appending or replacing (INTO and OVERWRITE clauses):
+
+      The INSERT INTO syntax appends data to a table. The existing data files are left as-is, and
+      the inserted data is put into one or more new data files.
+    
+      The INSERT OVERWRITE syntax replaces the data in a table.
+
+
+      Currently, the overwritten data files are deleted immediately; they do not go through the HDFS trash
+      mechanism.
+    
+Complex type considerations:
+ The INSERT statement currently does not support writing data files
+        containing complex types (ARRAY, STRUCT, and
+          MAP). To prepare Parquet data for such tables, you generate the data
+        files outside Impala and then use LOAD DATA or CREATE EXTERNAL
+          TABLE to associate those data files with the table. Currently, such tables must
+        use the Parquet file format.Kudu considerations:Currently, the INSERT OVERWRITE
+        syntax cannot be used with Kudu tables. 
+      Kudu tables require a unique primary key for each row. If an INSERT
+      statement attempts to insert a row with the same values for the primary key columns
+      as an existing row, that row is discarded and the insert operation continues.
+      When rows are discarded due to duplicate primary keys, the statement finishes
+      with a warning, not an error. (This is a change from early releases of Kudu
+      where the default was to return in error in such cases, and the syntax
+      INSERT IGNORE was required to make the statement succeed.
+      The IGNORE clause is no longer part of the INSERT
+      syntax.)
+    
+      For situations where you prefer to replace rows with duplicate primary key values,
+      rather than discarding the new data, you can use the UPSERT
+      statement instead of INSERT. UPSERT inserts
+      rows that are entirely new, and for rows that match an existing primary key in the
+      table, the non-primary-key columns are updated to reflect the values in the
+      upserted data.
+    
+      If you really want to store new rows, not replace existing ones, but cannot do so
+      because of the primary key uniqueness constraint, consider recreating the table
+      with additional columns included in the primary key.
+    
+Usage notes:
+
+      Impala currently supports:
+    
+
+        Copy data from another table using SELECT query. In Impala 1.2.1 and higher, you can
+        combine CREATE TABLE and INSERT operations into a single step with the
+        CREATE TABLE AS SELECT syntax, which bypasses the actual INSERT keyword.
+      
+ An optional WITH clause before the INSERT keyword, to
+          define a subquery referenced in the SELECT portion. 
+
+        Create one or more new rows using constant expressions through VALUES clause. (The
+        VALUES clause was added in Impala 1.0.1.)
+      
+
+
+          By default, the first column of each newly inserted row goes into the first column of the table, the
+          second column into the second column, and so on.
+        
+
+          You can also specify the columns to be inserted, an arbitrarily ordered subset of the columns in the
+          destination table, by specifying a column list immediately after the name of the destination table. This
+          feature lets you adjust the inserted columns to match the layout of a SELECT statement,
+          rather than the other way around. (This feature was added in Impala 1.1.)
+        
+
+          The number of columns mentioned in the column list (known as the column permutation) must match
+          the number of columns in the SELECT list or the VALUES tuples. The
+          order of columns in the column permutation can be different than in the underlying table, and the columns
+          of each input row are reordered to match. If the number of columns in the column permutation is less than
+          in the destination table, all unmentioned columns are set to NULL.
+        
+
+ An optional hint clause immediately either before the SELECT
+          keyword or after the INSERT keyword, to fine-tune the behavior when doing
+          an INSERT ... SELECT operation into partitioned Parquet tables. The hint
+          clause cannot be specified in multiple places. The hint keywords are
+            [SHUFFLE] and [NOSHUFFLE], including the square
+          brackets. Inserting into partitioned Parquet tables can be a resource-intensive operation
+          because it potentially involves many files being written to HDFS simultaneously, and
+          separate large memory buffers being allocated to buffer
+          the data for each partition.
+note
+
+ Insert commands that partition or add files result in changes to Hive metadata. Because
+            Impala uses Hive metadata, such changes may necessitate a metadata refresh. For more
+            information, see the REFRESH function.
+
+          Currently, Impala can only insert data into tables that use the text and Parquet formats. For other file
+          formats, insert the data using Hive and use Impala to query it.
+        
+
+          As an alternative to the INSERT statement, if you have existing data files elsewhere in
+          HDFS, the LOAD DATA statement can move those files into a table. This statement works
+          with tables of any file format.
+        
+
+
+Statement type: DML (but still affected by the SYNC_DDL query
+        option) 
+Usage notes:
+
+      When you insert the results of an expression, particularly of a built-in function call, into a small numeric
+      column such as INT, SMALLINT, TINYINT, or
+      FLOAT, you might need to use a CAST() expression to coerce values into the
+      appropriate type. Impala does not automatically convert from a larger type to a smaller one. For example, to
+      insert cosine values into a FLOAT column, write CAST(COS(angle) AS FLOAT)
+      in the INSERT statement to make the conversion explicit.
+    
+File format considerations:
+ Because Impala can read certain file formats that it cannot write, the
+          INSERT statement does not work for all kinds of Impala tables. See
+          How Impala works with Hadoop file formats for details about what file formats
+        are supported by the INSERT statement. 
+        Any INSERT statement for a Parquet table requires enough free space in the HDFS filesystem
+        to write one block. Because Parquet data files use a block size of 1 GB by default, an
+        INSERT might fail (even for a very small amount of data) if your HDFS is running low on
+        space.
+       If you connect to different Impala nodes within an
+          impala-shell session for load-balancing purposes, you can enable the
+          SYNC_DDL query option to make each DDL statement wait before returning,
+        until the new or changed metadata has been received by all the Impala nodes.important
+        After adding or replacing data in a table used in performance-critical queries, issue a COMPUTE
+        STATS statement to make sure all statistics are up-to-date. Consider updating statistics for a
+        table after any INSERT, LOAD DATA, or CREATE TABLE AS
+        SELECT statement in Impala, or after loading data through Hive and doing a REFRESH
+        table_name in Impala. This technique is especially important for tables that
+        are very large, used in join queries, or both.
+      
+Examples:
+ The following example sets up new tables with the same definition as the TAB1
+        table using different file formats, and demonstrates inserting data into the tables created
+        with the STORED AS TEXTFILE and STORED AS PARQUET clauses: CREATE DATABASE IF NOT EXISTS file_formats;
+USE file_formats;
+
+DROP TABLE IF EXISTS text_table;
+CREATE TABLE text_table
+( id INT, col_1 BOOLEAN, col_2 DOUBLE, col_3 TIMESTAMP )
+STORED AS TEXTFILE;
+
+DROP TABLE IF EXISTS parquet_table;
+CREATE TABLE parquet_table
+( id INT, col_1 BOOLEAN, col_2 DOUBLE, col_3 TIMESTAMP )
+STORED AS PARQUET;
+      With the INSERT INTO TABLE syntax, each new set of inserted rows is appended to any existing
+      data in the table. This is how you would record small amounts of data that arrive continuously, or ingest new
+      batches of data alongside the existing data. For example, after running 2 INSERT INTO TABLE
+      statements with 5 rows each, the table contains 10 rows total:
+    [localhost:21000] > insert into table text_table select * from default.tab1;
+Inserted 5 rows in 0.41s
+
+[localhost:21000] > insert into table text_table select * from default.tab1;
+Inserted 5 rows in 0.46s
+
+[localhost:21000] > select count(*) from text_table;
++----------+
+| count(*) |
++----------+
+| 10       |
++----------+
+Returned 1 row(s) in 0.26s
+      With the INSERT OVERWRITE TABLE syntax, each new set of inserted rows replaces any existing
+      data in the table. This is how you load data to query in a data warehousing scenario where you analyze just
+      the data for a particular day, quarter, and so on, discarding the previous data each time. You might keep the
+      entire set of data in one raw table, and transfer and transform certain rows into a more compact and
+      efficient form to perform intensive analysis on that subset.
+    
+      For example, here we insert 5 rows into a table using the INSERT INTO clause, then replace
+      the data by inserting 3 rows with the INSERT OVERWRITE clause. Afterward, the table only
+      contains the 3 rows from the final INSERT statement.
+    [localhost:21000] > insert into table parquet_table select * from default.tab1;
+Inserted 5 rows in 0.35s
+
+[localhost:21000] > insert overwrite table parquet_table select * from default.tab1 limit 3;
+Inserted 3 rows in 0.43s
+[localhost:21000] > select count(*) from parquet_table;
++----------+
+| count(*) |
++----------+
+| 3        |
++----------+
+Returned 1 row(s) in 0.43s The VALUES clause lets you insert one or more rows by specifying constant
+        values for all the columns. The number, types, and order of the expressions must match the
+        table definition. note
+      The INSERT ... VALUES technique is not suitable for loading large quantities of data into
+      HDFS-based tables, because the insert operations cannot be parallelized, and each one produces a separate
+      data file. Use it for setting up small dimension tables or tiny amounts of data for experimenting with SQL
+      syntax, or with HBase tables. Do not use it for large ETL jobs or benchmark tests for load operations. Do not
+      run scripts with thousands of INSERT ... VALUES statements that insert a single row each
+      time. If you do run INSERT ... VALUES operations to load data into a staging table as one
+      stage in an ETL pipeline, include multiple row values if possible within each VALUES clause,
+      and use a separate database to make cleanup easier if the operation does produce many tiny files.
+    
+      The following example shows how to insert one row or multiple rows, with expressions of different types,
+      using literal values, expressions, and function return values:
+    create table val_test_1 (c1 int, c2 float, c3 string, c4 boolean, c5 timestamp);
+insert into val_test_1 values (100, 99.9/10, 'abc', true, now());
+create table val_test_2 (id int, token string);
+insert overwrite val_test_2 values (1, 'a'), (2, 'b'), (-1,'xyzzy');
+      These examples show the type of not implemented error that you see when attempting to insert data into
+      a table with a file format that Impala currently does not write to:
+    DROP TABLE IF EXISTS sequence_table;
+CREATE TABLE sequence_table
+( id INT, col_1 BOOLEAN, col_2 DOUBLE, col_3 TIMESTAMP )
+STORED AS SEQUENCEFILE;
+
+DROP TABLE IF EXISTS rc_table;
+CREATE TABLE rc_table
+( id INT, col_1 BOOLEAN, col_2 DOUBLE, col_3 TIMESTAMP )
+STORED AS RCFILE;
+
+[localhost:21000] > insert into table rc_table select * from default.tab1;
+Remote error
+Backend 0:RC_FILE not implemented.
+
+[localhost:21000] > insert into table sequence_table select * from default.tab1;
+Remote error
+Backend 0:SEQUENCE_FILE not implemented. 
+      The following examples show how you can copy the data in all the columns from one table to another, copy the
+      data from only some columns, or specify the columns in the select list in a different order than they
+      actually appear in the table:
+    -- Start with 2 identical tables.
+create table t1 (c1 int, c2 int);
+create table t2 like t1;
+
+-- If there is no () part after the destination table name,
+-- all columns must be specified, either as * or by name.
+insert into t2 select * from t1;
+insert into t2 select c1, c2 from t1;
+
+-- With the () notation following the destination table name,
+-- you can omit columns (all values for that column are NULL
+-- in the destination table), and/or reorder the values
+-- selected from the source table. This is the "column permutation" feature.
+insert into t2 (c1) select c1 from t1;
+insert into t2 (c2, c1) select c1, c2 from t1;
+
+-- The column names can be entirely different in the source and destination tables.
+-- You can copy any columns, not just the corresponding ones, from the source table.
+-- But the number and type of selected columns must match the columns mentioned in the () part.
+alter table t2 replace columns (x int, y int);
+insert into t2 (y) select c1 from t1;
+
+
+Sorting considerations: Although you can specify an ORDER BY clause in an
+        INSERT ... SELECT statement, any ORDER BY clause is ignored and the
+        results are not necessarily sorted. An INSERT ... SELECT operation potentially creates
+        many different data files, prepared by different executor Impala daemons, and therefore the notion of the data being
+        stored in sorted order is impractical.
+      
+Concurrency considerations: Each INSERT
+        operation creates new data files with unique names, so you can run
+        multiple INSERT INTO statements simultaneously without
+        filename conflicts. While data is being inserted into an Impala table,
+        the data is staged temporarily in a subdirectory inside the data
+        directory; during this period, you cannot issue queries against that
+        table in Hive. If an INSERT operation fails, the
+        temporary data file and the subdirectory could be left behind in the
+        data directory. If so, remove the relevant subdirectory and any data
+        files it contains manually, by issuing an hdfs dfs -rm
+          -r command, specifying the full path of the work
+        subdirectory, whose name ends in _dir. 
+VALUES clause
+ The VALUES clause is a general-purpose way to specify the columns of one
+        or more rows, typically within an INSERT statement. 
+note
+        The INSERT ... VALUES technique is not suitable for loading large quantities of data into
+        HDFS-based tables, because the insert operations cannot be parallelized, and each one produces a separate
+        data file. Use it for setting up small dimension tables or tiny amounts of data for experimenting with SQL
+        syntax, or with HBase tables. Do not use it for large ETL jobs or benchmark tests for load operations. Do
+        not run scripts with thousands of INSERT ... VALUES statements that insert a single row
+        each time. If you do run INSERT ... VALUES operations to load data into a staging table as
+        one stage in an ETL pipeline, include multiple row values if possible within each VALUES
+        clause, and use a separate database to make cleanup easier if the operation does produce many tiny files.
+      
+ The following examples illustrate: 
+
+ How to insert a single row using a VALUES clause. 
+ How to insert multiple rows using a VALUES clause. 
+ How the row or rows from a VALUES clause can be appended to a table
+          through INSERT INTO, or replace the contents of the table through
+            INSERT OVERWRITE. 
+ How the entries in a VALUES clause can be literals, function results,
+          or any other kind of expression. See Impala SQL literals for the
+          notation to use for literal values, especially for quoting and escaping conventions for
+          strings. See Impala SQL operators and Impala built-in functions for other things you can include in expressions
+          with the VALUES clause. 
+
+[localhost:21000] > describe val_example;
+Query: describe val_example
+Query finished, fetching results ...
++-------+---------+---------+
+| name  | type    | comment |
++-------+---------+---------+
+| id    | int     |         |
+| col_1 | boolean |         |
+| col_2 | double  |         |
++-------+---------+---------+
+
+[localhost:21000] > insert into val_example values (1,true,100.0);
+Inserted 1 rows in 0.30s
+[localhost:21000] > select * from val_example;
++----+-------+-------+
+| id | col_1 | col_2 |
++----+-------+-------+
+| 1  | true  | 100   |
++----+-------+-------+
+
+[localhost:21000] > insert overwrite val_example values (10,false,pow(2,5)), (50,true,10/3);
+Inserted 2 rows in 0.16s
+[localhost:21000] > select * from val_example;
++----+-------+-------------------+
+| id | col_1 | col_2             |
++----+-------+-------------------+
+| 10 | false | 32                |
+| 50 | true  | 3.333333333333333 |
++----+-------+-------------------+
+ When used in an INSERT statement, the Impala VALUES
+        clause can specify some or all of the columns in the destination table, and the columns can
+        be specified in a different order than they actually appear in the table. To specify a
+        different set or order of columns than in the table, use the syntax: 
+INSERT INTO destination
+  (col_x, col_y, col_z)
+  VALUES
+  (val_x, val_y, val_z);
+
+ Any columns in the table that are not listed in the INSERT statement are
+        set to NULL. 
+
+HDFS considerations:
+
+ Impala physically writes all inserted files under the ownership of its default user,
+        typically impala. Therefore, this user must have HDFS write permission in
+        the corresponding table directory. 
+ The permission requirement is independent of the authorization
+        performed by the Ranger framework. (If the connected user is not
+        authorized to insert into a table, Ranger blocks that operation
+        immediately, regardless of the privileges available to the
+          impala user.) Files created by Impala are not owned
+        by and do not inherit permissions from the connected user. 
+ The number of data files produced by an INSERT statement depends on the
+        size of the cluster, the number of data blocks that are processed, the partition key columns
+        in a partitioned table, and the mechanism Impala uses for dividing the work in parallel. Do
+        not assume that an INSERT statement will produce some particular number of
+        output files. In case of performance issues with data written by Impala, check that the
+        output files do not suffer from issues such as many tiny files or many tiny partitions. (In
+        the Hadoop context, even files or partitions of a few tens of megabytes are considered
+          tiny.) 
+
+        The INSERT statement has always left behind a hidden work directory inside the data
+        directory of the table. Formerly, this hidden work directory was named
+        .impala_insert_staging . In Impala 2.0.1 and later, this directory name is changed to
+        _impala_insert_staging . (While HDFS tools are expected to treat names beginning
+        either with underscore and dot as hidden, in practice names beginning with an underscore are more widely
+        supported.) If you have any scripts, cleanup jobs, and so on that rely on the name of this work directory,
+        adjust them to use the new name.
+      
+
+HBase considerations:
+
+ You can use the INSERT statement with HBase tables as follows: 
+
+
+ You can insert a single row or a small set of rows into an HBase table with the
+              INSERT ... VALUES syntax. This is a good use case for HBase tables
+            with Impala, because HBase tables are not subject to the same kind of fragmentation from
+            many small insert operations as HDFS tables are. 
+
+
+ You can insert any number of rows at once into an HBase table using the INSERT
+              ... SELECT syntax. 
+
+
+ If more than one inserted row has the same value for the HBase key column, only the
+            last inserted row with that value is visible to Impala queries. You can take advantage
+            of this fact with INSERT ... VALUES statements to effectively update
+            rows one at a time, by inserting new rows with the same key values as existing rows. Be
+            aware that after an INSERT ... SELECT operation copying from an HDFS
+            table, the HBase table might contain fewer rows than were inserted, if the key column in
+            the source table contained duplicate values. 
+
+
+ You cannot INSERT OVERWRITE into an HBase table. New rows are always
+            appended. 
+
+
+ When you create an Impala or Hive table that maps to an HBase table, the column order
+            you specify with the INSERT statement might be different than the order
+            you declare with the CREATE TABLE statement. Behind the scenes, HBase
+            arranges the columns based on how they are divided into column families. This might
+            cause a mismatch during insert operations, especially if you use the syntax
+              INSERT INTO hbase_table SELECT * FROM
+                hdfs_table. Before inserting data, verify the column
+            order by issuing a DESCRIBE statement for the table, and adjust the
+            order of the select list in the INSERT statement. 
+
+
+
+Amazon S3 considerations:
+
+ In Impala 2.6 and higher, the Impala DML
+        statements (INSERT, LOAD DATA, and CREATE TABLE AS
+          SELECT) can write data into a table or partition that resides in the Amazon
+        Simple Storage Service (S3). The syntax of the DML statements is the same as for any other
+        tables, because the S3 location for tables and partitions is specified by an
+          s3a:// prefix in the LOCATION attribute of
+          CREATE TABLE or ALTER TABLE statements. If you bring
+        data into S3 using the normal S3 transfer mechanisms instead of Impala DML statements, issue
+        a REFRESH statement for the table before using Impala to query the S3 data. 
+ Because of differences between
+        S3 and traditional filesystems, DML operations for S3 tables can take longer than for tables
+        on HDFS. For example, both the LOAD DATA statement and the final stage of
+        the INSERT and CREATE TABLE AS SELECT statements involve
+        moving files from one directory to another. (In the case of INSERT and
+          CREATE TABLE AS SELECT, the files are moved from a temporary staging
+        directory to the final destination directory.) Because S3 does not support a rename
+        operation for existing objects, in these cases Impala actually copies the data files from
+        one location to another and then removes the original files. In Impala 2.6, the
+          S3_SKIP_INSERT_STAGING query option provides a way to speed up
+          INSERT statements for S3 tables and partitions, with the tradeoff that a
+        problem during statement execution could leave data in an inconsistent state. It does not
+        apply to INSERT OVERWRITE or LOAD DATA statements.
+
+ADLS considerations:
+
+ In Impala 2.9 and higher, the Impala DML statements
+          (INSERT, LOAD DATA, and CREATE TABLE AS
+          SELECT) can write data into a table or partition that resides in the Azure Data
+        Lake Store (ADLS). ADLS Gen2 is supported in Impala 3.1 and higher.In theCREATE TABLE or
+          ALTER TABLE statements, specify the ADLS location for
+        tables and partitions with the adl:// prefix for ADLS
+        Gen1 and abfs:// or abfss:// for ADLS
+        Gen2 in the LOCATION attribute.If you bring data into ADLS
+        using the normal ADLS transfer mechanisms instead of Impala DML
+        statements, issue a REFRESH statement for the table
+        before using Impala to query the ADLS data. 
+
+Security considerations:
+
+ If these statements in your environment contain sensitive
+        literal values such as credit card numbers or tax identifiers, Impala can redact this
+        sensitive information when displaying the statements in log files and other administrative
+        contexts.
+
+Cancellation: Can be cancelled. To cancel this statement, use Ctrl-C from the
+        impala-shell interpreter, the Cancel button from the
+        Watch page in Hue, Actions > Cancel from the
+        Queries list in Cloudera Manager, or Cancel from the list of
+        in-flight queries (for a particular node) on the Queries tab in the Impala web UI
+        (port 25000).
+      
+
+HDFS permissions:
+
+ The user ID that the impalad daemon runs under, typically the
+          impala user, must have read permission for the files in the source
+        directory of an INSERT ... SELECT operation, and write permission for all
+        affected directories in the destination table. (An INSERT operation could
+        write files to multiple different HDFS directories if the destination table is partitioned.)
+        This user must also have write permission to create a temporary work directory in the
+        top-level HDFS directory of the destination table. An INSERT OVERWRITE
+        operation does not require write permission on the original data files in the table, only on
+        the table directories themselves. 
+
+Restrictions:
+
+
+        For INSERT operations into CHAR or VARCHAR columns, you
+        must cast all STRING literals or expressions returning STRING to to a
+        CHAR or VARCHAR type with the appropriate length.
+      
+
+Related startup options:
+
+ By default, if an
+          INSERT statement creates any new subdirectories
+        underneath a partitioned table, those subdirectories are assigned
+        default HDFS permissions for the impala user. To make
+        each subdirectory have the same permissions as its parent directory in
+        HDFS, specify the
+          ‑‑insert_inherit_permissions startup
+        option for the impalad daemon. 
+
+Inserting into partitioned tables with PARTITION clause
+ For a partitioned table, the optional PARTITION clause identifies which
+        partition or partitions the values are inserted into. 
+ All examples in this section will use the table declared as below: 
+CREATE TABLE t1 (w INT) PARTITIONED BY (x INT, y STRING);
+
+Static partition inserts
+
+ In a static partition insert where a partition key column is given a constant value,
+              such as PARTITION
+(year=2012, month=2), the rows are inserted with the same values
+              specified for those partition key columns. 
+ The number of columns in the SELECT list must equal the number of
+              columns in the column permutation. 
+ The PARTITION clause must be used for static partitioning inserts. 
+ Example: 
+ The following statement will insert the some_other_table.c1 values
+              for the w column, and all the rows inserted will have the same
+                x value of 10, and the same y
+              value of
+              ‘a’.INSERT INTO t1 PARTITION (x=10, y='a')
+            SELECT c1 FROM some_other_table;
+
+
+
+
+Dynamic partition inserts
+
+ In a dynamic partition insert where a partition key column is in the
+                INSERT statement but not assigned a value, such as in
+                PARTITION (year, region)(both columns unassigned) or
+                PARTITION(year, region='CA') (year column
+              unassigned), the unassigned columns are filled in with the final columns of the
+                SELECT or VALUES clause. In this case, the number
+              of columns in the SELECT list must equal the number of columns in the
+              column permutation plus the number of partition key columns not assigned a constant
+              value. 
+ The following rules apply to dynamic partition inserts. 
+
+
+ The columns are bound in the order they appear in the INSERT
+                  statement. 
+ The table below shows the values inserted with the INSERT
+                  statements of different column orders. 
+
+
+
+
+
+Column w Value
+Column x Value
+Column y Value
+
+
+INSERT INTO t1 (w, x, y) VALUES (1, 2, 'c');
+1
+2
+‘c’
+
+
+INSERT INTO t1 (x,w) PARTITION (y) VALUES (1, 2,
+                      'c');
+2
+1
+‘c’
+
+
+
+ When a partition clause is specified but the non-partition columns are not
+                specified in the INSERT statement, as in the first example below,
+                the non-partition columns are treated as though they had been specified before the
+                  PARTITION clause in the SQL.  Example: These three statements
+                  are equivalent, inserting 1 to w,
+                    2 to x, and ‘c’ to
+                    y columns. 
+INSERT INTO t1 PARTITION (x,y) VALUES (1, 2, ‘c’);
+INSERT INTO t1 (w) PARTITION (x, y) VALUES (1, 2, ‘c’);
+INSERT INTO t1 PARTITION (x, y='c') VALUES (1, 2);
+
+ The PARTITION clause is not required for dynamic partition, but
+                all the partition columns must be explicitly present in the INSERT
+                statement in the column list or in the PARTITION clause. The
+                partition columns cannot be defaulted to NULL.  Example: 
+The following statements are valid because the partition columns,
+                    x and y, are present in the
+                    INSERT statements, either in the PARTITION
+                  clause or in the column list. 
+INSERT INTO t1 PARTITION (x,y) VALUES (1, 2, ‘c’);
+INSERT INTO t1 (w, x) PARTITION (y) VALUES (1, 2, ‘c’);
+ The following statement is not valid for the partitioned table as defined above
+                  because the partition columns, x and y, are not
+                  present in the INSERT statement. 
+INSERT INTO t1 VALUES (1, 2, 'c');
+
+ If partition columns do not exist in the source table, you can specify a specific
+                value for that column in the PARTITION clause.  Example: The
+                    source table only contains the column w and
+                    y. The value, 20, specified in the
+                    PARTITION clause, is inserted into the x
+                  column. 
+INSERT INTO t1 PARTITION (x=20, y) SELECT * FROM source;
+
+
+
+
+
+TRUNCATE on Insert-Only Transactional Tables
+The TRUNCATE table statement on Insert-Only Transactional tables creates new empty ACID
+        base directories and does not remove the files. To maintain transactional isolation TRUNCATE
+        statement will NOT delete the previous base and delta directories.
+
+Related informationReading and writing ADLS data with ImpalaExamples and performance characteristics of static and dynamic partitioned insertsParent topic: Impala SQL statements

@@ -1,0 +1,57 @@
+UPSERT statementCloudera Docs
+UPSERT statement
+The UPSERT statement acts as a combination of the
+      INSERT and UPDATE statements.For each row processed by the UPSERT statement: 
+
+ If another row already exists with the same set of primary key values, the other
+              columns are updated to match the values from the row being UPSERTed. 
+
+
+ If there is not any row with the same set of primary key values, the row is created,
+              the same as if the INSERT statement was used. 
+
+
+
+      This statement only works for Impala tables that use the Kudu storage engine.
+    
+Syntax:
+
+UPSERT [hint_clause] INTO [TABLE] [db_name.]table_name
+  [(column_list)]
+{
+    [hint_clause] select_statement
+  | VALUES (value [, value ...]) [, (value [, value ...]) ...]
+}
+
+hint_clause ::= [SHUFFLE] | [NOSHUFFLE]
+  (Note: the square brackets are part of the syntax.)
+ The select_statement clause can use the full syntax, such as
+          WHERE and JOIN clauses.
+Statement type: DML
+      
+Usage notes:
+
+      If you specify a column list, any omitted columns in the inserted or updated rows are
+      set to their default value (if the column has one) or NULL (if the
+      column does not have a default value). Therefore, if a column is not nullable and
+      has no default value, it must be included in the column list for any UPSERT
+      statement. Because all primary key columns meet these conditions, all the primary key
+      columns must be specified in every UPSERT statement.
+    
+      Because Kudu tables can efficiently handle small incremental changes, the VALUES
+      clause is more practical to use with Kudu tables than with HDFS-based tables.
+    important
+        After adding or replacing data in a table used in performance-critical queries, issue a COMPUTE
+        STATS statement to make sure all statistics are up-to-date. Consider updating statistics for a
+        table after any INSERT, LOAD DATA, or CREATE TABLE AS
+        SELECT statement in Impala, or after loading data through Hive and doing a REFRESH
+        table_name in Impala. This technique is especially important for tables that
+        are very large, used in join queries, or both.
+      
+Examples:
+
+UPSERT INTO kudu_table (pk, c1, c2, c3) VALUES (0, 'hello', 50, true), (1, 'world', -1, false);
+UPSERT INTO production_table SELECT * FROM staging_table;
+UPSERT INTO production_table SELECT * FROM staging_table WHERE c1 IS NOT NULL AND c2 > 0;
+
+Parent topic: Impala SQL statements

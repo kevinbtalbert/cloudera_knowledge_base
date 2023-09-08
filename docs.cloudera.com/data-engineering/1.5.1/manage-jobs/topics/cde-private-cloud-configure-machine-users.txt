@@ -1,0 +1,61 @@
+Configuring service account key tab to the machine userCloudera Docs
+Configuring service account key tab to the machine user 
+You can configure a service account Kerberos key tab file to a machine user id in order
+    to submit CDE jobs. The machine user will now have access to the hdfs storage through
+    jobs.
+
+Create a CDP machine user. For example, mu_cde.
+Generate access key and secret key for the machine user and download the credential
+        information. 
+On the ECS or HDFS gateway host, create a filename containing the user principal, and
+          generate a keytab. If you do not have the ktutil utility, you might
+          need to install the krb5-workstation package. The following example
+          commands assume the user principal is mu_cde@example.com.
+
+
+Create a file named <username>.principal (for example,
+                mu_cde.principal) containing the user principal:
+              mu_cde@example.com
+Generate a key tab file for the actual service account. For example,
+                svc_acc. Name this keytab file as
+                <username>.keytab, example: mu_cde.keytab.
+              The generation of keytab can be done for the user using the ktutil
+              command:sudo ktutil
+ktutil:  addent -password -p mu_cde@example.com -k 1 -e aes256-cts
+Password for pmu_cde@example.com: 
+ktutil:  addent -password -p mu_cde@example.com -k 2 -e aes128-cts
+Password for mu_cde@example.com: 
+ktutil:  wkt mu_cde.keytab
+
+ktutil:  q
+
+
+
+Validate the keytab using klist and kinit
+          commands:
+klist -ekt mu_cde.keytab 
+
+Keytab name: FILE:mu_cde.keytab
+KVNO Timestamp           Principal
+---- ------------------- ------------------------------------------------------
+   1 08/01/2021 10:29:47 mu_cde@example.com (aes256-cts-hmac-sha1-96) 
+   1 08/01/2021 10:29:47 mu_cde@example.com (aes128-cts-hmac-sha1-96) 
+
+kinit -kt mu_cde.keytab mu_cde@example.comMake sure that the keytab is valid
+          before continuing. If the kinit command fails, the user will not be
+          able to run jobs in the virtual cluster. After verifying that the kinit
+          command succeeds, you can destroy the Kerberos ticket by running
+            kdestroy. 
+
+Upload the keytab file for the user id as mu_cde and use the principal
+          and keytab file of the actual service account (svc_acc). 
+./cde-utils.sh init-user-in-virtual-cluster -h <endpoint_host> -u <user> -p <principal_file> -k <keytab_file>
+          For example, using the mu-cde user, for the
+            dfdj6kgx.cde-2cdxw5x5.ecs-demo.example.com endpoint
+          host:./cde-utils.sh init-user-in-virtual-cluster -h dfdj6kgx.cde-2cdxw5x5.ecs-demo.example.com -u mu-cde -p mu-cde.principal -k mu-cde.keytab
+
+ Set the Ranger authorization policy for the svc_acc
+            account.
+
+
+Related informationRanger authorization policy Creating a machine user in CDPGenerate Access KeyParent topic: Configure users to create jobs

@@ -1,0 +1,209 @@
+Performing Import operationCloudera Docs
+Performing Import operation
+
+
+note If the users that are defined within the policy do not exist on the target
+                cluster / storage, they are auto-created, import operation succeeds, and no further
+                user action is required.
+
+You must import the Ranger policies to CDP cluster Ranger.
+
+Login to the RANGER_ADMIN portal with administrator user
+                    credentials or user privileges as ADMIN.
+
+
+Under Settings > Users/Groups/Roles >
+                            Search for the ranger user.
+Click on the ranger user and change its role to
+                                Admin and save the changes.
+
+
+
+Download and copy the file authz-ingest.zip to the
+                        /opt directory of migration node (target data lake Ranger
+                    node).
+
+For example: CDP Data Lake or any relevant target cluster.
+
+
+Unzip the authz-ingest.zip file into the
+                        /opt directory which contains the following files:
+
+
+config-files
+scripts
+
+
+
+The config-files contains the following:
+
+
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+  <property>
+    <name>authorization.migration.export.target_services</name>
+    <value>HIVE,KAFKA</value>
+  </property>
+  <property>
+    <name>authorization.migration.export.migration_objects</name>
+    <value />
+  </property>
+  <property>
+    <name>authorization.migration.export.output_file</name>
+    <value>hdfs:///user/sentry/export-permissions/permissions.json</value>
+  </property>
+  <property>
+    <name>authorization.migration.ingest.is_dry_run</name>
+    <value>false</value>
+  </property>
+  <property>
+    <name>authorization.migration.role.permissions</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>authorization.migration.translate.url.privileges</name>
+    <value>false</value>
+  </property>
+  <property>
+    <name>authorization.migration.ingest.merge.ifexists</name>
+    <value>true</value>
+  </property>
+  <property>
+    <name>authorization.migration.migrate.url.privileges</name>
+    <value>true</value>
+  </property>
+</configuration>
+
+
+
+noteWhile using permissions.json file, you
+                        might encounter an error or a warning message while using the default
+                        configuration. You can ignore this and continue with the process.
+
+
+If Ranger is TLS/SSL enabled using Cloudera Manager AUTO-TLS, you must then
+                    from the Ranger admin host, copy cm-auto-global_truststore.jks
+                    (from the Ranger-admin process directory). 
+
+noteIn CDP One or CDP Public Cloud environment TLS is always enabled by
+                        default.
+
+For example:
+                            /var/run/cloudera-scm-agent/process/<ranger-process-ID>-ranger-RANGER_ADMIN)
+                        to the location /opt/authz-ingest/config-files/ of the
+                        migration tool host.Follow these steps to find the Ranger admin
+                        process directory:
+
+Execute the below command to get to the RANGER_ADMIN process:
+
+ps -ef | grep proc_rangeradmin
+
+Search for -cp option from the above command output
+                                and look for 
+"/var/run/cloudera-scm-agent/process/<ID>-ranger-RANGER_ADMIN"
+
+If you have done SSL setup manually or in a different method, copy the
+                        filename which you created for truststores.For example:
+                        cp /path/to/cm-auto-global_truststore.jks
+                        /opt/authz-ingest/config-files/
+
+Export the following variables to the target Ranger:
+
+
+
+
+JAVA_HOME - Java home path used on
+                                    the cluster
+RANGER_ADMIN_URL - Ranger Admin
+                                    portal url
+RANGER_ADMIN_SSL_ENABLED - either
+                                    true or false
+RANGER_ADMIN_TRUSTORE_PASSWORD - If Ranger is
+                                    TLS/SSL enabled using Cloudera Manager AUTO-TLS, then the
+                                    password can be found on the Ranger host
+                                        /etc/hadoop/conf/ssl-client.xml property
+                                        'ssl.client.truststore.password'
+
+
+
+
+
+Go to the location /opt/authz-ingest/config-files and open the
+                    file authorization-migration-site.xml
+
+Locate the property
+                            “authorization.migration.ranger.import.input_file” and
+                        provide the location of the transformed output file generated from Running the transform operation.
+noteIf the property is not available then you must add this property in
+                            the file.
+Example:
+                            file:///tmp/exportedRangerPolicies_transform.json<property><name>authorization.migration.ranger.import.input_file</name><value>file:///tmp/exportedRangerPolicies_transform.json</value></property>
+
+For the Kerberos-based authentication (or in a non CDP-SaaS environment) use
+                    the following process
+ If the KDC server is not installed in your environment or
+                        imported without the Kerberos authentication, you can skip this procedure
+                        and use the process provided for non-Kerberos authentication. Also if PAM
+                        auth is enabled in the target cluster then Kerberos authentication is
+                        recommended to import Ranger policies quickly.
+Find the Ranger admin keytab location and provide it in the following
+                            command:
+export
+                            RANGER_ADMIN_KEYTAB_PATH=/path/to/ranger.keytabIn the
+                        CDEP cluster, Ranger keytab shall be available in the Ranger host location
+                            “/cdep/keytabs/rangeradmin.keytab” or under the Ranger
+                        admin process directory
+                            “/var/run/cloudera-scm-agent/process/<ranger-process-ID>-ranger-RANGER_ADMIN”
+                        location.Steps to find the Ranger admin process directory:
+Execute the following command to get to the RANGER_ADMIN
+                            process.
+ps -ef | grep proc_rangeradmin
+Search for -cp option from the above command
+                            output and look for
+                                "/var/run/cloudera-scm-agent/process/<ID>-ranger-RANGER_ADMIN"
+
+If your Ranger node and migration node (target data lake Ranger node)
+                            are different, copy the Ranger keytab to the migration node (target data
+                            lake Ranger node).
+Run the below klist command on the migration node (target data lake
+                            Ranger node) to get the list of principals available in
+                                ${RANGER_ADMIN_KEYTAB_PATH}
+klist -kt ${RANGER_ADMIN_KEYTAB_PATH}
+Run the below kinit command using the
+                                ${RANGER_ADMIN_KEYTAB_PATH} with
+                                rangeradmin/_HOST@REALM principle. 
+Update the _HOST and the REALM correctly using the below command.
+kinit -kt ${RANGER_ADMIN_KEYTAB_PATH}
+                            rangeradmin/_HOST@REALM
+
+For non-Kerberos authentication, add the following properties and provide
+                    relevant values. After providing the values to configurations, save, and close
+                    the file.
+
+<property>
+    <name>ranger.admin.username</name>
+    <value>admin</value>
+</property>
+<property>
+<name>authorization.migration.kerberos.authentication</name>
+<value>false</value>
+</property>
+
+
+
+Run the migration script:
+cd authz-ingest/scriptssh
+                        authz-import.sh
+
+noteIf import operation fails, locate for details in the output of the command
+                        printed on the terminal window or refer to the target Ranger admin log
+                        files.
+
+
+After execution, the authMigrator utility shall print total policies count,
+                    skipped policies count and the failed policy counts on the same console window.
+                    Users should refer to the console output logs to ensure policies have been
+                    imported or not.
+
+
+Parent topic: Migrating Ranger policies from HDP to CDP One

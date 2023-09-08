@@ -1,0 +1,118 @@
+Partition transform featureCloudera Docs
+Partition transform feature
+From Hive or Impala, you can create a table using identity partitioning in which every
+  value is a single partition, or the partition is calculated from values using transformations. You
+  learn supported transformations and see examples of how to partition a table.
+Using CREATE TABLE ... PARTITIONED BY you create identity-partitioned Iceberg tables.
+   Identity-partitioned Iceberg tables are similar to the Hive or Impala partitioned tables and are
+   stored in the same directory structure as the Hive and Impala partitioned tables. The difference
+   is data files of identity-partitioned Iceberg tables store the partitioning columns with the
+   following exception: Migrated external tables are not stored in the same directory structure, but
+   Iceberg handles the tables and files regardless of the location.
+Hive and Impala support Iceberg advanced partitioning through the PARTITION BY SPEC clause.
+   Using this clause, you can define the Iceberg partition fields and partition transforms.
+The following table lists the available transformations of partitions and corresponding
+   transform spec.
+
+Transformation
+Spec
+Supported by SQL Engine
+
+
+
+Partition by year
+years(time_stamp) | year(time_stamp)
+Hive and Impala
+
+
+Partition by month
+months(time_stamp) | month(time_stamp)
+Hive and Impala
+
+
+Partition by a date value stored as int (dateint)
+days(time_stamp) | date(time_stamp)
+Hive
+
+
+Partition by hours
+hours(time_stamp)
+Hive
+
+
+Partition by a dateint in hours
+date_hour(time_stamp)
+Hive
+
+
+Partition by hashed value mod N buckets
+bucket(N, col)
+Hive and Impala
+
+
+Partition by value truncated to L, which is a number of characters
+truncate(L, col)
+Hive and Impala
+
+
+Strings are truncated to length L. Integers and longs are truncated to bins. For example, truncate(10, i) yields partitions 0, 10, 20, 30 …
+  
+  
+The idea behind transformation partition by hashed value mod N buckets is the same as
+    hash bucketing for Hive tables. A hashing algorithm
+   calculates the bucketed column value (modulus). For example, for 10 buckets, data is stored in
+   column value % 10, ranging from 0-9 (0 to n-1) buckets.
+You use the PARTITIONED BY SPEC clause to partition a table by an identity transform.
+  
+Hive syntax
+CREATE [EXTERNAL] TABLE [IF NOT EXISTS] [db_name.]table_name	  
+  [(col_name data_type][, time_stamp TIMESTAMP] )]
+  [PARTITIONED BY SPEC([col_name][, spec(value)][, spec(value)]...)]
+  [STORED AS file_format]
+   STORED BY ICEBERG
+  [TBLPROPERTIES (property_name=property_value, ...)]
+Where spec(value)represents one or more of the following transforms:
+YEARS(col_name)
+MONTHS(col_name)
+DAYS(col_name)
+BUCKET(bucket_num,col_name)
+TRUNCATE(length, col_name)
+
+
+
+Impala syntax
+CREATE TABLE [IF NOT EXISTS] [db_name.]table_name	  
+  [(col_name data_type, ... )]
+  [PARTITIONED BY SPEC([col_name][, spec(value)][, spec(value)]...)]
+   STORED (AS | BY) ICEBERG
+  [TBLPROPERTIES (property_name=property_value, ...)]
+Where spec(value) represents one or more of the following transforms:
+YEARS(col_name)
+MONTHS(col_name)
+DAYS(col_name)
+BUCKET(bucket_num,col_name)
+TRUNCATE(length, col_name)
+
+
+Hive example
+The following example creates a top level partition based on column i, a second level
+    partition based on the hour part of the timestamp, and a third level partition based on the
+    first 1000 characters in column j. 
+CREATE EXTERNAL TABLE ice_3 (i INT, t TIMESTAMP, j BIGINT) PARTITIONED BY SPEC (i, HOUR(t), TRUNCATE(1000, j)) STORED BY ICEBERG;
+
+Impala examples
+CREATE TABLE ice_13 (i INT, t TIMESTAMP, j BIGINT) PARTITIONED BY SPEC (i, HOUR(t), TRUNCATE(1000, j)) STORED BY ICEBERG;
+The following examples show how to use the PARTITION BY SPEC clause in a CREATE TABLE query
+    from Impala.The same transforms are available in a CREATE EXTERNAL TABLE query from Hive.
+CREATE TABLE ice_t(id INT, name STRING, dept STRING)
+PARTITIONED BY SPEC (bucket(19, id), dept)
+STORED BY ICEBERG
+TBLPROPERTIES ('format-version'='2');
+CREATE TABLE ice_ctas
+PARTITIONED BY SPEC (truncate(1000, id))
+STORED BY ICEBERG
+TBLPROPERTIES ('format-version'='2')
+AS SELECT id, int_col, string_col FROM source_table;
+
+
+Parent topic: Apache Iceberg features

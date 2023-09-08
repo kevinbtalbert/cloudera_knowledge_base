@@ -1,0 +1,111 @@
+Run Hue Document CleanupCloudera Docs
+Run Hue Document Cleanup
+
+
+
+If your cluster uses Hue, perform the following steps (not required for maintenance
+      releases). These steps clean up the database tables used by Hue and can help improve
+      performance after an upgrade. importantThe clean-up steps
+        only deletes the unsaved documents and workflows. Saved data and information is not cleaned
+        up. Cloudera recommends that you take a backup of your databases before starting the
+        clean-up activity.
+Back up your database before starting the cleanup activity.
+Check the saved documents such as Queries and Workflows for a few users to prevent data
+          loss.
+Connect to the Hue database. See Hue Custom Databases in the Hue component guide
+          for information about connecting to your Hue database.
+Check the size of the desktop_document, desktop_document2, oozie_job, beeswax_session,
+          beeswax_savedquery and beeswax_queryhistory tables to have a reference point. If any of
+          these have more than 100k rows, run the cleanup.
+          select count(*) from desktop_document;
+select count(*) from desktop_document2;
+select count(*) from beeswax_session;
+select count(*) from beeswax_savedquery;
+select count(*) from beeswax_queryhistory;
+select count(*) from oozie_job;
+
+SSH in to an active Hue instance as a root user.
+If you are upgrading from CDH 5.x or 6.x to CDP, then follow the below steps:
+Download the Hue cleanup scripts by using one of the
+                commands:git clone https://github.com/cmconner156/hue_scripts.git /opt/cloudera/hue_scriptsorwget -qO- -O /tmp/hue_scripts.zip https://github.com/cmconner156/hue_scripts/archive/master.zip && unzip -d /tmp /tmp/hue_scripts.zip
+mv /tmp/hue_scripts-master /opt/cloudera/hue_scriptsAlternatively,
+                you can contact Cloudera Support for assistance.
+Run the script as the root
+                user:DESKTOP_DEBUG=True /opt/cloudera/hue_scripts/script_runner hue_desktop_document_cleanup --keep-days 30 --cm-managed(Optional)
+                Specify DESKTOP_DEBUG=True if you want to log information for
+                troubleshooting purposes. Alternatively, you can view the logs from the following
+                location: /var/log/hue/hue_desktop_document_cleanup.log. The
+                first run can typically take around 1 minute per 1000 entries in each
+              table.
+Check the size of the desktop_document, desktop_document2, oozie_job,
+              beeswax_session, beeswax_savedquery and beeswax_queryhistory tables and confirm they
+              are now smaller.select count(*) from desktop_document;
+select count(*) from desktop_document2;
+select count(*) from beeswax_session;
+select count(*) from beeswax_savedquery;
+select count(*) from beeswax_queryhistory;
+select count(*) from oozie_job;
+
+If the hue_scripts script has run successfully, the table size
+                should decrease, and you can now set up a cron job for scheduled cleanups.
+
+Copy the wrapper script for cron by running the following
+              command:cp /opt/cloudera/hue_scripts/hue_history_cron.sh /etc/cron.daily
+Specify the cleanup interval in the --keep-days property in the
+                hue_history_cron.sh file as shown in the following
+                example:${SCRIPT_DIR}/script_runner hue_desktop_document_cleanup --keep-days 120In
+                this case, the data will be retained in the tables for 120 days.
+Change the permissions on the script so only the root user can run
+              it.chmod 700 /etc/cron.daily/hue_history_cron.sh
+
+If you are upgrading from a previous CDP release, the follow the below steps:
+Change to the Hue home directory:
+              cd /opt/cloudera/parcels/CDH/lib/hue
+Run the following command as the root user:
+                ./build/env/bin/hue desktop_document_cleanup --keep-days x--cm-managedThe
+                  --keep-days property is used to specify the number of days for
+                which Hue will retain the data in the backend database.(Optional) Specify
+                  DESKTOP_DEBUG=True if you want to log information for
+                troubleshooting purposes. Alternatively, you can view the logs from the following
+                location:
+                /var/log/hue/hue_desktop_document_cleanup.log.For
+                example:
+                DESKTOP_DEBUG=True ./build/env/bin/hue desktop_document_cleanup --keep-days 90 --cm-managed 90In
+                this case, Hue will retain data for the last 90 days.The first run can
+                typically take around 1 minute per 1000 entries in each table, but can take much
+                longer depending on the size of the tables.
+Check the size of the desktop_document, desktop_document2, oozie_job,
+              beeswax_session, beeswax_savedquery and beeswax_queryhistory tables and confirm they
+              are now smaller.select count(*) from desktop_document;
+select count(*) from desktop_document2;
+select count(*) from beeswax_session;
+select count(*) from beeswax_savedquery;
+select count(*) from beeswax_queryhistory;
+select count(*) from oozie_job;
+If any of the tables are still above 100k in size, run the command again while
+              specifying less number of days this time. For example, 60 or 30.
+noteThe optimal number of documents that can be stored in a table is less than or
+                  equal to 30,000. Consider this number while specifying the cleanup
+                  interval.
+
+
+
+Troubleshooting
+If the script fails to find the HUE_SERVER process directory, then you may see the
+        following error: KeyError: 'HUE_CONF_DIR'.
+To resolve this issue, set the following environment variable before running the
+        script:export HUE_CONF_DIR=`ls -1dtr /var/run/cloudera-scm-agent/process/*HUE_SERVER | tail -1`
+If the script cannot decrypt the Hue database password from the configuration files, then
+        you may see the following
+        error:settings DEBUG DESKTOP_DB_TEST_USER SET: hue_test
+Error: Password not present
+...
+ File "/opt/cloudera/parcels/CDH-6.2.1-1.cdh6.2.1.p4099.4889921/lib/hue/desktop/core/src/desktop/lib/conf.py", line 721, in coerce_password_from_script
+ raise subprocess.CalledProcessError(p.returncode, script)
+subprocess.CalledProcessError: Command '/var/run/cloudera-scm-agent/process/5260-hue-HUE_SERVER/altscript.sh sec-5-password' returned non-zero exit status 1
+To resolve this issue, specify the Hue database password through an environment
+        variable:export HUE_IGNORE_PASSWORD_SCRIPT_ERRORS=1 
+export HUE_DATABASE_PASSWORD=[***PASSWORD***]
+
+
+Parent topic: Step 5: Complete Pre-Upgrade steps for upgrades to CDP Private Cloud Base

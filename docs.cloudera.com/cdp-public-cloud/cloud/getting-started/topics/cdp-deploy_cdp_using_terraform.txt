@@ -1,0 +1,326 @@
+Deploy CDP using TerraformCloudera Docs
+Deploy CDP using Terraform
+This guide demonstrates how to deploy CDP on AWS or Azure by using one of the CDP
+  deployment templates.
+
+The templates use Terraform, an open source Infrastructure as Code (IaC) software
+     tool for defining and managing cloud or data center infrastructure. You interface the templates
+     via a simple configuration file residing in a GitHub repository.For an overview of best practices for deploying CDP,
+    refer to Creating and managing CDP deployments.
+
+noteAs a best practice, cloud provider prerequisites (such as a VPC/VNet and subnets) should be
+   created and managed outside of CDP. The Terraform quickstart module provided creates all these
+   cloud provider prerequisites, but in case you would like to use an existing AWS VPC or Azure VNet
+   and subnets, you can achieve this by providing a few additional optional parameters. 
+
+
+Prerequisites
+Prior to deploying CDP, you should make sure that your cloud account meets the basic
+   requirements and that you've installed a few prerequisites. 
+To meet these requirements and install the prerequisites, refer to the following
+     documentation:
+Cloud provider requirements
+Prerequisites for deploying CDP
+You should also familiarize yourself with the background information about CDP deployment
+    patterns and deployment pattern definitions described in Creating and managing CDP deployments.
+Next, you can follow the instructions below for deploying CDP.
+
+
+
+Deploy CDP
+Setting up a CDP deployment involves cloning a GitHub repository, editing the
+   configuration, and running Terraform commands. 
+Step 1: Clone the repository
+The cdp-tf-quickstarts repository contains Terraform
+     resource files to quickly deploy Cloudera Data Platform (CDP) Public Cloud and associated
+     pre-requisite cloud resources. It uses the CDP Terraform Modules provided by Cloudera to do
+     this.
+Clone this repository and navigate to the directory with the cloned repository:
+
+git clone https://github.com/cloudera-labs/cdp-tf-quickstarts.git
+cd cdp-tf-quickstarts
+
+
+Step 2: Edit the configuration file for the required cloud provider
+In the cloned repository, change to the required cloud provider directory.
+     Currently AWS and Azure are available.
+Next, edit the input variables in the configuration file as required:
+AWSAzure
+
+cd aws
+mv terraform.tfvars.template terraform.tfvars
+vi terraform.tfvars
+
+
+
+cd azure
+mv terraform.tfvars.template terraform.tfvars
+vi terraform.tfvars
+
+
+Sample content of this file, with indicators of values to change are shown below.
+     The variables are explained below the sample. You should review and update all the variables. 
+AWSAzure
+
+# ------- Global settings -------
+env_prefix = "<ENTER_VALUE>" # Required name prefix for cloud and CDP resources, e.g. cldr1
+aws_region = "<ENTER_VALUE>" # Change this to specify Cloud Provider region, e.g. eu-west-1
+aws_key_pair= "<ENTER_VALUE>" # Change this with the name of a pre-existing AWS keypair (Example: my-keypair)
+deployment_template = "<ENTER_VALUE>"  # Specify the deployment pattern. Options are public, semi-private or private
+     
+# ------- Network Resources -------
+# **NOTE: If required change the values below any additional CIDRs to add the the AWS Security Groups**
+ingress_extra_cidrs_and_ports = {
+cidrs = ["<ENTER_IP_VALUE>/32", "<ENTER_IP_VALUE>/32"],
+ports = [443, 22]
+}
+
+
+# ------- Global settings -------
+env_prefix = "<ENTER_VALUE>" # Required name prefix for cloud and CDP resources, e.g. cldr1
+azure_region = "<ENTER_VALUE>" # Change this to specify Cloud Provider region, e.g. westeurpoe
+public_key_text = "<ENTER_VALUE> # Change this with the SSH public key text, e.g. ssh-rsa AAA....
+deployment_template = "<ENTER_VALUE>"  # Specify the deployment pattern. Options are public, semi-private or private
+
+# ------- Network Settings -------
+# **NOTE: If required change the values below any additional CIDRs to add the the AWS Security Groups**
+ingress_extra_cidrs_and_ports = {
+ cidrs = ["<ENTER_IP_VALUE>/32", "<ENTER_IP_VALUE>/32"],
+ ports = [443, 22]
+}
+
+As an outcome of this step, your configuration file should look similar to the following: 
+AWSAzure
+
+# ------- Global settings -------
+env_prefix = "test-env" # Required name prefix for cloud and CDP resources, e.g. cldr1
+aws_region = "eu-west-1" # Change this to specify Cloud Provider region, e.g. eu-west-1
+aws_key_pair= "test-public-key" # Change this with the name of a pre-existing AWS keypair (Example: my-keypair)
+deployment_template = "public"  # Specify the deployment pattern. Options are public, semi-private or private
+     
+# ------- Network Resources -------
+# **NOTE: If required change the values below any additional CIDRs to add the the AWS Security Groups**
+ingress_extra_cidrs_and_ports = {
+cidrs = ["137.171.0/32"],
+ports = [443, 22]
+}
+
+
+# ------- Global settings -------
+env_prefix = "test-env" # Required name prefix for cloud and CDP resources, e.g. cldr1
+azure_region = "westeurope" # Change this to specify Cloud Provider region, e.g. westeurpoe
+public_key_text= "ssh AAA78…." # Change this with the SSH public key text, e.g. ssh-rsa AAA....
+deployment_template = "public"  # Specify the deployment pattern. Options are public, semi-private or private
+     
+# ------- Network Resources -------
+# **NOTE: If required change the values below any additional CIDRs to add the the AWS Security Groups**
+ingress_extra_cidrs_and_ports = {
+cidrs = ["137.171.0/32"],
+ports = [443, 22]
+}
+
+The following tables explain the mandatory inputs that need to be provided in the
+     configuration file. 
+Table 1: Mandatory inputs 
+AWSAzure
+
+
+Input
+Description
+Default value
+
+
+aws_region
+The AWS region in which the cloud prerequisites and CDP will be deployed.
+        For example, eu-west-1. For a list of supported AWS regions, see Supported AWS regions.
+Not set 
+
+
+env_prefix
+A string prefix that will be used to name the cloud provider and CDP
+        resources created. 
+Not set 
+
+
+aws_key_pair
+The name of an AWS keypair that exists in your account in the selected
+        region.
+Not set 
+
+
+deployment_template
+
+The selected deployment pattern. Values allowed:
+private, semi-private and
+           public.
+
+public
+
+
+ingress_extra_cidrs_and_ports
+
+Inbound access to the UI and API endpoints of your deployment will be allowed
+         from the CIDRs (IP ranges) and ports
+         specified here. 
+Enter your machine’s public IP here, with ports 443 and 22. If unsure, you can
+          check your public IP address here.
+
+
+CIDRs are not set.
+Ports are set to 443, 22 by default.
+
+
+
+
+
+
+Input
+Description
+Default value
+
+
+azure_region
+The Azure region in which the cloud prerequisites and CDP will be deployed.
+         For example, eastus. For a list of supported Azure regions, see Supported Azure regions.
+Not set 
+
+
+env_prefix
+A string prefix that will be used to name the cloud provider and CDP
+         resources created. 
+Not set 
+
+
+public_key_text
+An SSH public key string to be used for the nodes of the CDP
+         environment.
+Not set 
+
+
+deployment_template
+
+The selected deployment pattern. Values allowed:
+private, semi-private and
+           public.
+
+public
+
+
+ingress_extra_cidrs_and_ports
+
+Inbound access to the UI and API endpoints of your deployment will be allowed
+          from the CIDRs (IP ranges) and ports
+          specified here. 
+Enter your machine’s public IP here, with ports 443 and 22. If unsure, you can
+          check your public IP address here.
+
+
+CIDRs are not set.
+Ports are set to 443, 22 by default.
+
+
+
+
+The following tables explain the optional inputs. The optional inputs can optionally
+     be added to the configuration file. While the mandatory inputs are present in the configuration
+     file and only their values need to be provided, the optional inputs should be added manually. 
+Table 2: Optional inputs 
+AWSAzure
+
+
+Input
+Description
+Default value
+
+
+private_network_extensions
+Enable creation of resources for connectivity to CDP Control Plane (public
+          subnet and NAT Gateway) for Private Deployment. Only relevant for private deployment
+          template
+true
+
+
+create_vpc
+Flag to specify if the VPC should be created
+true
+
+
+cdp_vpc_id
+VPC ID for CDP environment. Required if create_vpc is
+          false
+Empty string
+
+
+cdp_public_subnet_ids
+List of public subnet ids. Required if create_vpc is false
+Empty list
+
+
+cdp_private_subnet_ids
+List of private subnet ids. Required if create_vpc is false
+Empty list
+
+
+
+
+
+Input
+Description
+Default value
+
+
+create_vnet
+Flag to specify if the VNet should be created
+true
+
+
+cdp_resourcegroup_name
+Preexisting Azure resource group for CDP environment. Required if
+           create_vnet is false
+Empty string
+
+
+cdp_vnet_name
+VNet name for CDP environment. Required if create_vnet is
+          false
+Empty string
+
+
+cdp_subnet_names
+List of subnet names for CDP resources. Required if create_vnet is
+          false
+Empty list
+
+
+cdp_gw_subnet_ids
+List of subnet names for CDP Gateway. Required if create_vnet is
+          false
+Empty list
+
+
+
+
+Step 3: Launch the deployment 
+Run the Terraform commands to validate the configuration and launch the deployment
+     with the following commands:terraform init
+terraform apply
+Terraform will show a plan with the list of cloud provider and CDP resources that
+    will be created.
+When you are prompted, type yes to tell Terraform to perform the
+    deployment. Typically, this will take about 60 minutes. Once the deployment is complete, CDP
+    will print output similar to the following: 
+
+Apply complete! Resources: 46 added, 0 changed, 0 destroyed.
+
+You can navigate to the CDP web interface at https://cdp.cloudera.com/ and see your deployment
+    progressing. Once the deployment completes, you can create Data Hubs and data services. 
+
+Clean up the CDP environment and infrastructure
+If you no longer need the infrastructure that’s provisioned by Terraform, run the
+    following command to remove the deployment infrastructure and terminate all resources:
+
+terraform destroy
+
+
+
+

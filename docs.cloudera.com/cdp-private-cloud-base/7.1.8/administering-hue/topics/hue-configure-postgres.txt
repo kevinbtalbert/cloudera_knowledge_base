@@ -1,0 +1,139 @@
+Configure the PostgreSQL serverCloudera Docs
+Configure the PostgreSQL server
+By default, PostgreSQL only accepts connections on the loopback interface. You must
+        reconfigure PostgreSQL to accept connections from the fully qualified domain names (FQDN) of
+        the hosts hosting the services for which you are configuring databases. If you do not make
+        these changes, the services cannot connect and use the database on which they
+        depend.
+
+Make sure that LC_ALL is set to en_US.UTF-8 and initialize the
+                    database as follows:
+
+echo 'LC_ALL="en_US.UTF-8"' >> /etc/locale.conf
+sudo su -l postgres -c "postgresql-setup initdb"
+
+
+Enable MD5 authentication. Edit the pg_hba.conf file typically
+                    located at /var/lib/pgsql/data or
+                        /etc/postgresql/[***VERSION***]>/main. Add the
+                    following line:
+
+host all all 127.0.0.1/32 md5
+
+
+If the default pg_hba.conf file contains the "host all
+                        all 127.0.0.1/32 ident" line, then the host line specifying MD5
+                    authentication shown above must be inserted before this line. Failure to do so
+                    may cause an authentication error when running the
+                        scm_prepare_database.sh script. You can modify the contents
+                    of the MD5 line shown above to support different configurations. For example, if
+                    you want to access PostgreSQL from a different host, replace 127.0.0.1 with your
+                    IP address and update the postgresql.conf file, which is
+                    typically found in the same place as pg_hba.conf, to include
+                    the following line:
+
+listen_addresses = '*'
+
+
+Configure settings to ensure your system performs as expected. Update these
+                    settings in the /var/lib/pgsql/data/postgresql.conf or
+                        /var/lib/postgresql/data/postgresql.conf file based on
+                    cluster size and resources as follows:
+Small to mid-sized clusters: Consider the following settings as
+                    starting points. If resources are limited, consider reducing the buffer sizes
+                    and checkpoint segments further. Ongoing tuning may be required based on each
+                    host's resource utilization. For example, if the Cloudera Manager server is
+                    running on the same host as other roles, the following values may be
+                        acceptable:
+max_connection: In general, allow each database on a host a maximum of
+                            100 connections and then add 50 extra connections. You may have to
+                            increase the system resources available to PostgreSQL.
+shared_buffers: 256 MB
+wal_buffers: 8 MB
+checkpoint_segments: 16. Replace configuration parameter
+                                checkpoint_segments with
+                                min_wal_size and
+                                max_wal_size.If you previously adjusted
+                                checkpoint_segments, the following formula will give you an
+                                approximately equivalent
+                                setting:max_wal_size = (3 * checkpoint_segments) * 16MBnote
+The checkpoint_segments setting is removed in
+                                    PostgreSQL 9.5 and higher. This setting is replaced by
+                                        min_wal_size and
+                                        max_wal_size.
+The default setting for max_wal_size is much
+                                    higher than the default setting for
+                                        checkpoint_segments. So, adjusting it might
+                                    no longer be necessary.
+
+checkpoint_completion_target: 0.9
+
+Large clusters: Can contain up to 1000 hosts. Consider the following
+                    settings as starting points:
+max_connection: for large clusters, allow each database on a host a
+                            maximum of 100 connections and then add 50 extra connections. You may
+                            have to increase the system resources that is available to
+                            PostgreSQL.
+shared_buffers: 1024 MB. This requires that the operating system can
+                            allocate sufficient shared memory.
+wal_buffers: 16 MB. This value is derived from the
+                                shared_buffers value. Setting
+                                wal_buffers to be approximately 3% of
+                                shared_buffers, up to a maximum of approximately 16
+                            MB is sufficient in most cases.
+checkpoint_segments: 128. The PostgreSQL Tuning Guide recommends values
+                            between 32 and 256 for write-intensive systems, such as this one.
+                            Replace configuration parameter checkpoint_segments
+                            with min_wal_size and
+                                max_wal_size.If you previously adjusted
+                                checkpoint_segments, the following formula will give you an
+                                approximately equivalent
+                                setting:max_wal_size = (3 * checkpoint_segments) * 16MBnote
+The checkpoint_segments setting is removed in
+                                    PostgreSQL 9.5 and higher. This setting is replaced by
+                                        min_wal_size and
+                                        max_wal_size.
+The default setting for max_wal_size is much
+                                    higher than the default setting for
+                                        checkpoint_segments. So, adjusting it might
+                                    no longer be necessary.
+
+checkpoint_completion_target: 0.9
+
+
+Configure the PostgreSQL server to start when the system boots.
+
+
+
+OS
+Command
+
+
+
+RHEL 7 compatible, SLES, and Ubuntu
+
+sudo systemctl enable postgresql
+
+
+
+
+
+Restart the PostgreSQL database.
+
+
+
+OS
+Command
+
+
+
+RHEL 7 compatible, SLES, and Ubuntu
+
+sudo systemctl restart postgresql
+
+
+
+
+
+
+Parent topic: Using PostgreSQL database with Hue

@@ -1,0 +1,549 @@
+Adding a Host to a ClusterCloudera Docs
+Adding a Host to a Cluster
+Steps to add hosts to a cluster.
+Minimum Required Role:
+Full
+            Administrator. This feature is not available when using Cloudera
+            Manager to manage Data Hub clusters.
+You can add one or more hosts to your cluster using the Add Hosts wizard,
+      which installs the Oracle JDK, Cloudera Runtime, and Cloudera Manager
+      Agent software. After the software is installed and the Cloudera Manager
+      Agent is started, the Agent connects to the Cloudera Manager Server and
+      you can use the Cloudera Manager Admin Console to manage and monitor
+      Cloudera Runtime on the new host.
+noteIf the server on which Cloudera Manager is running is damaged or
+      cannot be repaired, Cloudera Manager instance can be recovered by installing Cloudera Manager
+      on a new machine and connecting to the Cloudera Manager database. In case the Cloudera Manager
+      server is down, refer to the KB article for more information.
+The Add Hosts wizard does not create roles on the
+      new host; once you have successfully added the host(s) you can either add
+      roles, one service at a time, or apply a host template, which can define
+      role configurations for multiple roles.
+important
+Unqualified hostnames (short names) must be unique in a Cloudera
+          Manager instance. For example, you cannot have both
+            host01.example.com and
+            host01.standby.example.com managed by the same
+          Cloudera Manager Server.
+All hosts in a single cluster must be running the same version of
+          Cloudera Runtime.
+When you add a new host, you must install the same version of
+          Cloudera Runtime to enable the new host to work with the other hosts
+          in the cluster. The installation wizard lets you select the version of
+          Cloudera Runtime to install, and you can choose a custom repository to
+          ensure that the version you install matches the version on the other
+          hosts.
+If you are managing multiple clusters, select the version of
+          Cloudera Runtime that matches the version in use on the cluster where
+          you plan to add the new host.
+When you add a new host, the following occurs:
+YARN topology.map is updated to include the new
+              host
+Any service that includes topology.map in its configuration—Flume,
+              Hive, Hue, Oozie, Solr, Spark,  YARN—is marked stale
+At a convenient point after adding the host you should restart
+          the stale services to pick up the new configuration.
+
+Use one of the following methods to add a new host:
+
+Parent topic: Managing Hosts
+Using the Add Hosts Wizard to Add Hosts
+You can use the Add Hosts wizard to install Cloudera Runtime,
+      Impala, and the Cloudera Manager Agent on a host. There are additional
+      considerations when TLS is enabled.
+
+importantIf you have enabled TLS in the cluster you must
+          use one of the following options:
+If you enabled TLS using Auto TLS, then you can use the Add
+              Hosts wizard in Cloudera Manager. 
+If you have manually enabled TLS, you can either:
+Install the Cloudera Manager Agent on the new hosts
+                  manually. See Alternate Method of Installing Cloudera Manager Agent without Disabling TLS, below.
+ Disable TLS before starting the Add Hosts wizard. You can
+                  then re-enable TLS after adding the hosts. See Disable TLS Encryption or Authentication,
+                  below.
+
+
+
+Disable TLS Encryption or Authentication
+If you have enabled TLS encryption or authentication for the Cloudera
+          Manager Agents, you must disable both of them before starting the Add
+          Hosts wizard. Otherwise, skip to the next step. 
+If you perform this step, then skip step 2 (Alternate
+            Method of Installing Cloudera Manager Agent without Disabling
+            TLS).  If you skip step 1 and perform step 2, then continue
+          to step 3 (Using the Add Hosts Wizard to Add Hosts).importantThis step temporarily puts the existing cluster
+            hosts in an unmanageable state; they are still configured to use TLS
+            and so cannot communicate with the Cloudera Manager Server. Roles on
+            these hosts continue to operate normally, but Cloudera Manager is
+            unable to detect errors and issues in the cluster and reports all
+            hosts as being in bad health. To work around this issue, you can
+            manually install the Cloudera Manager Agent on the new host. See
+              Alternate Method of Installing Cloudera Manager Agent without Disabling TLS.
+
+From the Administration tab, select Settings.
+Select the Security category.
+Disable TLS by clearing the following options: Use TLS
+              Encryption for Agents, and Use TLS Authentication of Agents
+              to Server.
+Click Save Changes to save the settings.
+Log in to the Cloudera Manager Server host.
+Restart the Cloudera Manager
+        Server.sudo systemctl restart cloudera-scm-server
+
+
+
+Alternate Method of Installing Cloudera Manager Agent without
+          Disabling TLS
+If you have TLS encryption or authentication enabled in your cluster,
+          you must either disable TLS during the installation, or install the
+          Cloudera Manager Agent manually using the following procedure:
+Copy the repository configuration file from an existing host in
+              the cluster to the new host. For example:
+
+OS
+Command
+
+
+
+RHEL
+
+sudo scp mynode.example.com:/etc/yum.repos.d/cloudera-manager.repo /etc/yum.repos.d/cloudera-manager.repo
+
+
+
+SLES
+
+sudo scp mynode.example.com:/etc/zypp/zypper.conf/cloudera-cm.repo /etc/zypp/zypper.conf/cloudera-cm.repo
+
+
+
+Ubuntu or Debian
+
+sudo scp mynode.example.com:/etc/apt/sources.list.d/cloudera.list /etc/apt/sources.list.d/cloudera.list
+
+
+
+Remove cached package lists and other transient data by running
+              the following command:
+
+OS
+Command
+
+
+
+RHEL
+
+sudo yum clean all
+
+
+
+SLES
+
+sudo zypper clean --all
+
+
+
+Ubuntu or Debian
+
+sudo apt-get clean
+
+
+
+Install the JDK package from the Cloudera Manager repository.
+              Install the same version as is used on other cluster hosts. Only
+              JDK 1.8 is supported:Table 1. Oracle JDK 1.8
+
+OS
+Command
+
+
+
+RHEL
+
+sudo yum install jdk1.8.0_144-cloudera
+
+
+
+SLES
+
+sudo zypper install jdk1.8.0_144-cloudera
+
+
+
+Ubuntu or Debian
+
+sudo apt-get install jdk1.8.0_144-cloudera
+
+
+Open JDK
+RHEL
+
+OpenJDK
+                      8sudo yum install java-1.8.0-openjdk-devel
+OpenJDK
+                      11su -c yum install java-11-openjdk-devel
+Ubuntu
+OpenJDK
+                      8sudo apt-get install openjdk-8-jdk
+OpenJDK
+                      11sudo apt-get install openjdk-11-jdk
+SLES
+OpenJDK
+                      8sudo zypper install java-1_8_0-openjdk-devel
+OpenJDK
+                      11sudo zypper install java-11-openjdk-devel
+
+Set up the TLS certificates using the same procedure that was
+              used to set them up on other cluster hosts. See Configuring TLS Encryption for
+                Cloudera Manager Using Auto-TLS. If you have set up a
+              custom truststore, copy that file from an existing host to the
+              same location on the new host. 
+Install the Cloudera Manager Agent:
+
+OS
+Command
+
+
+
+RHEL
+
+sudo yum install cloudera-manager-agent
+
+
+
+SLES
+
+sudo zypper install cloudera-manager-agent
+
+
+
+Ubuntu or Debian
+
+sudo apt-get install cloudera-manager-agent
+
+
+
+Copy the Cloudera Manager Agent configuration file from an
+              existing cluster host that is already configured for TLS to the
+              same location on the new host. For
+              example:sudo scp mynode.example.com:/etc/cloudera-scm-agent/config.ini /etc/cloudera-scm-agent/config.ini
+Create and secure the file containing the password used to
+              protect the private key of the Agent:
+Use a text editor to create a file called
+                    agentkey.pw that contains the password.
+                  Save the file in the /etc/cloudera-scm-agent
+                  directory.
+Change ownership of the file to
+                  root:sudo chown root:root /etc/cloudera-scm-agent/agentkey.pw
+Change the permissions of the
+                  file:sudo chmod 440 /etc/cloudera-scm-agent/agentkey.pw
+
+Start the Agent on the new host:
+              sudo service cloudera-scm-agent start
+Log in to Cloudera Manager and go to
+                  Hosts > All
+                  Hosts page and verify that the new
+              host is recognized by Cloudera Manager.
+
+
+Add Hosts to an Existing Cluster
+
+Click the Hosts tab.
+Click the Add Hosts button.
+Select Add hosts to cluster.
+If the cluster uses Kerberos
+            authentication, ensure that the Kerberos packages are installed on
+            the new hosts. If necessary, use the package commands provided on
+            the Add Hosts screen to install these
+            packages.
+Select the cluster where you want to add the host from the
+            drop-down list.
+Click Continue.The
+                Specify Hosts page displays. You can
+              either add a new host to the cluster, or add an existing managed
+              host to the cluster. Do one of the following:
+Add a new host:
+On the Specify Hosts page, enter a host name or
+                      pattern (click "using patterns" for more information) to
+                      search for new hosts to add to the cluster. A list of
+                        matching hosts displays.
+Select the hosts that you want to add.
+Click Continue.
+Select the Repository Location where
+                      Cloudera Manager can find the software to install on the
+                      new hosts. Select Public Cloudera
+                        Repository or Custom
+                        Repository and enter the URL of a custom
+                      repository available on your local network. 
+Click Continue.
+Follow the instructions in the wizard
+                      to install the Oracle JDK.
+Enter Login Credentials:
+Select root for the
+                            root account, or select
+                            Another user and enter the
+                          username for an account that has password-less
+                            sudo privileges.
+Select an authentication method:
+If you choose password authentication, enter and
+                              confirm the password.
+If you choose public-key authentication, provide
+                              a passphrase and path to the required key
+                              files.
+You can modify the default SSH port if
+                            necessary.
+Specify the maximum number of host installations to
+                          run at once. The default and recommended value is 10.
+                          You can adjust this based on your network
+                          capacity.
+Click Continue.The
+                              Install Agents page
+                            displays and Cloudera Manager installs the Agent
+                            software on the new hosts.
+When the agent installation
+                          finishes, click Continue.
+
+
+Add an existing managed host:
+Click the Currently Managed Hosts
+                      tab. A list of hosts previously added to Cloudera
+                        Manager displays.
+Select the hosts that you want to add to the
+                      cluster.
+Click Continue.
+
+
+Cloudera Manager begins to install the Cloudera Runtime
+            parcels.
+When the parcel installation finishes, click
+              Continue.
+The Host Inspector runs and displays any problems with the hosts.
+            Correct the problems before continuing.
+After correcting any problems, click
+              Continue.
+To add role instances to the hosts now or select
+              None to add them later.
+To add roles now:
+Select an existing host template, or create a new one.
+To create a new host template, click the
+                  Create... button. The Create New
+                  Host Template screen opens.. See Host Templates for details on
+                how you select the role groups that define the roles that should
+                run on a host. After you have created the template, it will
+                appear in the list of host templates from which you can
+                choose.
+Select the host template you want to use.
+By default Cloudera Manager will automatically start the roles
+                specified in the host template on your newly added hosts. To
+                prevent this, uncheck the option to start the newly-created
+                roles.
+
+When the wizard is finished, you can verify the Agent is
+            connecting properly with the Cloudera Manager Server by clicking the
+              Hosts tab and checking the health status for the new host.
+            If the Health Status is Good and the value for the Last
+            Heartbeat is recent, then the Agent is connecting properly with the
+            Cloudera Manager Server.
+
+If you did not specify a host template during the Add Hosts wizard,
+          then no roles will be present on your new hosts until you add them.
+          You can do this by adding individual roles under the Instances
+          tab for a specific service, or by using a host template. See Adding a Role Instance for information about
+          adding roles for a specific service. See Host Templates to create a host template that specifies a
+          set of roles (from different services) that should run on a host.
+
+Add New Hosts To Cloudera Manager
+This option allows you to add a host, but without adding them to a
+          specific cluster. Later, you can use these hosts to create new
+          clusters or expand existing clusters. 
+
+
+Click the Hosts tab.
+Click the Add Hosts button.
+Select Add hosts to Cloudera Manager
+Specify the hosts to add:
+On the Specify Hosts page, enter a host name or
+                      pattern (click "using patterns" for more information) to
+                      search for new hosts to add to the cluster. A list of
+                        matching hosts displays.
+Select the hosts that you want to add.
+Click Continue.
+Select the Repository Location where
+                      Cloudera Manager can find the software to install on the
+                      new hosts. Select Public Cloudera
+                        Repository or Custom
+                        Repository and enter the URL of a custom
+                      repository available on your local network. 
+Click Continue.
+Follow the instructions in the wizard
+                      to install the Oracle JDK.
+Enter Login Credentials:
+Select root for the
+                            root account, or select
+                            Another user and enter the
+                          username for an account that has password-less
+                            sudo privileges.
+Select an authentication method:
+If you choose password authentication, enter and
+                              confirm the password.
+If you choose public-key authentication, provide
+                              a passphrase and path to the required key
+                              files.
+You can modify the default SSH port if
+                            necessary.
+Specify the maximum number of host installations to
+                          run at once. The default and recommended value is 10.
+                          You can adjust this based on your network
+                          capacity.
+Click Continue.The
+                              Install Agents page
+                            displays and Cloudera Manager installs the Agent
+                            software on the new hosts.
+When the agent installation
+                          finishes, click Continue.
+
+
+If the cluster uses Kerberos
+            authentication, ensure that the Kerberos packages are installed on
+            the new hosts. If necessary, use the package commands provided on
+            the Add Hosts screen to install these
+            packages.
+Select the Repository Location where
+                      Cloudera Manager can find the software to install on the
+                      new hosts. Select Public Cloudera
+                        Repository or Custom
+                        Repository and enter the URL of a custom
+                      repository available on your local network. 
+Follow the instructions in the wizard
+                      to install the Oracle JDK.
+Enter Login Credentials:
+Select root for the
+                            root account, or select
+                            Another user and enter the
+                          username for an account that has password-less
+                            sudo privileges.
+Select an authentication method:
+If you choose password authentication, enter and
+                              confirm the password.
+If you choose public-key authentication, provide
+                              a passphrase and path to the required key
+                              files.
+You can modify the default SSH port if
+                            necessary.
+Specify the maximum number of host installations to
+                          run at once. The default and recommended value is 10.
+                          You can adjust this based on your network
+                          capacity.
+Click Continue.The
+                              Install Agents page
+                            displays and Cloudera Manager installs the Agent
+                            software on the new hosts.
+When the agent installation
+                          finishes, click Continue.
+
+The Host Inspector runs and displays any problems with the
+              hosts. Correct the problems before continuing.
+After correcting any problems, click
+                Continue.
+
+
+
+Enable TLS Encryption or Authentication
+If you previously enabled TLS security on your cluster, you must
+          re-enable the TLS options on the Administration page and also
+          configure TLS on each new host after using the Add Hosts wizard.
+          Otherwise, you can ignore this step. For instructions, see Configuring TLS Encryption for Cloudera Manager and CDH Using
+            Auto-TLS.
+
+Enable TLS/SSL for cluster Components
+If you have previously enabled TLS/SSL on your
+          cluster, and you plan to start these roles on this new host, make sure
+          you install a new host certificate to be configured from the same path
+          and naming convention as the rest of your hosts. Since the new host
+          and the roles configured on it are inheriting their configuration from
+          the previous host, ensure that the keystore or truststore passwords
+          and locations are the same on the new host. For instructions on
+          configuring TLS/SSL, see Configuring TLS Encryption for Cloudera Manager and CDH Using
+            Auto-TLS. 
+
+Enable Kerberos
+If you have previously enabled Kerberos on your
+            cluster:
+Install the packages required to kinit on the
+              new host (see the list in Enabling Kerberos Authentication for CDH
+              ).
+If you have set up Cloudera Manager to manage
+                krb5.conf, it will automatically deploy the
+              file on the new host. Note that Cloudera Manager will deploy
+                krb5.conf only if you use the Kerberos wizard.
+              If you have used the API, you will need to manually perform the
+              commands that the wizard calls.If Cloudera Manager does not
+                manage krb5.conf, you must manually update the
+                file at /etc/krb5.conf.
+
+
+
+
+
+Adding a Host by Installing the Packages Using Your Own
+      Method
+If you used a different mechanism to install the JDK, Cloudera
+      Runtime, and Cloudera Manager Agent packages, you can use that same
+      mechanism to install the JDK, Cloudera Runtime, Cloudera Manager Agent
+      packages and then start the Cloudera Manager Agent.
+
+
+Install the Oracle JDK, Cloudera Runtime, and Cloudera Manager
+            Agent packages using your own method. For instructions on installing
+            these packages, see Step 3: Install Cloudera Manager
+              Server.
+After installation is complete, start the Cloudera Manager Agent.
+            For instructions, see Starting, Stopping, and Restarting Cloudera Manager Agents.
+After the Agent is started, you can verify the Agent is connecting
+            properly with the Cloudera Manager Server by clicking the
+              Hosts tab and checking the health status for the new host.
+            If the Health Status is Good and the value for the Last
+            Heartbeat is recent, then the Agent is connecting properly with the
+            Cloudera Manager Server.
+If you have enabled TLS security on your cluster, you must enable
+            and configure TLS on each new host. Otherwise, ignore this step.
+Enable and configure TLS on each new host by specifying
+                  1 for the use_tls property
+                in the /etc/cloudera-scm-agent/config.ini
+                configuration file.
+Configure TLS security on the new hosts by following the
+                instructions in Configuring TLS Encryption for Cloudera Manager and CDH Using
+                  Auto-TLS.
+
+
+If you have previously enabled TLS/SSL on your
+          cluster, and you plan to start these roles on this new host, make sure
+          you install a new host certificate to be configured from the same path
+          and naming convention as the rest of your hosts. Since the new host
+          and the roles configured on it are inheriting their configuration from
+          the previous host, ensure that the keystore or truststore passwords
+          and locations are the same on the new host. For instructions on
+          configuring TLS/SSL, see Configuring TLS Encryption for Cloudera Manager and CDH Using
+            Auto-TLS. 
+
+
+If you have previously enabled Kerberos on your
+            cluster:
+Install the packages required to kinit on the
+              new host (see the list in Enabling Kerberos Authentication for CDH
+              ).
+If you have set up Cloudera Manager to manage
+                krb5.conf, it will automatically deploy the
+              file on the new host. Note that Cloudera Manager will deploy
+                krb5.conf only if you use the Kerberos wizard.
+              If you have used the API, you will need to manually perform the
+              commands that the wizard calls.If Cloudera Manager does not
+                manage krb5.conf, you must manually update the
+                file at /etc/krb5.conf.
+
+
+
+
+
+

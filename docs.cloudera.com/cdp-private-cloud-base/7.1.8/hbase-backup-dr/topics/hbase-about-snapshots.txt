@@ -1,0 +1,136 @@
+About HBase snapshotsCloudera Docs
+About HBase snapshots
+HBase snapshots allow you to clone a table without making data copies, and with
+      minimal impact on RegionServers. Exporting the table to another cluster does not have any
+      impact on the RegionServers.
+In previous HBase releases, the only way to a back up or to clone a
+          table was to use CopyTable or
+            ExportTable, or to copy all the
+            hfiles in HDFS after disabling the table. These
+          methods have disadvantages:
+
+
+CopyTable and ExportTable can degrade RegionServer
+            performance.
+Disabling the table means no reads or writes; this is usually unacceptable.
+
+HBase snapshots allow you to clone a table without making data
+          copies, and with minimal impact on RegionServers. Exporting the table
+          to another cluster does not have any impact on the RegionServers.
+Use Cases
+
+Recovery from user or application errors
+Useful because it may be some time before the database
+                     administrator notices the error.note
+The database administrator needs to schedule the
+                           intervals at which to take and delete snapshots. Use a script or
+                           management tool; HBase does not have this functionality.
+
+
+The database administrator may want to save a snapshot
+                     before a major application upgrade or change.note
+Snapshots are not primarily used for system upgrade
+                           protection because they do not roll back binaries, and would not
+                           necessarily prevent bugs or errors in the system or the upgrade.
+
+
+
+Recovery cases:
+Roll back to previous snapshot and merge in reverted
+                           data.
+View previous snapshots and selectively merge them
+                           into production.
+
+
+
+Backup
+Capture a copy of the database and store it outside HBase
+                  for disaster recovery.
+Capture previous versions of data for compliance,
+                  regulation, and archiving.
+Export from a snapshot on a live system provides a more
+                  consistent view of HBase than CopyTable and
+                    ExportTable.
+
+
+Audit or report view of data at a specific time
+Capture monthly data for compliance.
+Use for end-of-day/month/quarter reports.
+
+
+Application testing
+Test schema or application changes on similar production
+                  data from a snapshot and then discard.For example: 
+Take a snapshot.
+Create a new table from the snapshot content (schema
+                        and data)
+Manipulate the new table by changing the schema,
+                        adding and removing rows, and so on. The original table,
+                        the snapshot, and the new table remain independent of
+                        each other.
+
+
+
+
+
+Offload work
+Capture, copy, and restore data to another site
+Export data to another cluster
+
+
+
+
+Where Snapshots Are Stored
+Snapshot metadata is stored in the .hbase_snapshot
+            directory under the hbase root directory
+              (/hbase/.hbase-snapshot). Each snapshot has its
+            own directory that includes all the references to the
+              hfiles, logs, and metadata needed to restore the
+            table.
+
+hfiles required by the snapshot are in the
+              /hbase/data/<namespace>/<tableName>/<regionName>/<familyName>/
+            location if the table is still using them; otherwise, they are in
+              /hbase/.archive/<namespace>/<tableName>/<regionName>/<familyName>/.
+
+Zero-Copy Restore and Clone Table
+From a snapshot, you can create a new table (clone
+            operation) or restore the original table. These two operations do
+            not involve data copies; instead, a link is created to point to the
+            original hfiles.
+Changes to a cloned or restored table do not affect the snapshot or (in case of
+            a clone) the original table.
+To clone a table to another cluster, you export the snapshot to the
+            other cluster and then run the clone
+            operation; see Exporting a snapshot to another cluster.
+
+Reverting to a Previous HBase Version
+Snapshots do not affect HBase backward compatibility if they are
+            not used.
+If you  use snapshots, backward compatibility is affected as
+            follows:
+
+If you only take snapshots, you can still revert to a previous
+              HBase version.
+If you use restore or clone,
+              you cannot revert to a previous version unless the cloned or
+              restored tables have no links. Links cannot be detected
+              automatically; you would need to inspect the file system
+              manually.
+
+
+Storage Considerations
+Because hfiles are immutable, a snapshot consists
+            of a reference to the files in the table at the moment the snapshot
+            is taken. No copies of the data are made during the snapshot
+            operation, but copies may be made when a compaction or deletion is
+            triggered. In this case, if a snapshot has a reference to the files
+            to be removed, the files are moved to an archive folder, instead of
+            being deleted. This allows the snapshot to be restored in full.
+Because no copies are performed, multiple snapshots share the same
+              hfiles, butfor tables with lots of updates, and
+            compactions, each snapshot could have a different set of
+              hfiles.
+
+
+Parent topic: Configuring HBase snapshots

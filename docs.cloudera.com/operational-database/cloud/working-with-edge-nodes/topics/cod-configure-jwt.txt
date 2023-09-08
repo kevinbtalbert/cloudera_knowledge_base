@@ -1,0 +1,135 @@
+Configuring JWT authentication for HBase clientCloudera Docs
+Configuring JWT authentication for HBase client
+JWT (JSON Web Token)-based authentication uses an unique identifier and is a standard
+        way of securely transmitting signed information between two parties. Learn how to configure
+        JWT-based authentication for your HBase client.
+
+JSON Web Token (JWT) is a compact, URL-safe means of representing claims to be
+                transferred between two parties. The claims in a JWT are encoded as a JSON object
+                that is used as the payload of a JSON Web Signature (JWS) structure or as the
+                plaintext of a JSON Web Encryption (JWE) structure, enabling the claims to be
+                digitally signed or integrity protected with a Message Authentication Code (MAC)
+                and/or encrypted. The structure of JWT allows you to verify whether the content is
+                tampered.
+To disable JWT authentication for HBase clients, you can use the
+                    --disable-jwt-auth option while creating an operational
+                database using COD CLI. Ensure that the COD_JWT_AUTH entitlement is
+                enabled for the HBase client.
+For example,
+cdp opdb create-database --environment-name
+myEnvironment
+--database-name
+myDatabase
+--disable-jwt-auth
+important
+
+HBase client tarball contains all the binary dependencies that are required
+                        for JWT to function smoothly.
+You cannot perform MapReduce operations such as RowCounter and bulk-load
+                        while using JWT authentication.
+
+
+
+
+
+CDP CLI must have been configured to access CDP environments.
+Ensure that you have COD_JWT_AUTH entitlement enabled for your
+                    HBase client.
+
+
+
+On the COD UI, click on the database and go to Connect >  HBase Client Tarball >  JWT Configuration.
+This section provides you the necessary details in setting up a connection to
+                    HBase with a JWT token.
+
+
+
+Download the Environment Certificate and run the command as mentioned on the UI
+                    to build your own truststore JKS file.
+
+Open the HBase client’s hbase-site.xml file. The file is
+                    usually located in /etc/hbase/conf.
+Download the configuration snippet from the UI or add the following TLS and
+                    JWT properties to the hbase-site.xml file filling in the
+                    template based on your local configuration.
+<!-- TLS -->
+
+<property>
+    <name>hbase.client.netty.tls.enabled</name>
+    <value>true</value>
+</property>
+<property>
+   <name>hbase.rpc.tls.truststore.location</name>
+   <value>/path/to/truststore.jks</value>
+</property>
+<property>
+    <name>hbase.rpc.tls.truststore.password</name>
+    <value>...</value>
+</property>
+<property>
+    <name>hbase.rpc.tls.truststore.type</name>
+    <value>jks</value>
+</property>
+
+<!-- JWT -->
+
+<property>
+  <name>hbase.client.sasl.provider.extras</name>
+  <value>com.cloudera.hbase.security.provider.OAuthBearerSaslClientAuthenticationProvider</value>
+</property>
+<property>
+  <name>hbase.client.sasl.provider.class</name>
+  <value>com.cloudera.hbase.security.provider.OAuthBearerSaslProviderSelector</value>
+</property>
+<property>
+  <name>hbase.client.sasl.oauth.tokenprovider</name>
+  <value>com.cloudera.hbase.security.token.FileOAuthBearerTokenProvider</value>
+</property>
+<property>
+  <name>hbase.client.sasl.oauth.tokenfile</name>
+  <value>/path/to/token.txt</value>
+</property>
+noteCloudera recommends that you set this client
+                        configurations in hbase-site.xml file using the CDP CLI
+                        client instead of Cloudera Manager. If you set using Cloudera Manager, you
+                        might encounter problems.
+
+Ensure that the following JWT libraries (included in the HBase client tarball)
+                    are added on the classpath.
+
+cloudera-opdb-jwtauth-client-1.0.0.7.2.16.0-SNAPSHOT.jar
+cloudera-opdb-jwtauth-common-1.0.0.7.2.16.0-SNAPSHOT.jar
+nimbus-jose-jwt-9.15.2.jar
+
+
+Obtain the JWT token from the IAM service or the console authentication
+                    service.
+
+cdp iam generate-workload-auth-token --workload-name OPDB
+The command returns a JWT token in a JSON format. For
+                        example,{
+    "token": "eyJraWQiOiJjMDBjNmRlNGE1MjIyYTk1IiwidHlwIjo...",
+    "expireAt": "2022-03-17T17:10:32.472000+00:00"
+}
+
+
+Copy and paste the base64 encoded token into a TXT file
+                        (token.txt) with username. For example,
+
+<username>,<token>
+cloudbreak,eyJraWQiOiJjMDBjNmRlNGE1MjIyYTk1Iiwid…
+
+
+
+Validate that JWT is correctly set up. Use the following
+                    list command to validate that you are able to run commands on
+                HBase.
+
+bin/hbase shell 
+hbase> list
+
+After successful authentication, you can see the list of available tables in the
+                database.
+
+
+Related informationCreate databaseParent topic: Deploying applications on Cloudera Operational Database

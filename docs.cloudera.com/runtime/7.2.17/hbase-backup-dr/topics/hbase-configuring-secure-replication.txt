@@ -1,0 +1,151 @@
+Configure secure replicationCloudera Docs
+Configure secure replication
+Secure replication configuration is the same whether your clusters are all in the
+        same realm or not, with the exception of the last step.
+
+The last step involves setting up custom secure replication configurations per peer.
+                This can be convenient when you need to replicate to a cluster that uses different
+                cross-realm authentication rules than the source cluster. For example, a cluster in
+                Realm A may be allowed to replicate to Realm B and Realm C, but Realm B may not be
+                allowed to replicate to Realm C. If you do not need this feature, skip the last
+                step.
+To use this feature, service-level principals and keytabs (specific to HBase) must be
+                specified when you create the cluster peers using HBase Shell.
+
+importantSecure HBase replication is not
+                    supported if the source or the destination cluster uses custom ZooKeeper server
+                    principal. The default ZooKeeper principal is zookeeper.
+
+
+
+Set up Kerberos on your cluster.
+
+noteHBase peer-to-peer replication from a non-Kerberized
+                        cluster to a Kerberized cluster is not supported.
+
+
+If necessary, configure Kerberos cross-realm authentication:
+
+
+At the comman line, use the list_principals command to
+                            list the kdc, admin_server, and
+                                default_domain for each realm.
+Add this information to each cluster using Cloudera Manager:
+In Cloudera Manager, select the HDFS
+                                    service.
+Click the Configuration tab.
+Find the Truster Kerberos Realms
+                                    property.
+Add the target and source.
+Restart HDFS.
+
+
+
+
+Configure ZooKeeper.
+
+Configure the following HDFS parameters on both cluster:
+
+<!-- In hdfs-site.xml or advanced configuration snippet -->
+<property>
+  <name>dfs.encrypt.data.transfer</name>
+  <value>true</value>
+</property>
+<property>
+  <name>dfs.data.transfer.protection</name>
+  <value>privacy</value>
+</property>
+
+<!-- In core-site.xml or advanced configuration snippet -->
+<property>
+  <name>hadoop.security.authorization</name>
+  <value>true</value>
+</property>
+<property>
+  <name>hadoop.rpc.protection</name>
+  <value>privacy</value>
+</property>
+<property>
+  <name>hadoop.security.crypto.cipher.suite</name>
+  <value>AES/CTR/NoPadding</value>
+</property>
+<property>
+  <name>hadoop.ssl.enabled</name>
+  <value>true</value>
+</property>
+If you use Cloudera Manager to manage your cluster, do not set these
+                        properties directly in configuration files, because Cloudera Manager will
+                        overwrite or ignore these settings. You must set these properties in
+                        Cloudera Manager.
+For brevity, the Cloudera Manager setting names are not listed here, but you
+                        can search by property name. For instance, in the HDFS service configuration
+                        screen, search for dfs.encrypt.data.transfer. The Enable Data
+                            Transfer Encryption setting is shown. Selecting the box is
+                        equivalent to setting the value to true.
+
+
+Configure the following HBase parameters on both clusters, using Cloudera
+                    Manager or in hbase-site.xml if you do not use Cloudera
+                    Managert.
+
+<!-- In hbase-site.xml -->
+<property>
+  <name>hbase.rpc.protection</name>
+  <value>privacy</value>
+</property>
+<property>
+  <name>hbase.thrift.security.qop</name>
+  <value>auth-conf</value>
+</property>
+<property>
+  <name>hbase.thrift.ssl.enabled</name>
+  <value>true</value>
+</property>
+<property>
+  <name>hbase.rest.ssl.enabled</name>
+  <value>true</value>
+</property>
+<property>
+  <name>hbase.ssl.enabled</name>
+  <value>true</value>
+</property>
+<property>
+  <name>hbase.security.authentication</name>
+  <value>kerberos</value>
+</property>
+<property>
+  <name>hbase.security.authorization</name>
+  <value>true</value>
+</property>
+<property>
+  <name>hbase.secure.rpc.engine</name>
+  <value>true</value>
+</property>
+
+
+Add the cluster peers using the simplified add_peer syntax:
+
+add_peer 'ID', 'CLUSTER_KEY'
+
+
+If you need to add any peers which require custom security configuration,
+                    modify the add_peer syntax, using the following examples as a
+                    model.
+
+add_peer 'vegas', CLUSTER_KEY => 'zk1.vegas.example.com:2181:/hbase',
+         CONFIG => {'hbase.master.kerberos.principal'           => 'hbase/_HOST@TO_VEGAS',
+                    'hbase.regionserver.kerberos.principal'     => 'hbase/_HOST@TO_VEGAS',
+                    'hbase.regionserver.keytab.file'            => '/keytabs/vegas_hbase.keytab',
+                    'hbase.master.keytab.file'                  => '/keytabs/vegas_hbase.keytab'},
+          TABLE_CFS => {"tbl" => [cf1']}
+
+add_peer 'atlanta', CLUSTER_KEY => 'zk1.vegas.example.com:2181:/hbase',
+         CONFIG => {'hbase.master.kerberos.principal'           => 'hbase/_HOST@TO_ATLANTA',
+                    'hbase.regionserver.kerberos.principal'     => 'hbase/_HOST@TO_ATLANTA',
+                    'hbase.regionserver.keytab.file'            => '/keytabs/atlanta_hbase.keytab',
+                    'hbase.master.keytab.file'                  => '/keytabs/atlanta_hbase.keytab'},
+          TABLE_CFS => {"tbl" => [cf2']}
+
+
+
+Related informationInitiate replication when data already existParent topic: Using HBase replication

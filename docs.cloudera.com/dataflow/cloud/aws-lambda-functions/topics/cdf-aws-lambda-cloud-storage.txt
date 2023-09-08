@@ -1,0 +1,107 @@
+Cloud storageCloudera Docs
+Cloud storage
+
+Providing custom extensions / NARs
+The binary that is deployed for running AWS Lambda does not include the full NiFi
+        deployment with all NARs / extensions to avoid very long startup times and requiring more
+        expensive configurations for Lambda. Instead, it packages only the NARs necessary to run
+        Stateless NiFi as well as the AWS NAR. If any other extension is needed to run the data
+        flow, it will be automatically downloaded when the Lambda function is initialized on a cold
+        start. The extensions will be downloaded from the Cloudera Maven Repository by default.
+However, you can configure an alternate Nexus repository by setting the
+          NEXUS_URL environment variable to the URL of the Nexus Repository where
+        extensions should be downloaded. For example, to use Google's mirror of the Maven Central
+        repository, set the NEXUS_URL environment variable to
+          https://maven-central.storage-download.googleapis.com/maven2.
+importantAny configured URL must either be accessible
+        through http or be served over https with a trusted certificate.
+This is the recommended approach for downloading extensions that are made
+        available by Cloudera or Apache NiFi. However, if there is a need to provide custom
+        extensions, a simpler route is usually to use Lambda's Layers capability.
+
+
+Create a zip file containing all NAR files that you will need.
+
+
+In the AWS console (or through the CLI), add a layer to your Lambda function,
+            providing the zip file as the source for the layer.
+
+
+Tell Lambda where to look for those extensions by adding another environment variable
+            whose name starts with EXTENSIONS_DIR_.
+You can add multiple extensions, such as EXTENSIONS_DIR_1,
+              EXTENSIONS_DIR_2, EXTENSIONS_DIR_MY_CUSTOM_LIBS. The
+            name of the environment variable is the path where Lambda should look for the
+            extensions. If the zip file provided as a layer does not contain any directories, the
+            value should be /opt. If the zip file is to contain some directory,
+            (for example, extensions/nars), the value for the environment variable
+            would be set to /opt/extensions/nars.
+
+
+If you add a larger layer, the Lambda configuration takes a bit longer to load on
+        a cold start, and it takes more memory to load the additional classes. So it is not
+        recommended to upload extremely large zip files of extensions if they are not needed.
+
+Providing additional resources
+Besides NiFi extensions, some data flows may also require additional resources to
+        work. For example, a JDBC driver for establishing a database connection, or a CSV file for
+        data enrichment. The recommended approach for providing such resources to your Lambda
+        function is through Lambda Layers. You can create a zip file containing the resources that
+        are required for your data flow. This zip file will be extracted into the
+          /opt directory to be accessed by the data flow.
+As each deployment of a data flow may need to reference files in a different
+        location depending on its environment, it is a best practice to parameterize resources that
+        need to be accessed by the data flow.
+For example, if the data flow contains a DBCPConnectionPool
+        Controller Service for accessing a database, you should use a parameter for the
+          Database Driver Location(s) property of the Controller Service. This way
+        each deployment can specify the location of the JDBC driver independently.
+
+
+Set the Database Driver Location(s) property to
+              #{JDBC_DRIVER_LOCATION}.
+
+
+In Lambda, add a layer that contains our JDBC driver,
+              database-jdbc-driver.jar.
+
+
+Add an Environment Variable named JDBC_DRIVER_LOCATION
+            with a value of  /opt/database-jdbc-driver.jar.
+
+
+This way your data flow can be deployed (reused) in many different
+        environments.
+
+S3 Bucket storage
+If the extensions or resources of your data flow exceed the size limit of Lambda
+        Layers, you can provide these files in an S3 bucket.
+
+
+Specify the S3 bucket name in the STORAGE_BUCKET
+            environment variable.
+
+
+Upload any extensions to a directory in the S3 bucket and specify the
+            directory name in the STORAGE_EXTENSIONS_DIRECTORY environment
+            variable.
+
+
+Upload any data flow resources to another directory in the bucket and specify
+            the directory name in the STORAGE_RESOURCES_DIRECTORY environment
+            variable.
+
+
+When your Lambda function does a cold start, it will download any extensions or
+        resources from these locations.
+The extensions are directly downloaded in the right location to be loaded in NiFi at
+        startup. The resources are downloaded in /tmp. For example if
+        STORAGE_BUCKET = my-bucket-name, STORAGE_RESOURCES_DIRECTORY = my_resources and there is an
+        hdfs-site.xml file in s3a://my-bucket-name/my_resources/hdfs-site.xml,
+        the file will be available in the Lambda at
+          /tmp/my_resources/hdfs-site.xml.
+noteIn order to pull from S3, the Execution Role for the Lambda
+        function must have both the ListBucket and GetObject permissions for the chosen
+        bucket.
+
+

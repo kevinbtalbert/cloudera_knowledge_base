@@ -1,0 +1,290 @@
+How to Configure Encryption for Amazon S3Cloudera Docs
+How to Configure Encryption for Amazon S3
+Amazon offers several server-side encryption mechanisms for use with Amazon S3 storage.
+    Cloudera clusters support server-side encryption for Amazon S3 data using either SSE-S3 or
+    SSE-KMS.
+Amazon offers several server-side encryption mechanisms for use with
+      Amazon
+      S3 storage. Cloudera clusters support server-side encryption for Amazon S3 data using either
+      SSE-S3
+      or
+      SSE-KMS.
+      With SSE-S3, keys are completely under the control of Amazon. With SSE-KMS, you have more
+      control over the encryption keys, and can upload your own key material to use for encrypting
+      Amazon S3. With either mechanism, encryption is applied transparently to the Amazon S3 bucket
+      objects after you configure your cluster to use it.
+Amazon S3 also supports TLS/SSL ('wire' or data-in-transit) encryption by
+      default. Configuring data-at-rest encryption for Amazon S3 for use with
+      your cluster involves some configuration both on Amazon S3 and for the
+      cluster, using the Cloudera Manager Admin Console, as detailed below: 
+
+Requirements
+
+Using Amazon S3 assumes that you have an Amazon Web Services account and the appropriate
+        privileges on the AWS Management Console to set up and configure Amazon S3 buckets. 
+In addition, to configure Amazon S3 storage for use with a Cloudera cluster, you must have
+        privileges as the User Administrator or Full Administrator on the Cloudera Manager Admin
+        Console. See
+          How
+          to Configure AWS Credentials for details. 
+
+
+Amazon S3 and TLS/SSL Encryption
+
+Amazon S3 uses TLS/SSL by default. Cloudera clusters (release 5.9 and later) include in
+        their default configuration file the boolean property,
+          fs.s3a.connection.ssl.enabled set to true, which
+        activates TLS/SSL. This means that if the cluster has been configured to use TLS/SSL,
+        connections from the cluster to Amazon S3 automatically use TLS wire encryption for the
+        communication. The value of the fs.s3a.connection.ssl.enabled property can
+        be confirmed by running hadoop org.apache.hadoop.conf.Configuration. 
+importantCloudera recommends that clusters always be configured for TLS/SSL.
+        See How to Configure TLS Encryption for Cloudera
+        Manager
+        for details. 
+If the cluster is not configured to use TLS, the connection to Amazon
+            S3 silently reverts to an unencrypted connection.
+ 
+
+
+Amazon S3 and Data at Rest Encryption
+
+Cloudera clusters can use either of these two Amazon S3 mechanisms for
+         data-at-rest encryption: 
+Server-side
+            Encryption with AWS KMS-Managed Keys (SSE-KMS), which requires using Amazon Key
+            Management Server (AWS KMS) in conjunction with your Amazon S3. You can have Amazon
+            generate and manage the keys in AWS KMS for you, or you can provide your own key
+            material, but you must configure AWS KMS and create a key before you can use it with
+            your cluster. See Prerequisites for Using
+            SSE-KMS for details.
+Server-side
+            Encryption with S3-Managed Encryption Keys (SSE-S3), which is simplest to set up because
+            it uses Amazon-provided and -managed keys and has no requirements beyond setting a
+            single property. See Configuring the Cluster to Use Server-Side Encryption on Amazon
+              S3 for details. 
+
+Enabling the cluster to use Amazon S3 server-side encryption involves using the Cloudera
+        Manager Admin Console to configure the Advanced Configuration Snippet (Safety Valve) as
+        detailed in Configuring the Cluster to Use Server-Side Encryption on Amazon
+        S3, below. 
+The steps assume that your cluster has been set up and that you have set up AWS
+        credentials.
+noteCloudera clusters can be configured one encryption mode and key at a time
+        for all objects in a given Amazon S3 bucket. However, you can change encryption modes or
+        keys. See Changing Encryption Modes or
+        Keys for
+        details.
+
+Prerequisites for Using SSE-KMS
+
+To use SSE-KMS with your Amazon S3 bucket, you must log in to the AWS Management Console
+          using the account you set up in Step 1 of Getting Started with Amazon Web
+          Services.
+          For example, the account lab-iam has an IAM user named etl-workload that has
+          been granted permissions on the Amazon S3 storage bucket to be configured using SSE-KMS. 
+
+Select My Security Credentials from the
+            menu.
+Click Encryption keys (bottom left-hand on
+            the AWS Management Console that displays at step 1, above).  
+Click the Create key button to start the
+            5-step key-creation wizard that leads you through entry pages for
+            giving the key an alias and description; adding tags, defining
+            administrator permissions to the key, and defining usage
+            permissions. The last page of the wizard shows you the policy that
+            will be applied to the key before creating the key. 
+
+
+
+
+Configuring the Cluster to Use Server-Side Encryption
+          on Amazon S3
+
+Follow the steps below to enable server-side encryption on Amazon S3. To use SSE-KMS
+          encryption, you will need your KMS key ID at step 7. Using SSE-S3 has no
+          pre-requisites—Amazon generates and manages the keys transparently.
+To configure the cluster to encrypt data stored on Amazon S3:
+
+
+Log into the Cloudera Manager Admin Console.
+Select
+                  Clusters > HDFS.
+Click the Configuration tab.
+Select Scope > HDFS
+                  (Service-Wide).
+Select
+                  Category > Advanced.
+Locate the Cluster-wide Advanced Configuration Snippet
+                (Safety Valve) for core-site.xml property.
+In the text field, define the properties and values appropriate
+                for the type of encryption you want to use.
+To use SSE-S3
+                    encryption:
+<property>
+    <name>fs.s3a.server-side-encryption-algorithm</name>
+    <value>AES256</value>
+</property>
+
+To use SSE-KMS
+                  encryption:
+<property>
+    <name>fs.s3a.server-side-encryption-algorithm</name>
+    <value>SSE-KMS</value>
+</property>
+<property>
+    <name>fs.s3a.server-side-encryption-key</name>
+    <value>your_kms_key_id</value>
+</property>
+
+
+
+Click Save Changes.
+Restart the HDFS service.
+
+
+For the value of your_kms_key_id (step 7b.,
+          above), you can use any of Amazon's four different key ID formats.
+          Here are some examples: 
+
+
+Format
+Example
+
+
+
+Key ARN
+arn:aws:kms:us-west-1:141229114088:key/c914b724-f191-
+                  41df-934a-6147f6235983
+
+
+Alias ARN
+arn:aws:kms:us-west-1:
+                  141229114088:key/c914b724-f191-41df-934a-6147f6235983:
+                  alias/awsCreatedMasterKey
+
+
+Globally Unique Key ID
+141229114088:key/c914b724-f191-41df-934a-
+                  6147f6235983
+
+
+Alias Name
+alias/awsCreatedMasterKey
+
+
+
+
+
+Changing Encryption Modes or Keys
+
+Cloudera clusters can be configured to use only one type of
+          server-side encryption for Amazon S3 data at a time. 
+However, Amazon S3 does support using different encryption
+          keys for objects on an Amazon S3 bucket, which means that Amazon S3
+          continues to use whichever key was initially used to encrypt data (to
+          decrypt on reads and re-encrypt on writes), even after a new mechanism
+          and key exists. Your new key is used on new data written to the Amazon
+          S3 bucket, while your ‘old’ key is used on any existing data that was
+          encrypted with it. To summarize the behavior: 
+Changing encryption mechanisms or keys on Amazon S3 has no
+              effect on existing encrypted or unencrypted data. 
+Data stored on Amazon S3 without encryption remains unencrypted
+              even after you configure encryption for Amazon S3.
+Any existing encrypted data continues using the original
+              mechanism and key to decrypt data (on reads) and re-encrypt data
+              (on writes).
+After changing encryption mode or key, new objects stored on
+              Amazon S3 from the cluster use the new mode and key.
+
+
+
+Effect of Changing Encryption Mode or Key
+
+This table shows the effect on existing encrypted or unencrypted
+            data on Amazon S3 (far left column labeled "Data starts as...,"
+            reading down) and the result of "New" and "Existing" data and the
+            keys that would be used after changing encryption-key configuration
+            on the cluster. After changing encryption mode or key, existing data
+            (Existing) and new data (New) use the mode and keys shown in columns
+            2 ("Unencrypted") through 5 ("Non-SSE Key"):
+
+
+Data starts as...↓
+Data results after modifying
+                      encryption mode or keys...
+
+
+Unencrypted
+SSE-S3
+SSE-KMS
+Non-SSE Key
+
+
+
+Unencrypted
+Existing
+New
+New
+~
+
+
+SSE-S3 encrypted
+~
+Existing
+New
+~
+
+
+SSE-KMS [key1]
+~
+New
+Existing [key1] New [key2]
+~
+
+
+Non-SSE key
+~
+~
+~
+Existing
+
+
+
+
+Migrating Encrypted Data to New Encryption Mode or Key 
+
+To use a new key with existing data (data stored on Amazon S3
+              using a different mechanism or key), you must first decrypt the
+              data, and then re-encrypt it using the new key. The process is as follows:
+Create an Amazon S3 bucket as temporary storage for the
+                  unencrypted files.
+ Decrypt the data on the Amazon S3 bucket using the
+                  mechanism and key used for encryption (legacy encryption mode
+                  or key), moving the unencrypted data to the temporary bucket
+                  created in step 1. 
+ Configure the Amazon S3 bucket to use the new encryption
+                  mechanism and key of your choice (SSE-S3, SSE-KMS).
+Move the unencrypted data from the temporary bucket back to
+                  the Amazon S3 bucket that is now configured using the new
+                  mechanism and key.
+
+
+
+
+
+Deleting an Encryption Key
+
+If you change encryption modes or keys on Amazon S3, do not delete the key. To
+              replace the old key and mode with a completely new mode or key, you must manually
+              migrate the data. 
+When you delete an encryption key, Amazon puts the key in a Pending Deletion
+              state (as shown in the Status column of the screenshot below) for at least 7 days,
+              allowing you to reinstate a key if you change your mind or realize an error.
+              
+The pending time frame is configurable, from 7 up to 30 days. See AWS Key
+                Management Service
+              Documentation
+              for complete details.
+
+

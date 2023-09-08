@@ -1,0 +1,160 @@
+CDP CLI commands for generating a diagnostic bundleCloudera Docs
+CDP CLI commands for generating a diagnostic bundle
+CDP includes a set of CLI commands that allow you to generate an on-demand diagnostic
+    bundle that gathers logs and command output from your Data Lake, FreeIPA, or Data Hub cluster
+    VMs. The bundle can also be used for support case troubleshooting if the logs captured via the
+    equivalent UI option are not sufficient. 
+For each resource type (freeipa, datalake, or
+        datahub), there are two commands that you can use:
+
+get-<resource-type>-log-descriptors - Allows you to obtain a
+    list of logs that get collected for diagnostics. 
+collect-<resource-type>-diagnostics - Triggers diagnostics
+        collection. You need to provide a CRN of a resource (Data Lake, FreeIPA, or Data Hub
+        cluster), a description, and a destination for the bundle. 
+list-<resource-type>-diagnostics - Lists the running or
+        finished diagnostic operations.
+cancel-<resource-type>-diagnostics - Stops the ongoing diagnostics
+    operations.
+
+Required role: You need the EnvironmentAdmin or Owner role for the
+      environment for which you would like to create a bundle.
+Prerequisites
+
+
+FreeIPA deployment time must be September 2020 or later.
+The VMs from which diagnostic data is to be collected must be running. 
+Salt minions must be started properly on the CM nodes.
+
+get-<resource-type>-log-descriptors
+The get-<resource-type>-log-descriptors commands allow you to
+    obtain a list of logs that get collected. These commands can also be used to obtain available
+    log label/path pairs that can be provided in the
+     collect-<resource-type>-diagnostics command via the
+     --labels parameter in order to limit the command output. 
+The output is printed in the Event History tab on the UI in Data Lake or Data Hub
+    details. Since there is no FreeIPA Event History on the UI, in case of FreeIPA the output is
+    saved to /var/log/salt/minion, which can be accessed from your logs location in cloud storage. 
+Commands
+To gather available log label/path pairs, use one of the following commands:
+cdp environments get-freeipa-log-descriptors 
+cdp datalake get-datalake-log-descriptors 
+cdp datahub get-datahub-log-descriptors 
+
+collect-<resource-type>-diagnostics
+
+The collect-<resource-type>-diagnostics commands trigger
+            log collection. You need to provide a CRN of a resource (Data Lake, FreeIPA, or Data Hub
+            cluster), a description, and a destination for the bundle. The generated bundle can be
+            saved to cloud storage or to a local file. The command progress (including the location
+            where the bundle is generated) is printed in the Event History tab on the UI. 
+noteThis feature only works out of the box with environments created or upgraded in
+              October 2020 or later. If your environment is older and your nodes have internet
+              access, you can use the --update-package option to download the
+              newest library that is needed for the collection.
+Prerequisites
+If you would like to use cloud storage as a destination, ensure that the
+              Logger and IDBroker instance profiles (on AWS) or managed identities (on Azure) are
+              able to write to the specified cloud storage location.
+If you would like to use Cloudera support as a destination, your network must be
+              able to reach the following destinations:
+                https://dbusapi.us-west-1.altus.cloudera.com if your CDP account
+              runs in Control Plane region us-west-1, or
+                https://api.<control-plane-region>.cdp.cloudera.com if your CDP
+              account runs in any other Control Plane region (only required if your cloud provider
+              is AWS) and https://cloudera-dbus-prod.s3.amazonaws.com (required
+              even if your cloud provider is not AWS).
+Example commandsTo run collection with salt
+            script included and update cdp-telemetry package on the nodes, use one of the following
+
+            commands, Replace <DESCRIPTION> with an actual description and the
+              <NAME-OR-CRN>, <DATALAKE-CRN>, and
+              <DATAHUBCRN> with an actual CRN.To send the diagnostics
+            bundle to cloud storage, use:
+cdp environments collect-freeipa-diagnostics --environment-name <NAME-OR-CRN> \
+--description <DESCRIPTION> \
+--destination CLOUD_STORAGE \
+--include-salt-logs
+
+cdp datalake collect-datalake-diagnostics --crn <DATALAKE-CRN> \
+--description <DESCRIPTION> \
+--destination CLOUD_STORAGE \
+--include-salt-logs
+
+cdp datahub collect-datahub-diagnostics --crn <DATAHUB-CRN> \
+--description <DESCRIPTION> \
+--destination CLOUD_STORAGE \
+--include-salt-logs
+To send the diagnostic bundle directly to Cloudera support,
+            use:cdp datahub collect-datahub-diagnostics --crn <DATAHUB-CRN> \
+--description <DESCRIPTION> \
+--case-number <SUPPORT_CASE_NUMBER>
+--destination SUPPORT \
+--update-package \
+--include-salt-logsTo collect only specific custom logs (such as /var/log/audit/audit.log used in
+            this example), use: 
+cdp environments collect-freeipa-diagnostics --environment-name <name> \
+--description <DESCRIPTION> 
+--destination CLOUD_STORAGE \
+--additional-logs path=/var/log/audit/audit.log,label=audit \
+--labels audit
+If you run this command:
+Logs specified under --additional-logs will be
+              collected
+Due to the specified label, all other logs will be filtered out and no
+              other logs will be included in the bundle. 
+Required parameters--environment-name
+            (for Data Lake or Data Hub) or --crn (for Data
+            Hub)Provide a CRN of your Data Lake, FreeIPA, or Data Hub cluster. You can
+            obtain it by running a list or describe command on your resource. --description Provide a description for the diagnostics
+            bundle.--destination Specify a destination of the
+            diagnostics collection: SUPORT, CLOUD_STORAGE, or LOCAL:
+SUPPORT: Sends diagnostic bundles directly to Cloudera support.
+CLOUD_STORAGE: Saves collected diagnostics into a tar.gzfile file and
+              uploads it to your logs cloud storage location specified during environment
+              registration, to a PATH that looks like
+              this: cluster-logs/<CLUSTER-TYPE>/<CLUSTER-NAME>_<UUID PART-OF-CLUSTER-CRN>/diagnostics.     The
+              “cluster logs” directory is only created if your cloud storage location is a bucket.
+              If your cloud storage location includes a directory within a bucket, then the “cluster
+              logs” directory is not created.noteThe value of <CLUSTER_NAME> for FreeIPA is
+                  <ENVIRONMENT-NAME>-freeipa. For example, if your environment
+                is called "test", the <CLUSTER_NAME> for FreeIPA is "test-freeipa".
+LOCAL: Diagnostics will be collected to a compressed file, and saved to
+                /var/lib/filecollector on every cluster node. 
+Optional parameters--labels You
+            can use this to pass a list of labels that can be used to filter collected logs. This is
+            useful if instead of including all logs, you would only include certain specific logs in
+            the bundle. This list can be obtained from the get-<cluster-type>-log-descriptors
+            response. --additional-logs One or more additional VM
+            log objects that will be included in the diagnostics bundle. A VM log object is a
+            path/label pair. Cloudera support may ask you to provide specific values
+              here.--hosts Run diagnostics only the specified hosts (both IP
+            addresses or fqdns are valid).--host-groups Run diagnostics only
+            on the those hosts that are included in the specified host
+              groups.--exclude-hosts Same as the --hosts
+            filter but for exclusion.--skip-unresponsive-hosts Skip unhealthy
+          hosts from the diagnostics collection (where "unhealthy" means that salt minion is
+          unresponsive). If this is not used, the diagnostics will fail if there is an unresponsive
+          host during diagnostics. --include-salt-logs If this is set,
+            salt minion/master logs will be included in the diagnostic bundle. --case-number Allows you to provide a support case number. --update-package If this is set, during diagnostics
+            collection, the required third party applications will be downloaded and updated on the
+            VM nodes. This requires internet access.--storage-validation You can use this if using CLOUD_STORAGE as a
+            destination. If this is set, cloud storage write validation check will happen during an
+            initial phase of the diagnostics collection. For more information about the command
+          and its options, use the --help CLI option. 
+
+
+list-<resource-type>-diagnostics
+Lists the running or finished diagnostic operations.
+Examples:cdp environments list-freeipa-diagnostics --environment-name <NAME-OR-CRN>
+cdp datalake list-datalake-diagnostics --crn <DATALAKE-CRN> 
+cdp datahub list-datahub-diagnostics --crn <DATAHUB-CRN>
+
+cancel-<resource-type>-diagnostics
+Stops the ongoing diagnostics operations.
+Examples:cdp environments cancel-freeipa-diagnostics --environment-name <NAME-OR-CRN>
+cdp datalake cancel-datalake-diagnostics --crn <DATALAKE-CRN> 
+cdp datahub cancel-datahub-diagnostics --crn <DATAHUB-CRN>
+
+
+Related informationDiagnostic bundle contentSend a diagnostic bundle to Cloudera SupportDownloading Impala diagnostic bundles from AWSDownloading Diagnostic Bundles for a Workspace

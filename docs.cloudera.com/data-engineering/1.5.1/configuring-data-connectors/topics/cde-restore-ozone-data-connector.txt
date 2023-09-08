@@ -1,0 +1,78 @@
+Restoring the data connectorCloudera Docs
+Restoring the data connector
+You can restore the backed-up data connectors post-upgrade or on the new CDE Service in
+    the same cluster or across clusters. 
+
+Get the CDE Service URL.
+
+
+In the Cloudera Data Platform (CDP) console, click the
+                Data Engineering tile. The CDE Home
+              page displays. 
+In the CDE Services column, click   for the CDE service. 
+Click GRAFANA CHARTS and get the domain name. 
+Note the URL. For example, if the URL copied is
+                https://service.cde-n82xsqpr.apps.apps.shared-rke-dev-01.kcloud.example.com/grafana/d/sK1XDusZz/kubernetes,
+              use only the
+                https://service.cde-n82xsqpr.apps.apps.shared-rke-dev-01.kcloud.example.com
+              as the CDE Service URL. 
+
+
+
+Get the CDE token for the CDE Service that you want to restore. 
+
+export CDE_TOKEN=$(curl -k -L -u <user-name>:<password> https://<cde service url>/gateway/authtkn/knoxtoken/api/v1/token | jq -r .access_token)
+Example:
+export CDE_TOKEN=$(curl -k -L -u dexssoadmin:Password@123 https://service.cde-4x6s29mx.apps.apps.shared-os-qe-01.kcloud.example.com/gateway/authtkn/knoxtoken/api/v1/token | jq -r .access_token)
+
+
+Encode the backed-up zip file to base64 to use it in the restore
+          process. 
+
+base64 -i <backup-dataconnections.zip>
+Example:
+base64 -i backup-dataconnections.zip
+dGhpcyBpcyBhbiBleGFtcGxlIGVuY29kZWQgc3RyaW5n 
+dGhpcyBpcyBhbiBleGFtcGxlIGVuY29kZWQgc3RyaW5n  is the output.
+
+
+Note the Cluster ID.
+
+
+In the Cloudera Data Platform (CDP) console, click the
+                Data Engineering tile. The CDE Home
+              page displays. 
+In the CDE Services column, click  for the CDE service. 
+Click GRAFANA CHARTS and get the domain name. 
+Note the Cluster ID shown on the page. 
+
+
+
+Run the restore API to restore the data connector. 
+
+curl --location --request POST '<CDE Service URL>/data-connectors/v1/restoreDataConnections' \
+--header "Authorization: Bearer ${CDE_TOKEN}" \
+--data-raw '{
+ "clusterId": "<cluster id to restore into>",
+ "handleDuplicates":false,
+ "backupZipFile": "<base64 string from last step>"
+}'--insecure
+Example:
+curl --location --request POST 'https://service.cde-wwkd776f.apps.apps.shared-os-qe-01.kcloud.cloudera.com/data-connectors/v1/restoreDataConnections' \
+--header "Authorization: Bearer ${CDE_TOKEN}" \
+--data-raw '{
+ "clusterId": "cluster-wwkd776f",
+ "handleDuplicates": false,
+ "backupZipFile": "dGhpcyBpcyBhbiBleGFtcGxlIGVuY29kZWQgc3RyaW5n"
+}' --insecure
+The handleDuplicates parameter controls the restore behavior if data
+            connectors with the same name are found on the cluster during the restore process. If
+            there are data connectors with the same name and handleDuplicates is
+            set to false, the restoration fails with an error. If
+              handleDuplicates is set to true, data connectors
+            are restored with a different name and the format of the new name is
+              <old-name>-restored-<random string of length 3>.
+
+
+
+Parent topic: Backing up and Restoring Data Connectors

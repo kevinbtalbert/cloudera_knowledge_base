@@ -1,0 +1,359 @@
+Attaching a managed policy ARNCloudera Docs
+Attaching a managed policy ARN
+ For security reasons, if you do not want to provide PutRolePolicy permission
+        in your cross account role, which would be used later to add an inline policy to the Node
+        instance role, you must create a managed policy. Failure to do so results in an
+        authorization error. You learn how to create the managed policy in a few steps.
+ If you are using the restricted policy, you need to add permission
+            to the cross account role, so this policy can be attached to the Node role. The
+            following example shows the noderole-inline-policy permission on the last
+            line.noteEnable DAS Link will not be supported, since *PutRolePolicy* permission, which is needed for adding the policies to Node Instance Role is not available in your cross account role.{
+            "Sid": "VisualEditor12",
+            "Effect": "Allow",
+            "Action": "iam:AttachRolePolicy",
+            "Resource": [
+                "arn:aws:iam::*:role/env-*-dwx-stack-EKSServiceRole-*",
+                "arn:aws:iam::*:role/env-*-dwx-stack-NodeInstanceRole-*"
+            ],
+            "Condition": {
+                "ForAnyValue:ArnEqualsIfExists": {
+                    "iam:PolicyARN": [
+                        "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy",
+                        "arn:aws:iam::aws:policy/AmazonEKSServicePolicy",
+                        "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+                        "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
+                        "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
+
+                        "arn:aws:iam::<AWS_ACCOUNT>:policy/<noderole-inline-policy>"
+                    ]
+                }
+            }
+        }       
+
+
+Follow instructions in steps 1-4 to activate your environment in Cloudera Data
+                    Warehouse, as described in the "Activating an AWS environment" above.
+
+Select Attach Managed policy ARN to Node Role, and pass
+                    the ARN.
+For example:
+
+
+ When you remove the PutRolePolicy permission, which is one of the standard
+                    permissions needed, from your cross account role, the reduced permissions mode
+                    UI appears. 
+For example:
+
+
+For more information about reduced permissions mode, see the topic below.
+
+In Environmental Activations, optionally do not select Reduced Permissions mode.
+
+Click Activate.
+The following managed policy noderole-inline-policy.json is
+                    attached to the Node Instance role instead of a inline policy requiring the
+                    PutRolePolicy permission in your cross account role: noderole-inline-policy.json{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "clusterautoscaler",
+      "Effect": "Allow",
+      "Action": [
+        "autoscaling:DescribeAutoScalingGroups",
+        "autoscaling:DescribeAutoScalingInstances",
+        "autoscaling:DescribeTags",
+        "autoscaling:DescribeLaunchConfigurations",
+        "autoscaling:SetDesiredCapacity",
+        "autoscaling:TerminateInstanceInAutoScalingGroup",
+        "ec2:DescribeLaunchTemplateVersions",
+        "ec2:CreateTags"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Action": [
+        "elasticfilesystem:DescribeAccessPoints",
+        "elasticfilesystem:DescribeFileSystems",
+        "elasticfilesystem:DescribeMountTargets",
+        "ec2:DescribeAvailabilityZones"
+      ],
+      "Resource": "*",
+      "Effect": "Allow"
+    },
+    {
+      "Condition": {
+        "StringLike": {
+          "aws:RequestTag/efs.csi.aws.com/cluster": "true"
+        }
+      },
+      "Action": [
+        "elasticfilesystem:CreateAccessPoint"
+      ],
+      "Resource": "*",
+      "Effect": "Allow"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "elasticfilesystem:TagResource"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringLike": {
+          "aws:ResourceTag/efs.csi.aws.com/cluster": "true"
+        }
+      }
+    },
+    {
+      "Condition": {
+        "StringEquals": {
+          "aws:ResourceTag/efs.csi.aws.com/cluster": "true"
+        }
+      },
+      "Action": "elasticfilesystem:DeleteAccessPoint",
+      "Resource": "*",
+      "Effect": "Allow"
+    },
+    {
+      "Action": [
+        "ec2:CreateSnapshot",
+        "ec2:AttachVolume",
+        "ec2:DetachVolume",
+        "ec2:ModifyVolume",
+        "ec2:DescribeAvailabilityZones",
+        "ec2:DescribeInstances",
+        "ec2:DescribeSnapshots",
+        "ec2:DescribeTags",
+        "ec2:DescribeVolumes",
+        "ec2:DescribeVolumesModifications"
+      ],
+      "Resource": "*",
+      "Effect": "Allow"
+    },
+    {
+      "Condition": {
+        "StringEquals": {
+          "ec2:CreateAction": [
+            "CreateVolume",
+            "CreateSnapshot"
+          ]
+        }
+      },
+      "Action": [
+        "ec2:CreateTags"
+      ],
+      "Resource": [
+        "arn:aws:ec2:*:*:volume/*",
+        "arn:aws:ec2:*:*:snapshot/*"
+      ],
+      "Effect": "Allow"
+    },
+    {
+      "Action": [
+        "ec2:DeleteTags"
+      ],
+      "Resource": [
+        "arn:aws:ec2:*:*:volume/*",
+        "arn:aws:ec2:*:*:snapshot/*"
+      ],
+      "Effect": "Allow"
+    },
+    {
+      "Condition": {
+        "StringLike": {
+          "aws:RequestTag/ebs.csi.aws.com/cluster": "true"
+        }
+      },
+      "Action": [
+        "ec2:CreateVolume"
+      ],
+      "Resource": "*",
+      "Effect": "Allow"
+    },
+    {
+      "Condition": {
+        "StringLike": {
+          "aws:RequestTag/CSIVolumeName": "*"
+        }
+      },
+      "Action": [
+        "ec2:CreateVolume"
+      ],
+      "Resource": "*",
+      "Effect": "Allow"
+    },
+    {
+      "Condition": {
+        "StringLike": {
+          "aws:RequestTag/kubernetes.io/cluster/*": "owned"
+        }
+      },
+      "Action": [
+        "ec2:CreateVolume"
+      ],
+      "Resource": "*",
+      "Effect": "Allow"
+    },
+    {
+      "Condition": {
+        "StringLike": {
+          "ec2:ResourceTag/ebs.csi.aws.com/cluster": "true"
+        }
+      },
+      "Action": [
+        "ec2:DeleteVolume"
+      ],
+      "Resource": "*",
+      "Effect": "Allow"
+    },
+    {
+      "Condition": {
+        "StringLike": {
+          "ec2:ResourceTag/CSIVolumeName": "*"
+        }
+      },
+      "Action": [
+        "ec2:DeleteVolume"
+      ],
+      "Resource": "*",
+      "Effect": "Allow"
+    },
+    {
+      "Condition": {
+        "StringLike": {
+          "ec2:ResourceTag/kubernetes.io/cluster/*": "owned"
+        }
+      },
+      "Action": [
+        "ec2:DeleteVolume"
+      ],
+      "Resource": "*",
+      "Effect": "Allow"
+    },
+    {
+      "Condition": {
+        "StringLike": {
+          "ec2:ResourceTag/CSIVolumeSnapshotName": "*"
+        }
+      },
+      "Action": [
+        "ec2:DeleteSnapshot"
+      ],
+      "Resource": "*",
+      "Effect": "Allow"
+    },
+    {
+      "Condition": {
+        "StringLike": {
+          "ec2:ResourceTag/ebs.csi.aws.com/cluster": "true"
+        }
+      },
+      "Action": [
+        "ec2:DeleteSnapshot"
+      ],
+      "Resource": "*",
+      "Effect": "Allow"
+    },
+    {
+      "Action": [
+        "kms:Decrypt",
+        "kms:GenerateDataKeyWithoutPlaintext",
+        "kms:CreateGrant"
+      ],
+      "Resource": "*",
+      "Effect": "Allow"
+    },
+    {
+      "Sid": "kms",
+      "Effect": "Allow",
+      "Action": [
+        "kms:Encrypt",
+        "kms:Decrypt",
+        "kms:GenerateDatakey",
+        "kms:ListAliases",
+        "kms:DescribeKey"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+      "Sid": "limitsmonitoring",
+      "Effect": "Allow",
+      "Action": [
+        "servicequotas:ListServiceQuotas",
+        "elasticloadbalancing:DescribeAccountLimits",
+        "elasticloadbalancing:DescribeLoadBalancers",
+        "rds:DescribeAccountAttributes",
+        "rds:DescribeDBInstances",
+        "rds:DescribeDBSnapshots"
+      ],
+      "Resource": [
+        "*"
+      ]
+    },
+    {
+          "Sid": "listmybuckets",
+          "Action": [
+            "s3:ListBucket",
+            "s3:GetBucketLocation"
+          ],
+          "Resource": [
+            "arn:aws:s3:::${DATALAKE_BUCKET}",
+            "arn:aws:s3:::${LOGS_BUCKET}",
+            "arn:aws:s3:::${BACKUP_BUCKET} "
+          ],
+          ],
+          "Effect": "Allow"
+
+    },
+    {
+          "Sid": "putgetmybucketpaths",
+          "Action": [
+            "s3:Get*",
+            "s3:Delete*",
+            "s3:Put*",
+            "s3:ListBucketMultipartUploads",
+            "s3:AbortMultipartUpload"
+          ],
+          "Resource": [
+            "arn:aws:s3:::${LOGS_BUCKET}/clusters",
+            "arn:aws:s3:::${LOGS_BUCKET}/clusters/*",
+            "arn:aws:s3:::${DATALAKE_BUCKET}/clusters",
+            "arn:aws:s3:::${DATALAKE_BUCKET}/clusters/*",
+            "arn:aws:s3:::${LOGS_LOCATION_BASE}",
+            "arn:aws:s3:::${LOGS_LOCATION_BASE}/*",
+            "arn:aws:s3:::${BACKUP_LOCATION_BASE}",
+            "arn:aws:s3:::${BACKUP_LOCATION_BASE}/*",
+            "arn:aws:s3:::${STORAGE_LOCATION_BASE}",
+            "arn:aws:s3:::${STORAGE_LOCATION_BASE}/*",
+            "arn:aws:s3:::${DATALAKE_BUCKET}/backup",
+            "arn:aws:s3:::${DATALAKE_BUCKET}/backup/*",
+            "arn:aws:s3:::${DATALAKE_BUCKET}/tmp",
+            "arn:aws:s3:::${DATALAKE_BUCKET}/tmp/*"
+          ],
+          "Effect": "Allow"
+    }
+  ]
+} 
+
+${DATALAKE_BUCKET} - Replace this with the name of your S3 bucket. For
+                            example my-bucket. 
+${STORAGE_LOCATION_BASE} - Replace this with the path to your Data Lake
+                            directory in the S3 bucket specified as ${DATALAKE_BUCKET}{}/SOME_PATH.
+                            For example my-bucket/my-dl. 
+${LOGS_BUCKET} - Replace this with the name of your S3 bucket for logs.
+                            For example my-bucket. ${LOGS_LOCATION_BASE} - Replace this with the
+                            path to your S3 location for logs. For example my-bucket/my-dl.
+${BACKUP_LOCATION_BASE} - Replace this with the path to your S3 location
+                            for backups. This location is used for both FreeIPA and Data Lake
+                            backups. For example my-bucket/my-dl. 
+${BACKUP_BUCKET} - Replace this with the name of your S3 bucket for
+                            backup. For example my-bucket. 
+
+
+
+
+Parent topic: Activating an AWS environment from CDW

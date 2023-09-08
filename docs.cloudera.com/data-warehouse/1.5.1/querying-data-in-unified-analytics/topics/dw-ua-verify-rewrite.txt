@@ -1,0 +1,61 @@
+Verifying the query rewriteCloudera Docs
+Verifying the query rewrite
+ You can check that a materialized view is used as a query rewrite.
+
+In Hue, verify that the query rewrite used the materialized view by running an
+                    extended EXPLAIN statement:
+
+EXPLAIN EXTENDED SELECT empid, deptname
+FROM emps
+JOIN depts
+ON (emps.deptno = depts.deptno)
+WHERE hire_date >= '2017-01-01'
+AND hire_date <= '2019-01-01';
+
+
+Export results.
+The output shows the alias default.mv1 for the
+                    materialized view in the Scan section of the plan.
+                    Explain
+OPTIMIZED SQL: SELECT `empid`, `deptname`
+FROM `default`.`mv`
+WHERE '2019-01-01' >= `hire_date`
+STAGE DEPENDENCIES:
+Stage-1 is a root stage
+Stage-0 is a root stage
+STAGE PLANS:
+Stage: Stage-1
+Impala
+Impala Plan:
+F01:PLAN FRAGMENT [UNPARTITIONED] hosts=1 instances=1
+| Per-Instance Resources: mem-estimate=4.02MB mem-reservation=4.00MB thread-reservation=1
+PLAN-ROOT SINK
+| output exprs: default.mv.empid, default.mv.deptname
+| mem-estimate=4.00MB mem-reservation=4.00MB spill-buffer=2.00MB thread-reservation=0
+|
+01:EXCHANGE [UNPARTITIONED]
+| mem-estimate=16.00KB mem-reservation=0B thread-reservation=0
+| tuple-ids=0 row-size=32B cardinality=15
+| in pipelines: 00(GETNEXT)
+|
+F00:PLAN FRAGMENT [RANDOM] hosts=1 instances=1
+Per-Instance Resources: mem-estimate=16.00MB mem-reservation=24.00KB thread-reservation=1
+00:SCAN S3 [default.mv default.mv1, RANDOM]
+S3 partitions=1/1 files=1 size=964B
+predicates: casttotimestamp('2019-01-01') >= default.mv1.hire_date
+stored statistics:
+table: rows=unavailable size=964B
+columns: unavailable
+extrapolated-rows=disabled max-scan-range-rows=unavailable
+parquet dictionary predicates: casttotimestamp('2019-01-01') >= default.mv1.hire_date
+mem-estimate=16.00MB mem-reservation=24.00KB thread-reservation=0
+tuple-ids=0 row-size=32B cardinality=15
+in pipelines: 00(GETNEXT)
+Stage: Stage-0
+Fetch Operator
+limit: -1
+Processor Tree:
+ListSink                             
+
+
+Parent topic: Creating and using a materialized view

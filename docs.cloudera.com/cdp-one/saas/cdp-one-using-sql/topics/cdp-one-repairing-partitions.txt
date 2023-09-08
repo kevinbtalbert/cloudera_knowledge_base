@@ -1,0 +1,60 @@
+Repairing Hive or Impala partitionsCloudera Docs
+Repairing Hive or Impala partitions
+Under certain conditions, you must manually repair metadata about Hive or Impala
+        partitions. You learn when and how to do this.
+
+Partition information in the metadata gets stale under the following
+                    circumstances:
+Hive: The dynamic partition refresh is disabled.
+Impala: Data files are removed by a non-Impala mechanism, and the table
+                        metadata is not updated
+You must manually refresh metastore partition information when these conditions
+                exist.
+This task assumes you created a partitioned external table named
+                students_part that stores partitions outside the warehouse. You remove one of the
+                partition directories on the object store. This action renders the metastore
+                inconsistent with S3. You repair the discrepancy manually to synchronize the
+                metastore with S3 as follows;
+
+HiveTo repair partition metadata, you run the MSCK (metastore consistency
+                        check) Hive command to manually add partitions that are added to or removed
+                        from the object store, but are not present in the Hive metastore.
+
+
+ImpalaTo repair partition metadata, you run ALTER TABLE with
+                        the RECOVER PARTITIONS clause to to find any new partition
+                        directories and the data files.
+
+
+
+Remove a partition directory, called engineering for example, from S3. 
+
+In Hive or Impala, look at the students_part table partitions.
+SHOW students_part PARTITIONS;The list of partitions
+                    is stale in the metadata because it still includes the major=engineering
+                    partition, so you must run MSCK to repair the
+                    metadata.+-------------------+
+|       major       |
++-------------------+
+| major=engineering |
+| major=humanities  |
+| major=mathematics |
++-------------------+
+
+Repair the partition.
+Hive example:MSCK REPAIR TABLE students_part DROP PARTITIONS;
+                Impala example: ALTER TABLE students_part RECOVER PARTITIONS;
+
+
+Show that the repair succeeded.
+SHOW PARTITIONS students_part;
+The repair was successful. The sales partition no longer
+                    appears.+-------------------+
+|       major       |
++-------------------+
+| major=humanities  |
+| major=mathematics |
++-------------------+
+
+
+Parent topic: Partitioned tables

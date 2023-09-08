@@ -1,0 +1,136 @@
+Encrypting Data in TransitCloudera Docs
+Encrypting Data in Transit
+How to configure TLS/SSL encryption in Cloudera Manager.
+Transport Layer Security (TLS) 1.2 is an industry standard set of cryptographic protocols for
+      securing communications over a network. TLS evolved from Secure Sockets Layer (SSL). Because
+      the SSL terminology is still widely used, Cloudera software and documentation refer to
+      TLS as TLS/SSL, but the actual protocol used is TLS. SSL is not used in
+      Cloudera software.
+In addition to TLS/SSL encryption, HDFS and HBase transfer data using
+      remote procedure calls (RPCs). To secure this transfer, you must enable
+      RPC encryption.
+For instructions on enabling TLS/SSL and RPC
+      encryption, see the following topics:
+
+Related informationTransport Layer Security (TLS) 1.2How to Convert File Encodings (DER, JKS, PEM) for TLS/SSL
+                            Certificates and Keys
+TLS/SSL and Its Use of Certificates
+
+TLS/SSL provides privacy and data integrity between applications
+      communicating over a network by encrypting the packets transmitted between
+      endpoints (ports on a host, for example). Configuring TLS/SSL for any
+      system typically involves creating a private key and public
+        key for use by server and client processes to negotiate an encrypted
+      connection at runtime. In addition, TLS/SSL can use certificates to
+      verify the trustworthiness of keys presented during the negotiation to
+      prevent spoofing and mitigate other potential security issues.
+Setting up Cloudera clusters to use TLS/SSL requires creating private
+      key, public key, and storing these securely in a keystore, among other
+      tasks. Although adding a certificate to the keystore may be the last task
+      in the process, the lead time required to obtain a certificate depends on
+      the type of certificate you plan to use for the cluster. 
+
+
+
+Certificates Overview
+
+A certificate is digitally signed, typically by a certificate authority
+        (CA) that indirectly (through a chain of trust) verifies the
+        authenticity of the public key presented during the negotiation.
+        Certificates can be signed in one of the three different ways shown in
+        the table: 
+
+Type
+Usage Note
+
+
+
+Public CA-signed certificates
+Recommended. This type of certificate is signed by a public
+                  certificate authority (CA), such as Symantec or Comodo. Public CAs are trusted
+                  third-parties whose certificates can be verified through publicly accessible
+                  chains of trust. Using this type of certificate can simplify deployment because
+                  security infrastructure, such as root CAs, are already contained in the Java JDK
+                  and its default
+                  truststore.
+
+
+Internal CA-signed certificates
+This type of certificate is signed by your organization's internal CA.
+                  Organizations using OpenSSL Certificate Authority, Microsoft Active Directory
+                  Certificate Service, or another internal CA system can use this type of
+                  certificate.
+                  
+
+
+Self-signed certificates
+Not recommended for production deployments. Self-signed certificates are
+                  acceptable for use in non-production deployments, such as for proof-of-concept
+                  setups.
+                  
+
+
+During the process of configuring TLS/SSL for the cluster, you typically obtain a
+        certificate for each host in the cluster, and re-use the certificate obtained in a given
+        format (JKS, PEM) as needed for the various services (daemon roles) supported by the host.
+        For information about converting formats, see How to Convert File Encodings (DER, JKS,
+          PEM) for TLS/SSL Certificates and Keys. As an alternative to creating discrete
+        certificates for each host in the cluster, Cloudera cluster components support wildcard
+        domains and SubjectAlternateName certificates.
+
+Wildcard Domain Certificates and SAN Certificates Support
+Cloudera Manager and CDP support the use of
+     wildcard domain certificates and SAN certificates. 
+A wildcard certificate—a certificate with the common name
+              *, as in *.example.com,
+          rather than a specific host name—can be used for any number of first
+          level sub-domains within a single domain name. For example, a wildcard
+          certificate can be used with host-1.example.com,
+            host-2.example,
+          host-3.example.com, and so on. 
+Certificates obtained from public CAs are not free, so using wildcard
+          certificates can reduce costs. Using wildcard certificates also makes
+          it easier to enable encryption for transient clusters and for clusters
+          that need to expand and shrink, since the same certificate and
+          keystore can be re-used.importantBe aware that using
+            wildcard domain certificates has some security risks. Specifically,
+            because all nodes use the same certificate, a breach of any one
+            machine can result in a breach of all machines.
+
+
+Wildcard Certificates
+Wildcard certificates can be used by all hosts within a
+                  given domain. Using wildcard certificates for all hosts in the
+                  cluster can reduce costs but also exposes greater potential
+                  risk.
+
+
+SubjectAlternativeName Certificates
+SubjectAlternativeName (SAN) certificates are bound to a
+                  set of specific DNS names. A single SAN certificate can be
+                  used for all hosts or a subset of hosts in the cluster. SAN
+                  certificates are used in Cloudera Manager high-availability
+                  (HA) configurations.
+                
+
+
+
+
+Renew Certificates Before Expiration Dates
+
+The signed certificates you obtain from a public CA (or those you
+          obtain from an internal CA) have an expiration date, such as that
+          shown in this excerpt:
+
+Expired certificates cause most cluster operations to fail. Cloudera
+          Manager Agent hosts, for example, will not be able to validate the
+          Cloudera Manager Server host and will fail to launch the cluster
+          nodes. Administrators should note expiration dates of all certificates
+          when they deploy the certificates to the cluster nodes and setup
+          reminders to allow enough time to renew.
+tipUse OpenSSL to check the expiration dates for certificates
+          already deployed:
+          openssl x509 -enddate -noout -in /opt/cloudera/security/pki/$(hostname -f)-server.cert.pem
+
+
+

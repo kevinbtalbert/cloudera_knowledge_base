@@ -1,0 +1,229 @@
+Understanding SRM properties, their configuration and hierarchyCloudera Docs
+Understanding SRM properties, their configuration and hierarchy
+There are a number of configuration properties that Streams Replication Manager (SRM)
+    accepts, but are not exposed directly in Cloudera Manager. You can configure these properties
+    with the Streams Replication Manager's Replication Configs property. Additionally, these
+    properties can be configured on different levels allowing for granular control over how and when
+    they are applied.
+SRM supports various configuration properties. With the exception of adding and enabling
+      replications, all fundamental properties required to set up and start data replication between
+      clusters are available for configuration directly through Cloudera Manager, or are configured
+      automatically by Cloudera Manager. 
+In addition to these properties, SRM accepts and supports a number of additional properties
+      including Streams Replication Manager specific properties, Kafka Connect worker properties as
+      well as Kafka properties available in the version of Kafka that you are using. These however
+      are not directly available for configuration in Cloudera Manager, and do not have dedicated
+      configuration entries on the UI. Properties like these are configured through the
+        Streams Replication Manager's Replication Configs property.
+The configuration properties that you add to Streams Replication Manager's
+        Replication Configs can be set on multiple levels with the help of property
+      prefixes. These prefixes allow you to exercise control over when and where (at what level) a
+      configuration is used by SRM. This gives you fine grained control over how data is
+      replicated.
+The prefixes that you can use and the configuration levels they correspond to are as
+      follows:
+
+Global level - no prefixFor example:
+        offset.flush.timeout.ms
+Global worker level - prefixed with the workers. prefixFor example:
+          workers.scheduled.rebalance.max.delay.ms 
+Global connector level - prefixed with the connectors. prefixFor
+          example: connectors.producer.override.buffer.memory
+Cluster level - prefixed with cluster alias For
+        example:[***ALIAS***].offset.flush.timeout.ms
+Replication level - prefixed with a replication nameFor
+          example:[***ALIAS***]->[***ALIAS***].consumer.max.poll.records
+
+noteAll properties in SRM support prefixes, even the ones that you set directly through the
+      Cloudera Manager UI. However, the prefixes for these properties are set automatically in the
+      background based on your overall configuration. Therefore, from a user perspective, prefixes
+      only become significant when you use Streams Replication Manager's Replication
+        Configs.
+Properties follow a hierarchy, which is based on what prefix they have. In general, prefixed
+      properties take precedence over non-prefixed properties, and more specific prefixes take
+      priority over less specific ones. That is, replication level properties take precedence over
+      both cluster and global level configurations. Cluster level properties take precedence over
+      global level configurations. Lastly, global level configurations are overridden by both
+      replication and cluster level properties.
+Not all prefixes and configuration levels are valid for all properties. For example, most
+      properties related to Kafka client connections (bootstrap servers, aliases, security
+      configurations and so on) are not relevant on a replication level. While they can be set, they
+      will not have an effect.
+The following sections give more information on the available configuration levels/prefixes,
+      give examples of what types of properties can be set at each level, as well as recommendations
+      on when and how to use each.
+Global level
+Global configuration is achieved by adding the property on its own, without a prefix. This
+        is the most generic configuration, with the lowest priority level.  Global level
+        configurations can also be regarded as fallback configurations. This is a result of the
+        property hierarchy. SRM will fall back and use a global level configuration if there are no
+        cluster or replication level configurations set for a specific property. 
+The following types of properties are accepted at this level by SRM:
+SRM service level properties
+These are SRM-specific configurations that are applied to SRM as a whole. For
+              example, mm.rest.protocol is a property typically set at this level,
+              as it allows configuring the protocol used by all replication specific Connect REST
+              Servers run internally by the SRM Driver to use the same protocol.
+Kafka client connection properties
+Client connection properties are used by SRM when it connects to a Kafka cluster.
+              Client connection properties can be set on a global level, however, not all connection
+              related properties are compatible with this level. For example, you can set
+                bootstrap.servers on a global level, but because in the majority of
+              cases you will have a unique bootstrap server set for each individual connection,
+              setting this property on a global level is redundant. As a result, Cloudera
+                recommends that you only configure security related connection properties at this
+                level and only if you have multiple clusters in your deployment that use the same
+                security configuration. For example, you might have a deployment where SRM connects
+                to many Kafka clusters, and all of them use the same cipher suite. In a case like
+                this you can set ssl.cipher.suites at the global level a single
+                time instead of configuring it on a per cluster basis. 
+Kafka Connect worker properties 
+These configurations are applied to all Kafka Connect workers run internally by the
+              SRM Driver. Any Connect worker property is supported at this level as long as it uses
+              one of the following prefixes: 
+offset.storage
+config.storage
+status.storage
+key.converter
+
+value.converter
+header.converter
+
+task
+worker
+listeners.https
+For example, you can configure
+                  offset.storage.replication.factor at this level to specify the
+                replication factor of the internal topic used to track the source offsets of SRM in
+                all target clusters.Other worker properties that do not use the listed
+                prefixes can still be configured globally. However, they must be configured on a
+                global worker level using the workers. prefix.
+Kafka Connect connector properties 
+These configurations are applied to all connectors in all replications run
+              internally by the SRM Driver. The Connect connector properties supported at this level
+              are as follows: 
+errors.retry.timeout
+errors.retry.delay.max.ms
+errors.tolerance
+errors.log.enable
+errors.log.include.messages
+config.properties.exclude
+config.properties.blacklist
+config.property.filter.class
+consumer.poll.timeout.ms
+admin.timeout.ms
+refresh.topics.enabled
+refresh.groups.enabled
+sync.topic.configs.enabled
+sync.topic.acls.enabled
+emit.heartbeats.interval.seconds
+emit.checkpoints.interval.seconds
+sync.group.offsets.enabled
+sync.group.offsets.interval.seconds
+replication.policy.class
+replication.policy.separator
+heartbeats.topic.replication.factor
+checkpoints.topic.replication.factor
+offset-syncs.topic.replication.factor
+offset.lag.max
+offset-syncs.topic.location
+connect.start.task.timeout.ms
+disable.source.topic.auto.creation
+copy.source.offset.in.header.enabled
+
+
+For example, you can configure sync.group.offsets at this level to sync
+        the translated consumer group offsets. 
+Other connector properties that are not listed can still be configured globally. However,
+        they must be configured on a global connector level using the connectors.
+        prefix.
+
+Global worker level
+Global worker level configuration is achieved by using the workers.
+        prefix. This level supports Kafka Connect worker properties only. Properties specified with
+        the workers. prefix are applied to all Connect workers run internally by
+        the SRM Driver. 
+The difference between the global worker level and the global level (no prefix) is that on
+        a global level only a handful of Connect worker properties are supported. The global worker
+        level on the other hand supports all Connect worker properties. 
+For example, scheduled.rebalance.max.delay.ms is not supported on a global
+        level, it is not applied to all Connect workers if it is set without a prefix. However,
+        specifying the property on a global worker level is supported. That is, when the property is
+        set with the workers. prefix, it is applied to all workers.
+
+Global connector level
+Global connector level configuration can be achieved by prefixing the configuration
+        property with the connectors. prefix. This level supports Kafka Connect
+        connector properties only. Properties that use this prefix are applied to all Connect
+        connectors run internally by the SRM Driver. 
+The difference between the global connector level and the global level (no prefix) is that
+        on a global level only a handful of Connect connector properties are supported. The global
+        connector level on the other hand supports all Connect connector properties. 
+The global connector level prefix can also be used to tweak all consumers and producers
+        that are used by the SRM Driver. For example, by using the
+          connectors.consumer. prefix, any consumer property can be specified to
+        tweak the consumers used in the replications. Similarly, the
+          connectors.producer.override. prefix can be used to override producer
+        configurations in the replications.
+
+Cluster level
+Cluster level configuration is achieved by prefixing the configuration property with a
+        cluster alias specified in Streams Replication Manager Cluster alias.
+        Cluster level configurations have a higher priority than global configurations. As a result,
+        cluster level configurations take precedence over global configurations.
+The following types of configurations are accepted at this level by SRM:
+Kafka client connection properties 
+
+These configurations are used by SRM to connect to the Kafka cluster identified by
+                the alias. SRM is capable of generating connection configurations securely for most
+                use-cases and Kafka clusters either through automation, or with Kafka Credentials
+                    (Administration > External
+                    Accounts > Kafka Credentials).
+                Cloudera recommends that you only use automation or Kafka credentials to configure
+                these properties. 
+For advanced use-cases, or when a specific connection configuration property is not
+                available through Kafka credentials, the cluster prefix can be used to specify the
+                configuration property. For example, the
+                  sasl.login.callback.handler.class property cannot be set using
+                Kafka credentials. If in your deployment you are using a third-party callback
+                handler and need to specify it for SRM, you can do so by adding
+                  sasl.login.callback.handler.class with the appropriate cluster
+                prefixes to Streams Replication Manager Replication
+                Configs.
+
+Kafka Connect worker properties 
+These configurations are applied to Kafka Connect workers which correspond to a
+              replication targeting the Kafka cluster identified by the alias prefix. On this level,
+              all Connect worker configurations are supported. For example, you can use
+                offset.flush.timeout.ms to increase the flush timeout to support
+              high-traffic replication flows.
+
+
+Replication level
+Replication level configuration can be achieved by prefixing the configuration property
+        with the name of the replication. Replication level configurations have a higher priority
+        than cluster or global level configurations. As a result, replication level configurations
+        take precedence over both cluster and global configurations.
+The following types of configurations are accepted at this level by SRM:
+Kafka Connect worker properties using the
+              cluster->cluster.worker.prefix 
+These properties are applied to the Kafka Connect workers which correspond to the
+              replication identified by the prefix. On this level, all Connect worker configurations
+              are supported. For example, offset.flush.timeout.ms can be specified
+              to increase the flush timeout to support high-traffic replication flows.
+
+Kafka Connect connector properties 
+
+These configurations are applied to all connectors in the replication identified by
+                the prefix. 
+In addition to the replication specific connector configurations, you can also
+                tweak the consumers and producers that are used within a specific replication. For
+                example, by using the cluster->cluster.consumer. prefix, any
+                consumer property can be specified to tweak the consumers used in the replication.
+                Similarly, the cluster->cluster.producer.override. prefix can be
+                used to override producer configurations in the replication flow.
+
+
+
+
+Related informationConfiguring properties not exposed in Cloudera Manager

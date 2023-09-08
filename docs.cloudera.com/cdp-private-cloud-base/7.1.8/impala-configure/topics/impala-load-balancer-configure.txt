@@ -1,0 +1,406 @@
+Configuring Load Balancer for ImpalaCloudera Docs
+Configuring Load Balancer for Impala
+
+    For most clusters that have multiple users and production availability
+    requirements, you might want to set up a load-balancing proxy server to
+    relay requests to and from Impala.
+    
+When using a load balancer for Impala, applications connect to a
+     single well-known host and port, rather than keeping track of the hosts
+     where a specific Impala daemon is running. The load balancer also lets the
+     Impala nodes share resources to balance out the work loads.
+ Set up a software package of your choice to perform these functions. 
+Most considerations for load balancing and high availability apply to the
+        impalad daemons. The statestored and
+        catalogd daemons do not have special requirements for
+      high availability, because problems with those daemons do not result in
+      data loss.
+ The following are the general setup steps that apply to any
+      load-balancing proxy software: 
+
+ Select and download a load-balancing proxy software or other
+        load-balancing hardware appliance. It should only need to be installed
+        and configured on a single host, typically on an edge node.
+ Configure the load balancer (typically by editing a configuration
+        file). In particular: 
+ To relay Impala requests back and forth, set up a port that the
+            load balancer will listen on. 
+Select a load balancing algorithm. 
+For Kerberized clusters, follow the instructions in Special Proxy Considerations for Clusters Using Kerberos
+            below. 
+
+
+ If you are using Hue or JDBC-based applications, you typically set up
+        load balancing for both ports 21000 and 21050, because these client
+        applications connect through port 21050 while the
+          impala-shell command connects through port 21000.
+        See Ports used by Impala for when to
+        use port 21000, 21050, or another value depending on what type of
+        connections you are load balancing. 
+ Run the load-balancing proxy server, pointing it at the configuration
+        file that you set up. 
+ In Cloudera Manager, navigate to
+            Impala > Configuration > Impala
+            Daemon Default Group.
+ In the Impala Daemons Load Balancer field,
+        specify the address of the load balancer in the
+            host:port
+          format.This setting lets Cloudera Manager route all appropriate
+          Impala-related operations through the load-balancing proxy
+        server.
+ For any scripts, jobs, or configuration settings for applications
+        that formerly connected to a specific impalad to run
+        Impala SQL statements, change the connection information (such as the
+          -i option in impala-shell) to
+        point to the load balancer instead. 
+
+note The following sections use the HAProxy software as a
+      representative example of a load balancer that you can use with Impala.
+      For information specifically about using Impala with the F5 BIG-IP load
+      balancer, see Impala HA with
+        F5 BIG-IP. 
+Choosing the Load-Balancing Algorithm
+ Load-balancing software offers a number of algorithms to distribute
+        requests. Each algorithm has its own characteristics that make it
+        suitable in some situations but not others. 
+
+ Leastconn 
+
+ Connects sessions to the coordinator with the fewest
+              connections, to balance the load evenly. Typically used for
+              workloads consisting of many independent, short-running queries.
+              In configurations with only a few client machines, this setting
+              can avoid having all requests go to only a small set of
+              coordinators. 
+
+ Recommended for Impala with F5. 
+ Source IP Persistence 
+ Sessions from the same IP address always go to the same
+            coordinator. A good choice for Impala workloads containing a mix of
+            queries and DDL statements, such as CREATE TABLE
+            and ALTER TABLE. Because the metadata changes from
+            a DDL statement take time to propagate across the cluster, prefer to
+            use the Source IP Persistence algorithm in this case. If you are
+            unable to choose Source IP Persistence, run the DDL and subsequent
+            queries that depend on the results of the DDL through the same
+            session, for example by running impala-shell -f
+                script_file to submit several
+            statements through a single session. 
+ Required for setting up high availability with Hue.
+ Round-robin 
+ Distributes connections to all coordinator nodes. Typically not
+            recommended for Impala. 
+
+ You might need to perform benchmarks and load testing to determine
+        which setting is optimal for your use case. Always set up using two
+        load-balancing algorithms: Source IP Persistence for Hue and Leastconn
+        for others. 
+
+Special Proxy Considerations for Clusters Using Kerberos
+ In a cluster using Kerberos, applications check host credentials to
+        verify that the host they are connecting to is the same one that is
+        actually processing the request. 
+ In Impala 2.11 and lower
+        versions, once you enable a proxy server in a Kerberized cluster, users
+        will not be able to connect to individual impala daemons directly from
+        impala-shell. 
+ In Impala 2.12 and higher,
+        when you enable a proxy server in a Kerberized cluster, users have an
+        option to connect to Impala daemons directly from
+          impala-shell using the -b /
+          --kerberos_host_fqdn
+impala-shell flag. This option can be used for
+        testing or troubleshooting purposes, but not recommended for live
+        production environments as it defeats the purpose of a load
+        balancer/proxy.
+ Example:
+        
+impala-shell -i impalad-1.mydomain.com -k -b loadbalancer-1.mydomain.com
+
+
+ Alternatively, with the fully qualified configurations:
+        impala-shell --impalad=impalad-1.mydomain.com:21000 --kerberos --kerberos_host_fqdn=loadbalancer-1.mydomain.com
+
+ To validate the load-balancing proxy server, perform these extra
+        Kerberos setup steps: 
+
+ This section assumes you are starting with a
+          Kerberos-enabled cluster.
+ Choose the host you will use for the proxy server. Based on the
+          Kerberos setup procedure, it should already have an entry
+              impala/proxy_host@realm
+          in its keytab.
+In Cloudera Manager, navigate to
+              Impala > Configuration > Impala
+              Daemon Default Group.
+In the Impala Daemons Load Balancer field,
+          specify the address of the load balancer in the
+              host:port
+            format.When this field is specified and Kerberos is enabled,
+            Cloudera Manager adds a principal for
+                impala/proxy_host@realm
+            to the keytab for all Impala daemons.
+Restart the Impala service. 
+
+
+Client Connection to Proxy Server in Kerberized Clusters
+ When a client connect to Impala, the service principal specified by
+        the client must match the -principal setting,
+            impala/proxy_host@realm,
+        of the Impala proxy server as specified in its
+          keytab. And the client should connect to the
+        proxy server port. 
+ In hue.ini, set the following to configure Hue to
+        automatically connect to the proxy server: 
+[impala]
+server_host=proxy_host
+impala_principal=impala/proxy_host
+ The following are the JDBC connection string formats when connecting
+        through the load balancer with the load balancer's host name in the
+        principal: 
+jdbc:hive2://proxy_host:load_balancer_port/;principal=impala/_HOST@realm
+jdbc:hive2://proxy_host:load_balancer_port/;principal=impala/proxy_host@realm
+ When starting impala-shell, specify the service
+        principal via the -b or
+          --kerberos_host_fqdn flag. 
+
+Special Proxy Considerations for TLS/SSL Enabled Clusters
+ When TLS/SSL is enabled for Impala, the client application, whether
+        impala-shell, Hue, or something else, expects the certificate common
+        name (CN) to match the hostname that it is connected to. With no load
+        balancing proxy server, the hostname and certificate CN are both that of
+        the impalad instance. However, with a proxy server, the
+        certificate presented by the impalad instance does not
+        match the load balancing proxy server hostname. If you try to
+        load-balance a TLS/SSL-enabled Impala installation without additional
+        configuration, you see a certificate mismatch error when a client
+        attempts to connect to the load balancing proxy host. 
+You can configure a proxy server in several ways to load balance
+        TLS/SSL enabled Impala: 
+
+ TLS/SSL Bridging
+ In this configuration, the proxy server presents a TLS/SSL
+            certificate to the client, decrypts the client request, then
+            re-encrypts the request before sending it to the backend
+              impalad. The client and server certificates can
+            be managed separately. The request or resulting payload is encrypted
+            in transit at all times. 
+ TLS/SSL Passthrough 
+ In this configuration, traffic passes through to the backend
+              impalad instance with no interaction from the
+            load balancing proxy server. Traffic is still encrypted end-to-end. 
+ The same server certificate, utilizing either wildcard or Subject
+            Alternate Name (SAN), must be installed on each
+              impalad instance. 
+ TLS/SSL Offload 
+ In this configuration, all traffic is decrypted on the load
+            balancing proxy server, and traffic between the backend
+              impalad instances is unencrypted. This
+            configuration presumes that cluster hosts reside on a trusted
+            network and only external client-facing communication need to be
+            encrypted in-transit. 
+
+If you plan to use Auto-TLS, your load balancer must perform TLS/SSL
+        bridging or TLS/SSL offload.
+ Refer to your load balancer documentation for the steps to set up
+        Impala and the load balancer using one of the options above. 
+ For information specifically about using Impala with the F5 BIG-IP
+        load balancer with TLS/SSL enabled, see Impala HA with
+          F5 BIG-IP.
+      
+
+Example of Configuring HAProxy Load Balancer for Impala
+ If you are not already using a load-balancing proxy, you can
+        experiment with HAProxy a free, open
+        source load balancer. 
+
+note HAProxy is not a CDH component, and Cloudera
+          does not provide the support for HAProxy. Refer to HAProxy for questions and support issues for
+          HAProxy. 
+
+ This example shows how you might install and configure that load
+        balancer on a Red Hat Enterprise Linux system. 
+
+
+ Install the load balancer:
+yum install haproxy 
+
+
+ Set up the configuration file:
+              /etc/haproxy/haproxy.cfg. See the following
+            section for a sample configuration file. 
+
+
+ Run the load balancer (on a single host, preferably one not
+            running impalad): 
+/usr/sbin/haproxy –f /etc/haproxy/haproxy.cfg
+
+
+ In impala-shell, JDBC applications, or ODBC
+            applications, connect to the listener port of the proxy host, rather
+            than port 21000 or 21050 on a host actually running
+              impalad. The sample configuration file sets
+            haproxy to listen on port 25003, therefore you would send all
+            requests to haproxy_host:25003.
+          
+
+
+ This is the sample haproxy.cfg used in this
+        example: 
+global
+    # To have these messages end up in /var/log/haproxy.log you will
+    # need to:
+    #
+    # 1) configure syslog to accept network log events.  This is done
+    #    by adding the '-r' option to the SYSLOGD_OPTIONS in
+    #    /etc/sysconfig/syslog
+    #
+    # 2) configure local2 events to go to the /var/log/haproxy.log
+    #   file. A line like the following can be added to
+    #   /etc/sysconfig/syslog
+    #
+    #    local2.*                       /var/log/haproxy.log
+    #
+    log         127.0.0.1 local0
+    log         127.0.0.1 local1 notice
+    chroot      /var/lib/haproxy
+    pidfile     /var/run/haproxy.pid
+    maxconn     4000
+    user        haproxy
+    group       haproxy
+    daemon
+
+    # turn on stats unix socket
+    #stats socket /var/lib/haproxy/stats
+
+#---------------------------------------------------------------------
+# common defaults that all the 'listen' and 'backend' sections will
+# use if not designated in their block
+#
+# You might need to adjust timing values to prevent timeouts.
+#
+# The timeout values should be dependant on how you use the cluster
+# and how long your queries run.
+#---------------------------------------------------------------------
+defaults
+    mode                    http
+    log                     global
+    option                  httplog
+    option                  dontlognull
+    option http-server-close
+    option forwardfor       except 127.0.0.0/8
+    option                  redispatch
+    retries                 3
+    maxconn                 3000
+    timeout connect 5000
+    timeout client 3600s
+    timeout server 3600s
+
+#
+# This sets up the admin page for HA Proxy at port 25002.
+#
+listen stats :25002
+    balance
+    mode http
+    stats enable
+    stats auth username:password
+
+# This is the setup for Impala. Impala client connect to load_balancer_host:25003.
+# HAProxy will balance connections among the list of servers listed below.
+# The list of Impalad is listening at port 21000 for beeswax (impala-shell) or original ODBC driver.
+# For JDBC or ODBC version 2.x driver, use port 21050 instead of 21000.
+listen impala :25003
+    mode tcp
+    option tcplog
+    balance leastconn
+
+    server symbolic_name_1 impala-host-1.example.com:21000 check
+    server symbolic_name_2 impala-host-2.example.com:21000 check
+    server symbolic_name_3 impala-host-3.example.com:21000 check
+    server symbolic_name_4 impala-host-4.example.com:21000 check
+
+# Setup for Hue or other JDBC-enabled applications.
+# In particular, Hue requires sticky sessions.
+# The application connects to load_balancer_host:21051, and HAProxy balances
+# connections to the associated hosts, where Impala listens for JDBC
+# requests on port 21050.
+listen impalajdbc :21051
+    mode tcp
+    option tcplog
+    balance source
+    server symbolic_name_5 impala-host-1.example.com:21050 check
+    server symbolic_name_6 impala-host-2.example.com:21050 check
+    server symbolic_name_7 impala-host-3.example.com:21050 check
+    server symbolic_name_8 impala-host-4.example.com:21050 check
+
+important Hue requires the check option at
+        the end of each line in the above file to ensure HAProxy can detect any
+        unreachable impalad server, and failover can be
+        successful. Without the TCP check, you can encounter an error when the
+          impalad daemon to which Hue tries to connect is
+        down. 
+noteIf your JDBC or ODBC application connects to Impala through a load
+        balancer such as haproxy, be cautious about reusing the
+        connections. If the load balancer has set up connection timeout values,
+        either check the connection frequently so that it never sits idle longer
+        than the load balancer timeout value, or check the connection validity
+        before using it and create a new one if the connection has been closed.
+      
+
+Example of Configuring HAProxy Load Balancer for Impala with Auto-TLS
+
+
+Create unencrypted key file. Auto TLS will not create the unencrypted file so you must
+            create it manually.
+              
+         openssl rsa -in  /var/lib/cloudera-scm-agent/agent-cert/cm-auto-host_key.pem -out /etc/haproxy/cm-auto-host_unenckey.pem
+         # enter password from /var/lib/cloudera-scm-agent/agent-cert/cm-auto-host_key.pw
+noteThe
+              created cm-auto-host_cert_chain_unenckey.pem should be owned by the haproxy user with
+              600 or 400 privileges.
+Combine the created unencrypted key with CA certificate:
+              cat /var/lib/cloudera-scm-agent/agent-cert/cm-auto-host_cert_chain.pem /etc/haproxy/cm-auto-host_unenckey.pem > /etc/haproxy/cm-auto-host_cert_chain_unenckey.pemnoteYou
+              must reload HAProxy after combining the unencrypted key with CA
+            certificate.
+Configure haproxy.cfg, most often found in /etc/haproxy/haproxy.cfg. This example
+            shown here uses non-standarad ports however you may want to configure port 21000 and
+            21050. And you may want to use balance source instead of
+              balance leastconn which is needed for tools like Hue to work
+            properly.frontend impala-auto-tls-thrift
+    bind :21013 ssl crt /etc/haproxy/cm-auto-host_cert_chain_unenckey.pem
+    mode tcp
+    stats enable
+
+    default_backend shell_autotls_backend
+
+backend shell_autotls_backend
+    mode tcp
+    balance leastconn
+    timeout connect 5000ms
+    timeout client  3600000ms
+    timeout server  3600000ms
+    # Impala Nodes
+    server ve1311.halxg.cloudera.com ve1311.halxg.cloudera.com:21000 check ssl ca-file /var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_cacerts.pem
+    server ve1312.halxg.cloudera.com ve1312.halxg.cloudera.com:21000 check ssl ca-file /var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_cacerts.pem
+
+frontend impala-autotls-jdbc
+    bind :21056 ssl crt /etc/haproxy/cm-auto-host_cert_chain_unenckey.pem
+    mode tcp
+    stats enable
+
+    default_backend jdbc_autotls_backend
+
+backend jdbc_autotls_backend
+    mode tcp
+    balance leastconn
+    timeout connect 5000ms
+    timeout client  3600000ms
+    timeout server  3600000ms
+    # Impala Nodes
+    server ve1311.halxg.cloudera.com ve1311.halxg.cloudera.com:21050 check ssl ca-file /var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_cacerts.pem
+    server ve1312.halxg.cloudera.com ve1312.halxg.cloudera.com:21050 check ssl ca-file /var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_cacerts.pem
+
+
+
+
+Related informationPorts used by ImpalaImpala Shell Configuration OptionsConfiguring Kerberos Authentication

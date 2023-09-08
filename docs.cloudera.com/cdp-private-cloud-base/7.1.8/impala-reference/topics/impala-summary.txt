@@ -1,0 +1,53 @@
+Understanding Performance using SUMMARY ReportCloudera Docs
+Understanding Performance using SUMMARY Report
+For an overview of the physical performance characteristics for a
+    query, issue the SUMMARY command in
+      impala-shell immediately after executing a query. This
+    condensed information shows which phases of execution took the most time,
+    and how the estimates for memory usage and number of rows at each phase
+    compare to the actual values. 
+ Like the EXPLAIN plan, it is easy to see potential
+      performance bottlenecks in the SUMMARY report. Like the
+        PROFILE output, the SUMMARY report is
+      available after the query is run, and it displays actual timing
+      statistics. 
+ The SUMMARY report is also printed at the beginning of
+      the query profile report described in the PROFILE output,
+      for convenience in examining high-level and low-level aspects of the query
+      side-by-side. 
+ When the MT_DOP query option is set to a value larger
+      than 0, the #Inst column in the output
+      shows the number of fragment instances. Impala decomposes each query into
+      smaller units of work that are distributed across the cluster, and these
+      units are referred as fragments. 
+ When the MT_DOP query option is set to 0, the
+        #Inst column in the output shows the same value as the
+        #Hosts column, since there is exactly one fragment for
+      each host. 
+ For example, here is a query involving an aggregate function on a
+      single-node. The different stages of the query and their timings are shown
+      (rolled up for all nodes), along with estimated and actual values used in
+      planning the query. In this case, the AVG() function is
+      computed for a subset of data on each node (stage 01) and then the
+      aggregated results from all nodes are combined at the end (stage 03). You
+      can see which stages took the most time, and whether any estimates were
+      substantially different than the actual data distribution. (When examining
+      the time values, be sure to consider the suffixes such as
+        us for microseconds and ms for
+      milliseconds, rather than just looking for the largest numbers.) 
+> SELECT AVG(ss_sales_price) FROM store_sales WHERE ss_coupon_amt = 0;
+> SUMMARY;
++--------------+--------+--------+----------+----------+-------+------------+----------+---------------+-----------------+
+| Operator     | #Hosts | #Inst  | Avg Time | Max Time | #Rows | Est. #Rows | Peak Mem | Est. Peak Mem | Detail          |
++--------------+--------+--------+----------+----------+-------+------------+----------+---------------+-----------------+
+| 03:AGGREGATE | 1      | 1      | 1.03ms   | 1.03ms   | 1     | 1          | 48.00 KB | -1 B          | MERGE FINALIZE  |
+| 02:EXCHANGE  | 1      | 1      | 0ns      | 0ns      | 1     | 1          | 0 B      | -1 B          | UNPARTITIONED   |
+| 01:AGGREGATE | 1      | 1      |30.79ms   | 30.79ms  | 1     | 1          | 80.00 KB | 10.00 MB      |                 |
+| 00:SCAN HDFS | 1      | 1      | 5.45s    | 5.45s    | 2.21M | -1         | 64.05 MB | 432.00 MB     | tpc.store_sales |
++--------------+--------+--------+----------+----------+-------+------------+----------+---------------+-----------------+
+
+ Notice how the longest initial phase of the query is measured in seconds
+      (s), while later phases working on smaller intermediate results are
+      measured in milliseconds (ms) or even nanoseconds (ns). 
+
+Parent topic: Performance Considerations

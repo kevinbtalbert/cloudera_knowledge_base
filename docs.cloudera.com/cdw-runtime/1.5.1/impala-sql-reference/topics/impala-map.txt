@@ -1,0 +1,325 @@
+MAP complex typeCloudera Docs
+MAP complex type
+A complex data type representing an arbitrary set of key-value pairs. The key part is a
+    scalar type, while the value part can be a scalar or another complex type
+      (ARRAY, STRUCT, or MAP).
+Syntax:
+column_name MAP < primitive_type, type >
+
+type ::= primitive_type | complex_type
+
+Usage notes:
+ Because complex types are often used in combination, for example
+        an ARRAY of STRUCT elements, if you are unfamiliar with
+        the Impala complex types, start with Complex types for background information and usage
+        examples.
+        The MAP complex data type represents a set of key-value pairs.
+        Each element of the map is indexed by a primitive type such as BIGINT or
+        STRING, letting you define sequences that are not continuous or categories with arbitrary names.
+        You might find it convenient for modelling data produced in other languages, such as a
+        Python dictionary or Java HashMap, where a single scalar value serves as the lookup key.
+      
+        In a big data context, the keys in a map column might represent a numeric sequence of events during a
+        manufacturing process, or TIMESTAMP values corresponding to sensor observations.
+        The map itself is inherently unordered, so you choose whether to make the key values significant
+        (such as a recorded TIMESTAMP) or synthetic (such as a random global universal ID).
+      note
+        Behind the scenes, the MAP type is implemented in a similar way as the
+        ARRAY type. Impala does not enforce any uniqueness constraint on the
+        KEY values, and the KEY values are processed by
+        looping through the elements of the MAP rather than by a constant-time lookup.
+        Therefore, this type is primarily for ease of understanding when importing data and
+        algorithms from non-SQL contexts, rather than optimizing the performance of key lookups.
+      
+        You can pass a multi-part qualified name to DESCRIBE
+        to specify an ARRAY, STRUCT, or MAP
+        column and visualize its structure as if it were a table.
+        For example, if table T1 contains an ARRAY column
+        A1, you could issue the statement DESCRIBE t1.a1.
+        If table T1 contained a STRUCT column S1,
+        and a field F1 within the STRUCT was a MAP,
+        you could issue the statement DESCRIBE t1.s1.f1.
+        An ARRAY is shown as a two-column table, with
+        ITEM and POS columns.
+        A STRUCT is shown as a table with each field
+        representing a column in the table.
+        A MAP is shown as a two-column table, with
+        KEY and VALUE columns.
+      
+Added in: Impala 2.3.0
+Restrictions:
+
+
+
+            Columns with this data type can only be used in tables or partitions with the Parquet file format. Also this data type can be read from ORC files.
+          
+
+
+
+            Columns with this data type cannot be used as partition key columns in a partitioned table.
+          
+
+
+
+            The COMPUTE STATS statement does not produce any statistics for columns of this data type.
+          
+
+
+
+            The maximum length of the column definition for any complex type, including declarations for any nested types,
+            is 4000 characters.
+          
+
+
+ See the Limitations and restrictions for complex types topic for a full
+            list of limitations and associated guidelines about complex type columns. 
+
+
+Kudu considerations:Currently, the data types CHAR,
+          ARRAY, MAP, and
+          STRUCT cannot be used with Kudu tables. 
+Examples:
+note Many of the complex type examples refer to tables such
+        as CUSTOMER and REGION adapted from the tables used in the
+        TPC-H benchmark.
+        The following example shows a table with various kinds of MAP columns,
+        both at the top level and nested within other complex types.
+        Each row represents information about a specific country, with complex type fields
+        of various levels of nesting to represent different information associated
+        with the country: factual measurements such as area and population,
+        notable people in different categories, geographic features such as
+        cities, points of interest within each city, and mountains with associated facts.
+        Practice the CREATE TABLE and query notation for complex type columns
+        using empty tables, until you can visualize a complex data structure and construct corresponding SQL statements reliably.
+      create TABLE map_demo
+(
+  country_id BIGINT,
+
+-- Numeric facts about each country, looked up by name.
+-- For example, 'Area':1000, 'Population':999999.
+-- Using a MAP instead of a STRUCT because there could be
+-- a different set of facts for each country.
+  metrics MAP <STRING, BIGINT>,
+
+-- MAP whose value part is an ARRAY.
+-- For example, the key 'Famous Politicians' could represent an array of 10 elements,
+-- while the key 'Famous Actors' could represent an array of 20 elements.
+  notables MAP <STRING, ARRAY <STRING>>,
+
+-- MAP that is a field within a STRUCT.
+-- (The STRUCT is inside another ARRAY, because it is rare
+-- for a STRUCT to be a top-level column.)
+-- For example, city #1 might have points of interest with key 'Zoo',
+-- representing an array of 3 different zoos.
+-- City #2 might have completely different kinds of points of interest.
+-- Because the set of field names is potentially large, and most entries could be blank,
+-- a MAP makes more sense than a STRUCT to represent such a sparse data structure.
+  cities ARRAY < STRUCT <
+    name: STRING,
+    points_of_interest: MAP <STRING, ARRAY <STRING>>
+  >>,
+
+-- MAP that is an element within an ARRAY. The MAP is inside a STRUCT field to associate
+-- the mountain name with all the facts about the mountain.
+-- The "key" of the map (the first STRING field) represents the name of some fact whose value
+-- can be expressed as an integer, such as 'Height', 'Year First Climbed', and so on.
+  mountains ARRAY < STRUCT < name: STRING, facts: MAP <STRING, INT > > >
+)
+STORED AS PARQUET;
+
+DESCRIBE map_demo;
++------------+------------------------------------------------+
+| name       | type                                           |
++------------+------------------------------------------------+
+| country_id | bigint                                         |
+| metrics    | map<string,bigint>                             |
+| notables   | map<string,array<string>>                      |
+| cities     | array<struct<                                  |
+|            |   name:string,                                 |
+|            |   points_of_interest:map<string,array<string>> |
+|            | >>                                             |
+| mountains  | array<struct<                                  |
+|            |   name:string,                                 |
+|            |   facts:map<string,int>                        |
+|            | >>                                             |
++------------+------------------------------------------------+
+
+DESCRIBE map_demo.metrics;
++-------+--------+
+| name  | type   |
++-------+--------+
+| key   | string |
+| value | bigint |
++-------+--------+
+
+DESCRIBE map_demo.notables;
++-------+---------------+
+| name  | type          |
++-------+---------------+
+| key   | string        |
+| value | array<string> |
++-------+---------------+
+
+DESCRIBE map_demo.notables.value;
++------+--------+
+| name | type   |
++------+--------+
+| item | string |
+| pos  | bigint |
++------+--------+
+
+DESCRIBE map_demo.cities;
++------+------------------------------------------------+
+| name | type                                           |
++------+------------------------------------------------+
+| item | struct<                                        |
+|      |   name:string,                                 |
+|      |   points_of_interest:map<string,array<string>> |
+|      | >                                              |
+| pos  | bigint                                         |
++------+------------------------------------------------+
+
+DESCRIBE map_demo.cities.item.points_of_interest;
++-------+---------------+
+| name  | type          |
++-------+---------------+
+| key   | string        |
+| value | array<string> |
++-------+---------------+
+
+DESCRIBE map_demo.cities.item.points_of_interest.value;
++------+--------+
+| name | type   |
++------+--------+
+| item | string |
+| pos  | bigint |
++------+--------+
+
+DESCRIBE map_demo.mountains;
++------+-------------------------+
+| name | type                    |
++------+-------------------------+
+| item | struct<                 |
+|      |   name:string,          |
+|      |   facts:map<string,int> |
+|      | >                       |
+| pos  | bigint                  |
++------+-------------------------+
+
+DESCRIBE map_demo.mountains.item.facts;
++-------+--------+
+| name  | type   |
++-------+--------+
+| key   | string |
+| value | int    |
++-------+--------+
+
+
+        The following example shows a table that uses a variety of data types for the MAP
+key field. Typically, you use BIGINT or STRING to use
+        numeric or character-based keys without worrying about exceeding any size or length constraints.
+      CREATE TABLE map_demo_obscure
+(
+  id BIGINT,
+  m1 MAP <INT, INT>,
+  m2 MAP <SMALLINT, INT>,
+  m3 MAP <TINYINT, INT>,
+  m4 MAP <TIMESTAMP, INT>,
+  m5 MAP <BOOLEAN, INT>,
+  m6 MAP <CHAR(5), INT>,
+  m7 MAP <VARCHAR(25), INT>,
+  m8 MAP <FLOAT, INT>,
+  m9 MAP <DOUBLE, INT>,
+  m10 MAP <DECIMAL(12,2), INT>
+)
+STORED AS PARQUET;
+
+CREATE TABLE celebrities (name STRING, birth_year MAP < STRING, SMALLINT >) STORED AS PARQUET;
+-- A typical row might represent values with 2 different birth years, such as:
+-- ("Joe Movie Star", { "real": 1972, "claimed": 1977 })
+
+CREATE TABLE countries (name STRING, famous_leaders MAP < INT, STRING >) STORED AS PARQUET;
+-- A typical row might represent values with different leaders, with key values corresponding to their numeric sequence, such as:
+-- ("United States", { 1: "George Washington", 3: "Thomas Jefferson", 16: "Abraham Lincoln" })
+
+CREATE TABLE airlines (name STRING, special_meals MAP < STRING, MAP < STRING, STRING > >) STORED AS PARQUET;
+-- A typical row might represent values with multiple kinds of meals, each with several components:
+-- ("Elegant Airlines",
+--   {
+--     "vegetarian": { "breakfast": "pancakes", "snack": "cookies", "dinner": "rice pilaf" },
+--     "gluten free": { "breakfast": "oatmeal", "snack": "fruit", "dinner": "chicken" }
+--   } )
+
+Querying MAPs with SELECT statement
+You can use a SELECT statement to run queries on the keys and values of maps. However, you
+        cannot have mixed complex types in the select list such as collections (arrays or maps) in
+        structs or structs in collections. Also sorting is not supported if the select list contains
+        collection columns.
+When you query the MAP data type using a SELECT statement, it returns a JSON
+        string. MAP keys can be non-string types but JSON objects can only have string keys.
+        Therefore when a SELECT statement returns a MAP with integer keys, the resulting JSON is
+        technically invalid.
+For example, in Impala the following two maps are not the same: 
+{1: "a", 2: "b"}
+{"1": "a", "2": "b"}
+
+The first map has INT keys, the second has STRING keys. Only the second one is valid
+        json.
+Examples of using MAPs in the SELECT list
+---- QUERY
+select id, int_map from complextypestbl
+---- RESULTS
+1,'{"k1":1,"k2":100}'
+2,'{"k1":2,"k2":NULL}'
+3,'{}'
+4,'{}'
+5,'{}'
+6,'NULL'
+7,'{"k1":NULL,"k3":NULL}'
+8,'{"k1":-1}'
+---- TYPES
+bigint,string    
+---- QUERY
+select id, int_map from complextypestbl where id=1
+---- RESULTS
+1,'{"k1":1,"k2":100}'
+---- TYPES
+bigint,string   
+---- QUERY
+select id, int_map, int_map_array from complextypestbl
+---- RESULTS
+1,'{"k1":1,"k2":100}','[{"k1":1}]'
+2,'{"k1":2,"k2":NULL}','[{"k3":NULL,"k1":1},NULL,{}]'
+3,'{}','[NULL,NULL]'
+4,'{}','[]'
+5,'{}','NULL'
+6,'NULL','NULL'
+7,'{"k1":NULL,"k3":NULL}','NULL'
+8,'{"k1":-1}','[{},{"k1":1},{},{}]'
+---- TYPES
+bigint,string,string
+---- QUERY
+select id, int_map from complextypestbl union all select id, int_map from complextypestbl
+---- RESULTS
+1,'{"k1":1,"k2":100}'
+2,'{"k1":2,"k2":NULL}'
+3,'{}'
+4,'{}'
+5,'{}'
+6,'NULL'
+7,'{"k1":NULL,"k3":NULL}'
+8,'{"k1":-1}'
+1,'{"k1":1,"k2":100}'
+2,'{"k1":2,"k2":NULL}'
+3,'{}'
+4,'{}'
+5,'{}'
+6,'NULL'
+7,'{"k1":NULL,"k3":NULL}'
+8,'{"k1":-1}'
+---- TYPES
+bigint,string
+
+
+
+Parent topic: Impala SQL data types

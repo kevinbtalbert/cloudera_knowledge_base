@@ -1,0 +1,183 @@
+Partition Pruning for QueriesCloudera Docs
+Partition Pruning for Queries
+Partition pruning refers to the mechanism where a query can skip
+    reading the data files corresponding to one or more partitions. 
+ If you can arrange for queries to prune large numbers of unnecessary
+      partitions from the query execution plan, the queries use fewer resources
+      and are thus proportionally faster and more scalable. 
+ For example, if a table is partitioned by columns YEAR,
+        MONTH, and DAY, then
+        WHERE clauses such as WHERE year =
+        2013, WHERE year < 2010, or WHERE
+        year BETWEEN 1995 AND 1998 allow Impala to skip the data files
+      in all partitions outside the specified range. Likewise, WHERE
+        year = 2013 AND month BETWEEN 1 AND 3 could prune even more
+      partitions, reading the data files for only a portion of one year. 
+ If a view applies to a partitioned table, any partition pruning
+      considers the clauses on both the original query and any additional
+        WHERE predicates in the query that refers to the
+      view.
+In queries involving both analytic functions and partitioned tables,
+      partition pruning only occurs for columns named in the PARTITION
+        BY clause of the analytic function call. For example, if an
+      analytic function query has a clause such as WHERE
+        year=2016, the way to make the query prune all other
+        YEAR partitions is to include PARTITION BY
+        year in the analytic function call; for example, OVER
+        (PARTITION BY year,other_columns
+other_analytic_clauses). 
+Checking if Partition Pruning Happens for a Query
+ To check the effectiveness of partition pruning for a query, check the
+          EXPLAIN output for the query before running it. For
+        example, this example shows a table with 3 partitions, where the query
+        only reads 1 of them. The notation #partitions=1/3 in
+        the EXPLAIN plan confirms that Impala can do the
+        appropriate partition pruning. 
+[localhost:21000] > INSERT INTO census PARTITION (year=2010) VALUES ('Smith'),('Jones');
+[localhost:21000] > INSERT INTO census PARTITION (year=2011) VALUES ('Smith'),('Jones'),('Doe');
+[localhost:21000] > INSERT INTO census PARTITION (year=2012) VALUES ('Smith'),('Doe');
+[localhost:21000] > EXPLAIN select name from census where year=2010;
++------------------------------------------------------------------+
+| Explain String                                                   |
++------------------------------------------------------------------+
+| PLAN FRAGMENT 1                                                  |
+|   PARTITION: RANDOM                                              |
+|                                                                  |
+|   STREAM DATA SINK                                               |
+|     EXCHANGE ID: 1                                               |
+|     UNPARTITIONED                                                |
+|                                                                  |
+|   0:SCAN HDFS                                                    |
+|      table=predicate_propagation.census #partitions=1/3 size=12B |
++------------------------------------------------------------------+
+ For a report of the volume of data that was actually read and
+        processed at each stage of the query, check the output of the
+          SUMMARY command immediately after running the query.
+        For a more detailed analysis, look at the output of the
+          PROFILE command; it includes this same summary report
+        near the start of the profile output. 
+
+Predicate Propagation
+Impala can do partition pruning in cases where the partition key column
+        is not directly compared to a constant. Using the predicate propagation
+        technique, Impala applies the transitive property to other parts of the
+          WHERE clause. 
+In this example, the census table includes another column indicating
+        when the data was collected, which happens in 10-year intervals. Even
+        though the query does not compare the partition key column
+          (YEAR) to a constant value, Impala can deduce that
+        only the partition YEAR=2010 is required, and again
+        only reads 1 out of 3 partitions. 
+[localhost:21000] > CREATE TABLE census (name STRING, census_year INT) PARTITIONED BY (year INT);
+[localhost:21000] > INSERT INTO census PARTITION (year=2010) VALUES  ('Smith',2010),('Jones',2010);
+[localhost:21000] > INSERT INTO census PARTITION (year=2011) VALUES  ('Smith',2020),('Jones',2020),('Doe',2020);
+[localhost:21000] > INSERT INTO census PARTITION (year=2012) VALUES  ('Smith',2020),('Doe',2020);
+[localhost:21000] > 
+[localhost:21000] > EXPLAIN select name from census where year = census_year and census_year=2010;
++------------------------------------------------------------------+
+| Explain String                                                   |
++------------------------------------------------------------------+
+| PLAN FRAGMENT 1                                                  |
+|   PARTITION: RANDOM                                              |
+|                                                                  |
+|   STREAM DATA SINK                                               |
+|     EXCHANGE ID: 1                                               |
+|     UNPARTITIONED                                                |
+|                                                                  |
+|   0:SCAN HDFS                                                    |
+|      table=predicate_propagation.census #partitions=1/3 size=22B |
+|      predicates: census_year = 2010, year = census_year          |
++------------------------------------------------------------------+
+
+
+Dynamic Partition Pruning
+ Impala supports two types of partition pruning.
+
+Static partition pruning: The conditions in the
+            WHERE clause are analyzed to determine in advance
+          which partitions can be safely skipped.
+Dynamic partition pruning: Information about the
+          partitions is collected during the query execution, and Impala prunes
+          unnecessary partitions. The information is not available in advance
+          before runtime. 
+
+ For example, if partition key columns are compared to literal values
+        in a WHERE clause, Impala can perform static partition
+        pruning during the planning phase to only read the relevant partitions: 
+
+-- The query only needs to read 3 partitions whose key values are known ahead of time.
+-- That's static partition pruning.
+SELECT COUNT(*) FROM sales_table WHERE year IN (2005, 2010, 2015);
+
+ Dynamic partition pruning involves using information only available at
+        run time, such as the result of a subquery. The following example shows
+        a simple dynamic partition pruning. 
+
+CREATE TABLE yy (s STRING) PARTITIONED BY (year INT);
+INSERT INTO yy PARTITION (year) VALUES ('1999', 1999), ('2000', 2000),
+  ('2001', 2001), ('2010', 2010), ('2018', 2018);
+COMPUTE STATS yy;
+
+CREATE TABLE yy2 (s STRING, year INT);
+INSERT INTO yy2 VALUES ('1999', 1999), ('2000', 2000), ('2001', 2001);
+COMPUTE STATS yy2;
+
+-- The following query reads an unknown number of partitions, whose key values
+-- are only known at run time. The runtime filters line shows the
+-- information used in query fragment 02 to decide which partitions to skip.
+
+EXPLAIN SELECT s FROM yy WHERE year IN (SELECT year FROM yy2);
++--------------------------------------------------------------------------+
+| PLAN-ROOT SINK                                                           |
+| |                                                                        |
+| 04:EXCHANGE [UNPARTITIONED]                                              |
+| |                                                                        |
+| 02:HASH JOIN [LEFT SEMI JOIN, BROADCAST]                                 |
+| |  hash predicates: year = year                                          |
+| |  runtime filters: RF000 <- year                                   |
+| |                                                                        |
+| |--03:EXCHANGE [BROADCAST]                                               |
+| |  |                                                                     |
+| |  01:SCAN HDFS [default.yy2]                                            |
+| |     partitions=1/1 files=1 size=620B                                   |
+| |                                                                        |
+| 00:SCAN HDFS [default.yy]                                                |
+|    partitions=5/5 files=5 size=1.71KB                               |
+|    runtime filters: RF000 -> year                                        |
++--------------------------------------------------------------------------+
+
+SELECT s FROM yy WHERE year IN (SELECT year FROM yy2); -- Returns 3 rows from yy
+PROFILE;
+
+ In the above example, Impala evaluates the subquery, sends the
+        subquery results to all Impala nodes participating in the query, and
+        then each impalad daemon uses the dynamic partition
+        pruning optimization to read only the partitions with the relevant key
+        values. 
+ The output query plan from the EXPLAIN statement
+        shows that runtime filters are enabled. The plan also shows that it
+        expects to read all 5 partitions of the yy table,
+        indicating that static partition pruning will not happen. 
+ The Filter summary in the PROFILE output shows that
+        the scan node filtered out based on a runtime filter of dynamic
+        partition pruning. 
+Filter 0 (1.00 MB):
+ - Files processed: 3
+ - Files rejected: 1 (1)
+ - Files total: 3 (3)
+
+ Dynamic partition pruning is especially effective for queries
+        involving joins of several large partitioned tables. Evaluating the
+          ON clauses of the join predicates might normally
+        require reading data from all partitions of certain tables. If the
+          WHERE clauses of the query refer to the partition key
+        columns, Impala can now often skip reading many of the partitions while
+        evaluating the ON clauses. The dynamic partition
+        pruning optimization reduces the amount of I/O and the amount of
+        intermediate data stored and transmitted across the network during the
+        query. 
+ Dynamic partition pruning is part of the runtime filtering feature,
+        which applies to other kinds of queries in addition to queries against
+        partitioned tables.
+
+

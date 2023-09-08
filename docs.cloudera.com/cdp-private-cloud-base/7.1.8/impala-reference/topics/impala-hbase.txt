@@ -1,0 +1,265 @@
+Impala with HBaseCloudera Docs
+Impala with HBase
+You can use Impala to query data residing in HBase tables, a
+    key-value data store where the value consists of multiple fields. The key is
+    mapped to one column in the Impala table, and the various fields of the
+    value are mapped to the other columns in the Impala table.
+HBase tables are the best suited in Impala in the following use
+      cases.
+
+ Storing rapidly incrementing counters, such as how many times a web
+        page has been viewed, or on a social network, how many connections a
+        user has or how many votes a post received.  The append-only storage
+          mechanism of HBase is efficient for writing each change to disk, and a
+          query always returns the latest value. An application could query
+          specific totals like these from HBase, and combine the results with a
+          broader set of data queried from Impala. 
+
+ Storing very wide tables in HBase. 
+Wide tables have many columns, possibly thousands, typically
+          recording many attributes for an important subject such as a user of
+          an online service. These tables are also often sparse, that is, most
+          of the columns values are NULL, 0,
+            false, empty string, or other blank or placeholder
+          value. (For example, any particular web site user might have never
+          used some site feature, filled in a certain field in their profile,
+          visited a particular part of the site, and so on.) A typical query
+          against this kind of table is to look up a single row to retrieve all
+          the information about a specific subject, rather than summing,
+          averaging, or filtering millions of rows as in typical Impala-managed
+          tables. 
+
+
+ HBase works out of the box with Impala. There is no mandatory
+      configuration needed to use these two components together. 
+ For efficient queries, use WHERE clauses to find a
+      single key value or a range of key values wherever practical, by testing
+      the Impala column corresponding to the HBase row key. Avoid queries that
+      do full-table scans, which are efficient for regular Impala tables but
+      inefficient in HBase.
+ To work with an HBase table from Impala, ensure that the
+        impala user has read/write privileges for the HBase
+      table, using the GRANT command in the HBase shell. 
+Creating HBase Tables for Impala
+You create the tables on the Impala side using the Hive shell, because
+        the Impala CREATE TABLE statement currently does not
+        support custom SerDes and some other syntax needed for HBase tables.
+ You create the new table as an HBase table using the
+              STORED BY
+              'org.apache.hadoop.hive.hbase.HBaseStorageHandler' clause
+            on the Hive CREATE TABLE statement. 
+ You map these specially created tables to corresponding tables
+            that exist in HBase, with the clause
+              TBLPROPERTIES("hbase.table.name" =
+                "table_name_in_hbase") on the Hive
+              CREATE TABLE statement. 
+ You define the column corresponding to the HBase row key as a
+            string with the #string keyword, or map it to a
+              STRING column. 
+After creating a new table through Hive, issue the
+              INVALIDATE METADATA statement in Impala to make
+            Impala aware of the new table.
+
+Because Impala and Hive share the same Metastore database, once you
+        create the table in Hive, you can query or insert into it through
+        Impala.
+
+Supported Data Types for HBase Columns
+ HBase does not enforce any typing for the key or value fields. All the
+        type enforcement is done on the Impala side. 
+
+HBase row key
+When creating the table through the Hive shell, use the
+              STRING data type for the column that corresponds
+            to the HBase row key.
+For best performance of Impala queries against HBase tables, most
+            queries will perform comparisons in the WHERE
+            clause against the column that corresponds to the HBase row
+            key.
+ Impala can translate predicates (through operators such as
+              =, <, and
+              BETWEEN) against this column into fast lookups in
+            HBase, but this optimization (predicate pushdown) only works
+            when that column is defined as STRING.
+HBase numeric column
+Define HBase numeric columns as the binary data type in Hive
+              CREATE TABLE statement using the
+              #binary (#b) keyword. 
+Defining numeric columns as binary can reduce the overall data
+            volume in the HBase tables.
+
+ Impala also supports reading and writing to columns that are defined
+        in the Hive CREATE TABLE statement using binary data
+        types , represented in the Hive table definition using the
+          #binary keyword, often abbreviated as
+          #b. 
+
+Loading Data into HBase Tables
+ The Impala INSERT statement supports HBase tables.
+        The INSERT ... VALUES syntax is ideally suited to HBase
+        tables, because inserting a single row is an efficient operation for an
+        HBase table. 
+ When you use the INSERT ... SELECT syntax, the result
+        in the HBase table could be fewer rows than you expect. HBase only
+        stores the most recent version of each unique row key, so if an
+          INSERT ... SELECT statement copies over multiple rows
+        containing the same value for the key column, subsequent queries will
+        only return one row with each key column value.
+ Successive INSERT statements using the same value for
+        the key column achieves the same result as UPDATE.
+
+Examples of Querying HBase Tables from Impala
+ The following examples create an HBase table with four column
+        families, create a corresponding table through Hive, then insert and
+        query the table through Impala. 
+ In HBase, create a table. Table names are quoted in the
+          CREATE statement in HBase.
+hbase(main):001:0> CREATE 'hbasealltypessmall', 'boolsCF', 'intsCF', 'floatsCF', 'stringsCF'
+
+ Issue the following CREATE TABLE statement in the
+        Hive shell. 
+ This example creates an external table mapped to the HBase table,
+        usable by both Impala and Hive. It is defined as an external table so
+        that when dropped by Impala or Hive, the original HBase table is not
+        touched at all. 
+ The WITH SERDEPROPERTIES clause specifies that the
+        first column (ID) represents the row key, and maps the
+        remaining columns of the SQL table to HBase column families. The mapping
+        relies on the ordinal order of the columns in the table, not the column
+        names in the CREATE TABLE statement. The first column
+        is defined to be the lookup key; the STRING data type
+        produces the fastest key-based lookups for HBase tables. 
+note For Impala with HBase tables, the most important aspect to ensure
+        good performance is to use a STRING column as the row
+        key, as shown in this example. 
+hive> CREATE EXTERNAL TABLE hbasestringids (
+    >   id string,
+    >   bool_col boolean,
+    >   tinyint_col tinyint,
+    >   smallint_col smallint,
+    >   int_col int,
+    >   bigint_col bigint,
+    >   float_col float,
+    >   double_col double,
+    >   date_string_col string,
+    >   string_col string,
+    >   timestamp_col timestamp)
+    > STORED BY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
+    > WITH SERDEPROPERTIES (
+    >   "hbase.columns.mapping" =
+    >   ":key,boolsCF:bool_col,intsCF:tinyint_col,intsCF:smallint_col,intsCF:int_col,intsCF:\
+    >   bigint_col,floatsCF:float_col,floatsCF:double_col,stringsCF:date_string_col,\
+    >   stringsCF:string_col,stringsCF:timestamp_col"
+    > )
+    > TBLPROPERTIES("hbase.table.name" = "hbasealltypessmall");
+
+ Once you have established the mapping to an HBase table, you can issue
+        DML statements and queries from Impala. The following example shows a
+        series of INSERT statements followed by a query. The
+        ideal kind of query from a performance standpoint retrieves a row from
+        the table based on a row key mapped to a string column. 
+The INVALIDATE METADATA  statement makes the table
+        created through Hive visible to Impala. 
+[impala] > INVALIDATE METADATA hbasestringids;
+
+[impala] > INSERT INTO hbasestringids VALUES ('0001',true,3.141,9.94,1234567,32768,4000,76,'2014-12-31','Hello world',NOW());
+
+[impala] > IMSERT INTO hbasestringids VALUES ('0002',false,2.004,6.196,1500,8000,129,127,'2014-01-01','Foo bar',NOW());
+
+[impala] > SELECT * FROM hbasestringids WHERE id = '0001';
++------+----------+------------+-------------------+------------+---------+--------------+-------------+-----------------+-------------+-------------------------------+
+| id   | bool_col | double_col | float_col         | bigint_col | int_col | smallint_col | tinyint_col | date_string_col | string_col  | timestamp_col                 |
++------+----------+------------+-------------------+------------+---------+--------------+-------------+-----------------+-------------+-------------------------------+
+| 0001 | true     | 3.141      | 9.939999580383301 | 1234567    | 32768   | 4000         | 76          | 2014-12-31      | Hello world | 2015-02-10 16:36:59.764838000 |
++------+----------+------------+-------------------+------------+---------+--------------+-------------+-----------------+-------------+-------------------------------+
+
+
+Performance Considerations for the Impala-HBase Integration
+ Impala uses the HBase client API via Java Native Interface (JNI) to
+        query data stored in HBase. This querying does not read HFiles directly.
+        The extra communication overhead makes it important to choose what data
+        to store in HBase or in HDFS, and construct efficient queries that can
+        retrieve the HBase data efficiently: 
+
+ Use HBase table for queries that return a single row or a small
+          range of rows, not queries that perform a full table scan of an entire
+          table. (If a query has a HBase table and no WHERE
+          clause referencing that table, that is a strong indicator that it is
+          an inefficient query for an HBase table.) 
+ HBase may offer acceptable performance for storing small dimension
+          tables where the table is small enough that executing a full table
+          scan for every query is efficient enough. However, Kudu is almost
+          always a superior alternative for storing dimension tables. HDFS
+          tables are also appropriate for dimension tables that do not need to
+          support update queries, delete queries or insert queries with small
+          numbers of rows. 
+
+ Query predicates are applied to row keys as start and stop keys,
+        thereby limiting the scope of a particular lookup. If row keys are not
+        mapped to string columns, then ordering is typically incorrect and
+        comparison operations do not work. For example, if row keys are not
+        mapped to string columns, evaluating for greater than (>) or less
+        than (<) cannot be completed. 
+ Predicates on non-key columns can be sent to HBase to scan as
+          SingleColumnValueFilters, providing some performance
+        gains. In such a case, HBase returns fewer rows than if those same
+        predicates were applied using Impala. While there is some improvement,
+        it is not as great when start and stop rows are used. This is because
+        the number of rows that HBase must examine is not limited as it is when
+        start and stop rows are used. As long as the row key predicate only
+        applies to a single row, HBase will locate and return that row.
+        Conversely, if a non-key predicate is used, even if it only applies to a
+        single row, HBase must still scan the entire table to find the correct
+        result. 
+
+Limitations and Restrictions of the Impala and HBase
+        Integration
+ The Impala integration with HBase has the following limitations and
+        restrictions, some inherited from the integration between HBase and
+        Hive, and some unique to Impala: 
+
+
+ If you issue a DROP TABLE for an internal
+            (Impala-managed) table that is mapped to an HBase table, the
+            underlying table is not removed in HBase. The Hive DROP
+              TABLE statement removes the HBase table in this case.
+          
+
+
+ The INSERT OVERWRITE statement is not available
+            for HBase tables. You can insert new data, or modify an existing row
+            by inserting a new row with the same key value, but not replace the
+            entire contents of the table. You can do an INSERT
+              OVERWRITE in Hive if you need this capability. 
+
+
+ If you issue a CREATE TABLE LIKE statement for a
+            table mapped to an HBase table, the new table is also an HBase
+            table, but inherits the same underlying HBase table name as the
+            original. The new table is effectively an alias for the old one, not
+            a new table with identical column structure. Avoid using
+              CREATE TABLE LIKE for HBase tables, to avoid any
+            confusion. 
+
+
+ Copying data into an HBase table using the Impala INSERT
+              ... SELECT syntax might produce fewer new rows than are
+            in the query result set. If the result set contains multiple rows
+            with the same value for the key column, each row supercedes any
+            previous rows with the same key value. Because the order of the
+            inserted rows is unpredictable, you cannot rely on this technique to
+            preserve the latest version of a particular key value. 
+
+
+ The LOAD DATA statement
+            cannot be used with HBase tables. 
+
+
+ The
+              TABLESAMPLE clause of the SELECT
+            statement does not suppport HBase tables. 
+
+
+
+
+Parent topic: Storage Systems Supports

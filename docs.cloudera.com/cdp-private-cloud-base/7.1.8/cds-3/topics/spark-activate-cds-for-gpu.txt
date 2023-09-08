@@ -1,0 +1,80 @@
+Enabling CDS 3.3 with GPU SupportCloudera Docs
+Enabling CDS 3.3 with GPU Support
+To activate the CDS 3.3 with GPU Support feature on suitable
+  hardware, you need to create a Yarn role group and optionally make configuration changes to enable
+  the NVIDIA RAPIDS Shuffle Manager.
+
+Set up a Yarn role group to enable GPU usage
+Create a Yarn role group so that you can selectively enable GPU usage for nodes with
+        GPUs within your cluster.
+GPU scheduling and isolation must be
+            configured.
+Enabling GPU on YARN through the Enable GPU Usage tickbox
+            operates on cluster-level. Role groups in Yarn enable you to apply settings selectively,
+            to a subset of nodes within your cluster.Role groups are configured on the service
+                level. 
+
+In Cloudera Manager navigate to Yarn > Instances.
+
+Create a role group where you can add nodes with GPUs.
+For more information, see Creating a Role Group.
+
+Move role instances with GPUs to the group you created. 
+On the Configuration tab select the source role group
+                    with the hosts you want to move, then click Move Selected Instances To Group and select the role group you created.
+You may need to restart the cluster.
+
+Enable GPU usage for the role group.
+
+
+On the Configuration tab select Categories >  GPU Management.
+
+
+Under GPU Usage click Edit Individual
+                                Values and select the role group you created.
+
+
+Click Save Changes.
+
+
+
+
+
+Configure NVIDIA RAPIDS Shuffle Manager
+The NVIDIA RAPIDS Shuffle Manager is a custom ShuffleManager for Apache Spark that
+        allows fast shuffle block transfers between GPUs in the same host (over PCIe or NVLink) and
+        over the network to remote hosts (over RoCE or Infiniband).
+
+NVIDIA RAPIDS Shuffle Manager has been shown to accelerate workloads where shuffle is
+                the bottleneck when using the RAPIDS accelerator for Apache Spark. It accomplishes
+                this by using a GPU shuffle cache for fast shuffle writes when shuffle blocks fit in
+                GPU memory, avoiding the cost of writes to host using the built-in Spark Shuffle, a
+                spill framework that will spill to host memory and disk on demand, and Unified Communication
+                    X (UCX) as its transport for fast network and peer-to-peer (GPU-to-GPU)
+                transfers.
+CDS 3.3 with GPU Support has built in support for UCX, no
+                separate installation is required.
+Cloudera and NVIDIA recommend using the RAPIDS shuffle manager for clusters with
+                Infiniband or RoCE networking.
+
+
+Validate your UCX environment following the instructions provided in the NVIDIA
+                        spark-rapids documentation.
+
+Before running applications with the RAPIDS Shuffle Manager, make the following
+                    configuration changes:
+
+--conf "spark.shuffle.service.enabled=false" \
+--conf "spark.dynamicAllocation.enabled=false"
+
+Optional: 
+You are recommended to make the following UCX settings:
+spark.executorEnv.UCX_TLS=cuda_copy,cuda_ipc,rc,tcp
+spark.executorEnv.UCX_RNDV_SCHEME=put_zcopy
+spark.executorEnv.UCX_MAX_RNDV_RAILS=1
+spark.executorEnv.UCX_IB_RX_QUEUE_LEN=1024For more information on
+                    environment variables, see the NVIDIA spark-rapids documentation.noteRunning a job with the
+                            --rapids-shuffle=true flag does not affect these
+                        optional settings. You need to set them manually.
+
+

@@ -1,0 +1,93 @@
+Known Issues in Apache HBaseCloudera Docs
+Known Issues in Apache HBase
+This topic describes known issues and workarounds for using HBase in this release of
+    Cloudera Runtime.
+
+
+In the affected CDP releases (7.1.7.1056+, 7.1.7 SP2+, 7.1.8
+          CHF1+, 7.2.16.0+, 7.2.15.2+, 7.2.14.3+), Hbase Regionserver performance is degraded by
+          aggressive GC pause and memory contention from the ColumnFamilyCache.
+Disable ColumnFamilyCache Cloudera Manager -> HBase
+          -> HBase Service Advanced Configuration Snippet (Safety Valve) for
+          ranger-hbase-security.xml xasecure.hbase.columnfamilies.cache.maxsize=0
+
+CDPD-44402: If you are running CDP 7.1.8 and >7.1.7.1056 SP1 releases, there is an
+          increased heap usage and GC pressure in the HBase regionserver due to the Ranger
+          ColumnFamily Cache feature. This problem is particularly evident when HBase tables that
+          contain numerous columns, leading to high heap utilization and potentially causing the
+          Regionserver to fail. 
+Workaround: Disable the Ranger ColumnFamily Cache in Cloudera Manager by setting
+            xasecure.hbase.columnfamilies.cache.maxsize to
+            0 in ranger-hbase-security.xml. This cache
+          can be safely turned off, as it reverts to the behavior seen in version 7.1.7 without any
+          impact.
+IntegrationTestReplication fails if replication does not finish before
+          the verify phase begins
+
+During IntegrationTestReplication, if the verify
+            phase starts before the replication phase finishes, the test will fail
+            because the target cluster does not contain all of the data. If the HBase services in
+            the target cluster does not have enough memory, long garbage-collection pauses might
+            occur.
+
+Workaround: Use the -t flag to set the timeout value before
+          starting verification.
+ HDFS encryption with HBase
+
+Cloudera has tested the performance impact of using HDFS encryption with HBase. The
+            overall overhead of HDFS encryption on HBase performance is in the range of 3 to 4% for
+            both read and update workloads. Scan performance has not been thoroughly tested. 
+
+Workaround: N/A
+AccessController postOperation problems in asynchronous operations
+
+When security and Access Control are enabled, the following problems occur:
+If a Delete Table fails for a reason other than missing
+                permissions, the access rights are removed but the table may still exist and may be
+                used again.
+If hbaseAdmin.modifyTable() is used to delete column families,
+                the rights are not removed from the Access Control List (ACL) table. The
+                  portOperation is implemented only for
+                  postDeleteColumn().
+If Create Table fails, full rights for that table persist for the
+                user who attempted to create it. If another user later succeeds in creating the
+                table, the user who made the failed attempt still has the full rights.
+
+
+Workaround: N/A
+Apache Issue:
+HBASE-6992
+
+
+Snappy compression with /tmp directory mounted with noexec
+          option
+
+Using the HBase client applications such as hbase hfile on the cluster
+            with Snappy compression could result in UnsatisfiedLinkError. 
+
+Workaround: Add
+            -Dorg.xerial.snappy.tempdir=/var/hbase/snappy-tempdir to
+            Client Java Configuration Options in Cloudera Manager that points
+          to a directory where exec option is allowed.
+
+
+HBase shutdown can lead to inconsistencies in META
+
+Cloudera Manager uses an incorrect shutdown command. This prevents graceful shutdown of
+            the HBase service and forces Cloudera Manager to kill the processes instead. It can lead
+            to inconsistencies in Meta.
+
+Workaround: Run the following command instead of
+          shutting down the HBase service using Cloudera
+            Manager.hbase master stop --shutDownClusterThe
+            command output must end with Closing master protocol: MasterService
+            phrase. You can verify the command execution by checking the master logs. The log must
+            contain Cluster shutdown requested of master=xxx and the closing of
+            regions. Upon successful execution, the RegionServers start shutting down.noteThe command does not stop the REST Server and the
+              Thrift Server role instances. You can safely shut down them from Cloudera
+            Manager later.If you find any inconsistencies, please contact Cloudera
+            Support.
+
+
+
+Parent topic: Known issues in Cloudera Runtime 7.1.8

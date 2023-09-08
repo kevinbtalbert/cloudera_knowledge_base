@@ -1,0 +1,83 @@
+Preparing Atlas for upgradeCloudera Docs
+Preparing Atlas for upgrade
+The Atlas migration exporter utility is used for exporting data from Atlas from HDP
+    2.6.5.x. You must import this data into the CDP Private Cloud Base version of Atlas.
+To estimate the duration for the export operation, use one of the following methods
+      to determine the number of entities in Atlas: The time the tool takes to export the Atlas
+      metadata depends on the number of entities and your cluster configuration.
+Within Solr, check the number of entities in the vertex_index collection.
+Run the following Atlas metrics REST API query, with your values for user, password, and
+          Atlas port:
+          curl -g -X GET -u admin:admin -H "Content-Type: application/json"  -H"Cache-Control: no-cache" "http://<atlas_server>:21000/api/atlas/admin/metrics" 
+noteEstimated duration for export: Two million entities per hour, for a node with a 8
+        GB RAM quad-core processor with both the Atlas and Solr servers on the same node.
+If your environment is kerberos enabled, perform the following steps. and proceed to
+      exporting Atlas data.
+
+noteIf your environment is not kerberos enabled, then skip the steps below
+        and proceed to exporting Atlas data.
+
+Switch identity to the Atlas user. $ su - atlas
+
+List the Atlas keytab to find the Atlas Kerberos
+            Service Principal
+          value.
+$ klist -kt /etc/security/keytabs/atlas.service.keytab
+Keytab name: FILE:/etc/security/keytabs/atlas.service.keytab
+KVNO Timestamp           Principal
+---- ------------------- ------------------------------------------------------
+ 1 11/28/2018 06:40:24 atlas/finance.acme.trade@ACME.TRADE
+ 1 11/28/2018 06:40:24 atlas/finance.acme.trade@ACME.TRADE
+
+Initialize the Atlas keytab and the Atlas Kerberos
+            Service Principal value.
+          $ kinit -kt /etc/security/keytabs/atlas.service.keytab atlas/finance.acme.trade@ACME.TRADE
+Verify you have a valid
+          ticket.$ klist
+Ticket cache: FILE:/tmp/krb5cc_1005
+Default principal: atlas/finance.acme.trade@ACME.TRADE
+Valid starting       Expires              Service principal
+11/29/2020 22:52:56  11/30/2020 22:52:56  krbtgt/ACME.TRADE@ACME.TRADE
+    renew until 12/06/2020 22:52:56
+
+
+Export Atlas data:
+The Atlas migration exporter utility is used for migrating Atlas from HDP 2.6.5.x to HDP
+
+        7.1.x:
+In the Ambari Web UI, click Atlas.
+Select Actions>Stop.
+Ensure that HBase is running. If it is not running, in the
+            Ambari Web UI, click HBase
+Select Actions>Start.
+SSH to the host where your Atlas Metadata Server is installed.
+Download from the location: Atlas migration exporter.
+Create this directory mkdir /usr/hdp/2.6.<current
+            version>/atlas/tools/migration-exporter/
+Copy the contents to /usr/hdp/2.6.<current
+            version>/atlas/tools/migration-exporter/
+Modify the permissions using chown -R atlas:atlas <directory
+          above>
+Execute the tool from the location above. atlas_migration.py -d <output
+            directory>. For example, /usr/hdp/2.6.<current
+            version>/atlas/tools/migration-exporter/atlas_migration.py -d
+            /var/lib/atlas-dataFor example, this command exports the metadata to an
+            output directory called atlas_metadata.
+python
+              /usr/hdp/current/atlas/tools/migration-exporter/atlas_migration_export.py -d
+              ./atlas_metadata
+noteWhile running the Atlas export migration tool, the tool prevents the use of Atlas,
+              and blocks all REST APIs and Atlas hook notification processing. The time the tool
+              takes to export the Atlas metadata depends on the number of entities and your cluster
+              configuration.
+
+To display the export status, use this command: tail -f
+            /var/log/atlas/atlas-migration-exporter.log.
+noteThe export task creates a file named atlas-migration-data.json
+              and atlas-migration-typesdef.json in the specified output directory
+              specified, which contains the exported Atlas entity data.  Preserve this output for
+              later steps to populate Atlas.
+
+
+
+Parent topic: Overview of the Migration of the Atlas and Infra Solr Data

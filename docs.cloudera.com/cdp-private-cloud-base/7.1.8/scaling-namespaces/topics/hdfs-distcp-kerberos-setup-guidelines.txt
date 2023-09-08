@@ -1,0 +1,97 @@
+Kerberos setup guidelines for Distcp between secure clustersCloudera Docs
+Kerberos setup guidelines for Distcp between secure clusters
+There are specific guidelines to consider while setting up Kerberos on secure CDP
+        clusters for successfully performing distcp between them.
+The guidelines mentioned here are only applicable for the following example
+                deployment:
+You have two clusters, each in a different Kerberos realm
+                        (SOURCE and DESTINATION in this
+                    example)
+You have data that needs to be copied from SOURCE to
+                        DESTINATION
+
+A Kerberos realm trust exists, either between SOURCE and
+                        DESTINATION (in either direction), or between both
+                        SOURCE and DESTINATION and a common third
+                    realm (such as an Active Directory domain). 
+
+If your environment matches the one described above, use the following table to configure
+            Kerberos delegation tokens on your cluster so that you can successfully
+                distcp across two secure clusters. Based on the direction of the
+            trust between the SOURCE and DESTINATION clusters, you
+            can use the mapreduce.job.hdfs-servers.token-renewal.exclude property
+            to instruct ResourceManagers on either cluster to skip or perform delegation token
+            renewal for NameNode hosts.
+noteYou must use the mapreduce.job.hdfs-servers.token-renewal.exclude
+            parameter if both clusters use the HDFS Transparent Encryption feature.
+
+
+Environment Type
+Kerberos Delegation Token Setting
+
+
+
+SOURCE trusts
+                                DESTINATION
+Distcp job runs on the DESTINATION cluster
+You do not need to set the
+                                mapreduce.job.hdfs-servers.token-renewal.exclude
+                            property. 
+
+
+Distcp job runs on the SOURCE cluster
+Set the
+                                mapreduce.job.hdfs-servers.token-renewal.exclude
+                            property to a comma-separated list of the hostnames of the NameNodes of
+                            the DESTINATION cluster. 
+
+
+DESTINATION trusts
+                                SOURCE
+Distcp job runs on the DESTINATION cluster
+Set the
+                                mapreduce.job.hdfs-servers.token-renewal.exclude
+                            property to a comma-separated list of the hostnames of the NameNodes of
+                            the SOURCE cluster.
+
+
+Distcp job runs on the SOURCE cluster
+You do not need to set the
+                                mapreduce.job.hdfs-servers.token-renewal.exclude
+                            property.
+
+
+Both SOURCE and DESTINATION trust
+                            each other
+Set the
+                                mapreduce.job.hdfs-servers.token-renewal.exclude
+                            property to a comma-separated list of the hostnames of the NameNodes of
+                            the DESTINATION cluster.
+
+
+Neither SOURCE nor DESTINATION
+                            trusts the other
+If a common realm is usable (such as
+                            Active Directory), set the
+                                mapreduce.job.hdfs-servers.token-renewal.exclude
+                            property to a comma-separated list of hostnames of the NameNodes of the
+                            cluster that is not running the distcp job. For example, if you
+                            are running the job on the DESTINATION cluster:
+kinit on any DESTINATION YARN
+                                    Gateway host using an AD account that can be used on both
+                                        SOURCE and DESTINATION. 
+Run the distcp job as the hadoop
+                                        user:$ hadoop distcp -Ddfs.namenode.kerberos.principal.pattern=*  \
+-Dmapreduce.job.hdfs-servers.token-renewal.exclude=SOURCE-nn-host1,SOURCE-nn-host2   \
+hdfs://source-nn-nameservice/source/path    \
+/destination/pathBy
+                                        default, the YARN ResourceManager renews tokens for
+                                        applications. The
+                                            mapreduce.job.hdfs-servers.token-renewal.exclude
+                                        property instructs ResourceManagers on either cluster to
+                                        skip delegation token renewal for NameNode hosts.
+
+
+
+
+Parent topic: Using DistCp to copy files

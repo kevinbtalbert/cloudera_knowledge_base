@@ -1,0 +1,125 @@
+Replacing Key Trustee Server CertificatesCloudera Docs
+Replacing Key Trustee Server Certificates
+Use the following procedure if you need to replace an existing certificate for the
+        Key Trustee Server. For example, you can use this procedure to replace the auto-generated
+        self-signed certificate with a CA-signed certificate, or to replace an expired
+        certificate.
+
+noteKey Trustee Server supports password-protected private keys, but not
+                password-protected certificates.
+
+
+After Generating a New Certificate, back up the original certificate and
+                    key files:
+
+sudo cp -r /var/lib/keytrustee/.keytrustee/.ssl /var/lib/keytrustee/.keytrustee/.ssl.bak
+
+
+(CA-Signed Certificates Only) Provide either the root or intermediate CA
+                    certificate:
+
+importantIf you have separate root CA and intermediate CA
+                        certificate files, then you must concatenate them into a single file. If you
+                        need to convert from a JKS with combined certificate and private key file to
+                        a PEM file and separate private key file, refer to How to Convert File
+                            Encodings (DER, JKS, PEM) for TLS/SSL Certificates and Keys. 
+sudo mv /path/to/rootca.pem /var/lib/keytrustee/.keytrustee/.ssl/ssl-cert-keytrustee-ca.pem
+
+
+Make sure that the certificate and key files are owned by the
+                        keytrustee user and group, with file permissions set to
+                        600:
+
+sudo chown keytrustee:keytrustee /path/to/new/certificate.pem /path/to/new/private_key.pem
+sudo chmod 600 /path/to/new/certificate.pem /path/to/new/private_key.pem
+
+
+Update the Key Trustee Server configuration with the location of the new
+                    certificate and key files:
+
+
+Using Cloudera Manager:
+Go to the Key Trustee Server service.
+Click the Configuration tab.
+Select Category > Security.
+Edit the following properties to specify the location of the new
+                                    certificate and key files. If the private keys are not password
+                                    protected, leave the password fields empty.
+Active Key Trustee Server TLS/SSL Server
+                                                Private Key File (PEM Format)
+Active Key Trustee Server TLS/SSL Server
+                                                Certificate File (PEM Format)
+Active Key Trustee Server TLS/SSL Private Key
+                                                Password
+Passive Key Trustee Server TLS/SSL Server
+                                                Private Key File (PEM Format)
+Passive Key Trustee Server TLS/SSL Server
+                                                Certificate File (PEM Format)
+Passive Key Trustee Server TLS/SSL Private
+                                                Key Password
+
+Enter a Reason for
+            change, and then click Save
+            Changes to commit the changes.
+
+Using the command line:
+Edit
+                                        /var/lib/keytrustee/.keytrustee/keytrustee.conf
+                                    on the active and passive Key Trustee Server hosts and modify
+                                    the SSL_CERTIFICATE and
+                                        SSL_PRIVATE_KEY parameters as
+                                        follows:    "SSL_CERTIFICATE": "/path/to/new/certificate.pem",
+    "SSL_PRIVATE_KEY": "/path/to/new/private_key.pem"If
+                                        the private key is password protected, add the following
+                                        entry:    "SSL_PRIVATE_KEY_PASSWORD_SCRIPT": "/path/to/password_script [arguments]"Replace
+                                            /path/to/password_script [arguments]
+                                        with the path to a script (and any necessary command
+                                        arguments) that returns the password for the private key
+                                        file. If you do not want to create a script, you can use a
+                                        simple command, such as echo -n
+                                                password. For
+                                        example:    "SSL_PRIVATE_KEY_PASSWORD_SCRIPT": "/bin/echo -n password"Keep
+                                        in mind that this method can expose the private key password
+                                        in plain text to anyone who can view the
+                                            /var/lib/keytrustee/.keytrustee/keytrustee.conf
+                                        file.
+
+
+
+
+Restart Key Trustee Server:
+
+
+Using Cloudera Manager: Restart the Key Trustee Server service (Key Trustee Server service > Actions > Restart).
+Using the Command Line: Restart the Key Trustee Server daemon:
+RHEL 6-compatible: $ sudo service keytrusteed
+                                        restart
+RHEL 7-compatible: $ sudo systemctl restart
+                                        keytrusteed
+
+
+
+
+If you are using Key HSM, update the Key Trustee Server and Key HSM
+                    configuration: 
+
+
+Run the keyhsm trust command, using the path to the
+                            new certificate:
+
+sudo keyhsm trust /path/to/new/key_trustee_server/cert
+
+
+
+Run the ktadmin keyhsm command, using the
+                                --client-certfile and
+                                --client-keyfile options to specify the location of
+                            the new certificate file and private key:
+
+sudo ktadmin keyhsm --server https://keyhsm01.example.com:9090 --client-certfile /path/to/new/key_trustee_server/cert --client-keyfile /path/to/new/key_trustee_server/private_key
+
+
+
+
+
+Related informationHow to Convert File Encodings (DER, JKS, PEM) for TLS/SSL Certificates and KeysParent topic: Managing Key Trustee Server Certificates

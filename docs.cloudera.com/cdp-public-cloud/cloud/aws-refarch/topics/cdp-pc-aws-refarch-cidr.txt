@@ -1,0 +1,424 @@
+Determining the CIDR rangeCloudera Docs
+Determining the CIDR range
+This topic covers options for determining the CIDR range for CDP Public Cloud for
+  AWS.
+When registering an AWS environment in CDP, you are asked to select a VPC and one or
+   more subnets. You have two options:
+
+CDP will create a new VPC and subnets.
+Select an existing VPC.
+
+In both cases, use this guide to calculate and verify the limits of the VPC and
+   subnets available in your AWS subscription to ensure that you have enough networking resources to
+   create clusters in CDP.
+
+Parent topic: Network architecture
+Option 1: CDP creates the VPCs and subnets
+If you would like CDP to create a new VPC, you will need to specify a /16 CIDR in IPv4
+  range that will be used to define the range of private IPs for VM instances provisioned into these
+  subnets. The default is 10.10.0.0/16.
+By default CDP creates 6 subnets (3 private and 3 public) and divides the address
+   space as follows:
+
+3 x /19 private subnets for FreeIPA, Data Lake, Data Hub, Data Warehouse, Machine
+    Learning, Data Engineering, DataFlow, Operational Database.
+3 x /24 public subnets reserved for future use.
+CDP creates an internet gateway for your VPC and deploys a NAT gateway in each
+    public subnet and configures it in the route table of each private subnet.
+All the resources created in the VPC are assigned with relevant tags (like
+    ‘kubernetes.io/role/internal-elb:1’ for private subnets and ‘kubernetes.io/role/elb:1’ for
+    public subnets).
+
+
+
+Option 2: Existing VPC and subnets
+If you would like to use an existing VPC, the subnet requirements vary based on the
+  services used. This section is a guide for calculating network requirements per
+  service.
+Subnets for Data Lake and Data Hub
+Both Data Lake and Data Hub share the same subnet, but due to Data Lake’s dependency on RDS,
+    CDP admins need at least two subnets.
+It is recommended to use subnets of /19 CIDR. If you would like to use a smaller
+    subnets, use the following guidelines:
+
+One IP address is used for each VM.
+Two IPs for your RDS instances.
+One Light Duty Data Lake cluster uses 2 VMs and 1 additional VMs for FreeIPA.
+One Medium Duty Data Lake cluster uses 10 VMs and 3 additional VMs for
+     FreeIPA.
+The exact number of VMs depends on the Data Hub’s cluster definition, but a
+     typical Data Hub cluster uses a minimum of four VMs as a starting point and this number can be
+     dynamically scaled up or down.
+Make sure you allocate enough IPs to handle each cluster running at peak
+     capacity
+
+
+Subnets for Data Warehouse
+The Data Warehouse service needs three subnets. You can choose the specific subnets that
+    should be used when you activate Data Warehouse for an environment and if the specified subnets
+    are shared with other CDP data services then ensure that there are sufficient IPs left for CDW. 
+An environment can be activated for CDW with Overlay Network or without Overlay
+    Network, the next section outlines the benefits and the pitfalls of one choice over the
+    other.
+Using Data Warehouse with Overlay Network vs without Overlay Network 
+Enabling overlay networks creates two network spaces in your EKS:
+
+A node network space, which derives per-node IP addresses from the VPC.
+A Kubernetes pod network space, which derives per-pod IP addresses from the CNI
+     plugin's own network space.
+
+The overlay network is bridged into the node network. As a result, one IP address is
+    required per node instead of one IP address needed per pod. It is recommended to enable overlay
+    networks with Data Warehouse if the available IPs in your subnets is less than 1024.
+Even though using an overlay network for CDW requires less number of IPs it adds
+    more metadata to each network packet which even though are processed in the kernel can have a
+    performance impact. Due to this extra metadata added to each network packet it may not be
+    straightforward to debug incoming and outgoing traffic with some of the network debugging tools.
+    To employ an overlay network for CDW, Weave net CNI (Container Network Interface) plugin is
+    used. Since weave-net is a full-mesh network where each node is connected to every other node in
+    the mesh, the number of nodes the overlay network can span across is limited to 200.
+Data Warehouse with Overlay Networks
+Use these guidelines to arrive at your desired subnet CIDR if you choose to use overlay
+    networks. It is recommended to enable overlay networks with Data Warehouse if the available IPs
+    in your subnets is less than 1024.
+
+
+VM type
+No of VMs
+Total no of IPs addresses required
+
+
+
+DW Shared Services - (Shared among all VWs in an environment)
+3
+3
+
+
+Per Database Catalog (One catalog is created by default, you can create
+         additional catalogs)
+2
+2
+
+
+Shared Services per Virtual Warehouse (HS2, Hue, DAS, coordinators, catalog,
+        statestored, and so on.)
+3
+3
+
+
+Per Virtual Warehouse (XS) *
+2 to 20
+2 to 20
+
+
+Per Virtual Warehouse (S) *
+10 to 100
+10 to 100
+
+
+Per Virtual Warehouse (M) *
+20 to 200
+20 to 200
+
+
+Per Virtual Warehouse (L) *
+40 to 400
+40 to 400
+
+
+Per Virtual Warehouse (Custom)*
+x to 10x ( where x is the initial node count )
+x to 10x ( where x is the initial node count)
+
+
+* Each autoscaling activity can be treated as deploying a new Virtual Warehouse. For
+    example, when a XS Virtual Warehouse is scaled once, it uses four VMs instead of two.
+Data Warehouse without Overlay Network
+Use these guidelines to arrive at your desired subnet CIDR if you choose to not to use overlay
+    networks while activating your DW environment.
+
+
+VM type
+No of VMs
+Maximum no of pods per VM
+Maximum number of IPs per VM (No of pods per VM +1 per VM)
+Maximum no of IPs addresses required
+
+
+
+DW Shared Services - (Shared among all VWs in an environment)
+3
+25
+26
+78
+
+
+
+Per Database Catalog
+(One catalog is created by default, you can create additional
+         catalogs)
+
+2
+25
+26
+52
+
+
+Shared Services per Virtual Warehouse (HS2, Hue, DAS, coordinators, catalog,
+        statestored, and so on.)
+3
+25
+26
+78
+
+
+Per Virtual Warehouse (XS) *
+2 to 20
+10
+11
+22 to 220
+
+
+Per Virtual Warehouse (S) *
+10 to 100
+10
+11
+110 to 1100
+
+
+Per Virtual Warehouse (M) *
+20 to 200
+10
+11
+220 to 2200
+
+
+Per Virtual Warehouse (L) *
+40 to 400
+10
+11
+440 to 4400
+
+
+Per Virtual Warehouse (Custom)*
+
+x to 10 x ( where x is the initial node count )
+
+10
+11
+11x to 110x
+
+
+* Each autoscaling activity can be treated as deploying a new Virtual Warehouse. For
+    example, when a XS Virtual Warehouse is scaled once, it uses four VMs instead of two.
+Query Isolation
+If the Query Isolation feature has been enabled for a Virtual Warehouse and a query scans more
+    than the threshold set in the hive.query.isolation.scan.size.threshold parameter, the planner
+    runs the query in isolation. This means that an isolated standalone executor group is spawned to
+    run the data-intensive query. The number of executors spawned to run the query does not exceed
+    the default setting for the hive.query.isolation.max.nodes.per.query parameter, which default to
+    2 times the virtual warehouse template size. The number of isolated parallel queries (can go
+    up to 400) and number of nodes per isolated queries (can go up to 400) is configurable for a given
+    virtual warehouse. Each of these nodes can consume up to 11 IPs when overlay networks are not
+    enabled and 1 IP if the overlay network is enabled against your environment.
+
+Subnets for Machine Learning
+CML requires at least two subnets in two different availability zones and you can
+    choose which subnets should be used by a workspace at the time of provisioning. If the specified
+    subnets are shared with other CDP data services then ensure that there are sufficient IPs left
+    for CML. CML uses Calico CNI (Container Network Interface) to run ML pods in an overlay network.
+    The formula to calculate IP Addresses per workspace is as follows:
+
+Each workspace can grow up to 100 CPU worker nodes and 100 GPU workers; each node
+     consumes 1 IP address.
+In addition, you will need to allocate 9 IP addresses for infrastructure nodes (3
+     IPs for ML infra nodes, 4 for Liftie infra nodes and 2 load balancers).
+
+
+Subnets for Data Engineering
+CDE requires at least two subnets in two different availability zones. You choose at the time
+    of workspace provisioning which subnets should be used. Ensure that there are adequate IPs left
+    for CDE to provide for the maximum expected size of the cluster. CDE uses Calico CNI (Container
+    Network Interface) to run pods in an overlay network. A /24 CIDR is recommended for CDE subnets,
+    but for a custom range the formula to calculate IP addresses per CDE service is as follows:
+
+Each CDE service can scale up to 100 compute nodes, each node consumes one IP address.
+In addition, you need to allocate 5 IP addresses for the infrastructure nodes (1 IP for DE
+     infra node, 4 for Liftie infra nodes) and 2 IP addresses per virtual cluster for the virtual
+     cluster service nodes.
+
+
+Subnets for DataFlow
+CDF requires at least two subnets in two different availability zones. DataFlow by default
+    configures EKS to run in private subnets, if they are available. CDF uses Calico CNI (Container
+    Network Interface) to run pods in an overlay network. The CIDR block for the subnets must be
+    sized appropriately in each CDF environment to accommodate the following:
+
+Each DataFlow cluster can grow up to 50 autoscaling compute instances, each of which
+     consumes 1 IP address.
+A fixed overhead of 48 IP addresses for three instances for core DataFlow services.
+
+
+Subnets for Operational Database
+COD currently leverages Data Hub to deploy infrastructure in a private subnet. Clients
+    associated with HBase REST server, Thrift Server, or the Phoenix Thin server can be proxied via
+    the VPN gateway. If Apache HBase Java API or Apache Phoenix Thick JDBC client are used, an edge
+    node must be configured to access the private computing resources. The formula to calculate IP
+    addresses per COD database is as follows:
+
+Each COD database defaults to a minimum of 9 nodes (1 leader, 2 master, 1 gateway, and 5
+     worker nodes), requiring 9 IP addresses.
+Each COD database can autoscale the number of worker nodes given various factors/attributes.
+     The range defaults to a minimum of 5 nodes and a maximum of 20 nodes. Users can reduce the
+     minimum to 3 nodes, but there is currently no fixed upper limit. They must consider the
+     behaviour of their database while providing the CIDR range to accommodate for the potential
+     autoscaling growth, where each node takes 1 IP address.
+In addition, configuring an edge node, if required for client applications, takes 1 IP
+     address for 1 accessory node.
+
+
+
+
+DNS
+This topic covers recommended DNS configurations for CDP Public Cloud for
+    AWS.
+The previous sections dealt with how connectivity is established to the workload
+      infrastructure. This section deals with ‘addressability’. The workloads launched by CDP
+      contain a few services that need to be accessed by the CDP admins or data consumers. These
+      include services like Cloudera Manager, metadata services like the Hive Metastore, Atlas or
+      Ranger, data processing or consumption services such as Oozie server, Hue, and so on. Given
+      the nature of the cloud infrastructure, the IP addresses for the nodes running these services
+      may change (for example, if the infrastructure is restarted or repaired). However, these
+      should have statically addressable DNS names so that users can access them with the same
+      names.
+In order to help with this, CDP assigns DNS names to these nodes. These naming
+   schemes have the following properties:
+
+The DNS name is of the following format for each Data Lake node, Data Hub node, and
+        the Data Lake/Data Hub cluster endpoint:
+              <CLUSTER_NAME>-{<HOST_GROUP><i>}.<ENVIRONMENT_IDENTIFIER>.<CUSTOMER_IDENTIFIER>.cloudera.site
+An example could be
+              my-dataeng-master0.my-envir.aaaa-1234.cloudera.siteThis
+        name has the following components:
+The base domain is cloudera.site. This is a publicly
+            registered DNS suffix (see Public Suffix List). It is also a registered Route53 hosted
+            zone in a Cloudera owned AWS account.
+The
+              <CUSTOMER_IDENTIFIER> is
+            unique to a customer account on CDP made of alphanumeric characters and "-"
+The
+                <ENVIRONMENT_IDENTIFIER>
+            is generated based on the environment name and is truncated to 8 characters.
+The
+              <CLUSTER_NAME> is the
+            cluster name given to the Data Lake or Data Hub. It is appended with a
+                  <HOST_GROUP> name such as "gateway",
+            "master", "worker", and so on, depending on the role that the node plays in the
+            cluster. If there are more than one of these nodes playing the same role, they are
+            appended with a serial number, <i>.
+
+The DNS name of the endpoints of the CDP data services is of the following
+          format:
+For a Virtual Warehouse in CDW, it is
+                    <VIRTUAL_WAREHOUSE_NAME>.<CDW_ENVIRONMENT_IDENTIFIER>.dw.<CUSTOMER_IDENTIFIER>.cloudera.site
+The <VIRTUAL_WAREHOUSE_NAME>
+is the name of the Virtual Warehouse created. There could be multiple
+                virtual warehouses for a given CDP environment.
+The
+<CDW_ENVIRONMENT_IDENTIFIER>
+is the identifier for the CDP environment.
+
+For a Session Terminal in a CML workspace, it is
+                  <TTY_SESSION_ID>.<CML_WORKSPACE_ID>.<ENVIRONMENT_IDENTIFIER>.<CUSTOMER_IDENTIFIER>.cloudera.site
+The
+<TTY_SESSION_ID>
+is the ID of the CML Terminal Session ID.
+The <CML_WORKSPACE_ID>
+is the ID of the CML workspace created.
+The
+                    <ENVIRONMENT_IDENTIFIER>
+                is generated based on the environment name and is truncated to 8 characters. If the
+                8th character is a "-" (dash), then it is truncated to 7 characters instead.
+
+For all the CDP data services listed above, the common portions of the DNS
+              include.
+The base domain is cloudera.site. This is a
+                publicly registered DNS suffix (see Public Suffix List). It is also a registered Route53
+                hosted zone in a Cloudera owned AWS account.
+The
+                  <CUSTOMER_IDENTIFIER> is unique
+                to a customer account on CDP made of alphanumeric characters and a "-" (dash).
+
+For a virtual cluster in CDE, it is
+                  <VIRTUAL_CLUSTER_ID>.<CDE_SERVICE_ID>.<ENVIRONMENT_IDENTIFIER>.<CUSTOMER_IDENTIFIER>.cloudera.site
+The <VIRTUAL_CLUSTER_ID> is the 8-character
+                ID of the CDE virtual cluster, for example, afg57p98.
+The <CDE_SERVICE_ID> is the ID of the CDE
+                service containing the virtual cluster, for example, cde-g6th4kjv.
+The <ENVIRONMENT_IDENTIFIER> is generated
+                based on the CDP environment name and is truncated to 8 characters. if the 8th
+                character is a "-" (dash), then it is truncated to 7 characters instead.
+
+For a DataFlow service in CDF, it
+                    isdfx.<CDF_WORKLOAD_ENDPOINT_ID>.<CUSTOMER_IDENTIFIER>.cloudera.site
+The <CDF_WORKLOAD_ENDPOINT_ID> is the
+                8-character ID of the CDP DataFlow Service Workload Endpoint, for example,
+                1bxt50kk.
+
+For a database in COD, it is
+                <COD_WORKLOAD_NAME>-{<HOST-GROUP><i>}.<ENVIRONMENT_IDENTIFIER>.<CUSTOMER_IDENTIFIER>.cloudera.site
+The <COD_WORKLOAD_NAME> is the ID of
+                the Cloudera Operational Database, for example, cod-1m6yz9uwqhrg2.
+The user provides a database name and the environment where they want to create
+                the database. These two entities are hashed together to create the internal
+                      <COD_WORKLOAD_NAME>, which is set
+                as the Data Hub cluster.
+Except for the <COD_WORKLOAD_NAME>,
+                the rest of the DNS name of the endpoint is implemented as per Data Hub DNS format
+                as mentioned above.
+
+For all the CDP data services listed above, the common portions of the DNS include:
+The base domain is cloudera.site. This is a publicly registered DNS suffix. It is also a registered Route53 hosted zone in
+                a Cloudera owned AWS account.
+The <CUSTOMER_IDENTIFIER> is unique to
+                a customer account on CDP made of alphanumeric characters and a "-" (dash).
+
+
+The length of the DNS name is restricted to 64 characters due to some limitations
+    with Hue workloads.
+These names are stored as A records in the Route53 hosted zone in the Cloudera
+        managed CDP Control Plane AWS account. Hence, you can resolve these names from any location
+        outside of the VPC. However, note that they would still resolve to private IP addresses and
+        hence are constrained by the connectivity setup described in preceding sections.
+Within a CDP environment, the DNS resolution happens differently. Every CDP
+        environment has a DNS server that is played by a component called FreeIPA. This server is
+        seeded with the hostnames of the nodes of all workload clusters in the environment. Every
+        node in a Data Lake, Data Hub, and a CDP data service is configured to look up the FreeIPA
+        DNS service for name resolution within the cluster. 
+
+
+Parent topic: Network architecture
+Associating additional CIDRs to a VPC
+You can choose to add another CIDR to your VPC in case you are close to exhausting the
+  available IPs in your VPC by following the necessary steps from Associate a secondary IPv4 CIDR block with your VPC. Once a
+  new CIDR has been added to your VPC, a created environment not will pick these changes
+  automatically. For the environment to pick up the new CIDR, follow these steps.
+
+Go to your environment page and under Summary tab click on the refresh icon in the Network
+     card.
+
+
+
+
+
+
+To add any new subnets created with the new CIDR, click on the pencil icon and choose the
+     new subnet from the dropdown.
+
+
+
+
+
+
+The user can now use the new subnet for any subsequent workloads
+   that will be created.

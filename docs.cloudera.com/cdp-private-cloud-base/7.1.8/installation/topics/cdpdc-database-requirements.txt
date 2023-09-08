@@ -1,0 +1,158 @@
+Database RequirementsCloudera Docs
+Database Requirements
+This topic describes the database requirements for CDP Private Cloud Base.
+Please see the Cloudera Support Matrix for detailed information about supported
+      databases based on the CDP and Cloudera Manager versions.
+importantWhen you restart processes, the
+      configuration for each of the services is redeployed using information
+      saved in the Cloudera Manager database. If this information is not
+      available, your cluster cannot start or function correctly. You must
+      schedule and maintain regular backups of the Cloudera Manager database to
+      recover the cluster in the event of the loss of this database. For more
+      information, see Backing Up Databases.
+Cloudera Manager and Runtime come packaged with an embedded PostgreSQL database for use in
+      non-production environments. The embedded PostgreSQL database is not supported in production
+      environments. For production environments, you must configure your cluster to use dedicated
+      external databases. You must ensure latency between Cloudera Manager server and the database
+      is < 10 ms. You can verify the latency with a simple SQL command from your Cloudera Manager
+      server host to the database. Start your database's command line client tool and connect to the
+      Cloudera Manager database. Run the follwoing SQL
+      command:SELECT 1;
+After installing a database, upgrade to the latest patch and apply appropriate updates.
+      Available updates may be specific to the operating system on which it is installed.
+Notes:
+
+Cloudera recommends installing the databases on different hosts than
+        the services, located in the same data center. Separating databases from
+        services can help isolate the potential impact from failure or resource
+        contention in one or the other. It can also simplify management in
+        organizations that have dedicated database administrators.
+Data Analytics Studio requires PostgreSQL version 9.6, while RHEL 7.6 provides PostgreSQL
+        9.2.
+Hue Query Processor in CDP 7.1.8 requires a non-SSL enabled PostgreSQL database.
+Use UTF8 encoding for all custom databases. Oozie also supports UTF8MB4 character
+          encoding out of box without any configuration change when the Oozie custom database is
+          created with the encoding of UTF8MB4.MySQL and MariaDB must use the MySQL
+          utf8 encoding, not utf8mb4. 
+Ranger only supports the InnoDB engine for MySQL and MariaDB databases.
+For MySQL 5.7, you must install the MySQL-shared-compat or MySQL-shared
+        package. This is required for the Cloudera Manager Agent installation.
+MySQL GTID-based replication is not supported.
+Both the Community and Enterprise versions of MySQL are supported, as well as MySQL
+        configured by the AWS RDS service.
+Before upgrading from CDH 5 to CDH 6, check the value of the COMPATIBLE
+        initialization parameter in the Oracle Database using the following SQL
+          query: SELECT name, value FROM v$parameter WHERE name = 'compatible'The
+          default value is 12.2.0. If the parameter has a different value, you can set it to the
+          default as shown in the Oracle Database Upgrade
+            Guide.noteBefore resetting the COMPATIBLE initialization
+            parameter to its default value, make sure you consider the effects of this change can
+            have on your system.
+
+
+Related informationRequired DatabasesParent topic: CDP Private Cloud Base Requirements and Supported Versions
+RDBMS High Availability Support
+
+Various Cloudera components rely on backing RDBMS services as critical infrastructure. You
+        may require Cloudera components to support deployment in environments where RDBMS services
+        are made highly-available. High availability (HA) solutions for RDBMS are
+        implementation-specific, and can create constraints or behavioral changes in Cloudera
+        components. 
+This section clarifies the support state and identifies known issues and limitations for HA
+        deployments.
+
+
+High Availability vs. Load Balancing
+
+Understanding the difference between HA and load balancing is important for Cloudera
+          components, which are designed to assume services are provided by a single RDBMS instance.
+          Load balancing distributes operations across multiple RDBMS services in parallel, while HA
+          focuses on service continuity. Load balanced deployments are often used as part of HA
+          strategies to overcome demands of monitoring and failover management in an HA environment.
+          While less easier to implement, load-balanced deployments require applications tailored to
+          the behavior and limitations of the particular technology.
+Support Statement: Cloudera components are not designed for and do not support
+          load balanced deployments of any kind. Any HA strategy involving multiple active RDBMS
+          services must ensure all connections are routed to a single RDBMS service at any given
+          time, regardless of vendor or HA implementation/technology. 
+
+
+
+General High Availability Support
+
+Cloudera supports various RDBMS options, each of which have multiple possible
+          strategies to implement HA. Cloudera cannot reasonably test and certify on each strategy
+          for each RDBMS. Cloudera expects HA solutions for RDBMS to be transparent to Cloudera
+          software, and therefore are not supported and debugged by Cloudera. It is the
+          responsibility of the customer to provision, configure, and manage the RDBMS HA
+          deployment, so that Cloudera software behaves as it would when interfacing with a single,
+          non-HA service. Cloudera will support and help customers troubleshoot issues when a
+          cluster has HA enabled. While diagnosing database-related problems in Cloudera components,
+          customers may be required to temporarily disable or bypass HA mechanisms for
+          troubleshooting purposes. If an HA-related issue is found, it is the responsibility of the
+          customer to engage with the database vendor so that a solution to that issue can be
+          found.
+Support Statement: Cloudera Support may require customers to temporarily bypass HA
+          layers and connect directly to supported RDBMS back-ends to troubleshoot issues. Issues
+          observed only when connected through HA layers are the responsibility of the customer DBA
+          staff to resolve.
+
+
+
+RDBMS Storage Sizing
+
+The amount of RDBMS storage space used by CDP Private Cloud Base varies depending on the
+          services that are installed and the operations performed. Approximately, the amount of
+          RDBMS storage needed is between 10 MB and 100 MB per host in the CDP cluster.
+You can better estimate the RDBMS storage space by deploying a test cluster with the
+          approximate proportion of service roles that the full cluster can bear. Later, execute a
+          sample set of operations, (including Data Recovery backup) for about 24 hours and observe
+          the storage usage on the RDBMS. Next, extrapolate the usage to the full cluster size.
+
+
+
+Sharing an RDBMS with other applications
+
+The ability to share an RDBMS storage between CDP Private Cloud Base and other
+          applications depends on many factors. Cloudera recommends that you do not share the RDBMS
+          used by CDP Private Cloud Base with any other application.
+For non-production clusters where cluster size is small, not expected to grow, and
+          occasional glitches are tolerable, it is acceptable to share a database with other
+          applications.
+MySQL
+For a production cluster, CDP Runtime services must not share a database server with
+            other applications. For small clusters, this database can be shared by the CDP Runtime
+            services. For large clusters (hosts > 500), each CDP Runtime service must have its own
+            database server.
+
+PostgreSQL
+If you have a dedicated database team managing high-performance hardware, with the CDP
+            Private Cloud Base databases stored on their own spindles (or raid array), then it can
+            be possible to have the DB server shared with other applications. When the cluster size
+            is very large (hosts > 1000), there might be performance issues between shared
+            applications. Cloudera recommends that you do not share the CDP Private Cloud Base
+            database server with other application usages.
+If you do not have a dedicated database team that can analyze and tune RDBMS
+            performance, it is recommended to follow the advice for MySQL as detailed above.
+
+Oracle
+For single-server Oracle installations, see the above description related to
+            PostgreSQL.
+If you are using a clustered system like Oracle RAC, with multiple servers,
+            it is possible to use a shared DB service, since it is no longer a single server. The
+            end user's DB team must monitor DB latency, scale the hardware, or tune DB parameters to
+            ensure optimal performance.
+
+Latency target
+For end users attempting to tune a shared RDBMS, ensure that elapsed times must not
+            exceed 40 milliseconds for the 99th percentile of SELECT statements on
+            indexed single-row queries.
+
+
+
+
+
+
+
+
+

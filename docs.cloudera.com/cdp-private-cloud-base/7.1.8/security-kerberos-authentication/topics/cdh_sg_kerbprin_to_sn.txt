@@ -1,0 +1,223 @@
+Mapping Kerberos Principals to Short NamesCloudera Docs
+Mapping Kerberos Principals to Short Names
+
+You configure the mapping from Kerberos principals to short names in the
+        hadoop.security.auth_to_local property setting in the
+        core-site.xml file. Kerberos has this support natively,
+      and Hadoop's implementation uses Kerberos's configuration language to
+      specify the mapping.
+A mapping consists of a set of rules that are evaluated in the order listed in
+      the hadoop.security.auth_to_local property. The first
+      rule that matches a principal name is used to map that principal name to a
+      short name. Any later rules in the list that match the same principal name
+      are ignored.
+You specify the mapping rules on separate lines in the
+      hadoop.security.auth_to_local property as follows:<property>
+  <name>hadoop.security.auth_to_local</name>
+  <value>
+  RULE:[<principal translation>](<acceptance filter>)<short name substitution>
+  RULE:[<principal translation>](<acceptance filter>)<short name substitution>
+  DEFAULT
+  </value>
+</property>
+
+noteYou can also set auth_to_local rules in krb5.conf
+        using MIT Kerberos. If you do, be aware that the format is different, and the rules
+        described below will fail if used in this context.
+        
+
+
+
+Mapping Rule Syntax
+
+To specify a mapping rule, use the prefix string RULE: followed
+        by three sections—principal translation, acceptance filter, and short
+        name substitution—described in more detail below. The syntax of a
+        mapping rule is:RULE:[<principal translation>](<acceptance filter>)<short name substitution>
+
+
+Principal Translation
+
+The first section of a rule, <principal translation>,
+          performs the matching of the principal name to the rule. If there is a
+          match, the principal translation also does the initial translation of
+          the principal name to a short name. In the <principal
+          translation> section, you specify the number of components
+          in the principal name and the pattern you want to use to translate
+          those principal component(s) and realm into a short name. In Kerberos
+          terminology, a principal name is a set of components separated by
+          slash ("/") characters.
+The principal translation is composed of two parts that are both specified
+          within "[ ]" using the following syntax:
+[<number of components in principal name>:<initial specification of short name>]
+where:
+<number of components in principal name> – This first part
+          specifies the number of components in the principal name (not
+          including the realm) and must be 1 or
+          2. A value of 1 specifies principal
+          names that have a single component (for example,
+          hdfs), and 2 specifies principal
+          names that have two components (for example,
+          hdfs/fully.qualified.domain.name). A principal name
+          that has only one component will only match single-component rules,
+          and a principal name that has two components will only match
+          two-component rules.
+<initial specification of short name> – This second part specifies
+          a pattern for translating the principal component(s) and the realm
+          into a short name. The variable $0 translates the realm, $1 translates
+          the first component, and $2 translates the second component.
+Here are some examples of principal translation sections. These examples use
+          atm@YOUR-REALM.COM and
+          atm/fully.qualified.domain.name@YOUR-REALM.COM as
+          principal name inputs:
+
+
+This Principal Translation
+Translates atm@YOUR-REALM.COM into this short name
+Translates atm/fully.qualified.domain.name@YOUR-REALM.COM into this short name
+
+
+
+[1:$1@$0]
+atm@YOUR-REALM.COM
+Rule does not match1
+
+
+[1:$1]
+atm
+Rule does not match1
+
+
+[1:$1.foo]
+atm.foo
+Rule does not match1
+
+
+[2:$1/$2@$0]
+Rule does not match2
+atm/fully.qualified.domain.name@YOUR-REALM.COM
+
+
+[2:$1/$2]
+Rule does not match2
+atm/fully.qualified.domain.name
+
+
+[2:$1@$0]
+Rule does not match2
+atm@YOUR-REALM.COM
+
+
+[2:$1]
+Rule does not match2
+atm
+
+
+Footnotes:
+1Rule does not match because there are two components in principal name
+          atm/fully.qualified.domain.name@YOUR-REALM.COM
+2Rule does not match because there is one component in principal name
+          atm@YOUR-REALM.COM
+
+
+
+Acceptance Filter
+
+The second section of a rule, (<acceptance filter>),
+          matches the translated short name from the principal translation (that
+          is, the output from the first section). The acceptance filter is
+          specified in "( )" characters and is a standard regular expression. A
+          rule matches only if the specified regular expression matches the
+          entire translated short name from the principal translation. That is,
+          there's an implied ^ at the beginning of the pattern
+          and an implied $ at the end.
+
+
+
+Short Name Substitution
+
+The third and final section of a rule is the (<short name
+          substitution>). If there is a match in the second section,
+          the acceptance filter, the (<short name
+          substitution>) section does a final translation of the
+          short name from the first section. This translation is a
+          sed replacement expression
+          (s/.../.../g) that translates the short name from the
+          first section into the final short name string. The short name
+          substitution section is optional. In many cases, it is sufficient to
+          use the first two sections only.
+
+
+
+Converting Principal Names to Lowercase
+
+In some organizations, naming conventions result in mixed-case usernames (for
+          example, John.Doe) or even uppercase usernames (for
+          example, JDOE) in Active Directory or LDAP. This can
+          cause a conflict when the Linux username and HDFS home directory are
+          lowercase.
+To convert principal names to lowercase, append /L to the rule.
+
+
+
+Example Rules
+
+Suppose all of your service principals are either of the form
+          App.service-name/fully.qualified.domain.name@YOUR-REALM.COM
+          or App.service-name@YOUR-REALM.COM, and you want to
+          map these to the short name string service-name. To
+          do this, your rule set would be:
+<property>
+  <name>hadoop.security.auth_to_local</name>
+  <value>
+ RULE:[1:$1](App\..*)s/App\.(.*)/$1/g
+  RULE:[2:$1](App\..*)s/App\.(.*)/$1/g
+  DEFAULT
+  </value>
+</property>
+The first $1 in each rule is a reference to the first component
+          of the full principal name, and the second $1 is a
+          regular expression back-reference to text that is matched by
+          (.*).
+In the following example, suppose your company's naming scheme for user accounts
+          in Active Directory is FirstnameLastname (for example,
+          JohnDoe), but user home directories in HDFS are
+          /user/firstnamelastname. The following rule set
+          converts user accounts in the CORP.EXAMPLE.COM domain
+          to lowercase.
+<property>
+  <name>hadoop.security.auth_to_local</name>
+  <value>
+  RULE:[2:$1@$0](HTTP@\QCORP.EXAMPLE.COM\E$)s/@\QCORP.EXAMPLE.COM\E$//
+  RULE:[1:$1@$0](.*@\QCORP.EXAMPLE.COM\E$)s/@\QCORP.EXAMPLE.COM\E$///L
+  RULE:[2:$1@$0](.*@\QCORP.EXAMPLE.COM\E$)s/@\QCORP.EXAMPLE.COM\E$///L
+  DEFAULT
+  </value>
+</property>
+In this example, the JohnDoe@CORP.EXAMPLE.COM principal becomes
+          the johndoe HDFS user.
+
+
+
+Default Rule
+
+You can specify an optional default rule called DEFAULT (see
+          example above). The default rule reduces a principal name down to its
+          first component only. For example, the default rule reduces the
+          principal names atm@YOUR-REALM.COM or
+          atm/fully.qualified.domain.name@YOUR-REALM.COM down
+          to atm, assuming that the default domain is
+          YOUR-REALM.COM.
+The default rule applies only if the principal is in the default realm.
+If a principal name does not match any of the specified rules, the mapping for
+          that principal name will fail.
+
+
+
+Testing Mapping Rules
+
+You can test mapping rules for a long principal name by running:
+hadoop org.apache.hadoop.security.HadoopKerberosName name1 name2 name3
+
+
+

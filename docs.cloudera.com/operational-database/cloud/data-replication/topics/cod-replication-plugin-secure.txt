@@ -1,0 +1,81 @@
+Configuring replication for secure clustersCloudera Docs
+Configuring replication for secure clusters
+You can configure replication between two secure Apache HBase clusters. These
+        clusters can be Data Hub clusters or Cloudera Operational Database (COD) experience
+        clusters. 
+
+Ensure that you have root access on your source HDP, CDH, or any other Apache HBase
+                cluster.
+Ensure that you have noted down your workload user name and password. To check your
+                workload user name, navigate to the Management Console > User Management
+                    > Users, find your user, and then find your Workload User Name. The
+                workload user name is typically srv_[***WORKLOAD USER
+                NAME***].
+
+
+You need the replication plugin to enable data replication to secure clusters. A
+                custom replication endpoint allows the Apache HBase clusters to specify a different
+                Simple Authentication and Security Layer (SASL) ticket when establishing the
+                connection with a remote cluster. Use the following instructions to configure secure
+                cluster data replication.
+
+
+Create a machine user in your CDP environment that has your COD instances. This
+                    machine user is specific for your replication use case.
+Note down the machine user name. You will need this information later.
+
+Add your created machine user with environmentUser role in the
+                    destination environment using the Assign environment role.
+
+Do FreeIPA sync for the destination environment and wait for the sync to
+                    complete.
+ The sync can take about 5 to 15 minutes depending upon the number of
+                    servers and users in the environment.
+
+Verify if the credentials are correct by running the following kinit command on
+                    any node of the destination environment.
+
+kinit [***WORKLOAD USER NAME***]
+
+
+On any environment, generate the keystore using the following command and
+                    passing your workload password as a parameter.
+
+sudo -u hbase hbase com.cloudera.hbase.security.token.CldrReplicationSecurityTool -sharedkey cloudera -password [***WORKLOAD PASSWORD***] -keystore localjceks://file/[***PATH***]/[credentials.jceks]
+
+
+Add the generated keystore to HDFS on both the clusters using the following
+                    commands
+
+kinit -kt /var/run/cloudera-scm-agent/process/`ls -1 /var/run/cloudera-scm-agent/process/ | grep -i "namenode\|datanode" | sort -n | tail -1`/hdfs.keytab hdfs/$(hostname -f)
+
+hdfs dfs -mkdir /hbase-replication
+
+hdfs dfs -put /[***PATH***]/[credentials.jceks] /hbase-replication
+
+hdfs dfs -chown -R hbase:hbase /hbase-replication
+
+
+Using the HBase shell define replication peer at source cluster, specifying the
+                    pluggable replication endpoint implementation and zookeeper_quorum in the
+                    following format:  zk1:zk2:zk3:2181:/hbase.
+
+hbase shell
+
+add_peer '1', 
+ENDPOINT_CLASSNAME => 'com.cloudera.hbase.replication.CldrHBaseInterClusterReplicationEndpoint', 
+CLUSTER_KEY => '[***ZOOKEEPER_QUORUM***]:2181:/hbase'
+
+
+
+
+Set the REPLICATION_SCOPE for the selected table and column family. Note that
+                    enable_table_replication is not supported.
+                    hbase shell alter 'my-table', {NAME=>'cf', REPLICATION_SCOPE => '1'}
+Use replication plugin validation tool to make sure the setup is working. On one
+                    of the source cluster hosts, run the following
+                    command:hbase com.cloudera.hbase.replication.CldrReplicationPluginValidator [***PEER_ID***]
+
+
+
+Parent topic: Cloudera Operational Database data replication

@@ -1,0 +1,110 @@
+Supporting Azure private storageCloudera Docs
+Supporting Azure private storage
+Cloudera Data Engineering (CDE) stores all the metadata and application files in Azure
+    Files. By default, CDE relies on Azure Kubernetes Service (AKS) to create a public Azure Storage
+    Account in the AKS Node Resource Group. The provisioned Storage Account will be used only for
+    Azure Files in CDE and will be deleted once the CDE service is deleted. 
+
+With CDE 1.16, the Azure Files used for storing CDE internal metadata can be overridden
+        with custom private/public Azure Files.
+
+Creating Private Azure files
+
+Create a Private Azure Account. For more
+        information, see Private Endpoints for Azure Storage below. Be sure to create a Private
+        Endpoint for Files as target sub-resource since CDE only uses Azure
+        Files. This means that blobs, tables, queues, and so on are not used.Table 1. Sample creation commands
+
+Action
+Command
+
+
+
+Export Variables
+RESOURCE_GROUP=TestCDEPrivateResourceGroup \
+                  STORAGE_ACCOUNT_NAME=testcdeprivatestorageaccount \
+                  PRIVATE_ENDPOINT_NAME=private-endpoint-${STORAGE_ACCOUNT_NAME} \
+                  VNET_NAME=cde-vnet \ VNET_RESOURCE_GROUP=TestCDEPrivateResourceGroup \
+                  DNS_ZONE_NAME=${STORAGE_ACCOUNT_NAME}.privatelink.file.core.windows.net \
+                  VNET_LINK_NAME=vnet-link-${STORAGE_ACCOUNT_NAME} 
+
+
+Create Private Storage Account
+az storage account create --name ${STORAGE_ACCOUNT_NAME}
+                  --resource-group ${RESOURCE_GROUP} --allow-blob-public-access false --https true
+                  --public-network-access Disabled --sku Standard_LRS --location
+                westus2
+
+
+Get Storage Account ID
+STORAGE_ACCOUNT_ID=$(az storage account show --resource-group
+                  ${RESOURCE_GROUP} --name ${STORAGE_ACCOUNT_NAME} | jq -r .id)
+
+
+Get Subnet ID
+SUBNET_ID=$(az network vnet subnet list --resource-group
+                  ${VNET_RESOURCE_GROUP} --vnet-name ${VNET_NAME} | jq -r
+                '.[0].id')
+
+
+Create Private Endpoint
+az network private-endpoint create --connection-name myConnection
+                  --name ${PRIVATE_ENDPOINT_NAME} --private-connection-resource-id
+                  ${STORAGE_ACCOUNT_ID} --location westus2 --subnet ${SUBNET_ID} --resource-group
+                  ${RESOURCE_GROUP} --group-id file
+
+
+Get Private Endpoint IP
+PRIVATE_ENDPOINT_IP=$(az network private-endpoint show --name
+                  ${PRIVATE_ENDPOINT_NAME} --resource-group ${RESOURCE_GROUP} | jq -r
+                  '.customDnsConfigs | .[0].ipAddresses | .[0]')
+
+
+Create Private DNS Zone
+az network private-dns zone create --resource-group ${RESOURCE_GROUP}
+                  --name ${DNS_ZONE_NAME}
+
+
+Create Private DNS Zone record
+az network private-dns record-set a add-record --resource-group
+                  ${RESOURCE_GROUP} --zone-name ${DNS_ZONE_NAME} --record-set-name @ --ipv4-address
+                  ${PRIVATE_ENDPOINT_IP}
+
+
+Get VNet ID
+VNET_ID=$(az network vnet show --resource-group ${VNET_RESOURCE_GROUP}
+                  --name ${VNET_NAME} | jq -r .id)
+
+
+Link DNS Zone to VNet
+az network private-dns link vnet create --name ${VNET_LINK_NAME}
+                  --registration-enabled false --resource-group ${RESOURCE_GROUP} --virtual-network
+                  ${VNET_ID} --zone-name ${DNS_ZONE_NAME}
+
+Enable CDE Service for Azure
+Navigate to the Cloudera Data Engineering Overview page by
+          clicking the Data Engineering tile in the Cloudera Data Platform
+          (CDP) management console.
+In the CDE Environments column, click the plus icon at the top or
+          the Enable new CDE link at the bottom to enable CDE for an
+          environment.
+Select an Azure environment.
+Select the Override Azure Files Storage Server option. 
+Enter the Storage Account name and Resource
+            group of the Storage Account.
+For Azure Files FQDN, enter the Private Endpoint FQDN that you
+          created in the prerequisites above.
+Fill out the necessary details and click Create.
+Using customer-managed key encryption
+You can enable CMK encryption with CDE in Azure. Below are high-level instructions to
+        enable CMK encryption. For detailed instructions, see Customer-managed keys for Azure
+        Storage encryption linked below.
+Create a key vault and grant corresponding permission to the service principle that is
+          used to create CDP environment.
+Associate the private storage account and key vault when enabling the CMK
+          encryption.
+In their job’s code, set up ABFS authentication configurations and access the abfs://
+          files.
+
+
+Related informationWhy are two resource groups created with AKS?Azure FilesPrivate Endpoints for Azure StorageCustomer-managed keys for Azure storage encryption

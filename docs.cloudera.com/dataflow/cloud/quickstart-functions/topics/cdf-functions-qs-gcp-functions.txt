@@ -1,0 +1,99 @@
+Google Cloud FunctionsCloudera Docs
+Google Cloud Functions
+This section helps you to check the list of actions you must perfom before you start
+    working on your function.
+
+
+You have the latest version of the Google Cloud Functions (GCP) CLI.
+The scripts assume that a default project has been associated to your local
+            client:gcloud config set project PROJECT_ID.
+
+
+
+Start by setting all the parameters required for deploying your function using the GCP
+          CLI.
+
+# Name of the binary file you downloaded from the CDP Public Cloud control plane. Change it based on the version you downloaded.
+FILEKEY="naaf-gcp-cloud-functions-1.0.0.2.3.6.0-35-bin.zip"
+
+
+# Location where the function will be deployed. Change this value to match your needs/requirements.
+LOCATION=europe-west1
+
+
+# Name of the bucket where the binary and NAR will be uploaded. Change this value to match your needs/requirements.
+BUCKET_NAME=mydffresizeimagebucket
+
+# Name of the function (only lower case letters). Cange this value to match your needs/requirements.
+FUNCTIONNAME=resizeimage
+
+# Flow CRN. Add the Customer Resource Number you obtained from the DataFlow Catalog.
+FLOW_CRN=***YOUR VALUE HERE***
+
+# Credentials of the machine user
+DF_ACCESS_KEY=***YOUR VALUE HERE***
+DF_PRIVATE_KEY=***YOUR VALUE HERE***
+
+
+Create a bucket where you will upload the DataFlow Functions binary.
+
+gcloud alpha storage buckets create gs://$BUCKET_NAME --location $LOCATION
+gsutil cp $FILEKEY gs://$BUCKET_NAME/$FILEKEY
+
+
+
+Deploy the function.
+
+gcloud functions deploy $FUNCTIONNAME \
+	--gen2 \
+	--region=$LOCATION \
+	--runtime=java11 \
+	--source=gs://$BUCKET_NAME/$FILEKEY \
+	--memory=1024MB \
+	--timeout=300 \
+	--trigger-http \
+	--allow-unauthenticated \
+	--entry-point=com.cloudera.naaf.gcp.cloud.functions.StatelessNiFiHttpFunction \
+--set-env-vars=FLOW_CRN=$FLOW_CRN,DF_PRIVATE_KEY=$DF_PRIVATE_KEY,DF_ACCESS_KEY=$DF_ACCESS_KEY,NEXUS_URL=https://maven-central.storage-download.googleapis.com/maven2,STORAGE_BUCKET=$BUCKET_NAME,OUTPUT_PORT=success
+
+After a couple of minutes, the function will be deployed and you will receive an HTTP
+            endpoint exposed by Google Cloud to call your function.
+For example: https://resizeimage-vqz99abcdea-ew.a.run.app
+You can now use a tool like Postman to send your picture.
+You can add two custom headers (resize-width and
+              resize-height) to specify the resizing dimensions. If not specified,
+            the default values of the NiFi flow parameters are used.
+
+
+
+
+
+
+noteThe first attempt may fail due to cold start and timeout. A
+              subsequent retry should work and should return the resized image much faster. For more
+              information, see Cold start.
+
+It is possible to send a request to your function using
+            curl.
+For
+            example:curl -X POST https://resizeimage-vqz99abcdea-ew.a.run.app \
+-H "Content-Type: image/png" \
+-H "resize-width: 400" \
+-H "resize-height: 200" \
+--data-binary "@/Users/pierre/Desktop/test.png" \
+--output /tmp/my_resized_image.png
+
+
+noteThe function will be open to the internet. Make sure to
+              secure it if you want to keep it running or delete everything once you have completed
+              this quickstart.
+
+You can secure the function by deploying it without the
+              --allow-unauthenticated parameter.
+You can delete the function using the following
+            command:gcloud functions delete $FUNCTIONNAME --gen2 --region=$LOCATION --quiet
+gcloud alpha storage rm -r gs://$BUCKET_NAME
+
+
+
+

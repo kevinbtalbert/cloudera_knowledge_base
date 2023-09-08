@@ -1,0 +1,494 @@
+Creating and managing CDP deploymentsCloudera Docs
+Creating and managing CDP deployments
+In this topic, we provide an overview of best practices for deploying CDP and
+  demonstrate how to create and manage CDP deployments through a simple yet powerful Terraform
+  framework.
+If you are looking for a high-level overview of best practices for setting up CDP by using our
+   standardized Terraform-based CDP deployment patterns, continue reading this article.
+note
+Creating new CDP deployments, adding data services, and managing the platform is also possible
+    via the CDP web interface and CDP CLI. These options enable you to create customized
+    deployments with a high degree of flexibility.
+
+note
+This guide currently covers deploying CDP on AWS and Azure only. For instructions on how to
+    quickly deploy CDP on GCP, refer to CDP quickstarts.
+
+
+
+What is a CDP deployment
+ A CDP deployment is a set of CDP management services and data services including
+  related cloud provider resources that exist in your AWS, Azure, or GCP account. It is a
+  combination of the cloud infrastructure that may span multiple cloud providers and regions, and
+  the CDP platform that abstracts this underlying cloud provider infrastructure into an integrated,
+  unified, logical data platform layer.
+Each CDP deployment consists of CDP services and the underlying cloud provider
+   resources.
+In order for CDP to be deployed, a set of cloud provider prerequisites needs to be
+   provided first, including a virtual network and subnets, storage accounts, and access
+   roles/identities and policies. These cloud provider prerequisites are typically customer-managed
+   and exist in the cloud provider account independently of CDP services. As such, they may be
+   shared with other, non-Cloudera cloud services.
+Once the cloud provider prerequisites are present, a CDP environment can be deployed
+   in the virtual network. Once your CDP environment is up and running, your core CDP and cloud
+   provider infrastructure is in place and you can start creating Data Hubs and data services in
+   order to run workloads. When these services are created, additional cloud provider resources such
+   as VM instances, security groups, and load balancers are deployed in your cloud account. For each
+   service, you can select which subnets of the underlying virtual network and what storage
+   locations within your specified storage accounts they should use.
+These three high-level deployment steps are described in the following diagram:
+
+
+
+CDP deployment can be performed by using either CDP web interface or CDP CLI, or
+   Terraform-based CDP deployment patterns. Continue reading to learn about deploying CDP using
+   Terraform.
+noteAs a best practice, cloud provider prerequisites (such as a VPC/VNet and subnets) should be
+   created and managed outside of CDP. The Terraform quickstart module provided creates all these
+   cloud provider prerequisites, but in case you would like to use an existing AWS VPC or Azure VNet
+   and subnets, you can achieve this by providing a few additional optional parameters. 
+noteIf you would like to understand the details of the automation tooling provided here or are
+   looking for more flexibility for your automated CDP deployments, refer to Terraform module for deploying CDP.
+
+
+CDP deployment patterns
+To simplify the task of defining and creating CDP deployments, we provide and describe a
+  set of predefined target architectures recommended by Cloudera. These target architectures are
+  called deployment patterns.
+In Cloudera’s Terraform framework, each pattern is represented by a deployment template that
+   allows you to quickly instantiate one of the reference deployments. The templates can be used as
+   a starting point and modified according to your needs. You can learn more about the recommended
+   configurations of CDP Public Cloud from the documentation of our end-to-end deployment patterns
+   as well as our network reference architectures for AWS and Azure.
+Currently, we provide templates that represent the following deployment patterns, each matching
+   a different use case:
+
+
+
+Private
+Production-like setup fully deployed on private subnets without public IPs or direct
+        outbound internet access. Demonstrates a possible production deployment with typical network
+        security features enabled.noteSince private subnets have no internet connectivity by
+         default, such a setup of CDP would not function out of the box, unless additional network
+         components such as Internet Gateways or NAT Gateways are present. For convenience, we
+         deploy these additional components by default. To turn off this behavior (for example when
+         deploying to an existing private network), you can set the optional parameter
+          private_network_extensions=false.
+
+
+Semi-private
+Production-like setup with access over the public internet to the user interfaces and
+        API endpoints only. It serves as a reference for production deployments without the need for
+        configuring VPNs, jump hosts and user-defined routing for outbound (egress) traffic
+
+
+Public
+Simple setup with access over public internet to all endpoints and with a minimal
+        footprint. It can be used for quick testing, tutorial, demonstration, or simply to
+        understand the internal workings of CDP Public Cloud. This setup is not secure enough for
+        production, but can be used for proof of concept.
+
+
+
+note
+A real-life production CDP deployment often differs from the patterns described here. The
+    examples that we provide intend to simplify the initial creation of a CDP deployment and serve
+    as a reference for customized, customer-owned templates. While based on observed patterns and
+    best practices, these templates are provided as-is and maintained by the Cloudera field
+    community. If you plan to set up CDP for production, we assume that you customize the provided
+    examples to match your IT networking and security guidelines.
+
+
+
+CDP deployment pattern definitions 
+Deployment patterns are predefined architectures recommended by Cloudera that simplify
+  the task of defining and creating CDP deployments. There are many options available for deploying
+  CDP, but as a best practice, Cloudera recommends that you use one of the following three
+  deployment patterns: private, semi-private, or public. 
+These patterns are based on the identically named network reference architectures and extend
+   them, by incorporating Cloudera’s recommended configuration for deploying CDP in multiple
+   availability zones, selecting the Data Lake scale, configuring storage access policies and
+   setting up fine-grained access control.
+As can be expected, each of these deployment patterns brings a unique trade-off among
+   various aspects, such as ease of setup, security provided, workloads supported, and so on. Read
+   the following content to understand what specific networking, IAM, and storage cloud provider
+   configurations, and CDP configurations are applied as part of the supported deployment
+   patterns.
+Cloud provider prerequisites
+This section summarizes the networking, IAM, and storage cloud provider configurations that
+    are made when CDP is deployed based on one of the deployment patterns.
+Networking 
+AWSAzure
+
+
+
+
+Private
+Semi-private
+Public
+
+
+VPC
+A new VPC is provisioned in your cloud provider account.
+A new VPC is provisioned in your cloud provider account.
+A new VPC is provisioned in your cloud provider account.
+
+
+Subnets
+1x /18 public subnet for network access (when using
+             private_network_extension=true)3x /18 private subnets (for cluster
+           nodes)
+
+3x /19 public subnets (for load balancers)
+3x /19 subnets (for cluster nodes)
+
+3x /18 public subnets (for load balancers and cluster nodes)
+
+
+Public IPs 
+1 Elastic IP is allocated (when using
+            private_network_extension=true)
+3 Elastic IPs are allocated (for load balancers)
+All deployed nodes have public IPs
+
+
+Egress traffic
+One AWS Internet Gateway and one AWS Public and Private NAT Gateway are
+           created (when using private_network_extension=true)
+One AWS Internet Gateway, three AWS Public and Private NAT Gateways (1 per public
+            subnet)
+One AWS Internet Gateway
+
+
+Ingress traffic
+Public Load Balancer (when using
+            private_network_extension=true)
+Public Load Balancer
+Public Load Balancer
+
+
+Security groups
+2 Security Groups (Rules set up based on user input/configuration)
+2 Security Groups (Rules set up based on user input/configuration)
+2 Security Groups (Rules set up based on user input/configuration)
+
+
+
+
+
+
+
+
+Private
+Semi-private
+Public
+
+
+Resource Group
+A single new resource group is created.
+A single new resource group is created.
+A single new resource group is created.
+
+
+VNet
+A new VNet is provisioned in your cloud provider account.
+A new VNet is provisioned in your cloud provider account.
+A new VNet is provisioned in your cloud provider account.
+
+
+Subnets
+
+3x /18 subnets (for load balancers and cluster nodes)
+
+
+1x /18 subnets (for load balancers))
+3x /18 subnets (for cluster nodes)
+
+
+3x /18 subnets
+
+
+
+Public IPs 
+No public IPs are assigned.
+
+Load balancers have public hostnames.
+No public IPs are assigned to cluster nodes
+
+All nodes deployed have public IPs.
+
+
+Egress traffic
+Managed by Azure
+Managed by Azure
+Managed by Azure
+
+
+Ingress traffic
+Managed by Azure
+Managed by Azure
+Managed by Azure
+
+
+Security groups
+2 Network Security Groups (Rules set up based on user
+           input/configuration)
+2 Network Security Groups (Rules set up based on user input/configuration)
+2 Network Security Groups (Rules set up based on user
+           input/configuration)
+
+
+
+
+Identity and access management 
+AWSAzure
+
+
+
+Private
+Semi-private
+Public
+
+
+Federated access
+Cross-account policy
+Cross-account policy
+Cross-account policy
+
+
+Storage access 
+IAM roles, policies, and instance profiles
+IAM roles, policies, and instance profiles
+IAM roles, policies, and instance profiles
+
+
+
+
+
+
+Private
+Semi-private
+Public
+
+
+Federated access
+Azure service principal
+Azure service principal
+Azure service principal
+
+
+Storage access 
+User-assigned managed identities and role assignments using built-in roles
+User-assigned managed identities and role assignments using built-in roles
+User-assigned managed identities and role assignments using built-in roles
+
+
+
+Storage 
+AWSAzure
+
+
+
+Private
+Semi-private
+Public
+
+
+S3 buckets
+3 base locations
+3 base locations
+3 base locations
+
+
+
+
+
+
+Private
+Semi-private
+Public
+
+
+Azure storage accounts
+
+One storage account for data, logs and backup (3 containers)
+One additional storage account for locally caching VM images
+
+
+One storage account for data, logs and backup (3 containers)
+One additional storage account for locally caching VM images
+
+
+One storage account for data, logs and backup (3 containers)
+One additional storage account for locally caching VM images
+
+
+
+
+
+Environment and Data Lake
+This section summarizes CDP networking, security, and other configurations that are made when
+    CDP is deployed based on one of the deployment patterns. 
+CDP networking setup
+AWSAzure
+
+
+
+Private
+Semi-private
+Public
+
+
+Communication with CDP Control Plane 
+Reverse HTTPS tunnel (CCM), no private link
+Reverse HTTPS tunnel (CCM), no private link
+Reverse HTTPS tunnel (CCM), no private link
+
+
+Load balancer and node placement
+2 load balancers are placed in private subnets. All cluster nodes are placed
+        in private subnets.
+2 load balancers are placed in the external subnets and all cluster nodes
+        are placed in the internal subnets.
+2 load balancers and all cluster nodes are placed in public subnets.
+
+
+Multiple availability zones
+Environment and Data Lake clusters are spread across three availability
+          zones.
+Environment and Data Lake clusters are spread across three availability
+          zones.
+Environment cluster is spread across three availability zones. Basic Data
+          Lake cluster is deployed in one availability zone.
+
+
+Ports open (in the external and internal network)
+Ports 22 and 443 are open by default. 
+Ports 22 and 443 are open by default. 
+Ports 22 and 443 are open by default. 
+
+
+
+
+
+
+Private
+Semi-private
+Public
+
+
+Communication with CDP Control Plane 
+Reverse HTTPS tunnel (CCM), no private link
+Reverse HTTPS tunnel (CCM), no private link
+Reverse HTTPS tunnel (CCM), no private link
+
+
+Load balancer and node placement
+Azure Standard Network Load Balancers are created by the data lake
+Azure Standard Network Load Balancers are created by the data lake
+Azure Standard Network Load Balancers are created by the data lake
+
+
+Availability zones
+Zone placement is managed by Azure
+Zone placement is managed by Azure
+Zone placement is managed by Azure
+
+
+Ports open (in the external and internal network)
+Ports 22 and 443 are open by default. 
+Ports 22 and 443 are open by default. 
+Ports 22 and 443 are open by default. 
+
+
+
+CDP security setup
+AWSAzure
+
+
+
+Private
+Semi-private
+Public
+
+
+Fine-grained storage access control (RAZ)
+Enabled
+Enabled
+Enabled
+
+
+SSH access to cluster hosts
+Root access is possible with a customer-provided keypair.
+Root access is possible with a customer-provided keypair.
+Root access is possible with a customer-provided keypair.
+
+
+
+
+
+
+Private
+Semi-private
+Public
+
+
+Fine-grained storage access control (RAZ)
+Enabled
+Enabled
+Enabled
+
+
+SSH access to cluster hosts
+Root access is possible with a customer-provided keypair.
+Root access is possible with a customer-provided keypair.
+Root access is possible with a customer-provided keypair.
+
+
+
+CDP versions and details
+AWSAzure
+
+
+
+Private
+Semi-private
+Public
+
+
+Data Lake Runtime version
+Latest
+Latest 
+Latest 
+
+
+Data Lake shape 
+Medium Duty
+Medium Duty
+Light Duty
+
+
+
+
+
+
+Private
+Semi-private
+Public
+
+
+Data Lake Runtime version
+Latest
+Latest
+Latest 
+
+
+Data Lake shape 
+Medium Duty
+Medium Duty
+Light Duty
+
+
+
+
+

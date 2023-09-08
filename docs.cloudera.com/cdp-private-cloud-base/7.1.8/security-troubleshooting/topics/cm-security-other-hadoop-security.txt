@@ -1,0 +1,91 @@
+YARN, MRv1, and Linux OS SecurityCloudera Docs
+YARN, MRv1, and Linux OS Security
+Several subsystems are fundamental to Hadoop
+      clusters, specifically, the Jsvc, TaskController, and Container Executor
+      Programs, documented below. MRv1 and YARN: The jsvc Program
+The jsvc is part of the Hadoop Apache Commons libraries designed to make
+        Java applications run better on Linux. The jsvcprogram is part of the
+          bigtop-jsvc package and installed in
+          /usr/lib/bigtop-utils/jsvc or
+          /usr/libexec/bigtop-utils/jsvc depending on version of Linux.
+In particular, jsvc is used to start the DataNode listening on low port
+        numbers. Its entry point is the SecureDataNodeStarter class, which
+        implements the Daemon interface that jsvc expects. jsvc is
+        run as root, and calls the SecureDataNodeStarter.init(...) method while
+        running as root. Once the SecureDataNodeStarter class has finished
+        initializing, jsvc sets the effective UID to be the hdfs
+        user, and then calls SecureDataNodeStarter.start(...).
+          SecureDataNodeStarter then calls the regular DataNode entry point,
+        passing in a reference to the privileged resources it previously obtained.
+MRv1 Only: The Linux TaskController
+A setuid binary called task-controller is part of the
+          hadoop-0.20-mapreduce package and is installed in either
+          /usr/lib/hadoop-0.20-mapreduce/sbin/Linux-amd64-64/task-controller or
+          /usr/lib/hadoop-0.20-mapreduce/sbin/Linux-i386-32/task-controller.
+This task-controller program, which is used on MRv1 only, allows the
+        TaskTracker to run tasks under the Unix account of the user who submitted the job in the
+        first place. It is a setuid binary that must have a very specific set of permissions and
+        ownership to function correctly. In particular, it must:
+
+Be owned by root
+Be owned by a group that contains only the user running the MapReduce daemons
+Be setuid
+Be group readable and executable
+
+This corresponds to the ownership root:mapred and the permissions
+          4754.
+Here is the output of ls on a correctly-configured Task-controller:
+-rwsr-xr-- 1 root mapred 30888 Mar 18 13:03 task-controller
+The TaskTracker will check for this configuration on start up, and fail to start if the
+        Task-controller is not configured correctly.
+YARN Only: The Linux Container Executor
+A setuid binary called container-executor is part of the
+          hadoop-yarn package and is installed in
+          /usr/lib/hadoop-yarn/bin/container-executor.
+This container-executor program, which is used on YARN only and supported
+        on GNU/Linux only, runs the containers as the user who submitted the application. It
+        requires all user accounts to be created on the cluster hosts where the containers are
+        launched. It uses a setuid executable that is included in the Hadoop distribution. The
+        NodeManager uses this executable to launch and quit the containers. The setuid executable
+        switches to the user who has submitted the application and launches or quits the containers.
+        For maximum security, this executor sets up restricted permissions and user/group ownership
+        of local files and directories used by the containers such as the shared objects, jars,
+        intermediate files, and log files. As a result, only the application owner and NodeManager
+        can access any of the local files/directories including those localized as part of the
+        distributed cache.
+Parcel Deployments
+In a parcel deployment the container-executor file is located inside the
+        parcel at /opt/cloudera/parcels/CDH/lib/hadoop-yarn/bin/container-executor.
+        For the /usr/lib mount point, setuid should not be a problem. However, the
+        parcel could easily be located on a different mount point. If you are using a parcel, make
+        sure the mount point for the parcel directory is without the nosuid option.
+The container-executor program must have a very specific set of
+        permissions and ownership to function correctly. In particular, it must:
+
+Be owned by root
+Be owned by a group that contains only the user running the YARN daemons
+Be setuid
+Be group readable and executable. This corresponds to the ownership
+            root:yarn and the permissions
+          6050.---Sr-s--- 1 root yarn 91886 2012-04-01 19:54 container-executor
+
+importantConfiguration changes to the Linux container executor
+        could result in local NodeManager directories (such as usercache) being
+        left with incorrect permissions. To avoid this, when making changes using either Cloudera
+        Manager or the command line, first manually remove the existing NodeManager local
+        directories from all configured local directories
+          (yarn.nodemanager.local-dirs), and let the NodeManager recreate the
+        directory structure. 
+Troubleshooting 
+When you set up a secure cluster for the first time and debug problems with it, the
+          task-controller or container-executor may encounter
+        errors. These programs communicate these errors to the TaskTracker or NodeManager daemon via
+        numeric error codes that appear in the TaskTracker or NodeManager logs respectively
+          (/var/log/hadoop-mapreduce or /var/log/hadoop-yarn). The
+        following sections list the possible numeric error codes with descriptions of what they
+          mean:
+"TaskController Error Codes (MRv1)"
+"ContainerExecutor Error Codes (YARN)"
+
+
+Related informationApache CommonsTaskController Error Codes (MRv1)ContainerExecutor Error Codes (YARN)TaskController Error Codes (MRv1)ContainerExecutor Error Codes (YARN)

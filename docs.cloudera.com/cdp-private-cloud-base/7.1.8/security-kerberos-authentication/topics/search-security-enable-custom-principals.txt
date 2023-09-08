@@ -1,0 +1,182 @@
+Configuring custom Kerberos principals and custom system users for SolrCloudera Docs
+Configuring custom Kerberos principals and custom system users for Solr
+In a Kerberos enabled cluster, the Solr service uses the solr
+        principal by default. Changing the default principal and using custom principals is
+        supported. Principals can be configured on a service-wide level in Cloudera Manager with the
+            Kerberos Principal property. To configure a custom system user,
+        you need to modifty the System User property.
+
+Make sure you have the following privileges:
+
+SSH access to the cluster where you want to enable the custom
+                    principal
+administrative privileges in Cloudera Manager 
+HDFS super user access
+
+
+
+importantCloudera Manager configures
+            CDP services to use the default Kerberos principal names. Cloudera recommends that you
+            do not change the default Kerberos principal names. If it is unavoidable to do so,
+            contact Cloudera Professional Services because it requires extensive additional custom
+            configuration.
+note
+
+
+Stop the Solr service.
+
+Disable ZooKeeper ACL checking temporarily.
+
+
+In Cloudera Manager, navigate to ZooKeeper > Configuration.
+
+
+Find the Java Configuration Options for ZooKeeper Server
+                            property.
+
+
+Add the following value:
+
+-Dzookeeper.skipACL=yes
+
+
+
+Click Save Changes.
+
+
+Restart the ZooKeeper service.
+
+
+
+In Cloudera Manager, navigate to Clusters > Solr service > Configuration and find the Kerberos Principal
+                    property.
+
+Provide the custom Kerberos principal. 
+
+Click Save Changes.
+
+To be able to interact with the Solr service, you must either change the
+                        System User name to match the custom Kerberos
+                    principal, or add the existing System User name to
+                        Solr Service Environment Advanced Configuration Snippet (Safety
+                        Valve).
+Select one of the following options: 
+OptionDescription
+Change the System User name to match the
+                            custom Kerberos principal
+
+
+In Cloudera Manager, navigate to Clusters > Solr service > Configuration and find the System User
+                                    property.
+Change the user name to match the custom Kerberos principal you
+                                    have set.
+Click Save Changes. 
+
+
+
+Keep the original System User
+                            name
+
+
+In Cloudera Manager navigate to Clusters > Solr service > Configuration and find the Solr Service Environment
+                                        Advanced Configuration Snippet (Safety Valve)
+                                    property.
+Look for the SOLR_SECURITY_PROXY_JAVA_OPTS
+                                    key.
+Append its value with:
+                                                -Dsolr.security.proxyuser.[***SYSTEM_USER***].groups=*
+                                                -Dsolr.security.proxyuser.[***SYSTEM_USER***].hosts=*Replace
+                                            [***SYSTEM_USER***] with the service
+                                        user name you want to associate with the custom Kerberos
+                                        principal.
+
+Click Save Changes. 
+
+
+
+
+Create a jaas.conf file containing the following:
+
+Client {
+           com.sun.security.auth.module.Krb5LoginModule required
+           useKeyTab=false
+           useTicketCache=true
+           principal="[***CUSTOM_SOLR_KERBEROS_PRINCIPAL@KERBEROS_REALM_NAME***]";
+           };
+
+ Replace
+                            [***CUSTOM_SOLR_KERBEROS_PRINCIPAL@KERBEROS_REALM_NAME***]
+                        with your Kerberos principal and realm name.
+
+
+Set the LOG4J_PROPS environment variable to a
+                    log4j.properties file:
+
+export LOG4J_PROPS=/etc/zookeeper/conf/log4j.properties
+
+
+Set the ZKCLI_JVM_FLAGS environment variable:
+
+export ZKCLI_JVM_FLAGS="-Djava.security.auth.login.config=/path/to/jaas.conf \ 
+-DzkACLProvider=org.apache.solr.common.cloud.SaslZkACLProvider \ 
+-Droot.logger=INFO,console \
+-Dsolr.authorization.superuser=[***CUSTOM_SOLR_KERBEROS_PRINCIPAL***]"
+
+
+Authenticate as the
+                    [***CUSTOM_SOLR_KERBEROS_PRINCIPAL***]:
+
+kinit [***CUSTOM_SOLR_KERBEROS_PRINCIPAL@KERBEROS_REALM_NAME***]
+ Replace
+                            [***CUSTOM_SOLR_KERBEROS_PRINCIPAL@KERBEROS_REALM_NAME***]
+                        with your Kerberos principal and realm name.
+
+
+Run the zkcli.sh script as follows:
+
+/opt/cloudera/parcels/CDH/lib/solr/bin/zkcli.sh -zkhost [***ZOOKEEPER_SERVER_HOSTNAME***]:[***ZOOKEEPER_SERVER_PORT***] -cmd updateacls /solr
+Replace [***ZOOKEEPER_SERVER_HOSTNAME***] and
+                            [***ZOOKEEPER_SERVER_PORT***] with the hostname and
+                        port of a ZooKeeper server.
+
+For
+                    example:/opt/cloudera/parcels/CDH/lib/solr/bin/zkcli.sh -zkhost zk01.example.com:2181 -cmd updateacls /solr
+
+Check ACLs in Zookeeper:
+
+zookeeper-client -server ${HOSTNAME}:2181 getAcl /solr
+
+
+Change ownership of Solr’s HDFS Data Directory. Check the value in Cloudera
+                    Manager under Solr > Configuration > HDFS Data Directory.
+
+Execute the following command as the HDFS superuser:
+
+hdfs dfs -chown -R [***CUSTOM_SOLR_KERBEROS_PRINCIPAL***] [***HDFS_DATA_DIRECTORY***]
+
+
+Re-enable ZooKeeper ACL check.
+
+
+In Cloudera Manager, navigate to ZooKeeper > Configuration.
+
+
+Find the Java Configuration Options for ZooKeeper Server
+                            property.
+
+
+Remove the following value:
+
+-Dzookeeper.skipACL=yes
+
+
+
+Click Save Changes.
+
+
+Restart the ZooKeeper service.
+
+
+
+
+Parent topic: Customizing Kerberos principals

@@ -1,0 +1,95 @@
+Update and delete data featuresCloudera Docs
+Update and delete data features
+You can update and delete data in a V2 Iceberg table. 
+Hive and Impala update and delete Iceberg V2 tables using position delete files, one
+      type of encoding defined by the Iceberg Spec. Row-level deletes and updates are
+      supported.Position
+      delete files contain the following information:
+file_path, which is a full URI
+pos, the file position of the row
+row, the deleted row values, usually omitted
+Iceberg metadata, delete files per partition and min/max statistics
+
+Delete files are sorted by file_path and pos. The following table shows an example of delete
+      files in a partitioned table:Table 1. 
+
+Partition
+Partition information
+Delete file
+
+
+
+ YEAR(ts)=2022 
+
+ts_year=2022/data-abcd.parquet 
+ts_year=2022/data-bcde.parquet
+
+
+ts_year=2022/delete-wxyz.parquet
+
+
+
+ YEAR(ts)=2023 
+ ts_year=2023/data-efgh.parquet 
+ ts_year=2023/delete-hxkw.parquet 
+
+
+ MONTH(ts)=2023-06 
+ ts_month=2023-06/data-ijkl.parquet 
+ ts_month=2023-06/delete-uzwd.parquet 
+
+
+ MONTH(ts)=2023-07 
+ ts_month=2023-07/data-mnop.parquet 
+ ts_month=2023-07/delete-udqx.parquet 
+
+
+Neither SQL engine supports equality deletes, the other type of encoding. As a typical
+      user, you are oblivious to these encodings. If you have a problem with updates or deletes in
+      the following situations, an equality delete file in the table is the likely cause: 
+In Change Data Capture (CDC) applications
+In upserts from Apache Flink
+From a third-party engine
+
+Inserting, deleting, or updating table data generates a snapshot. A new snapshot corresponds
+      to a new manifest list. Manifest lists are named snap-*.avro.
+Hive and Impala evaluate rows from one table against an optional WHERE clause, and delete all
+      the rows that match WHERE conditions, or all rows if you omit WHERE. The WHERE expression is
+      the same as the WHERE expression SELECT. The conditions in the WHERE clause can refer to any
+      combination of primary key columns or other columns. If you omit the WHERE clause, all rows
+      are removed from the table. If some rows cannot be deleted because some primary key columns
+      are not found due to being deleted by a concurrent DELETE operation, the statement succeeds
+      but returns a warning. 
+ A DELETE statement might also overlap with INSERT, UPDATE, or UPSERT statements running
+      concurrently on the same table. After the statement finishes, you might have more or fewer
+      rows than expected in the table because it is undefined whether the DELETE applies to rows
+      that are inserted or updated while the DELETE is in progress.
+From joined tables, you can delete all matching rows from one of the tables. You can join
+      tables of any kind, but the table from which the rows are deleted must be an Iceberg table.
+      The FROM keyword is required in this case, to separate the name of the table whose rows are
+      being deleted from the table names of the join clauses.
+Hive or Impala syntax
+update tablename set column = value [, column = value ...] [where expression]
+delete from tablename [where expression]
+delete joined_tablename from [joined_tablename, joined_tablename2, ...] [ where expression ] 
+
+Hive or Impala examples
+create external table tbl_ice(a int, b s
+insert into tbl_ice values (1, 'one', 50), (2, 'two', 51), (3, 'three', 52), (4, 'four', 53), (5, 'five', 54), (111, 'one', 55), (333, 'two', 56);
+
+update tbl_ice set b='Changed' where b in (select b from tbl_ice where a < 4);
+
+delete from tbl_ice where a <= 2,1;
+ The following example deletes all rows of the table. The FROM keyword is optional.
+
+delete from ice_table;
+
+ The following example deletes 0, 1, or more rows of the table. If col1 is a primary key, 0
+        or 1 rows are deleted:
+
+delete from ice_table where col1 = 100;
+
+For more information, including examples, see Using Impala with Iceberg Tables.
+
+
+Parent topic: Apache Iceberg features

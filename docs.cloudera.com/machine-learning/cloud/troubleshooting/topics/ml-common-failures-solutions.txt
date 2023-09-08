@@ -1,0 +1,123 @@
+Common CML Errors and SolutionsCloudera Docs
+Common CML Errors and Solutions
+The following sections describe recommended steps to start
+    debugging common error messages you might see in the workspace logs (found
+    under Events > View
+        Logs).
+Before you begin
+Make sure you have reviewed the list of resources available to you for
+        debugging on CML and AWS: Troubleshooting ML Workspaces on AWS
+
+Timezone not properly set for scheduled job
+If the timezone is no longer correctly set for a scheduled job, then you 
+        should simply set it again. Go to Job Settings, 
+        edit the timezone, and update the job.
+
+AWS Account Resource Limits Exceeded (Compute, VPC, etc.)
+ML workspace provisioning fails because CDP could not get access to all
+        the AWS resources needed to deploy a CML workspace. This is likely
+        because your AWS account either does not have access to those resources
+        or is hitting the resource limits imposed on it.
+Sample errors include (from
+            Events > View
+            Logs):Failed to provision cluster. Reason: Failed to wait for provisioner: Wait for status failed with status CREATE_FAILED: error creating eks cluster (cause: InvalidParameterException: Provided subnets subnet-0a648a0cc5976b7a9 Free IPs: 0 , need at least 3 IPs in each subnet to be free for this operationFailed to mount storage. Reason: Failed to create mount target: NoFreeAddressesInSubnet: The specified subnet does not have enough free addresses to satisfy the request. 
+AWS accounts have certain hard and soft resource limits imposed on them
+        by default. For example, certain CPU/GPU instances that CML allows you
+        to provision might even have an initial default limit of 0 (set by AWS).
+        This means if you attempt to provision a cluster with those instance
+        types, your request will fail. 
+Aside from the CPU and GPU compute resource limits, there are other
+        types of limits you can run into. For example, the second error shows
+        that the subnets in your VPC don't have any more free IP addresses for
+        the workspace (and each of the underlying Kubernetes pods). This occurs
+        if the CIDR range mentioned while registering the environment was not
+        large enough for your current needs. 
+You can use the AWS console to request an increase in limits as needed.
+        Go to the AWS console for the region where the environment was
+        provisioned and then navigate to
+            EC2 > 
+            Limits.
+For networking failures, navigate to
+            EC2 > VPC.
+        Search for the environment's VPC ID (available on environment Summary
+        page) to see the list of available IP addresses for each subnet. Request
+        more resources as needed. 
+Related AWS documentation: AWS Service Limits, Amazon EC2 Resource Limits,
+          EKS Cluster VPC Considerations,
+          AWS CNI Custom Networking.
+
+Access denied to AWS credential used for authentication
+The cloud credential used to give CDP access to your AWS account failed
+        authentication. Therefore, CDP could not provision the resources
+        required to deploy a CML workspace.
+Sample error (from
+            Events > View
+            Logs):Failed to provision storage. Reason: Failed to create new file system: AccessDenied: User: arn:aws:iam::1234567890:user/cross-account-trust-user is not authorized to perform:
+Your cloud credential gives CDP access to the region and virtual
+        network that make up the environment thus allowing CDP to provision
+        resources within that environment. If authentication fails, go to your
+        environment to see how the cloud credentials were set up and confirm
+        whether your account has the permission to perform these actions. 
+
+CML Installation Failures
+While the steps to provision resources on AWS were completed
+        successfully, the CML workspace installation on EKS failed. 
+Sample error (from
+            Events > View
+            Logs):Failed to install ML workspace. Reason:Error: release mlx-mlx failed: timed out waiting for the condition
+If you are an advanced user, you can log in to the underlying EKS
+        cluster and use kubectlto investigate further into
+        which pods are failing.
+noteThis error might be an indication that DNS has been turned off for
+        the VPC. Go to the AWS console for the region where the environment was
+        provisioned and then navigate to
+            EC2 >  Load
+            Balancers to confirm that DNS is
+        configured properly for the environment's VPC. 
+Related AWS documentation: EKS and kubectl
+
+Failures due to API Throttling
+These errors can be harder to prepare for due to their seemingly random
+        nature. Occasionally, AWS will block API calls if it receives too many
+        requests at the same time. For example, this can occur when multiple
+        users are attempting to provision/delete/upgrade clusters at the same
+        time. 
+Sample error (from
+            Events > View
+            Logs):Failed to delete cluster. Reason: Failed to wait for deletion: Wait for status failed with status DELETE_FAILED: Throttling: Rate exceeded
+Currently, if you see a 'Throttling: Rate exceeded' error, our
+        recommendation is that you simply try again later. 
+Related AWS documentation:
+AWS API Request Throttling
+
+De-provisioning Failures
+De-provisioning operations can sometimes fail if AWS resources are not
+        terminated in the right order. This is usually due to timing issues
+        where certain resources might take too long to terminate. This can
+        result in a cascading set of failures where AWS cannot delete the next
+        set of resources because they still have active dependencies on the
+        previous set.
+Sample error (from
+            Events > View
+            Logs):Failed to delete cluster. Reason: Failed to wait for deletion: DELETE_FAILED: msg: failed to delete aws stack
+Cloudformation says resource xyz has a dependent object (Service: AmazonEC2; Status Code: 400; Error Code: DependencyViolation; Request ID: 815928e2-277e-4b8b-9fed-4b89716a205b) EKS - cluster still existed, was blocking CF delete
+
+CML includes a Force Delete option now that will remove the workspace
+        from the CML service. However, this not mean all the underlying
+        resources have been cleaned up. This is where tags are very useful. 
+If you assigned tags to the workspace at the time of provisioning, you
+        can use the AWS console or the CLI to query the tags associated with the
+        workspace to see if any resources need to be cleaned up manually. Tags
+        associated with a workspace are available on the workspace Details
+        page.
+You can search by tags in the EC2 and VPC services. You can also use
+        the AWS CLI to search for specific tags: resourcegroupstaggingapi
+
+Users unable to access provisioned ML workspaces
+If you have provisioned a workspace but your colleagues cannot
+        automatically access the workspace using CDP Single-Sign on, make sure
+        that you have completed all the steps required to grant users
+        access to workspaces: Configuring User Access to CML.
+        All CML users must have CDP accounts. 
+
+

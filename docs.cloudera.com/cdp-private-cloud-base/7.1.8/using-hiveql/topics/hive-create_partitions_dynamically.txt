@@ -1,0 +1,72 @@
+Creating partitions dynamicallyCloudera Docs
+Creating partitions dynamically
+You can configure Hive to create partitions dynamically and then run a query that
+        creates the related directories on the file system or object store. Hive then separates the
+        data into the directories. 
+
+This example assumes you have the following CSV file named
+                    employees.csv to use as the data
+                source:1,jane doe,engineer,service
+2,john smith,sales rep,sales
+3,naoko murai,service rep,service
+4,somporn thong,ceo,sales
+5,xi singh,cfo,finance            
+
+
+Upload the CSV file to a file
+                    system.
+
+In the Hive shell, create an unpartitioned table that holds all the data.
+
+CREATE EXTERNAL TABLE employees (eid int, name string, position string, dept string)
+  ROW FORMAT DELIMITED
+  FIELDS TERMINATED BY ','
+  STORED AS TEXTFILE
+  LOCATION '<object store or file system path>';
+
+For example, specify an Ozone location
+                        'ofs://ozone1/vol1/bucket1/employees'.
+
+Check that the data loaded into the employees table.
+SELECT * FROM employees;
+The output, formatted to fit this publication,
+                    appears:
++------+---------------+-------------+-------+---------+
+| eid  |    name       | position    | dept  |         |
++------+---------------+-------------+-------+---------|
+| 1    | jane doe      | engineer    | service         |
+| 2    | john smith    | sales rep   | sales           |
+| 3    | naoko murai   | service rep | service         |
+| 4    | somporn thong | ceo         | sales           |
+| 5    | xi singh      | cfo         | finance         |
++------+---------------+-------------+-----------------+
+
+Create a partition table.
+
+CREATE EXTERNAL TABLE EMP_PART (eid int, name string, position string) 
+  PARTITIONED BY (dept string);
+
+Accept the default dynamic partition mode (nonstrict) to create partitioned directories of data
+                dynamically when data is inserted, or if you changed the default, reset the mode as follows:
+
+SET hive.exec.dynamic.partition.mode=nonstrict;
+
+
+Insert data from the unpartitioned table (all the data) into the partitioned table
+               , dynamically creating the partitions.
+INSERT INTO TABLE EMP_PART PARTITION (DEPT)
+  SELECT eid,name,position,dept FROM employees;
+Partitions are created dynamically.
+
+Check that the partitions were created.
+SHOW PARTITIONS emp_part;
++----------------+
+|   partition    |
++----------------+
+| dept=finance   |
+| dept=sales     |
+| dept=service   |
++----------------+
+
+
+Parent topic: Partitions and performance

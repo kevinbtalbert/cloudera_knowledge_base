@@ -1,0 +1,118 @@
+Tuning S3A UploadsCloudera Docs
+Tuning S3A Uploads
+When data is written to S3, it is buffered locally and then uploaded in
+    multi-Megabyte blocks, with the final upload taking place as the file is closed.
+
+The following major configuration options are available for the S3A block upload options.
+        These are used whenever data is written to S3.
+
+
+Parameter
+Default Value
+Description
+
+
+
+
+fs.s3a.multipart.size
+
+100M
+Defines the size (in bytes) of the blocks into which the upload or copy
+                operations will be split up. A suffix from the set {K,M,G,T,P} may be used to scale
+                the numeric value. 
+
+
+
+fs.s3a.fast.upload.active.blocks
+
+8
+Defines the maximum number of blocks a single output stream can have active
+                uploading, or queued to the central FileSystem instance's pool of queued operations.
+                This stops a single stream overloading the shared thread pool. 
+
+
+
+fs.s3a.buffer.dir
+
+Empty value
+A comma separated list of temporary directories use for storing blocks of data
+                prior to their being uploaded to S3. When unset (by default), the Hadoop temporary
+                directory hadoop.tmp.dir is used. 
+
+
+fs.s3a.fast.upload.buffer
+disk
+
+The fs.s3a.fast.upload.buffer determines the buffering mechanism
+                  to use when uploading data.
+Allowed values are: disk, array, bytebuffer:
+
+(default) "disk" will use the directories listed in
+                          fs.s3a.buffer.dir as the location(s) to save data prior
+                        to being uploaded.
+
+
+"array" uses arrays in the JVM heap.
+
+
+"bytebuffer" uses off-heap memory within the JVM.
+
+
+Both "array" and "bytebuffer" will consume memory in a single stream up to the
+                  number of blocks set by: fs.s3a.multipart.size *
+                    fs.s3a.fast.upload.active.blocks. If using either of these mechanisms,
+                  keep this value low.
+The total number of threads performing work across all threads is set by
+                    fs.s3a.threads.max, with
+                    fs.s3a.max.total.tasks values setting the number of queued work
+                  items.
+
+
+
+Note that:
+
+
+If the amount of data written to a stream is below that set in
+              fs.s3a.multipart.size, the upload takes place after the application
+            has written all its data.
+
+
+The maximum size of a single file in S3 is one thousand blocks, which, for uploads
+            means 10000 * fs.s3a.multipart.size. Too A small value of
+              fs.s3a.multipart.size can limit the maximum size of files. 
+
+
+Incremental writes are not visible; the object can only be listed or read when the
+            multipart operation completes in the close() call, which will block
+            until the upload is completed.
+
+
+
+Buffering uploads to disk or RAMs
+This is the default buffer mechanism. The amount of data which can be buffered is limited
+        by the amount of available disk space.
+When fs.s3a.fast.upload.buffer is set to "disk", all data is buffered to
+        local hard disks prior to upload. This minimizes the amount of memory consumed, and so
+        eliminates heap size as the limiting factor in queued uploads.
+
+Buffering uploads in Byte Buffers
+When fs.s3a.fast.upload.buffer is set to "bytebuffer", all data is
+        buffered in "direct" ByteBuffers prior to upload. This may be faster than buffering
+        to disk in cases such as when disk space is small there may not be much disk space to buffer
+        with (for example, when using "tiny" EC2 VMs).
+The ByteBuffers are created in the memory of the JVM, but not in the Java Heap itself. The
+        amount of data which can be buffered is limited by the Java runtime, the operating system,
+        and, for YARN applications, the amount of memory requested for each container.
+The slower the upload bandwidth to S3, the greater the risk of running out of memory
+        — and so the more care is needed in tuning the upload thread settings to reduce the
+        maximum amount of data which can be buffered awaiting upload.
+
+Buffering Uploads with Array Buffers
+When fs.s3a.fast.upload.buffer is set to "array", all data is buffered in
+        byte arrays in the JVM's heap prior to upload. This may be faster than buffering to
+        disk.
+The amount of data which can be buffered is limited by the available size of the JVM heap
+        heap. The slower the write bandwidth to S3, the greater the risk of heap overflows. This
+        risk can be mitigated by tuning the upload thread settings.
+
+Parent topic: Configuring and tuning S3A block upload

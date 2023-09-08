@@ -1,0 +1,75 @@
+Enabling Spark rolling event log files in CDPCloudera Docs
+Enabling Spark rolling event log files in CDP
+While running a long-running Spark application in CDP, (for example, a streaming application), the Spark Job generates a large single event log file until the Spark application is killed or stopped.  A single event log file is not cost effective, requires high maintenance, and is resource-intensive. Therefore, to avoid creating a large event log file, you can use a rolling event log file. 
+    
+
+ If the Spark application is still running, only the
+                spark.history.fs.eventLog.rolling.maxFilesToRetain /
+                spark.history.fs.eventLog.rolling.compaction.score.threshold parameters are
+                considered (the spark.history.fs.cleaner.maxAge parameter is not used in this case). 
+
+
+Navigate to Cloudera Manager > Spark
+                        3 > Configuration > Spark 3
+                        Client Advanced Configuration Snippet (Safety Valve) for
+                        spark3-conf/spark-defaults.conf and set the following
+                        properties:
+spark.eventLog.rolling.enabled=true
+spark.eventLog.rolling.maxFileSize=128m
+
+The default spark.eventLog.rolling.maxFileSize value is 128 MB. The
+                        minimum value allowed is 10 MB.
+
+
+Set the maximum number of rolling event log files to retain:
+                
+
+
+Navigate to Cloudera Manager > Spark
+                                3> Configuration >
+                                History Server Advanced Configuration Snippet (Safety
+                                Valve) for spark3-conf/spark-history-server.conf and set
+                            the following property:
+spark.history.fs.eventLog.rolling.maxFilesToRetain=2
+
+By default,
+                                spark.history.fs.eventLog.rolling.maxFilesToRetain value is
+                                infinity, meaning all event log files are retained. Therefore, this
+                                parameter needs to be specified to avoid retaining more files. The
+                                minimum value allowed is 1.
+
+
+
+
+Verify the output from the Spark history server event log directory. An example output is displayed below:
+
+[root@c3543-node4 ~]# sudo -u spark hdfs dfs -ls -R
+                /user/spark/spark3ApplicationHistory/eventlog_v2_application_1672813574470_0002
+                -rw-rw---- 3 spark spark 0 2023-01-04 07:03
+                /user/spark/spark3ApplicationHistory/eventlog_v2_application_1672813574470_0002/appstatus_application_1672813574470_0002.inprogress
+                -rw-rw---- 3 spark spark 10485458 2023-01-04 07:05
+                /user/spark/spark3ApplicationHistory/eventlog_v2_application_1672813574470_0002/events_1_application_1672813574470_0002
+                -rw-rw---- 3 spark spark 0 2023-01-04 07:05
+                /user/spark/spark3ApplicationHistory/eventlog_v2_application_1672813574470_0002/events_2_application_1672813574470_0002
+                [root@c3543-node4 ~]# sudo -u spark hdfs dfs -ls -R
+                /user/spark/spark3ApplicationHistory/eventlog_v2_application_1672813574470_0002
+                -rw-rw---- 3 spark spark 0 2023-01-04 07:03
+                /user/spark/spark3ApplicationHistory/eventlog_v2_application_1672813574470_0002/appstatus_application_1672813574470_0002.inprogress
+                -rw-rw---- 3 spark spark 492014 2023-01-04 07:06
+                /user/spark/spark3ApplicationHistory/eventlog_v2_application_1672813574470_0002/events_1_application_1672813574470_0002.compact
+                -rw-rw---- 3 spark spark 10489509 2023-01-04 07:06
+                /user/spark/spark3ApplicationHistory/eventlog_v2_application_1672813574470_0002/events_2_application_1672813574470_0002
+                -rw-rw---- 3 spark spark 227068 2023-01-04 07:06
+                /user/spark/spark3ApplicationHistory/eventlog_v2_application_1672813574470_0002/events_3_application_1672813574470_0002
+                [root@c3543-node4 ~]# sudo -u spark hdfs dfs -ls -R
+                /user/spark/spark3ApplicationHistory/eventlog_v2_application_1672813574470_0002
+                -rw-rw---- 3 spark spark 0 2023-01-04 07:03
+                /user/spark/spark3ApplicationHistory/eventlog_v2_application_1672813574470_0002/appstatus_application_1672813574470_0002.inprogress
+                -rw-rw---- 3 spark spark 873356 2023-01-04 07:06
+                /user/spark/spark3ApplicationHistory/eventlog_v2_application_1672813574470_0002/events_2_application_1672813574470_0002.compact
+                -rw-rw---- 3 spark spark 10484816 2023-01-04 07:06
+                /user/spark/spark3ApplicationHistory/eventlog_v2_application_1672813574470_0002/events_3_application_1672813574470_0002
+                -rw-rw---- 3 spark spark 339165 2023-01-04 07:06
+                /user/spark/spark3ApplicationHistory/eventlog_v2_application_1672813574470_0002/events_4_application_1672813574470_0002
+            
+

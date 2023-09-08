@@ -1,0 +1,59 @@
+Running incremental extractionCloudera Docs
+Running incremental extraction
+Any object added to S3, including new buckets and new versions of existing objects,
+    publishes an event to AWS SQS (as configured by the user). 
+Incremental extraction consumes the events from SQS queue and creates corresponding
+      Atlas entities. 
+After running the bulk extraction once, you can run incremental extraction to update Atlas
+      metadata based on the events tracked in S3. This method has the benefit of tracking changes
+      that may not be captured in successive bulk extraction, such as when more than one object
+      version is created between extractions or when objects are deleted. 
+
+noteBefore running incremental extraction, you must set up event tracking in the AWS S3
+        buckets and configure an SQS queue to collect the S3 events.
+
+The incremental extraction operation reads all events produced by S3, then filters
+      the list based on the include and exclude configurations for the extractor. The appropriate
+      messages are passed into the Kafka queue and consumed by Atlas. Because the messages sit in
+      the SQS queue, you don't need to run the incremental extraction operation constantly: when it
+      runs, it will go through all the messages waiting in the queue. Run the extractor often enough
+      that the metadata is not stale by the time it processes, but not so often that it takes longer
+      to run than the time between runs. In addition, note that the SQS Queue does not maintain the
+      events forever. By default, the messages stay for 4 days; you can configure this value to hold
+      the events longer to protect against the chance that the extractor isn't able to process
+      events in time.
+In addition to the include and exclude lists described in Defining what assets to extract metadata for, the configuration
+      properties relevant to incremental extraction control the connection to the SQS Queue and how
+      long the extraction actively waits for events from S3. You must configure the name of the
+      queue that the events are published on. You can control how long the extractor waits to
+      receive messages from the queue and how many messages to wait for. When configuring the number
+      of messages to collect, remember that the extractor collects all events from the queue, not
+      just the events corresponding to objects in the allowlist. 
+In addition, you can set the timeout or retry time so the extractor doesn't keep
+      running even when it isn't able to connect to the queue. 
+You must plan whether to set up a repeating job to run incremental extraction.
+      Assuming you have a lot of changes that you want to track:
+
+
+Incremental extraction takes more time to process the individual changes than
+          running bulk extraction. 
+
+
+Incremental extraction maintains a complete history of objects (shows updates
+          and deletes)
+
+
+Batch is faster, but only captures current state and leaves deleted entities in
+          Atlas
+
+
+In conclusion, if you want to capture the history of S3 objects, run bulk
+      extraction once then run incremental extraction on a regular basis. As you have more
+      experience with the volume of changes and the speed of the extraction, you can determine if
+      you should run the incremental extraction more frequently.
+The following command line example runs the incremental extraction. Assuming the
+      mandatory properties are set in the default configuration file, only the parameter to enable
+      incremental mode is required:
+/opt/cloudera/parcels/CDH/lib/atlas/extractors/bin/aws-s3-extractor.sh -e INCREMENTAL
+
+Parent topic: S3 Extractor configuration

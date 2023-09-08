@@ -1,0 +1,139 @@
+Google Cloud Function triggersCloudera Docs
+Google Cloud Function triggers
+All Google Cloud Function triggers are supported with Cloudera DataFlow Functions. In
+    this section you can review the most commonly used triggers and examples of the FlowFile’s
+    content that would be generated following a triggering event.
+Background triggers
+The Output Port data flow logic is simple with background functions.
+If one Output Port is present, and its name is "failure", any data routed to that
+        Output Port will cause the function invocation to fail.
+If two Output Ports are present, and one of them is named "failure", that Output
+        Port will behave as the "failure" port above. Any other Output Port is considered a
+        successful invocation, but the function will do nothing with data routed here.
+Any Port with the name "failure" (ignoring case) is considered a Failure Port.
+        Additionally, if the FAILURE_PORTS environment variable is specified, any
+        port whose name is in the comma-separated list will be considered a Failure Port.
+
+Google Cloud Storage
+
+You can use this trigger, for example, to start your function whenever a file is
+              landing into Google Cloud Storage:
+
+
+
+The FlowFile’s content would look like this:
+
+
+
+
+Google Cloud Pub/Sub
+
+You can use this trigger for processing events received in a Pub/Sub
+              topic:
+
+
+
+The FlowFile’s content would look like this:
+
+
+
+note
+It is not possible to batch messages with this trigger. The function is executed
+                once for each message in the Pub/Sub topic.
+The payload of the message is Base 64 encoded.
+
+
+
+
+HTTP trigger
+This trigger can be used to expose an HTTP endpoint (with or without required
+        authentication) allowing for clients to send data to the function.
+
+
+
+This trigger would have Google Cloud creating and exposing an endpoint such as:
+          https://europe-west1-nifi-testing-320023.cloudfunctions.net/NaaF_HTTP-1
+The FlowFile created from the client call will be as follow:
+
+The content of the FlowFile is the exact body of the client request
+Attributes of the FlowFile are created for each HTTP headers of the client
+          request. Each attribute is prefixed: gcp.http.header.<header key> = <header
+            value>
+
+Since Cloud Functions with an HTTP trigger are invoked synchronously, they
+        directly return a response.
+The Output Port semantics are the following.
+If no Output Port is present in the data flow's root group, no output will be
+        provided from the function invocation, but a default success message (DataFlow
+          completed successfully) is returned in the HTTP response with a status code of
+        200.
+If one Output Port is present, and its name is "failure", any data routed to that
+        Output Port will cause the function invocation to fail. No output is provided as the output
+        of the function invocation, and an error message (DataFlow completed
+          successfully: + error message) is returned from the HTTP response, with a status
+        code of 500.
+If two Output Ports are present, and one of them is named "failure", that Output
+        Port will behave as the "failure" port above. The other Output Port is considered a
+        successful invocation. When the data flow is invoked, if a single FlowFile is routed to this
+        Port, the contents of the FlowFile are emitted as the output of the function. If more than
+        one FlowFile is sent to the Output Port, the data flow is considered a failure, as GCP
+        requires that a single entity be provided as its output. A MergeContent or MergeRecord
+        Processor may be used in order to assemble multiple FlowFiles into a single output FlowFile
+        if necessary.
+Any Port with the name "failure" (ignoring case) will be considered a Failure
+        Port. Additionally, if the FAILURE_PORTS environment variable is
+        specified, any port whose name is in the comma-separated list will be considered a Failure
+        Port.
+If two or more Output Ports, other than failure ports, are present, the
+          OUTPUT_PORT environment variable must be provided. In such a case, this
+        environment variable must match the name of an Output Port at the data flow's root group
+        (case is NOT ignored). Anything that is routed to the specified port is considered the
+        output of the function invocation. Anything routed to any other port is considered a
+        failure.
+Note: In any successful response, the mime.type flowfile
+        attribute is used as the Content-Type of the response.
+Additionally, there are two environment variables that can be configured to
+        customize the HTTP response:
+
+
+HEADER_ATTRIBUTE_PATTERN can provide a regular expression
+            matching any flowfile attributes to be included as HTTP response headers. This means
+            that any attributes to be included as headers should be named as the headers
+            themselves.
+
+
+HTTP_STATUS_CODE_ATTRIBUTE specifies a flowfile attribute
+            that sets the HTTP status code in the response. This allows a code other than 200 for
+            'success' or 500 for 'failure' to be returned. If this environment variable is specified
+            but the attribute is not set, the status code in the HTTP response will default to
+            200.
+
+
+In the "failure" scenario, the HTTP_STATUS_CODE_ATTRIBUTE is
+        not used. So, if a non-500 status code is required, it must be provided in a successful data
+        flow path. For example, if a 409 Conflict is desired in a particular case,
+        you can achieve it as follows:
+
+
+In the data flow, include an UpdateAttribute processor that sets an arbitrary
+            attribute, for example http.status.code, to the value
+              409.
+
+
+Optionally, add a ReplaceText processor that sets the contents of the
+            flowfile using Always Replace to whatever HTTP response body is
+            desired.
+
+
+Route this part of the flow to the main Output Port used for the success
+            case.
+
+
+In the GCP Cloud function, set the Runtime environment variable
+              HTTP_STATUS_CODE_ATTRIBUTE to http.status.code,
+            and deploy it.
+
+
+You may also use this same method to set a non-200 success code.
+
+

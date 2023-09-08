@@ -1,0 +1,131 @@
+Restoring a CDE serviceCloudera Docs
+Restoring a CDE service 
+You can restore the Cloudera Data Engineering (CDE) service with its jobs, resources,
+        job run history, and job logs from a backed-up ZIP file.
+You must back up the CDE service, you must expand the resource pool, and then
+            upgrade your Cloudera Data Platform (CDP) to restore the CDE service. You must validate
+            that the Ozone Gateway is working as expected by performing the steps listed in the
+                Post upgrade - Ozone Gateway validation topic. importantIt is recommended to copy the logs of the commands run from the terminal and save
+                them on your machine. This will be helpful in debugging or when raising a support
+                ticket. You can also increase the terminal buffer size and save the terminal logs of
+                each command for reference.
+
+ If you have exited from the previous terminal where the
+                        pre-upgrade commands were run for CDE Service being
+                    upgraded, then you have to export these variables before running any docker
+                    command. 
+
+export BASE_WORK_DIR=<host_machine_path>
+export BACKUP_OUTPUT_DIR=/home/dex/backup
+
+
+ Run the dex-upgrade-utils docker image to restore the
+                    service on the same machine where you have completed the prerequisite steps. 
+
+$ docker run \
+-v <kubeconfig_file_path>:/home/dex/.kube/config:ro \
+-v <cdp_credential_file_path>:/home/dex/.cdp/credentials:ro \
+-v <cde-upgrade-util.properties_file_path>:/opt/cde-backup-restore/scripts/backup-restore/cde-upgrade-util.properties:ro \
+-v <local_backup_directory>:$BACKUP_OUTPUT_DIR \
+-e KUBECONFIG=/home/dex/.kube/config \
+<docker_image_name>:<docker_image_version> restore-service -s <cde-cluster-id> -f $BACKUP_OUTPUT_DIR/<backup-zip-file-name>
+ Here -s is the CDE service ID and -f is
+                        the backup output filepath in the container.
+Example:
+$ docker run \
+-v $BASE_WORK_DIR/secrets/kubeconfig:/home/dex/.kube/config:ro \
+-v $BASE_WORK_DIR/secrets/credentials:/home/dex/.cdp/credentials:ro \
+-v $BASE_WORK_DIR/cde-upgrade-util.properties:/opt/cde-backup-restore/scripts/backup-restore/cde-upgrade-util.properties:ro \
+-v $BASE_WORK_DIR/backup:$BACKUP_OUTPUT_DIR \
+-e KUBECONFIG=/home/dex/.kube/config \
+docker-private.infra.cloudera.com/cloudera/dex/dex-upgrade-utils:1.19.1 restore-service -s cluster-c2dhkp22 -f $BACKUP_OUTPUT_DIR/cluster-c2dhkp22-2023-03-10T06_00_05.zip
+
+
+[Optional] If you are using a CDP database that is external and is not
+                    accessible from the container which is running the CDE upgrade command, then the
+                    following SQL statements are displayed in the logs.
+
+Example:
+2023-05-17 13:02:29,551 [INFO] CDP control plane database is external and not accessible
+2023-05-17 13:02:29,551 [INFO] Please rename the old & new cde service name manually by executing below SQL statement
+2023-05-17 13:02:29,551 [INFO]     update cluster set name = 'cde-base-service-1' where id = 'cluster-92c2fkgb';
+    2023-05-17 13:02:29,551 [INFO]     update cluster set name = 'cde-base-service-1-18-1' where id = 'cluster-rtc234g8';
+2023-05-17 13:02:29,551 [INFO] Please update the lastupdated time of old cde service in db to extend the expiry interval of db entry for supporting CDE CLI after old CDE service cleanup
+2023-05-17 13:02:29,551 [INFO]     update cluster set lastupdated = '2023-05-05 06:16:37.786199' where id = 'cluster-rtc234g8';
+                -----------------------------------------------------------------
+You must execute the above SQL statements to complete the restore
+                        process.
+If you have closed the terminal or do not have this information, run the
+                        following SQL statements and specify the cluster details. Use the cluster ID
+                        that you noted when performing the steps listed in the Prerequisites
+                            for upgrading CDE Service with endpoint stability section.
+
+Rename old CDE service to a different name.
+update cluster set name = '<modified_service_name>' where id = '<old_cde_cluster_id>';
+Example:update cluster set name = 'cde-base-service-1' where id = 'cluster-92c2fkgb'
+Rename the new CDE service to the old CDE service name.
+                            update cluster set name = '<old_cde_service_name>' where id = '<new_cde_cluster_id>';
+                            Example:
+                            update cluster set name = 'cde-base-service-1-18-1' where id = 'cluster-rtc234g8'
+
+Run the following command so that when the old CDE service is
+                            deleted/disabled then it is not cleared from the database for the next
+                            two years. The timestamp format must be the same and should be two years
+                            of the current time.
+                            update cluster set lastupdated = 'YYYY-MM-DD hh:mm:ss[.nnn]' where id = '<old_cde_cluster_id>';
+                            Example:
+                            update cluster set lastupdated = '2023-05-05 06:16:37.786199' where id = 'cluster-rtc234g8'
+
+
+
+
+[Optional] When the cluster is restored, self-signed certificates are
+                    automatically added to the new virtual clusters. To use a signed certificate and
+                    private key, perform the following:
+
+
+Identify the virtual cluster endpoint: 
+In the Cloudera Data Platform (CDP)
+                                    console, click the Data Engineering tile.
+                                    The CDE Home page displays. 
+Click Administration in the left
+                                    navigation menu. The Administration page
+                                    displays. 
+In the Services column on the left, click
+                                         corresponding to the CDE service whose endpoint you want to
+                                    migrate. 
+Click the JOBS API URL link to copy the
+                                    URL to your clipboard. 
+Paste the URL into a text editor to identify the endpoint host.
+                                    For example, the URL is similar to the following:
+                                    http://dfdj6kgx.cde-2cdxw5x5.ecs-demo.example.com/dex/api/v1
+                                    The endpoint host is
+                                        dfdj6kgx.cde-2cdxw5x5.ecs-demo.example.com.
+
+Provide a signed certificate and private key. Make sure that the
+                            certificate is a wildcard certificate for the cluster endpoint. For
+                            example,
+                            *.dfdj6kgx.cde-2cdxw5x5.ecs-demo.example.com../cdp-cde-utils.sh init-virtual-cluster -h <endpoint_host> -c /path/to/cert -k /path/to/keyfile For
+                            example, using the previous example URL, the endpoint host is
+                                dfdj6kgx.cde-2cdxw5x5.ecs-demo.example.com:
+                            ./cdp-cde-utils.sh init-virtual-cluster -h dfdj6kgx.cde-2cdxw5x5.ecs-demo.example.com -c /tmp/cde-pvc.crt -k /tmp/cde-pvc.key
+                            You must perform this procedure for each virtual cluster you use. 
+
+
+
+After the restore operation completes, validate that the jobs and resources are
+                    restored by running the cde job list and cde
+                        resource list CLI commands or check the virtual cluster job UI. 
+In the Administration page of the CDE UI, you can see
+                    the old CDE service is appended with a version number. For example, if the old
+                    CDE service name was cde-sales, after the restore, the old
+                    CDE service name is something similar to
+                    cde-sales-1-18.2.
+
+[Optional] You can now delete the old CDE service after validating that
+                    everything is working as expected. If you delete the old CDE service, then you
+                    can shrink the resource pool size back to its initial value which you expanded
+                    in the Prerequisite steps.
+
+
+Related informationUpgrading CDP on the Embedded Container ServiceOzone Gateway validation Parent topic: Post-upgrade - Restoring CDE Service for Endpoint Stability

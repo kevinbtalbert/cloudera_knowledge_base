@@ -1,0 +1,115 @@
+Recommendations for managing Docker containers on YARNCloudera Docs
+Recommendations for managing Docker containers on YARN
+YARN expects that Docker is already installed on all NodeManager hosts where Docker containers will run. 
+        Consider these recommendations before installing and configuring Docker for use with YARN.
+    
+Docker Version
+The minimum recommended version is Docker 1.12.5. Docker is rapidly
+                evolving and shipping multiple releases per year. Not all versions of Docker have
+                been tested. Docker versioning changed in 2017, and is now known as Docker CE.
+                Cloudera recommends running a recent version of Docker CE. 
+Note that recent versions of Docker CE use the overlay2 storage driver
+                which probably does not work for all workloads.
+RHEL/CentOs provides a version of Docker that can be installed through
+                yum.
+
+Storage Driver
+The storage driver you choose depends on OS kernel, workload, and Docker
+                version. Cloudera recommends administrators to read the documentation, consult with
+                their operating system vendor, and test the desired workload before making a
+                decision.
+Tests showed that device mapper using LVM is generally stable. Under high
+                write load to the container’s root filesystem, device mapper exhibited panics. SSDs
+                for the Docker graph storage are recommended in this case, but care still needs to
+                be taken. Overlay and overlay2 perform significantly better than device mapper and
+                are recommended if the OS kernel and workload support it.
+
+CGroup Support
+ YARN provides isolation through the use of cgroups. Docker also has cgroup
+                management built in. If isolation through cgroups is desired, Cloudera recommends to
+                use the cgroup management of YARN. YARN creates the cgroup hierarchy and set the the
+                    --cgroup-parent flag when launching the container. 
+ The cgroupdriver must be set to cgroupfs. Ensure
+                that Docker is running using the --exec-opt
+                    native.cgroupdriver=cgroupfs docker daemon option. 
+note
+
+                    The Docker version included with RHEL/CentOS 7.2+ sets the cgroupdriver to systemd. 
+                    You must change this, typically in the docker.service systemd unit file. 
+                
+
+vi /usr/lib/systemd/system/docker.service
+                
+ Find and sdd the following line to the cgroupdriver: 
+
+--exec-opt native.cgroupdriver=cgroupfs \
+                
+Also, this version of Docker may include oci-hooks that expect to use the systemd cgroupdriver. 
+                    Search for oci on your system and remove these files. For example:
+
+rm -f /usr/libexec/oci/hooks.d/oci-systemd-hook
+rm -f /usr/libexec/oci/hooks.d/oci-register-machine
+                
+
+
+Networking
+YARN has support for running Docker containers on a user specified network, however,
+                it does not manage the Docker networks. Administrators have to create the networks
+                before running the containers. Node labels can be used to isolate particular
+                networks. It is crucial to read and understand the Docker networking documentation.
+                Cloudera does not recommend swarm based options. Overlay networks can be used if the
+                setup uses an external store, such as etcd.
+YARN request the networking details, such as IP address and hostname, from the
+                Docker.  As a result, all networking types are supported. Set the
+                    YARN_CONTAINER_RUNTIME_DOCKER_CONTAINER_NETWORK environment
+                variable to specify the network that is used. 
+Cloudera recommends to use host networking only for testing. If the network where the
+                NodeManagers are running has a sufficient number of IP addresses, the bridge
+                networking with --fixed-cidr option works properly. Each
+                NodeManager is allocated with a small portion of the larger IP space, and then the
+                NodeManagers allocate those IP addresses to containers.
+If you want to use an administrator defined network, add the network to the
+                    yarn.nodemanager.runtime.linux.docker.allowed-container-networks
+                property using Cloudera Manager.
+
+Image Management
+            
+ Images can be preloaded on all NodeManager hosts or they can be implicitly pulled at
+                runtime if they are available in a public Docker registry, such as Docker hub. If
+                the image does not exist on the NodeManager host and cannot be pulled, the container
+                fails. 
+
+Docker Bind Mounted Volumes
+note
+ Take extra care when enabling this feature. Enabling access to directories such
+                    as, but not limited to, /, /etc,
+                        /run, or /home is not advisable and can
+                    result in containers negatively impacting the host or leaking sensitive
+                    information. 
+
+ Files and directories from the host are commonly needed within the Docker
+                containers, which Docker provides through volumes. Examples include localized
+                resources, Apache Hadoop binaries, and sockets. In order to make use of this
+                feature, the following must be configured: 
+ The administrator must define the volume allowlist by setting
+                    docker.allowed.ro-mounts and
+                    docker.allowed.rw-mounts to the list of parent directories that
+                are allowed to be mounted. 
+
+                The application submitter requests the required volumes at application submission time using the YARN_CONTAINER_RUNTIME_DOCKER_MOUNTS environment variable.
+                
+            
+ The administrator supplied allowlist is defined as a comma separated list of
+                directories that are allowed to be mounted into containers. The source directory
+                supplied by the user must either match or be a child of the specified directory. 
+The user supplied mount list is defined as a comma separated list in the form
+                    source:destination:mode. This format is ensured when you use
+                Cloudera Manager, as a validation error is displayed, if a mount does not satisfy
+                this format. The source is the file or directory on the host. The
+                    destination is the path within the container where the source
+                will be bind mounted. The mode defines the mode the user expects
+                for the mount, which can be “ro” or “rw”
+                representing read-only and read-write mode respectively.
+
+
+Related informationEnable CgroupsParent topic: Configuring YARN Docker Containers Support

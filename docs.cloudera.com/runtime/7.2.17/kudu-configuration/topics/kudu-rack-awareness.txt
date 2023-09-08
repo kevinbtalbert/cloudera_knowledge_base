@@ -1,0 +1,56 @@
+Rack awareness (Location awareness)Cloudera Docs
+Rack awareness (Location awareness)
+Kudu's rack awareness feature provides protection from correlated failures. The rack
+    awareness feature has two elements: location assignment and placement policy.
+Kudu supports a rack awareness feature. Kudu’s ordinary re-replication methods ensure the
+      availability of the cluster in the event of a single node failure. However, clusters can be
+      vulnerable to correlated failures of multiple nodes. For example, all of the physical hosts on
+      the same rack in a datacenter may become unavailable simultaneously if the top-of-rack switch
+      fails. Kudu’s rack awareness feature provides protection from certain kinds of correlated
+      failures, such as the failure of a single rack in a datacenter.
+Location assignment
+The first element of Kudu’s rack awareness feature is location
+        assignment. When a tablet server registers with a master, the master assigns it a location.
+        A location is a /-separated string that
+        begins with a / and where each /-separated component consists of characters from
+        the set [a-zA-Z0-9_-.]. 
+For example, /dc-0/rack-09 is a valid location, while rack-04 and /rack=1 are not
+        valid locations. Thus location strings resemble absolute UNIX file paths where characters in
+        directory and file names are restricted to the set [a-zA-Z0-9_-.]. 
+Kudu does not use the hierarchical structure of locations. Location
+        assignment is done by a user-provided command, whose path should be specified using the
+          --location_mapping_cmd master flag. The
+        command should take a single argument, the IP address or hostname of a tablet server, and
+        return the location for the tablet server. Make sure that all Kudu masters are using the
+        same location mapping command. 
+
+Placement policy
+The second element of Kudu’s rack awareness feature is the placement
+        policy: Do not place a majority of replicas of a tablet on tablet servers in the same
+        location. 
+The leader master, when placing newly created replicas on tablet servers
+        and when re-replicating existing tablets, will attempt to place the replicas in a way that
+        complies with the placement policy. 
+For example, in a cluster with five tablet servers A, B, C, D, and E, with respective locations /L0, /L0, /L1, /L1, /L2, to comply with the
+        placement policy a new 3x replicated tablet could have its replicas placed on A, C, and E, but not on A, B, and C, because then the
+        tablet would have 2/3 replicas in location /L0. 
+As another example, if a tablet has replicas on tablet servers A, C, and E, and then C fails, the replacement replica must be placed
+        on D in order to comply with the placement
+        policy. 
+ In the case where it is impossible to place replicas in a way that
+        complies with the placement policy, Kudu will violate the policy and place a replica anyway.
+        For example, using the setup described in the previous paragraph, if a tablet has replicas
+        on tablet servers A, C, and E, and then E fails, Kudu will
+        re-replicate the tablet onto one of B or
+          D, violating the placement policy, rather
+        than leaving the tablet under-replicated indefinitely. 
+The kudu cluster
+          rebalance tool can reestablish the placement policy if it is possible to do so.
+        The kudu cluster rebalance tool can also be
+        used to reimpose the placement policy on a cluster if the cluster has just been configured
+        to use the rack awareness feature and existing replicas need to be moved to comply with the
+        placement policy. See Run a tablet rebalancing tool on a rack-aware cluster for
+        more information.
+
+
+Related informationRunning a tablet rebalancing tool on a rack-aware cluster

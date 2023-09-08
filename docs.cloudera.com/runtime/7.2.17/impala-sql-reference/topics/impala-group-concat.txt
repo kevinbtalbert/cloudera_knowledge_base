@@ -1,0 +1,91 @@
+GROUP_CONCAT functionCloudera Docs
+GROUP_CONCAT function
+An aggregate function that returns a single string representing the argument value
+    concatenated together for each row of the result set. If the optional separator string is
+    specified, the separator is added between each pair of concatenated values. The default
+    separator is a comma followed by a space. 
+Syntax:
+GROUP_CONCAT([ALL | DISTINCT] expression [, separator])
+Usage notes: concat() and concat_ws() are appropriate for
+        concatenating the values of multiple columns within the same row, while group_concat()
+        joins together values from different rows.
+      
+      By default, returns a single string covering the whole result set. To include other columns or values in the
+      result set, or to produce multiple concatenated strings for subsets of rows, include a GROUP
+      BY clause in the query.
+    
+Return type: STRING
+
+        This function cannot be used in an analytic context. That is, the OVER() clause is not allowed at all with this function.
+      
+      Currently, Impala returns an error if the result value grows larger than 1 GiB.
+    
+Examples:
+
+      The following examples illustrate various aspects of the GROUP_CONCAT() function.
+    
+      You can call the function directly on a STRING column. To use it with a numeric column, cast
+      the value to STRING.
+    [localhost:21000] > create table t1 (x int, s string);
+[localhost:21000] > insert into t1 values (1, "one"), (3, "three"), (2, "two"), (1, "one");
+[localhost:21000] > select group_concat(s) from t1;
++----------------------+
+| group_concat(s)      |
++----------------------+
+| one, three, two, one |
++----------------------+
+[localhost:21000] > select group_concat(cast(x as string)) from t1;
++---------------------------------+
+| group_concat(cast(x as string)) |
++---------------------------------+
+| 1, 3, 2, 1                      |
++---------------------------------+
+
+      Specify the DISTINCT keyword to eliminate duplicate values from
+      the concatenated result:
+    
+[localhost:21000] > select group_concat(distinct s) from t1;
++--------------------------+
+| group_concat(distinct s) |
++--------------------------+
+| three, two, one          |
++--------------------------+
+
+      The optional separator lets you format the result in flexible ways. The separator can be an arbitrary string
+      expression, not just a single character.
+    [localhost:21000] > select group_concat(s,"|") from t1;
++----------------------+
+| group_concat(s, '|') |
++----------------------+
+| one|three|two|one    |
++----------------------+
+[localhost:21000] > select group_concat(s,'---') from t1;
++-------------------------+
+| group_concat(s, '---')  |
++-------------------------+
+| one---three---two---one |
++-------------------------+
+
+      The default separator is a comma followed by a space. To get a comma-delimited result without extra spaces,
+      specify a delimiter character that is only a comma.
+    [localhost:21000] > select group_concat(s,',') from t1;
++----------------------+
+| group_concat(s, ',') |
++----------------------+
+| one,three,two,one    |
++----------------------+
+
+      Including a GROUP BY clause lets you produce a different concatenated result for each group
+      in the result set. In this example, the only X value that occurs more than once is
+      1, so that is the only row in the result set where GROUP_CONCAT() returns a
+      delimited value. For groups containing a single value, GROUP_CONCAT() returns the original
+      value of its STRING argument.
+    [localhost:21000] > select x, group_concat(s) from t1 group by x;
++---+-----------------+
+| x | group_concat(s) |
++---+-----------------+
+| 2 | two             |
+| 3 | three           |
+| 1 | one, one        |
++---+-----------------+
+

@@ -1,0 +1,110 @@
+Known issues in Hive Virtual Warehouses on public cloudsCloudera Docs
+Known issues in Hive Virtual Warehouses on public clouds
+Learn about the known issues related to Hive Virtual Warehouse in Cloudera Data
+    Warehouse (CDW) service on public clouds, the impact or changes to the functionality, and the
+    workaround.
+
+DWX-10271: Missing log section in Hive query results
+In a Hive Virtual Warehouse, when you run a query in Hue, the query results do not contain a
+      logs section.
+DWX-8118: INSERT INTO command fails under certain circumstances
+This problem affects users who have a PostgreSQL database as the backend Hive database. If
+        you create a table A and create a table B as select (CTAS) from an empty table A,
+        inserting values into table B fails as follows:
+        Error while compiling statement: FAILED: Execution Error, return code 1 from 
+          org.apache.hadoop.hive.ql.exec.StatsTask.org.apache.thrift.transport.TTransportException
+Workaround: Disable auto-stats gathering: Go to Cloudera Manager Data Warehouse > Virtual Warehouses, and click the Hive VW name in the list. In Configuration > HiveServer2, set hive.cbo.enable to false. 
+DWX-5841: Virtual Warehouse endpoints are now restricted to TLS 1.2
+Problem: TLS 1.0 and 1.1 are no longer considered secure, so now Virtual Warehouse
+        endpoints must be secured with TLS 1.2 or later, and then the environment that the Virtual
+        Warehouse uses must be reactivated in CDW. This includes both Hive and Impala Virtual
+        Warehouses. To reactivate the environment in the CDW UI:
+        
+Deactivate the environment. See Deactivating AWS environments or Deactivating Azure environments.
+Activate the environment. See Activating AWS environments or Activating Azure environments
+
+
+Workaround: If environment reactivation is not possible, you can perform manual
+        steps using the kubectl command line tool to pick up the TLS 1.2 endpoint
+        change. Open a terminal window on a system where the kubectl command line
+        tool is installed, log in, and run the following commands:
+        kubectl edit svc nginx-service -n <cluster-name>
+
+# Add the following under the metadata.annotations field
+service.beta.kubernetes.io/aws-load-balancer-ssl-negotiation-policy: "ELBSecurityPolicy-TLS-1-2-2017-01"
+      
+# Save and quit the editor, and then run the following command to check your changes.
+      
+kubectl get svc nginx-service -n <cluster-name> -o yaml
+      
+# Make sure that the annotation you added is present.
+
+DWX-5926: Cloning an existing Hive Virtual Warehouse fails
+Problem: If you have an existing Hive Virtual Warehouse that you clone by selecting
+        Clone from the drop-down menu, the cloning
+      process fails. This does not apply to creating a new Hive Virtual Warehouse.
+Workaround: Make the following configuration change to resolve this issue:
+        
+In the Hive Virtual Warehouse tile, click the edit icon. This launches the Virtual
+            Warehouse details page.
+In the details page for the Virtual Warehouse, click the
+                Configurations tab.
+Click the Hiveserver2 sub-tab.
+Select hive-site from the configuration file drop-down list
+              menu.
+Search for the configuration property
+              hive.metastore.sasl.enabled.
+Set the hive.metastore.sasl.enabled configuration property to
+                true. noteIf the hive.metastore.sasl.enabled
+                configuration property is already set to true, delete the setting
+                and re-enter it.
+
+              Click Apply in the upper right corner of the page to save
+                the configuration.
+            
+Click the Actions menu and select Clone
+            to clone the Hive Virtual Warehouse:
+            
+
+
+
+
+
+DWX-2690: Older versions of Beeline return SSLPeerUnverifiedException when submitting a
+     query
+
+Problem: When submitting queries to Virtual Warehouses that use Hive, older Beeline
+      clients return an SSLPeerUnverifiedException error:
+javax.net.ssl.SSLPeerUnverifiedException: Host name ‘ec2-18-219-32-183.us-east-2.compute.amazonaws.com’ does not
+match the certificate subject provided by the peer (CN=*.env-c25dsw.dwx.cloudera.site) (state=08S01,code=0)
+
+
+Workaround: Only use Beeline clients from CDP Runtime version 7.0.1.0 or later.
+
+
+Technical Service Bulletins
+
+
+TSB 2021-525: Hive Virtual Warehouse in Cloudera Data Warehouse (CDW) available in CDP Public Cloud does not start the required nodes and further does not scale up/down
+When Hive Virtual Warehouse is configured to start with a minimum scaling factor > 1, there is a chance that it will not start the required number of nodes. When this happens it will fail to release the nodes when stopped and result in an increase in cost. The scale up does not work too.
+          Symptoms:
+          
+When Virtual Warehouse moves to started state, the UI will show as started but the number of instances started is less than what was configured.
+The Virtual Warehouse will not scale up at all, it will be stuck at the initial number of nodes.
+Further, when the cluster reaches “stopped” state either manually or via configured idle timeout, the UI will show the state as stopped but the nodes are not actually released.
+
+
+Impact
+
+The scale up stops working and it does not reach the configured parallelism.
+The scale down stops working and it will continue running the nodes even when stopped.
+This results in increased cost until the Virtual Warehouse is stopped.
+
+Action required
+Delete the Virtual Warehouse and create a new one, make sure the minimum scale factor is 1. Once the new patch is released it will start normally, but existing instances in this state have to be deleted and recreated.
+Knowledge article
+For the latest update on this issue see the corresponding Knowledge article: TSB 2021-525: Hive Virtual Warehouse in Cloudera Data Warehouse (CDW) available in CDP Public Cloud does not start the required nodes and further does not scale up/down
+
+
+
+Parent topic: Older known issues

@@ -1,0 +1,80 @@
+Manually configuring SAML authenticationCloudera Docs
+Manually configuring SAML authentication
+To manually configure Hue for SAML authentication on unmanaged clusters, you must add
+    GCC Python libraries and install xmlsec1 tools on all the hosts in your
+    cluster.
+    
+
+These instructions assume that you have an Identity
+            Provider set up and running. You can use any identity provider of your choice. For
+            example, Okta, Ping Identity, and OpenAM.
+importantYou may need to disable cipher algorithms before manually configuring Hue
+            for SAML authentication.
+
+
+Install the following libraries on all hosts in your
+                cluster:
+
+## RHEL/CentOS
+yum install git gcc python-devel swig openssl## Ubuntu/Debian
+apt-get install git gcc python-dev swig openssl## SLES
+zypper install git gcc python-devel swig openssl make libxslt-devel libltdl-devel
+
+
+Install xmlsec1 and xmlsec1-openssl
+              on all hosts in the cluster:
+
+importantEnsure
+                that the xmlsec1 package is executable by the
+                user, hue.
+              ## RHEL/CentOS 
+yum install xmlsec1 xmlsec1-opensslnoteIf
+  xmlsec libraries are not available, use the appropriate epel
+    repository:
+  ## For RHEL/CentOS 7
+wget http://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-6.noarch.rpm
+rpm -ivh epel-release-7-6.noarch.rpm## Ubuntu/Debian
+apt-get install xmlsec1 libxmlsec1-openssl## SLES (get latest version)
+wget http://www.aleksey.com/xmlsec/download/xmlsec1-1.2.24.tar.gz
+tar -xvzf xmlsec1-1.2.24.tar.gz
+cd xmlsec1-1.2.24
+./configure && make
+make install
+
+
+Copy metadata from your identity provider's SAML server and save it as an XML
+              file on every host with a Hue server. For example, if your identity provider is
+                  Shibboleth, visit
+                  https://<idp_host>:8443/idp/shibboleth,
+              copy the metadata content, and paste it into an XML file. Read the
+              documentation of your identity provider for details on how to
+              copy the XML of the SAML server metadata.
+
+noteYou may have to edit the copied metadata; for example,
+                the identity provider's port number (8443)
+                might be missing from its URL.
+mkdir -pm 755 /opt/cloudera/security/saml/
+cd /opt/cloudera/security/saml/vim idp-<your idp provider>-metadata.xml
+# Paste IdP SAML here and save
+
+
+Add the files that the key_file and cert_file SAML
+          properties point to for encrypted assertions and make sure you add this properties to the
+          hue.ini configuration file.
+
+
+The key_file parameter points to the location of the private key that
+            is used to encrypt metadata. Its file format must be
+              <file_name>.PEM.
+The cert_file parameter points to the location of the X.509
+            certificate that is sent with encrypted metadata. Its file format must be
+            <file_name>.PEM.
+
+warningAdd the key and cert files even if you are not encrypting
+              assertions. Hue checks for the existence and validity of these files even if they are
+              not needed. They cannot be empty files. This is a known issue. If necessary, create a
+              valid self-signed certificate:openssl req -x509 -newkey rsa:2048 -sha256 -days 3560 -nodes -keyout host.key -out host.pem -subj '/CN=Hue SAML'
+
+
+
+Parent topic: Authenticating Hue users with SAML

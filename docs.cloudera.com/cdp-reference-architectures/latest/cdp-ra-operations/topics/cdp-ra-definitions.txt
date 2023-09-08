@@ -1,0 +1,167 @@
+DefinitionsCloudera Docs
+Definitions
+Before you use Cloudera Data Platform (CDP) disaster recovery solutions, you might want
+    to understand the definitions of certain terms that are related to disaster recovery
+    operations.
+Disaster recovery and business continuity planning
+
+Disaster Recovery (DR)
+Disaster recovery concerns the collected set of tools, equipment, policies, and
+            procedures required to recover a business environment in the event of some disaster.
+            This disaster can be a natural or environmental event such as flood or fire, it can be a
+            technical issue such as power loss or critical equipment failure, or can be caused by
+            human factors (inadvertent or otherwise). Disaster recovery solutions are often designed
+            with two or more geographically-separated environments to facilitate returning business
+            processes back to a normal standard of operation, even in the event that one environment
+            is unrecoverable.
+Business Continuity Planning (BCP)
+Business continuity planning is a superset of the disaster recovery design process.
+            With business continuity planning, the goal is to identify the items that minimally need
+            to be running as soon as possible after a disaster-level event has occurred. While all
+            business processes may need to be restored after an event, each process has a particular
+            priority that defines how soon that must occur and what level of data loss is tolerable
+            from that event. Two metrics that help define this are the Recovery Point Objective
+            (RPO) and Recovery Time Objective (RTO).
+
+
+Seven tiers for disaster recovery
+The seven tiers for disaster recovery are used to provide a concise definition. The tiers
+        that are most relevant to this document are tier 4 and 5.
+
+Tier 4: Point-in-time recovery
+In this tier, point-in-time copies of storage volumes, files or dates are created at a
+            specific moment, such as end-of-day. The copies are stored in an active-secondary site,
+            either company-owned or provided by a third party. Copies are stored at both the primary
+            and secondary sites, each site backing up the other. Disk and solid-state storage are
+            used in this tier, as well as cloud storage technology.
+Cloudera backup and disaster recovery is designed to deliver a tier 4 capability
+            between one or more separate clusters in different regions.
+Tier 5: Two-site commit/transaction integrity
+At this tier, data is continuously transmitted to primary and alternate backup sites.
+            Organizations need substantial network bandwidth, often provided through the internet,
+            to maintain a constant flow of data. Local as well as remote storage can be used in this
+            situation. Cloud storage is often a fit at this tier.
+If higher levels of disaster recovery are required then certain services and
+            applications can be configured to achieve it. For example Kafka in combination with
+            Streams Replication or HBase in an active-active configuration can achieve these
+            requirements. However HDFS can only typically achieve tier 4.
+For more information, see Seven tiers of disaster recovery.
+
+
+Recovery Point Objective and Recovery Time Objective
+
+Recovery Point Objective (RPO)
+
+The Recovery Point Objective defines how much data loss is tolerated as a
+              direct outcome of an incident. Another way to think of this is how recent your data
+              needs to be on the secondary site to permit recovery operations. This metric is
+              measured over a particular time period for recovery purposes. For example, if you can
+              only tolerate five minutes worth of data loss, having a disaster recovery strategy
+              that synchronizes data hourly is insufficient. The RPO directly affects how frequently
+              your disaster recovery environments must be synchronized or backed up to survive an
+              incident. Additionally, this also drives the design of the disaster recovery
+              environment. As you move closer to near- or real-time data synchronization, depending
+              on your storage mechanism of choice, you may need to switch from periodic data
+              synchronizing to dual-ingestion to achieve your RPO requirements.
+
+Recovery Time Objective (RTO) 
+The Recovery Time Objective is a separate, but a related metric. This metric defines
+            the amount of time you have to restore normal service to your business systems before
+            you begin negatively impacting the business processes. In other words, how long after
+            the incident can the system be down before the normal recovery process is impacted, such
+            as requiring additional manual work to re-run processes.
+
+
+High availability
+When we talk about high availability (HA), we think about it in terms of both
+        intra- and inter-cluster behavior. Additionally, availability requirements must be
+        considered for the entire stack, from the CDP platform up to all applications built on top. 
+To minimize the risk of single components taking out an individual environment,
+        we look at the single points of failure and attempt to reasonably address those within that
+        system. As an example, we enable multiple HDFS NameNodes within CDP Private Cloud Base to
+        allow the system to survive individual service issues. This helps reduce the need to
+        fail-over to an entire disaster recovery environment, which further reduces the operational
+        work required to recover from an individual service issue.
+Additionally, we can think about high availability across equivalently configured
+        clusters through the use of load balancers and suitable data, metadata, and workload
+        synchronization. Dual-ingesting data into multiple clusters can help facilitate this mode of
+        HA. In some cases, such as cost minimization, you may consider reducing availability within
+        a cluster because overall availability is sufficiently provided across clusters. 
+Cloudera recommends considering high availability at all levels for all
+        environments because the operational and runtime benefits far outweigh the cost
+        reductions.
+
+Backups
+Backups are the processes, procedures, and equipment necessary to have a
+        recoverable snapshot of the data, metadata, and related environmental information. Backing
+        up data, metadata, and workload information is a form of disaster recovery preparation, but
+        the time scales associated with restoring service may preclude it from being a sole source
+        of recovery (that is, the recovery time is higher). Relying only on backups misses critical
+        parts of the architecture such as replacement equipment, time to provision new equipment and
+        environments, and so on. 
+Where backups come into play with disaster recovery is in the case of managing
+        data corruption or data deletion. Without backups, the risk in a paired set of disaster
+        recovery clusters is data corruption or deletion propagating between the two.
+
+Environment naming
+Disaster recovery clusters are traditionally designed in pairs or more. Cloudera recommends
+        describing them in terms of Left/Right, A/B, or through regional monikers such as East/West.
+        When naming environments like Production/Production-DR, you can get into some confusion
+        post-failover, when Production-DR effectively becomes “Production”, and the original
+        environment finally comes back online. 
+
+Active-Active and Active-Passive
+Disaster Recovery architectures are designed in terms of Active-Active or
+        Active-Passive.
+noteUnlike, for example an RDBMS, the CDP clusters do not have an
+        explicit passive mode. Even in an Active-Passive architecture, the clusters are always
+        Active. In this section, we are explicitly referring to Active and Passive application
+        architectures, rather than clusters.
+
+Active-Active
+In Active-Active designs, writes can go into each side of the disaster recovery pair,
+            with the expectation that new or changed data is correctly and quickly replicated. Read
+            requests can go to either side of the pair with some understanding that they may not be
+            consistent within the bounds of replication latency behavior. For example, replication
+            happens asynchronously in CDP. If a client writes to cluster A and immediately attempts
+            to read that from cluster B because of a failover incident, the data may not look
+            consistent to the client. Data consistency is only guaranteed within a single cluster
+            environment. 
+Active-Passive
+In Active-Passive designs, one half of the pair is declared the primary. All reads and
+            writes go to the primary, the passive cluster being configured as a read-only replica to
+            reduce risks of inconsistencies. All data changes are replicated to the secondary
+            environment. Generally, clients are never exposed to the secondary environment unless an
+            incident occurs that requires failover between clusters. In some Active-Passive designs,
+            clients may be directed to read from secondary environments when higher data latency can
+            be tolerated. This allows you to utilize the additional idle capacity on the secondary
+            cluster with the understanding that those use cases may need to be halted during a
+            failure event.
+
+
+Stretch clusters
+A stretch cluster is a single logical cluster that is placed across multiple
+        physical locations in a way to take advantage of cluster high availability mechanics. In
+        general, stretch clusters are not well suited for disaster recovery scenarios, despite the
+        reliance upon the cluster’s high-availability components. This cluster implementation type
+        has several notable disadvantages including minimum location count, significant impact on
+        performance due to latency, and incapability of all cluster or cluster management components
+        of high availability operation. Additionally, you may need to provide more spare capacity to
+        account for cluster behavior during failure situations, such as re-replication activities
+        that occur within HDFS or Ozone when nodes go offline.
+Minimum location set
+Stretch clusters can only operate redundantly with three distinct locations because
+              of the architectural design of lower level structural components needed by HDFS.
+              Attempts to operate with two locations leave the cluster prone to failure when quorum
+              operations occur during a critical event such as losing the dominant half of
+              odd-numbered quorum services.
+Latency
+Lower level services, such as HDFS, YARN, and Zookeeper, are prone to significant
+              negative performance impact as you stretch network latency. HDFS, for example, must
+              wait for the data block write pipeline to complete before providing a consistent
+              response to client write operations. Individual YARN jobs can see poor read
+              performance if tasks are dispatched to nodes not co-located with the required data.
+              The larger the network latency, the lower the overall read and write performance.
+
+
+

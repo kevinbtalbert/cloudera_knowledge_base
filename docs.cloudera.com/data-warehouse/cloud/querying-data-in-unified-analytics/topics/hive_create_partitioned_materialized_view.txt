@@ -1,0 +1,163 @@
+Creating and using a partitioned materialized viewCloudera Docs
+Creating and using a partitioned materialized view
+When creating a materialized view, you can partition selected columns to improve
+        performance. Partitioning separates the view of a table into parts, which often improves
+        query rewrites of partition-wise joins of materialized views with tables or other
+        materialized views.
+
+This task assumes you created a materialized view of the emps and
+                    depts tables and assumes you created these tables. The
+                    emps table contains the following data:
+
+
+ empid 
+ deptno 
+ name 
+ salary 
+ hire_date 
+
+
+
+ 10001 
+ 101 
+ jane doe 
+ 250000
+ 2018-01-10
+
+
+ 10005 
+ 100 
+ somporn klailee 
+ 210000
+ 2017-12-25
+
+
+ 10006 
+ 200 
+ jeiranan thongnopneua 
+ 175000
+ 2018-05-05
+
+
+The depts table contains the following data:
+
+
+deptno
+deptname
+locationid
+
+
+
+100
+HR
+10
+
+
+101
+Eng
+11
+
+
+200
+Sup
+20
+
+
+In this task, you create two materialized views: one partitions data on department;
+                the other partitions data on hire date. You select data, filtered by department,from
+                the original table, not from either one of the materialized views. The explain plan
+                shows that Hive rewrites your query for efficiency to select data from the
+                materialized view that partitions data by department. In this task, you also see the
+                effects of rebuilding a materialized view.
+
+
+Create a materialized view of the emps table that partitions
+                    data into departments.
+
+CREATE MATERIALIZED VIEW partition_mv_1 PARTITIONED ON (deptno) 
+AS SELECT hire_date, deptno FROM emps WHERE deptno > 100 AND deptno < 200;
+
+
+Create a second materialized view that partitions the data on the hire date
+                    instead of the department number.
+
+CREATE MATERIALIZED VIEW partition_mv_2 PARTITIONED ON (hire_date)
+  AS SELECT deptno, hire_date FROM emps where deptno > 100 AND deptno < 200;
+
+
+Generate an extended explain plan by selecting data for department 101 directly from the emps table without using the materialized view.
+
+EXPLAIN EXTENDED SELECT deptno, hire_date FROM emps_a where deptno = 101;
+
+
+The explain plan shows that Hive rewrites your query for efficiency, using the better of the two
+                        materialized views for the job: partition_mv_1.
++----------------------------------------------------+
+|                      Explain                       |
++----------------------------------------------------+
+| OPTIMIZED SQL: SELECT CAST(101 AS INTEGER) AS `deptno`, `hire_date` |
+| FROM `default`.`partition_mv_1`                    |
+| WHERE 101 = `deptno`                               |
+| STAGE DEPENDENCIES:                                |
+|   Stage-0 is a root stage  
+...
+
+
+Correct Jane Doe's hire date to February 12, 2018, rebuild one of the
+                    materialized views, but not the other, and compare contents of both materialized
+                    views.
+
+INSERT INTO emps VALUES (10001,101,'jane doe',250000,'2018-02-12');
+ALTER MATERIALIZED VIEW partition_mv_1 REBUILD;
+SELECT * FROM partition_mv_1 where deptno = 101;
+SELECT * FROM partition_mv_2 where deptno = 101;              
+
+The output of selecting the rebuilt partition_mv_1 includes the original
+                    row and newly inserted row because INSERT does not perform in-place updates
+                    (overwrites).
+                    +---------------------------+------------------------+
+| partition_mv_1.hire_date  | partition_mv_1.deptno  |
++---------------------------+------------------------+
+| 2018-01-10 00:00:00.0     | 101                    |
+| 2018-02-12 00:00:00.0     | 101                    |
++---------------------------+------------------------+                 
+                    The output from the other partition is stale because you did not rebuild it:
+                    +------------------------+---------------------------+
+| partition_mv_2.deptno  | partition_mv_2.hire_date  |
++------------------------+---------------------------+
+| 101                    | 2018-01-10 00:00:00.0     |
++------------------------+---------------------------+
+
+Create a second employees table and a materialized view of the tables joined on
+                    the department number.
+
+CREATE TABLE emps2 TBLPROPERTIES AS SELECT * FROM emps;
+
+CREATE MATERIALIZED VIEW partition_mv_3 PARTITIONED ON (deptno) AS
+  SELECT emps.hire_date, emps.deptno FROM emps, emps2
+  WHERE emps.deptno = emps2.deptno
+  AND emps.deptno > 100 AND emps.deptno < 200;              
+
+
+Generate an explain plan that joins tables emps and emps2 on department number using a query that omits the partitioned materialized view.
+EXPLAIN EXTENDED SELECT emps.hire_date, emps.deptno FROM emps, emps2
+  WHERE emps.deptno = emps2.deptno
+  AND emps.deptno > 100 AND emps.deptno < 200;
+The output shows that Hive rewrites the query to use the partitioned
+                    materialized view partition_mv_3 even though your query omitted the materialized
+                    view.
+
+Verify that the partition_mv_3 sets up the partition for deptno=101 for
+                    partition_mv_3.
+
+SHOW PARTITIONS partition_mv_3;
+
+Output is:
+                    +-------------+
+|  partition  |
++-------------+
+| deptno=101  |
++-------------+
+
+
+Parent topic: Creating and using a materialized view

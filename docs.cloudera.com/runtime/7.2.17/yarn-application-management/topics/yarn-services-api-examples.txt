@@ -1,0 +1,212 @@
+YARN services API examplesCloudera Docs
+YARN services API examples
+You can use the YARN Services API for situations such as creating a single-component
+    service and performing various operations on the service.
+
+
+
+Create a simple single-component service with most attribute values as
+              defaultsPOST URL –
+              http://localhost:8088/app/v1/servicesPOST Request
+              JSON
+{
+  "name": "hello-world",
+  "version": "1",
+  "components": [
+    {
+      "name": "hello",
+      "number_of_containers": 1,
+      "artifact": {
+        "id": "nginx:latest",
+        "type": "DOCKER"
+      },
+      "launch_command": "./start_nginx.sh",
+      "resource": {
+        "cpus": 1,
+        "memory": "256"
+      }
+    }
+  ]
+}GET
+              Response JSONGET URL –
+                http://localhost:8088/app/v1/services/hello-worldNote that a
+              lifetime value of -1 means unlimited
+            lifetime.{
+    "name": "hello-world",
+    "version": "1",
+    "id": "application_1503963985568_0002",
+    "lifetime": -1,
+    "components": [
+        {
+            "name": "hello",
+            "dependencies": [],
+            "resource": {
+                "cpus": 1,
+                "memory": "256"
+            },
+            "configuration": {
+                "properties": {},
+                "env": {},
+                "files": []
+            },
+            "quicklinks": [],
+            "containers": [
+                {
+                    "id": "container_e03_1503963985568_0002_01_000001",
+                    "ip": "10.22.8.143",
+                    "hostname": "myhost.local",
+                    "state": "READY",
+                    "launch_time": 1504051512412,
+                    "bare_host": "10.22.8.143",
+                    "component_name": "hello-0"
+                },
+                {
+                    "id": "container_e03_1503963985568_0002_01_000002",
+                    "ip": "10.22.8.143",
+                    "hostname": "myhost.local",
+                    "state": "READY",
+                    "launch_time": 1504051536450,
+                    "bare_host": "10.22.8.143",
+                    "component_name": "hello-1"
+                }
+            ],
+            "launch_command": "./start_nginx.sh",
+            "number_of_containers": 1,
+            "run_privileged_container": false
+        }
+    ],
+    "configuration": {
+        "properties": {},
+        "env": {},
+        "files": []
+    },
+    "quicklinks": {}
+}
+Update the lifetime of a servicePUT URL –
+                http://localhost:8088/app/v1/services/hello-worldPUT Request
+              JSONNote that irrespective of what the current lifetime value is, this update
+              request will set the lifetime of the service to 3600 seconds (1 hour) from the time
+              the request is submitted. Therefore, if a service has remaining lifetime of 5 minutes
+              (for example) and would like to extend it to an hour, OR if an application has
+              remaining lifetime of 5 hours (for example) and would like to reduce it down to one
+              hour, then for both scenarios you would need to submit the following
+            request.{
+  "lifetime": 3600
+}
+Stop a servicePUT URL –
+                http://localhost:8088/app/v1/services/hello-worldPUT Request
+              JSON{
+    "state": "STOPPED"
+}
+Start a servicePUT URL –
+                http://localhost:8088/app/v1/services/hello-worldPUT Request
+              JSON{
+    "state": "STARTED"
+}
+Increase or decrease the number of containers (instances) of a component of a
+              servicePUT URL –
+                http://localhost:8088/app/v1/services/hello-world/components/helloPUT
+              Request JSON{
+    "number_of_containers": 3
+}
+Destroy a serviceDELETE URL –
+                http://localhost:8088/app/v1/services/hello-world
+Create a complicated service – HBasePOST URL -
+                http://localhost:8088/app/v1/services/hbase-app-1
+{
+  "name": "hbase-app-1",
+  "lifetime": "3600",
+  "version": "2.0.0.3.0.0.0",
+  "artifact": {
+    "id": "hbase:2.0.0.3.0.0.0",
+    "type": "DOCKER"
+  },
+  "configuration": {
+    "env": {
+      "HBASE_LOG_DIR": "<LOG_DIR>"
+    },
+    "files": [
+      {
+        "type": "TEMPLATE",
+        "dest_file": "/etc/hadoop/conf/core-site.xml",
+        "src_file": "core-site.xml"
+      },
+      {
+        "type": "TEMPLATE",
+        "dest_file": "/etc/hadoop/conf/hdfs-site.xml",
+        "src_file": "hdfs-site.xml"
+      },
+      {
+        "type": "XML",
+        "dest_file": "/etc/hbase/conf/hbase-site.xml",
+        "properties": {
+          "hbase.cluster.distributed": "true",
+          "hbase.zookeeper.quorum": "${CLUSTER_ZK_QUORUM}",
+          "hbase.rootdir": "${SERVICE_HDFS_DIR}/hbase",
+          "zookeeper.znode.parent": "${SERVICE_ZK_PATH}",
+          "hbase.master.hostname": "hbasemaster-0.${SERVICE_NAME}.${USER}.${DOMAIN}",
+          "hbase.master.info.port": "16010"
+        }
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "hbasemaster",
+      "number_of_containers": 1,
+      "launch_command": "sleep 15;/opt/cloudera/parcels/CDH-<version>/bin/hbase master start",
+      "resource": {
+        "cpus": 1,
+        "memory": "2048"
+      },
+      "configuration": {
+        "env": {
+          "HBASE_MASTER_OPTS": "-Xmx2048m -Xms1024m"
+        }
+      }
+    },
+    {
+      "name": "regionserver",
+      "number_of_containers": 1,
+      "launch_command": "sleep 15; /opt/cloudera/parcels/CDH-<version>/bin/hbase master start",
+      "dependencies": [
+        "hbasemaster"
+      ],
+      "resource": {
+        "cpus": 1,
+        "memory": "2048"
+      },
+      "configuration": {
+        "files": [
+          {
+            "type": "XML",
+            "dest_file": "/etc/hbase/conf/hbase-site.xml",
+            "properties": {
+              "hbase.regionserver.hostname": "${COMPONENT_INSTANCE_NAME}.${SERVICE_NAME}.${USER}.${DOMAIN}"
+            }
+          }
+        ],
+        "env": {
+          "HBASE_REGIONSERVER_OPTS": "-XX:CMSInitiatingOccupancyFraction=70 -Xmx2048m -Xms1024m"
+        }
+      }
+    },
+    {
+      "name": "hbaseclient",
+      "number_of_containers": 1,
+      "launch_command": "sleep infinity",
+      "resource": {
+        "cpus": 1,
+        "memory": "1024"
+      }
+    }
+  ],
+  "quicklinks": {
+    "HBase Master Status UI": "http://hbasemaster-0.${SERVICE_NAME}.${USER}.${DOMAIN}:16010/master-status"
+  }
+}
+
+
+
+
+Parent topic: Running YARN Services

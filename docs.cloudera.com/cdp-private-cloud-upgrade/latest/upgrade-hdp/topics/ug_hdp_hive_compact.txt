@@ -1,0 +1,63 @@
+Run Compaction on Hive TablesCloudera Docs
+Run Compaction on Hive Tables
+You must use the Hive pre-upgrade tool JAR you downloaded to run compaction on Hive
+        tables. The pre-upgrade tool looks for files in an ACID table that contains update or delete
+        events, and generates scripts to compact these tables. You can run the pre-upgrade tool
+        command on the command line before or after upgrading Ambari. You do not actually use Ambari
+        to run this command.
+ Some transactional tables in HDP 2.6.5.x require a major compaction before
+            upgrading the tables to Hive 3.0 in CDP Private Cloud Base. Running the Hive pre-upgrade tool
+            identifies the tables that need such a compaction and provides scripts that you run to
+            perform the compaction. Depending on the number of tables and partitions, and the amount
+            of data involved, compactions might take a significant amount of time and resources. The
+            script output of the pre-upgrade tool includes some heuristics that might help estimate
+            the time required. If no script output is produced, no compaction is needed. 
+
+Log in as the hive user.
+$ sudo su - hive
+
+Export the JAVA_HOME environment variable if necessary.
+$ export JAVA_HOME=[ path to your installed JDK ]
+
+Set STACK_VERSION to the HDP version you are running.
+$ export STACK_VERSION=`hdp-select status hive-server2 | awk '{ print $3;
+}'`
+
+Run the pre-upgrade tool command.
+
+$ $JAVA_HOME/bin/java -cp /usr/hdp/$STACK_VERSION/hive/lib/derby-10.10.2.0.jar:/usr/hdp/$STACK_VERSION/hive/lib/*:/usr/hdp/$STACK_VERSION/hadoop/*:/usr/hdp/$STACK_VERSION/hadoop/lib/*:/usr/hdp/$STACK_VERSION/hadoop-mapreduce/*:/usr/hdp/$STACK_VERSION/hadoop-mapreduce/lib/*:/usr/hdp/$STACK_VERSION/hadoop-hdfs/*:/usr/hdp/$STACK_VERSION/hadoop-hdfs/lib/*:/usr/hdp/$STACK_VERSION/hadoop/etc/hadoop/*:/tmp/hive-pre-upgrade-3.1.0.3.1.0.258-3.jar:/usr/hdp/$STACK_VERSION/hive/conf/conf.server:/etc/hadoop/conf/:/etc/hive/conf/ org.apache.hadoop.hive.upgrade.acid.PreUpgradeTool > {hive_log_dir}/pre_upgrade_{target_version}.log
+The output indicates whether you need to perform compaction or not. In
+                    the /tmp directory, scripts named
+                        compacts_nnnnnnnnnnnnn.sql appear that contain ALTER
+                    statements for compacting tables.
+                    ALTER TABLE default.t COMPACT 'major';
+- Generated total of 1 compaction commands
+- The total volume of data to be compacted is 0.001155MB
+                    From the volume of data to be compacted, you can gauge how long the actual
+                    upgrade might take. If no scripts appear, a message in the output says you do not need to compact
+                    tables: ... org.apache.hadoop.hive.upgrade.acid.PreUpgradeTool - No compaction
+                       is necessary
+
+Check the logs on the Hive Metastore host for any errors.
+
+{hive_log_dir}/pre_upgrade_{target_version}.log
+/tmp/hive/hive.log
+
+
+If there are no errors, proceed; otherwise, resolve the errors, and
+                   repeat this procedure.
+
+On the node where the Hive Metastore resides, log in as a user who has privileges to
+                   alter the Hive database.
+
+Start Beeline as the Hive service user. 
+$ beeline -u 'jdbc:hive2://<Metastore host name>:10000' -n hive
+
+On the Hive command line run the compaction script.
+hive> !run /tmp/compacts_nnnnnnnnnnnnn.sql
+Output confirms that compaction is queued:
+                    INFO : Compaction enqueued with id 3
+...
+
+
+Parent topic: Preparing Hive for upgrade

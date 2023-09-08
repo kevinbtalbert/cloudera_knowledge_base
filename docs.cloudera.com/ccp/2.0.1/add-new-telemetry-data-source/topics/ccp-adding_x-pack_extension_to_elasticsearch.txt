@@ -1,0 +1,132 @@
+Add X-Pack Extension to ElasticsearchCloudera Docs
+Add X-Pack Extension to
+        Elasticsearch
+You can add the X-Pack extension to Elasticsearch to enable secure connections for
+        Elasticsearch. 
+Ensure that Elasticsearch and Kibana are installed. You must
+            also choose the X-pack version that matches the version of Elasticsearch that you are
+            running.
+
+Use the Storm UI to stop the random_access_indexing
+                    topology.
+
+
+From Topology Summary, click
+                                random_access_indexing
+
+
+Under Topology actions, click
+                                Deactivate. 
+
+
+
+Install X-Pack on Elasticsearch and Kibana. 
+See Installing X-Pack for information on
+                    installing X-Pack.
+
+After installing X-pack, navigate to the Elasticsearch node where Elasticsearch
+                    Master and the X-Pack were installed, then add a user name and password for
+                    Elasticsearch and Kibana to enable external connections from Metron
+                    components:
+For example, the following creates a user xpack_client_user
+                    with the password changeme and superuser
+                    credentials:
+
+sudo /usr/share/elasticsearch/bin/x-pack/users useradd xpack_client_user -p changeme -r superuser
+
+
+Create a file containing the password you created in Step 3 and upload it to
+                    HDFS. 
+For example:
+
+echo changeme > /tmp/xpack-password
+sudo -u hdfs hdfs dfs -mkdir /apps/metron/elasticsearch/
+sudo -u hdfs hdfs dfs -put /tmp/xpack-password /apps/metron/elasticsearch/
+sudo -u hdfs hdfs dfs -chown metron:metron /apps/metron/elasticsearch/xpack-password
+
+
+
+Pull the most recent CCP configuration to the local file system by running the
+                    following on the node on which CCP is installed:
+
+$METRON_HOME/bin/zk_load_configs.sh -m PULL -o ${METRON_HOME}/config/zookeeper -z $ZOOKEEPER -f
+
+
+ Set the X-Pack es.client.settings by adding it to
+                        $METRON_HOME/config/zookeeper/global.json. 
+For example, add the following to the global.json
+                    file:
+
+{
+...
+  "es.client.settings" : {
+      "xpack.username" : "xpack_client_user",
+      "xpack.password.file" : "/apps/metron/elasticsearch/xpack-password"
+  }
+  ...
+}
+
+
+OPTIONAL: Set up SSL connection for Elasticsearch client:
+
+
+Navigate to a node that has an HDFS client, then create a file
+                            containing the password you used for your truststore file and upload it
+                            to HDFS. 
+For example:
+
+echo changeme > /tmp/truststore-password
+sudo -u hdfs hdfs dfs -mkdir /apps/metron/elasticsearch/
+sudo -u hdfs hdfs dfs -put /tmp/truststore-password /apps/metron/elasticsearch/
+sudo -u hdfs hdfs dfs -chown metron:metron /apps/metron/elasticsearch/truststore-password
+
+
+
+
+Add the following properties to es.client.settings in
+                            the $METRON_HOME/config/zookeeper/global.json file: 
+
+{
+...
+  "es.client.settings" : {
+    "ssl.enabled": true,
+    "keystore.path" : "$LOCAL_FILE_SYSTEM_PATH",
+    "keystore.password.file" : "/apps/metron/elasticsearch/truststore-password"   
+  }
+  ...
+}
+
+
+noteMake sure you do not overwrite the existing
+                                    es.client.settings properties.
+
+The truststore.jks file must reside on all Storm
+                            supervisor nodes as well as the REST application node.
+For more information about configuring Elasticsearch SSL for X-pack,
+                            see Encrypted
+                            Communication.
+
+
+
+Add the X-Pack changes to ZooKeeper: 
+
+$METRON_HOME/bin/zk_load_configs.sh -m PUSH -i METRON_HOME/config/zookeeper/ -z $ZOOKEEPER
+
+
+Use Ambari to restart the REST API.
+
+Use the Storm UI to restart the random_access_indexing
+                    topology. 
+
+
+From Topology Summary, click
+                                random_access_indexing.
+
+
+Under Topology actions, click
+                                Start.
+
+
+
+
+Parent topic: Elasticsearch

@@ -1,0 +1,150 @@
+RANKCloudera Docs
+RANK
+Returns an ascending sequence of integers, starting with 1. The
+              output sequence produces duplicate integers for duplicate values
+              of the ORDER BY expressions. After generating
+              duplicate output values for the tied input values, the
+              function increments the sequence by the number of tied values.
+              Therefore, the sequence contains both duplicates and gaps when the
+              input contains duplicates. Starts the sequence over for each group
+              produced by the PARTITIONED BY clause.
+
+
+Syntax:
+
+RANK() OVER([partition_by_clause] order_by_clause)
+ The PARTITION BY clause is optional. The
+                ORDER BY clause is required. The window clause
+              is not allowed. 
+
+Usage notes:
+
+ Often used for top-N and bottom-N queries. For example, it could
+              produce a top 10 report including several items that were
+              tied for 10th place. 
+ Similar to ROW_NUMBER and
+                DENSE_RANK. These functions differ in how they
+              treat duplicate combinations of values. 
+
+Examples:
+
+ The following example demonstrates how the
+                RANK() function identifies where each value
+                places in the result set, producing the same result for
+              duplicate values, and skipping values in the sequence to account
+              for the number of duplicates. For example, when results are
+              ordered by the X column, both 1
+              values are tied for first; both 2 values are tied
+              for third; and so on. 
+select x, rank() over(order by x) as rank, property from int_t;
++----+------+----------+
+| x  | rank | property |
++----+------+----------+
+| 1  | 1    | square   |
+| 1  | 1    | odd      |
+| 2  | 3    | even     |
+| 2  | 3    | prime    |
+| 3  | 5    | prime    |
+| 3  | 5    | odd      |
+| 4  | 7    | even     |
+| 4  | 7    | square   |
+| 5  | 9    | odd      |
+| 5  | 9    | prime    |
+| 6  | 11   | even     |
+| 6  | 11   | perfect  |
+| 7  | 13   | lucky    |
+| 7  | 13   | lucky    |
+| 7  | 13   | lucky    |
+| 7  | 13   | odd      |
+| 7  | 13   | prime    |
+| 8  | 18   | even     |
+| 9  | 19   | square   |
+| 9  | 19   | odd      |
+| 10 | 21   | round    |
+| 10 | 21   | even     |
++----+------+----------+
+
+ The following examples show how the RANK()
+              function is affected by the PARTITION property
+              within the ORDER BY clause. 
+ Partitioning by the PROPERTY column groups all
+              the even, odd, and so on values together, and
+                RANK() returns the place of each value within
+              the group, producing several ascending sequences. 
+select x, rank() over(partition by property order by x) as rank, property from int_t;
++----+------+----------+
+| x  | rank | property |
++----+------+----------+
+| 2  | 1    | even     |
+| 4  | 2    | even     |
+| 6  | 3    | even     |
+| 8  | 4    | even     |
+| 10 | 5    | even     |
+| 7  | 1    | lucky    |
+| 7  | 1    | lucky    |
+| 7  | 1    | lucky    |
+| 1  | 1    | odd      |
+| 3  | 2    | odd      |
+| 5  | 3    | odd      |
+| 7  | 4    | odd      |
+| 9  | 5    | odd      |
+| 6  | 1    | perfect  |
+| 2  | 1    | prime    |
+| 3  | 2    | prime    |
+| 5  | 3    | prime    |
+| 7  | 4    | prime    |
+| 10 | 1    | round    |
+| 1  | 1    | square   |
+| 4  | 2    | square   |
+| 9  | 3    | square   |
++----+------+----------+
+
+ Partitioning by the X column groups all the
+              duplicate numbers together and returns the place each value within
+              the group; because each value occurs only 1 or 2 times,
+                RANK() designates each X value
+              as either first or second within its group. 
+select x, rank() over(partition by x order by property) as rank, property from int_t;
++----+------+----------+
+| x  | rank | property |
++----+------+----------+
+| 1  | 1    | odd      |
+| 1  | 2    | square   |
+| 2  | 1    | even     |
+| 2  | 2    | prime    |
+| 3  | 1    | odd      |
+| 3  | 2    | prime    |
+| 4  | 1    | even     |
+| 4  | 2    | square   |
+| 5  | 1    | odd      |
+| 5  | 2    | prime    |
+| 6  | 1    | even     |
+| 6  | 2    | perfect  |
+| 7  | 1    | lucky    |
+| 7  | 1    | lucky    |
+| 7  | 1    | lucky    |
+| 7  | 4    | odd      |
+| 7  | 5    | prime    |
+| 8  | 1    | even     |
+| 9  | 1    | odd      |
+| 9  | 2    | square   |
+| 10 | 1    | even     |
+| 10 | 2    | round    |
++----+------+----------+
+
+ The following example shows how a magazine might prepare a list
+              of history's wealthiest people. Croesus and Midas are tied for
+              second, then Crassus is fourth. 
+select rank() over (order by net_worth desc) as rank, name, net_worth from wealth order by rank, name;
++------+---------+---------------+
+| rank | name    | net_worth     |
++------+---------+---------------+
+| 1    | Solomon | 2000000000.00 |
+| 2    | Croesus | 1000000000.00 |
+| 2    | Midas   | 1000000000.00 |
+| 4    | Crassus | 500000000.00  |
+| 5    | Scrooge | 80000000.00   |
++------+---------+---------------+
+
+
+

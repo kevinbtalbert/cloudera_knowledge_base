@@ -1,0 +1,83 @@
+Backing up AWS environment activation parametersCloudera Docs
+Backing up AWS environment activation parameters
+You back up AWS environment activation parameters using the CDW UI , AWS CLI, and
+        kubectl.
+AWS environment activation settings that need
+            to be available in the new environment may include IP-CIDRs for the Kubernetes cluster
+            and load balancer, the deployment mode setting, reduced permissions mode, and overlay
+            networks. It is required that you gather and document these settings to have the
+            environment behave the same after the back-up/restore process as before. The activation
+            parameter values are available in the CDW UI. Additionally, some parameters may be
+            fetched using AWS CLI and kubectl.The following steps gather and document the
+                environment parameters.
+Deployment Mode (Network selection)
+Get subnet information in one of the following ways:
+
+Use the CDW UINavigate to Environment Details > General Details, and note the settings for Public Subnets or Private Subnets.
+Use the AWS
+                        CLIaws cloudformation describe-stacks --stack-name env-q4tzxd-dwx-stack --output json --query "Stacks[].{StackName:StackName, PublicSubnetIds:Outputs[?OutputKey=='PublicSubnetIds'].OutputValue, PrivateSubnetIds:Outputs[?OutputKey=='PrivateSubnetIds'].OutputValue}"
+
+IP-CIDR for kubernetes cluster and load balancer
+In the CDW UI, navigate to Environment Details > Configurations, and note the settings of Enable IP-CIDR for Kubernetes cluster and Enable IP-CIDR for the load balancer.
+Overprovision nodes
+Document the value of Overprovision nodes.
+
+Stored behind the CDW_CLUSTER_OVERPROVISIONER entitlement.
+Use Custom ECR repository
+Document the value of Use Custom ECR repository.
+Stored behind the CDP_CUSTOM_REPO entitlement.
+Use Overlay Network
+Using kubectl, get the value of Use Overlay Network.
+
+kubectl get daemonsets -n kube-system
+
+
+noteIf the daemonSet aws-node is not present, the overlay network is
+                        enabled.
+
+Attach Managed policy ARN to Node Role
+Using the AWS CLI, fetch the nodeInstanceRole.
+export nodeInstanceRole=$(aws iam list-roles --query "Roles[].{RoleName:RoleName}" | grep "env-q4tzxd-dwx-stack-NodeInstanceRole-*" | tr -d '"'| cut -f 2 -d ':'| awk '{$1=$1};1')
+
+List the policies attached to this nodeInstanceRole.
+aws iam list-role-policies --role-name $nodeInstanceRole
+
+Check for customized policies, which are not included in the following policies: 
+"PolicyNames": [
+  "cluster-autoscaler",
+  "dynamodb",
+  "ebs",
+  "efs",
+  "kms",
+  "limits-monitoring",
+  "s3-list-all-buckets",
+  "s3-read-only-buckets",
+  "s3-read-write-own-buckets"
+]
+AMI ID
+Using one of the following ways, get the value of the AMI ID only if you need
+                    to use a custom AMI:
+
+Use the CDW UI:Navigate to Environment Details > Configurations, and note the setting of AMI
+                            ID.
+Use AWS CLI:
+                        aws cloudformation describe-stacks --stack-name env-q4tzxd-dwx-stack --output json --query "Stacks[].{StackName:StackName, AMI:Parameters[?ParameterKey=='EksAmi'].ParameterValue}"
+
+Reduced Permissions Mode
+Using the CDW UI, determine whether or not your current policy has standard
+                    activation permission.
+If the current policy does not have the standard activation permission, when
+                    you reactivate the environment you see a
+                    prompt to use the Reduced Permissions Mode. In Reduced
+                        Permissions Mode, you deploy the cluster manually. A Cloudformation template
+                        is generated and the you must deploy the cluster and apply some role-based
+                        access control roles to the Kubernetes cluster.
+
+Enable CloudWatch logs
+Using the CDW UI, navigate to Environment Details > Configurations > Enable CloudWatch Logs to get the value of Enable CloudWatch logs..
+CloudWatch logs provide better visibility into cluster operations in addition to the diagnostic bundles within CDW. Enabling this option will not impact the restore procedure, even if it was not previously configured in the old environment.
+Additional External Buckets
+Using the CDW UI, gather values of the Additional External Buckets parameter. Navigate to Environment Details > Configurations > Bucket Name.
+
+
+Parent topic: Backing up the environment

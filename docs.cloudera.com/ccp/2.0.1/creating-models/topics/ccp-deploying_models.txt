@@ -1,0 +1,98 @@
+Deploy ModelsCloudera Docs
+Deploy Models
+After creating a model, you need to deploy the model onto HDFS and submit a request
+      for one or more instances of the model. Create a simple sample python model.   
+Let's say that you have a model, exposed as a REST microservice called "mock_dga"
+               that takes as an input argument "host" which represents an internet domain name and
+               returns a field called "is_malicious" which is either "malicious" if the domain is
+               thought to be malicious or "legit" if the domain is not thought to be malicious. The
+               following is a very simple example service that thinks that the only legitimate
+               domains are "yahoo.com" and "amazon.com":
+
+from flask import Flask
+from flask import request,jsonify
+import socket
+app = Flask(__name__)
+
+@app.route("/apply", methods=['GET'])
+def predict():
+        h = request.args.get('host')
+        r = {}
+        if h == 'yahoo.com' or h == 'amazon.com':
+                r['is_malicious'] = 'legit'
+        else:
+                r['is_malicious'] = 'malicious'
+        return jsonify(r)
+
+if __name__ == "__main__":
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(('localhost', 0))
+        port = sock.getsockname()[1]
+        sock.close()
+        with open("endpoint.dat", "w") as text_file:
+                text_file.write("{\"url\" : \"http://0.0.0.0:%d\"}" % port)
+        app.run(threaded=True, host="0.0.0.0", port=port)
+
+ Store this python model in a directory called /root/mock_dga as
+                  dga.py and an accompanying shell script called
+                  rest.sh which starts the model:  
+
+#!/bin/bash
+python dga.py
+ If you have not already done so, start MaaS:  
+
+$METRON_HOME/bin/maas_service.sh -zk $ZOOKEEPER_HOST:2181
+ Start one or more instances of the model, calling it "dga" and assigning an amount of memory
+               to each instance:     
+Because you have placed the model in the /root/mock_dga
+               directory, enter the following:
+
+$METRON_HOME/bin/maas_deploy.sh -zk $ZOOKEEPER_HOST:2181 -lmp /root/mock_dga -hmp /user/root/models -mo ADD -m 512 -n dga -v 1.0 -ni 1
+
+where
+
+
+-h, --h
+
+A list of functions for maas_deploy.sh
+
+
+-hmp, --hdfs_model_path <arg>
+
+Model path (HDFS)
+
+-lmp, --local_model_path <arg>
+
+Model path (local)
+
+-m, --memory <arg>
+
+Memory for container
+
+-mo, --mode <arg>
+
+ADD, LIST, or REMOVE
+
+-n, --name <arg>
+
+Model name
+
+-ni, --num_instances <arg>
+
+Number of model instances
+
+-v, --version <arg>
+
+Model version
+
+-zq, --zk_quorum <arg>
+
+ZooKeeper quorum
+
+-zr, --zk_root <arg>
+
+ZooKeeper root
+
+
+
+Parent topic: Creating Models Overview

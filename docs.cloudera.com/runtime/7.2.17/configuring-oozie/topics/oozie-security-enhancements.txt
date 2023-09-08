@@ -1,0 +1,74 @@
+Oozie security enhancementsCloudera Docs
+Oozie security enhancements
+Learn about Oozie security enhancements related to callback, callback endpoint, FIPS
+    compliance, and SMTP (Simple Mail Transfer Protocol). Oozie will be notified about completion of
+    tasks through HTTPS.Callback
+
+Prior to this enhancement, even though SSL was enabled for Oozie, the callback mechanism
+          – which notifies the Oozie server after an action finished (success/failed) – was going
+          through HTTP. With the enhanced callback feature if TLS/SSL is enabled for Oozie, the
+          callback invocation goes through HTTPS. This applies to all Oozie actions, including
+          map-reduce actions. For map-reduce actions, as always, the Oozie Application Master (AM)
+          container does not wait for the map-reduce Job to complete, but YARN makes a callback to
+          Oozie when the map-reduce Job completes. This callback goes through HTTPS as well when
+          TLS/SSL is enabled for Oozie. When TLS/SSL is enabled for Oozie, Oozie listens only on the
+          HTTPS port and not on the HTTP port as the HTTP port was only needed for the callback
+          mechanism. Oozie will not explicitly upload the truststore file
+          required for the HTTPS connection to the YARN applications launched by Oozie and neither
+          should you, but Oozie will pass the location of the file used by Oozie itself to the
+          callback mechanism running inside the YARN container. Hence, the truststore file used by
+          Oozie needs to be available on all NodeManager Hosts and accessible by YARN
+            containers.noteUntil now, the default callback command for SSH actions was
+              curl. If you have enabled TLS/SSL for Oozie, Cloudera Manager will
+            change this to curl -k. If you have added a custom callback command
+            setup for SSH actions through a safety valve, that setup will not be overridden by
+            Cloudera Manager. You must make sure that your command supports TLS/SSL.
+
+
+Callback Endpoint
+
+Along with the callback mechanism, you can also enable authentication for the callback
+          endpoint. If you have Kerberos configured on your cluster, authentication is enabled for
+          all endpoints of Oozie by default except for the callback endpoint. You can enable
+          authentication for the callback endpoint by setting the
+            oozie.servlet.CallbackServlet.authentication.required property to
+            true as a safety-valve in Cloudera Manager. noteAfter the release
+            of Cloudera Manager 7.3.0, you do not need to configure the callback endpoint
+            authentication through a safety-valve because Cloudera is introducing the
+              Oozie Callback Servlet Authentication property. After the release
+            of Cloudera Manager 7.3.0, upgrade Cloudera Manager, and search and select the new
+              Oozie Callback Servlet Authentication option. If you have set the
+            above property using safety-valve, you can remove it and instead enable it through the
+            new checkbox. No new configuration is required in Cloudera Runtime. When callback
+            authentication is enabled, Oozie does not allow an unauthenticated invocation to the
+            endpoint. Before starting the AM container, Oozie generates a new type of delegation
+            token and when the Job finishes and the AM container notifies the Oozie server. This new
+            Oozie delegation token is used to make the callback.noteIf you enable
+            authentication on the callback endpoint, when you are executing an SSH action, make sure
+            your SSH command will create a Kerberized environment. Otherwise, the callback will
+            fail. 
+
+
+FIPS Compliance
+To make Oozie FIPS compliant, the following changes are introduced:
+      
+
+When TLS/SSL is enabled for Oozie, apart from setting the trustStore,
+          trustStorePassword, keyStore, and keyStorePassword properties, Cloudera Manager adds two
+          new properties oozie.https.truststore.type and
+            oozie.https.keystore.type in the oozie-site.xml
+          file. These properties will contain the value of the globally configured keyStore type in
+          Cloudera Manager.
+ When TLS/SSL is enabled for ZooKeeper and Oozie runs with High-Availability, Cloudera
+          Manager sets the oozie.zookeeper.https.truststore.type and
+            oozie.zookeeper.https.keystore.type properties along with the
+          existing oozie.zookeeper.https.truststore/keystore.file/password
+          property in the oozie-site.xml file. 
+
+
+SMTP
+To configure custom TLS/SSL protocols when executing an email action, add the new
+          oozie.email.smtp.ssl.protocols property using a safety valve in
+        Cloudera Manager.
+
+Related informationConfigure TLS/SSL for OozieInstalling and Configuring CDP with FIPS                    

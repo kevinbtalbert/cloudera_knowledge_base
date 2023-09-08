@@ -1,0 +1,55 @@
+Security Model and Operations on S3Cloudera Docs
+Security Model and Operations on S3
+The security and permissions model of Amazon S3 is very different from this of a
+    UNIX-style filesystem: on Amazon S3, operations which query or manipulate permissions are
+    generally unsupported. Operations to which this applies include: chgrp,
+      chmod, chown, getfacl, and
+      setfacl. The related attribute commands getfattr
+      andsetfattr are also unavailable.In addition, operations which try to preserve permissions (for example fs -put
+        -p) do not preserve permissions. 
+Although these operations are unsupported, filesystem commands which list permission and
+      user/group details usually simulate these details. As a consequence, when interacting with
+      read-only object stores, the permissions found in “list” and “stat”
+      commands may indicate that the user has write access — when they do not. 
+Amazon S3 has a permissions model of its own. This model can be manipulated through
+      store-specific tooling. Be aware that some of the permissions which can be set — such as
+      write-only paths, or various permissions on the root path — may be incompatible with the S3A
+      client. It expects full read and write access to the entire bucket with trying to write
+      data, and may fail if it does not have these permissions.
+    
+As an example of how permissions are simulated, here is a listing of Amazon's public,
+      read-only bucket of Landsat images:
+      $ hadoop fs -ls s3a://landsat-pds/
+Found 10 items
+drwxrwxrwx - mapred 0 2016-09-26 12:16 s3a://landsat-pds/L8
+-rw-rw-rw- 1 mapred 23764 2015-01-28 18:13 s3a://landsat-pds/index.html
+drwxrwxrwx - mapred 0 2016-09-26 12:16 s3a://landsat-pds/landsat-pds_stats
+-rw-rw-rw- 1 mapred 105 2016-08-19 18:12 s3a://landsat-pds/robots.txt
+-rw-rw-rw- 1 mapred 38 2016-09-26 12:16 s3a://landsat-pds/run_info.json
+drwxrwxrwx - mapred 0 2016-09-26 12:16 s3a://landsat-pds/runs
+-rw-rw-rw- 1 mapred 27458808 2016-09-26 12:16 s3a://landsat-pds/scene_list.gz
+drwxrwxrwx - mapred 0 2016-09-26 12:16 s3a://landsat-pds/tarq
+drwxrwxrwx - mapred 0 2016-09-26 12:16 s3a://landsat-pds/tarq_corrupt
+drwxrwxrwx - mapred 0 2016-09-26 12:16 s3a://landsat-pds/test
+      
+      The following is evident from the examples:
+
+All files are listed as having full read/write permissions.
+All directories appear to have full rwx permissions. 
+The replication count of all files is "1".
+The owner of all files and directories is declared to be the current user
+          (mapred). 
+The timestamp of all directories is actually that of the time the -ls
+        operation was executed. This is because these directories are not actual objects in the
+        store; they are simulated directories based on the existence of objects under their paths. 
+
+When an attempt is made to delete one of the files, the operation fails — despite the
+      permissions shown by the ls command:
+      $ hadoop fs -rm s3a://landsat-pds/scene_list.gz
+rm: s3a://landsat-pds/scene_list.gz: delete on s3a://landsat-pds/scene_list.gz:
+com.amazonaws.services.s3.model.AmazonS3Exception: Access Denied (Service: Amazon S3;
+Status Code: 403; Error Code: AccessDenied; Request ID: 1EF98D5957BCAB3D),
+S3 Extended Request ID: wi3veOXFuFqWBUCJgV3Z+NQVj9gWgZVdXlPU4KBbYMsw/gA+hyhRXcaQ+PogOsDgHh31HlTCebQ=
+      This demonstrates that the listed permissions cannot be taken as evidence of write access.
+      Only object manipulation can determine this.
+Parent topic: Working with Amazon S3

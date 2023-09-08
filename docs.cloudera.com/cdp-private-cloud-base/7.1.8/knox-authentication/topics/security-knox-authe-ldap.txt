@@ -1,0 +1,80 @@
+Configure Apache Knox authentication for AD/LDAPCloudera Docs
+Configure Apache Knox authentication for AD/LDAP
+Knox authentication configurations for LDAP and AD in Cloudera Manager. SSO authentication for AD/LDAP
+In the following sample you will see how to change the PAM authentication (which
+        comes default with Knox) to LDAP authentication. It is as simple as removing the default PAM
+        related configuration in ShiroProvider and add LDAP related properties (e.g. with demo LDAP
+        server
+        configuration):role=authentication
+authentication.name=ShiroProvider
+authentication.param.sessionTimeout=30
+authentication.param.redirectToUrl=/${GATEWAY_PATH}/knoxsso/knoxauth/login.html
+authentication.param.restrictedCookies=rememberme,WWW-Authenticate
+authentication.param.urls./**=authcBasic
+authentication.param.main.ldapRealm=org.apache.knox.gateway.shirorealm.KnoxLdapRealm
+authentication.param.main.ldapContextFactory=org.apache.knox.gateway.shirorealm.KnoxLdapContextFactory
+authentication.param.main.ldapRealm.contextFactory=$ldapContextFactory
+authentication.param.main.ldapRealm.contextFactory.authenticationMechanism=simple
+authentication.param.main.ldapRealm.contextFactory.url=ldap://localhost:33389
+authentication.param.main.ldapRealm.contextFactory.systemUsername=uid=guest,ou=people,dc=hadoop,dc=apache,dc=org
+authentication.param.main.ldapRealm.contextFactory.systemPassword=${ALIAS=knoxLdapSystemPassword}
+authentication.param.main.ldapRealm.userDnTemplate=uid={0},ou=people,dc=hadoop,dc=apache,dc=org
+authentication.param.remove=main.pamRealm
+authentication.param.remove=main.pamRealm.serviceAfter
+        you finished editing the properties you have to save the configuration changes. This will
+        make the Refresh Needed stale configuration indicator appear. Once the
+        cluster refresh finishes, all topologies that are configured to use Knox SSO will be
+        authenticated by the configured LDAP server.
+
+note
+As you can see we used a Knox alias when we declared the system password
+            instead of writing the plain text password there. To make it easier for the end-users a
+            new Knox Gateway command was created that allows them to save aliases on all hosts where
+            a Knox Gateway is running. See Saving
+              aliases.
+To
+        verify:$ curl -ku knoxui:knoxui 'https://johndoe-1.abc.cloudera.com:8443/gateway/admin/api/v1/providerconfig/knoxsso'
+...
+  }, {
+    "role" : "authentication",
+    "name" : "ShiroProvider",
+    "enabled" : true,
+    "params" : {
+      "main.ldapContextFactory" : "org.apache.knox.gateway.shirorealm.KnoxLdapContextFactory",
+      "main.ldapRealm" : "org.apache.hadoop.gateway.shirorealm.KnoxLdapRealm",
+      "main.ldapRealm.contextFactory" : "$ldapContextFactory",
+      "main.ldapRealm.contextFactory.authenticationMechanism" : "simple",
+      "main.ldapRealm.contextFactory.systemPassword" : "${ALIAS=knoxLdapSystemPassword}",
+      "main.ldapRealm.contextFactory.systemUsername" : "uid=guest,ou=people,dc=hadoop,dc=apache,dc=org",
+      "main.ldapRealm.contextFactory.url" : "ldap://localhost:33389",
+      "main.ldapRealm.userDnTemplate" : "uid={0},ou=people,dc=hadoop,dc=apache,dc=org",
+      "redirectToUrl" : "/${GATEWAY_PATH}/knoxsso/knoxauth/login.html",
+      "restrictedCookies" : "rememberme,WWW-Authenticate",
+      "sessionTimeout" : "30",
+      "urls./**" : "authcBasic"
+    }
+
+noteAny change in SSO authentication configuration alters the Knox SSO topology. This
+        affects the manager, homepage, and cdp-proxy topologies because the SSO cookie federation
+        provider is used.
+API authentication for AD/LDAP
+In the following sample you will see how to change the PAM authentication (which
+        comes default with Knox) to LDAP
+        authentication:role=authentication
+authentication.name=ShiroProvider
+authentication.param.sessionTimeout=30
+authentication.param.urls./**=authcBasic
+authentication.param.main.ldapRealm=org.apache.knox.gateway.shirorealm.KnoxLdapRealm
+authentication.param.main.ldapContextFactory=org.apache.knox.gateway.shirorealm.KnoxLdapContextFactory
+authentication.param.main.ldapRealm.contextFactory=$ldapContextFactory
+authentication.param.main.ldapRealm.contextFactory.authenticationMechanism=simple
+authentication.param.main.ldapRealm.contextFactory.url=ldap://localhost:33389
+authentication.param.main.ldapRealm.contextFactory.systemUsername=uid=guest,ou=people,dc=hadoop,dc=apache,dc=org
+authentication.param.main.ldapRealm.contextFactory.systemPassword=${ALIAS=knoxLdapSystemPassword}
+authentication.param.main.ldapRealm.userDnTemplate=uid={0},ou=people,dc=hadoop,dc=apache,dc=org
+authentication.param.remove=main.pamRealm
+authentication.param.remove=main.pamRealm.serviceEvery
+        change here goes directly into admin, metadata, and
+          cdp-proxy-api topologies.
+
+Parent topic: Management of Knox shared providers in Cloudera Manager

@@ -1,0 +1,122 @@
+Configuring your truststoresCloudera Docs
+Configuring your truststores
+You must configure your truststores so that each cluster is aware of and trusts the
+        other cluster, to support the two-way TLS that is used to initiate the site-to-site
+        communication between clusters. To do this, you need to download and merge the truststores
+        for NiFi in CDP Private Cloud Base and CDP Public Cloud.
+
+
+You have set up a CDP Private Cloud Base and CDP Public
+                    Cloud cluster, and have the necessary network configurations established.
+
+You have the necessary administrative permissions to manipulate the
+                        truststore files. You require root access, and this is typically done by an
+                        Environment Administrator.
+
+
+You have the passwords for the Java Keystore (JKS) files available. 
+
+
+
+
+Download the truststore from the clusters.
+
+
+Create a temporary directory in which you can edit the truststore
+                            files.
+
+
+$ mkdir s2s-temp && cd s2s-temp
+
+
+
+
+Download the JKS truststore file for CA used by NiFi in your CDP Private Cloud Base cluster.
+
+$ scp -i <key>  
+root@<nifi_node>:/var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_truststore.jks 
+privatecloud_cm-auto-global_truststore.jks
+
+
+
+
+Download the JKS truststore file for CA used by NiFi in your CDP Public
+                            Cloud cluster. 
+
+
+$ scp -i <key>  
+cloudbreak@<nifi_node_public_cloud>:/var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_truststore.jks 
+publiccloud_cm-auto-global_truststore.jks
+
+
+
+
+
+Merge the truststores. 
+
+
+Make a copy of the CDP Private Cloud Base
+                            JKS:
+$ cp privatecloud_cm-auto-global_truststore.jks 
+privatecloud_cm-auto-global_truststore.jks.bak
+
+Merge the CDP Public Cloud JKS into the CDP Private Cloud Base JKS and rename the entries
+                            alias to prevent conflict:
+$ keytool 
+-importkeystore 
+-srckeystore publiccloud_cm-auto-global_truststore.jks 
+-destkeystore privatecloud_cm-auto-global_truststore.jks 
+The result will be similar to:
+Importing keystore publiccloud_cm-auto-global_truststore.jks to privatecloud_cm-auto-global_truststore.jks...
+Enter destination keystore password:  
+Enter source keystore password:  
+Entry for alias imported-ca-b379e6601f5ecfbbee2fefc4eb2efd4a successfully imported.
+[...]
+Entry for alias imported-ca-5945bad341623ae14991e09ffe851725 successfully imported.
+Entry for alias cmrootca-1 successfully imported.
+Existing entry alias cmrootca-0 exists, overwrite? [no]:  no
+Enter new alias name	(RETURN to cancel import for this entry):  cmrootca-1-bis
+Entry for alias cmrootca-0 successfully imported.
+Entry for alias imported-ca-10c56ecc972802e53d1b7287ac2d1c6c successfully imported.
+[...]
+Entry for alias imported-ca-840644351dd523125493ff4c28e694f7 successfully imported.
+Import command completed:  140 entries successfully imported, 0 entries failed or cancelled
+
+Use the copy you made to merge the CDP Private Cloud Base JKS into the CDP Public
+                            Cloud JKS and rename the entries alias to prevent
+                                conflict:
+$ keytool 
+-importkeystore 
+-srckeystore privatecloud_cm-auto-global_truststore.jks.bak 
+-destkeystore publiccloud_cm-auto-global_truststore.jks 
+The result will be similar to: 
+Importing keystore privatecloud_cm-auto-global_truststore.jks.bak to publiccloud_cm-auto-global_truststore.jks...
+Enter destination keystore password:  
+Enter source keystore password:  
+Existing entry alias cmrootca-0 exists, overwrite? [no]:  no
+Enter new alias name	(RETURN to cancel import for this entry):  cmrootca-0-bis
+Entry for alias cmrootca-0 successfully imported.
+Import command completed:  1 entries successfully imported, 0 entries failed or cancelled
+
+
+
+
+Deploy the truststores.
+
+Deploy the modified CDP Private Cloud Base and CDP
+                        Public Cloud JKS files on each NiFi node of the respective clusters. 
+note
+Do not change the permissions and owners of the file
+                                (chmod/chown).
+
+
+
+Restart your CDP Private Cloud Base and CDP Public Cloud
+                    clusters. 
+
+
+After you have configured your truststores, proceed by defining your data flow in
+                your CDP Public Cloud cluster.
+
+
+Parent topic: Moving data from CDP Private Cloud Base to Public Cloud with NiFi site-to-site

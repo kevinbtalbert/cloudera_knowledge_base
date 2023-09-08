@@ -1,0 +1,132 @@
+Understanding the extractHBaseCells Morphline CommandCloudera Docs
+Understanding the extractHBaseCells Morphline
+      Command
+
+The extractHBaseCells morphline command extracts cells
+        from an HBase result and transforms the values into a
+          SolrInputDocument. The command consists of an array
+        of zero or more mapping specifications.
+Each mapping has:
+
+The inputColumn parameter, which
+          specifies the data from HBase for populating a field in Solr. It has
+          the form of a column family name and qualifier, separated by a colon.
+          The qualifier portion can end in an asterisk, which is interpreted as
+          a wildcard. In this case, all matching column-family and qualifier
+          expressions are used. The following are examples of valid
+            inputColumn values:
+
+mycolumnfamily:myqualifier
+
+
+mycolumnfamily:my*
+
+
+mycolumnfamily:*
+
+
+
+The outputField parameter
+          specifies the morphline record field to which to add output values.
+          The morphline record field is also known as the Solr document field.
+          Example: first_name.
+Dynamic output fields are enabled by the
+            outputField parameter ending with a wildcard
+            (*). For
+          example:inputColumn : "mycolumnfamily:*"
+outputField : "belongs_to_*"In
+          this case, if you make these puts in
+          HBase:put 'table_name' , 'row1' , 'mycolumnfamily:1' , 'foo'
+put 'table_name' , 'row1' , 'mycolumnfamily:9' , 'bar'Then
+          the fields of the Solr document are as
+          follows:belongs_to_1 : foo
+belongs_to_9 : bar
+
+The type parameter defines the
+          data type of the content in HBase. All input data is stored in HBase
+          as byte arrays, but all content in Solr is indexed as text, so a
+          method for converting byte arrays to the actual data type is required.
+          The type parameter can be the name of a type that is supported by
+            org.apache.hadoop.hbase.util.Bytes.to* (which
+          currently includes byte[], int,
+            long, string,
+            boolean, float,
+            double, short, and
+            bigdecimal). Use type byte[] to
+          pass the byte array through to the morphline without conversion.
+
+type:byte[] copies the byte array
+                unmodified into the record output field
+
+
+type:int converts with
+                org.apache.hadoop.hbase.util.Bytes.toInt
+
+
+type:long converts with
+                org.apache.hadoop.hbase.util.Bytes.toLong
+
+
+type:string converts with
+                org.apache.hadoop.hbase.util.Bytes.toString
+
+
+type:boolean converts with
+                org.apache.hadoop.hbase.util.Bytes.toBoolean
+
+
+type:float converts with
+                org.apache.hadoop.hbase.util.Bytes.toFloat
+
+
+type:double converts with
+                org.apache.hadoop.hbase.util.Bytes.toDouble
+
+
+type:short converts with
+                org.apache.hadoop.hbase.util.Bytes.toShort
+
+
+type:bigdecimal converts with
+                org.apache.hadoop.hbase.util.Bytes.toBigDecimal
+
+Alternatively, the type parameter can be the
+          name of a Java class that implements the
+            com.ngdata.hbaseindexer.parse.ByteArrayValueMapper
+            interface.HBase data formatting does not always match what is
+            specified by org.apache.hadoop.hbase.util.Bytes.*.
+            For example, this can occur with data of type float
+            or double. You can enable indexing of such HBase
+            data by converting the data. There are various ways to do so,
+            including: 
+Using Java morphline command to parse input data, converting
+                it to the expected output. For
+                example:{
+ imports : "import java.util.*;" code: """ // manipulate the contents of a record field
+ String stringAmount = (String) record.getFirstValue("amount");
+ Double dbl = Double.parseDouble(stringAmount); record.replaceValues("amount",dbl);
+ return child.process(record); // pass record to next command in chain """
+}
+
+Creating table fields with binary format and then using types
+                such as double or float in a morphline.conf.
+                You could create a table in HBase for storing doubles using
+                commands similar
+                to:CREATE TABLE sample_lily_hbase ( id string, amount double, ts timestamp )
+STORED BY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
+WITH SERDEPROPERTIES ('hbase.columns.mapping' = ':key,ti:amount#b,ti:ts,')
+TBLPROPERTIES ('hbase.table.name' = 'sample_lily'); 
+
+
+
+
+The source parameter determines
+          which portion of an HBase KeyValue is used as indexing input. Valid
+          choices are value or qualifier. When
+            value is specified, the HBase cell value is used as
+          input for indexing. When qualifier is specified, then
+          the HBase column qualifier is used as input for indexing. The default
+          is value.
+
+
+Parent topic: Using the Lily HBase NRT indexer serviceParent topic: Lily HBase batch indexing for Cloudera Search

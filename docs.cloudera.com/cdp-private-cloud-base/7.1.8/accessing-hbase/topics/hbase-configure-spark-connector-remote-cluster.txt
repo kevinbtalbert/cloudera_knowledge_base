@@ -1,0 +1,116 @@
+Configuring HBase-Spark connector using Cloudera Manager when HBase is on a remote clusterCloudera Docs
+Configuring HBase-Spark connector using Cloudera Manager when HBase is on a remote
+        cluster
+Learn how to configure the HBase-Spark connector when HBase is residing on a remote
+        cluster. 
+
+If you are using the HBase-Spark3 connector, ensure that the software version is
+                    7.1.7 SP1 Spark3 parcel or above.
+
+
+Go to the Spark or Spark3 service.
+
+Click the Configuration tab.
+
+Select Scope > Gateway.
+
+Select Category > Advanced.
+
+Locate the spark-defaults.conf property or search for it by
+                    typing its name in the Search box.
+
+Spark2: Locate the Spark Client Advanced Configuration Snippet
+                            (Safety Valve) for spark-conf/spark-defaults.conf property or
+                        search for it by typing its name in the Search box.
+Spark3: Locate the Spark 3 Client Advanced Configuration Snippet
+                            (Safety Valve) for spark3-conf/spark-defaults.conf property or
+                        search for it by typing its name in the Search box.
+
+
+Add the required properties to ensure that all required Phoenix and HBase
+                    platform dependencies are available on the classpath for the Spark executors and
+                    drivers.
+
+note
+
+Upload all necessary jar files to the distributed filesystem, for
+                                example HDFS (it can be GS, ABFS, or S3A). If the CDH version is
+                                different on the remote HBase cluster, run the hbase
+                                    mapredcp command on the HBase cluster and copy them to
+                                    /path/hbase_jars_common location so that
+                                the Spark applications can use them.
+                                    
+Spark3 related
+                                            files:hdfs dfs -mkdir /path/hbase_jars_spark3
+Spark2 related
+                                            files:hdfs dfs -mkdir /path/hbase_jars_spark2
+Common files for both Spark2 and
+                                            Spark3:hdfs dfs -mkdir /path/hbase_jars_common
+hdfs dfs -put `hbase mapredcp | tr : " "` /path/hbase_jars_common
+
+
+Download the /etc/hbase/conf/hbase-site.xml
+                                from the remote HBase cluster. Create the
+                                    hbase-site.xml.jar file. The
+                                    hbase-site.xml is added to the classpath
+                                with the spark.jars parameter because it is
+                                part of the jar file’s root
+                                path.jar cf hbase-site.xml.jar hbase-site.xml
+hdfs dfs -put hbase-site.xml.jar /path/hbase_jars_common
+Upload the Spark3 related
+                                files:hdfs dfs -put /opt/cloudera/parcels/SPARK3/lib/spark3/hbase_connectors/lib/hbase-spark3-***VERSION /path/hbase_jars_spark3
+hdfs dfs -put /opt/cloudera/parcels/SPARK3/lib/spark3/hbase_connectors/lib/hbase-spark3-protocol-shaded-***VERSION NUMBER***.jar /path/hbase_jars_spark3
+Upload the Spark2 related
+                                files:hdfs dfs -put /opt/cloudera/parcels/CDH/lib/hbase_connectors/lib/hbase-spark.jar /path/hbase_jars_spark2
+hdfs dfs -put /opt/cloudera/parcels/CDH/lib/hbase_connectors/lib/hbase-spark-protocol-shaded.jar /path/hbase_jars_spark2
+hdfs dfs -put /opt/cloudera/parcels/CDH/lib/hbase_connectors/lib/scala-library.jar /path/hbase_jars_spark2
+Add all the Spark version related files and the hbase
+                                    mapredcp files to the spark.jars parameter:
+                                    
+Spark2:spark.jars=hdfs:///path/hbase_jars_common/hbase-site.xml.jar,hdfs:///path/hbase_jars_spark2/hbase-spark-protocol-shaded.jar,hdfs:///path/hbase_jars_spark2/hbase-spark.jar,hdfs:///path/hbase_jars_spark2/scala-library.jar,/path/hbase_jars_common(other common files)...
+Spark3:spark.jars=hdfs:///path/hbase_jars_common/hbase-site.xml.jar,hdfs:///path/hbase_jars_spark3/hbase-spark3.jar,hdfs:///path/hbase_jars_spark3/hbase-spark3-protocol-shaded.jar,/path/hbase_jars_common(other common files)...
+
+
+
+
+
+
+Enter a Reason for change, and then click Save Changes
+                    to commit the changes.
+
+Restart the role and service when Cloudera Manager prompts you to
+                    restart.
+
+Perform the following steps while using HBase
+                            RegionServer:
+Edit the HBase RegionServer configuration for running Spark Filter. Spark
+                        Filter is used when Spark SQL Where clauses are in use.
+In Cloudera Manager, select the HBase
+                                service.
+Click the Configuration tab.
+Search for regionserver environment.
+Find the RegionServer Environment Advanced Configuration
+                                    Snippet (Safety Valve).
+Click the plus icon to add the following
+                                        property:Key:
+HBASE_CLASSPATHValue:
+/opt/cloudera/parcels/CDH/lib/hbase_connectors/lib/hbase-spark-***VERSION NUMBER***-198.jar:/opt/cloudera/parcels/CDH/lib/hbase_connectors/lib/hbase-spark-protocol-shaded-***VERSION NUMBER***-198.jar:/opt/cloudera/parcels/CDH/jars/scala-library-2.11.12.jar
+Ensure that the listed jars have the correct version number in their
+                                name.
+Click Save Changes.
+Restart the Region Server.
+
+
+
+
+Build a Spark or Spark3 application using the dependencies that you provide when you
+                run your application. If you follow the previous instructions, Cloudera Manager
+                automatically configures the connector for Spark. If you have not:
+Consider the following example while using a Spark2
+                        application:spark-shell --conf spark.jars=hdfs:///path/hbase_jars_common/hbase-site.xml.jar,hdfs:///path/hbase_jars_spark2/hbase-spark-protocol-shaded.jar,hdfs:///path/hbase_jars_spark2/hbase-spark.jar,hdfs:///path/hbase_jars_spark2/scala-library.jar,hdfs:///path/hbase_jars_common/hbase-shaded-mapreduce-***VERSION NUMBER***.jar,hdfs:///path/hbase_jars_common/opentelemetry-api-***VERSION NUMBER***.jar,hdfs:///path/hbase_jars_common/opentelemetry-context-***VERSION NUMBER***.jar
+Consider the following example while using a Spark3
+                        application:spark3-shell --conf spark.jars=hdfs:///path/hbase_jars_common/hbase-site.xml.jar,hdfs:///path/hbase_jars_spark3/hbase-spark3-protocol-shaded.jar,hdfs:///path/hbase_jars_spark3/hbase-spark3.jar,hdfs:///path/hbase_jars_common/hbase-shaded-mapreduce-***VERSION NUMBER***.jar,hdfs:///path/hbase_jars_common/opentelemetry-api-***VERSION NUMBER***.jar,hdfs:///path/hbase_jars_common/opentelemetry-context-***VERSION NUMBER***.jar
+
+
+
+Parent topic: Configure HBase-Spark connector using Cloudera Manager

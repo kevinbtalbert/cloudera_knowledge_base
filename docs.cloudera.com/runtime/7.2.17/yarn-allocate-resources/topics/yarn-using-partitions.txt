@@ -1,0 +1,87 @@
+Using partitions when submitting a jobCloudera Docs
+Using partitions when
+      submitting a job
+You can use various methods to specify partitions when submitting jobs.
+
+Set partitions when Submitting Jobs
+
+
+You can use the following methods to specify partitions when submitting
+                     jobs:
+
+
+ApplicationSubmissionContext.setNodeLabelExpression(<node_label_expression>)
+                           - sets the partition expression for all containers of the
+                           application.
+
+
+ResourceRequest.setNodeLabelExpression(<node_label_expression>)
+                           - sets the partition expression for individual resource requests. This
+                           overrides the partitions expression set in
+                              ApplicationSubmissionContext.setNodeLabelExpression(<node_label_expression>).
+
+
+Specify
+                              setAMContainerResourceRequest.setNodeLabelExpression
+                           in ApplicationSubmissionContext to indicate the expected
+                           partition for the ApplicationMaster container.
+
+
+You can use one of these methods to specify a partition expression, and
+                        -queue to specify a queue, when you submit YARN jobs using
+                     the distributed shell client. If the queue has a label that satisfies the label
+                     expression, it will run the job on the partition(s). If the label expression
+                     does not reference a label associated with the specified queue, the job does
+                     not run and an error is returned. If no partitionn is specified, the job runs
+                     only on nodes without a partition, and on nodes with non-exclusive partitions
+                     if idle resources are available.
+
+note
+You can only specify one partition in the
+                              .setNodeLabelExpression methods.
+
+
+For example, the following commands run a simple YARN distributed shell "sleep
+                     for a long time" job. In this example you are asking for more containers than
+                     the cluster can run so you can see which node the job runs on. We are
+                     specifying that the job should run on queue "a1", which our user has permission
+                     to run jobs on. We are also using the -node_label_expression
+                     parameter to specify that the job will run on all nodes with label "x".
+sudo su yarn
+hadoop jar /opt/cloudera/parcels/CDH/lib/hadoop-yarn/hadoop-yarn-applications-distributedshell.jar
+ -shell_command "sleep 100" -jar /opt/cloudera/parcels/CDH/lib/hadoop-yarn/hadoop-yarn-applications-distributedshell.jar
+ -num_containers 30 -queue a1 -node_label_expression x 
+
+If you run this job on the example cluster we configured previously, containers
+                  are allocated on node-1, as this node has been assigned partition "x", and queue
+                  "a1" also has partition "x":
+The following commands run the same job that you specified for partition "x", but
+                  this time you will specify queue "b1" rather than queue "a1".
+sudo su yarn
+hadoop jar /opt/cloudera/parcels/CDH/lib/hadoop-yarn/hadoop-yarn-applications-distributedshell.jar
+ -shell_command "sleep 100000" -jar /opt/cloudera/parcels/CDH/lib/hadoop-yarn/hadoop-yarn-applications-distributedshell.jar
+ -num_containers 30 -queue b1 -node_label_expression x
+When you attempt to run this job on our example cluster, the job will fail with
+                  the following error message because label "x" is not associated with queue
+                  "b1".
+14/11/24 13:42:21 INFO distributedshell.Client: Submitting application to ASM
+14/11/24 13:42:21 FATAL distributedshell.Client: Error running Client
+org.apache.hadoop.yarn.exceptions.InvalidResourceRequestException: Invalid resource request, queue=b1 doesn't 
+have permission to access all labels in resource request. labelExpression of resource request=x. Queue labels=y
+
+
+MapReduce Jobs and Partitions
+
+
+Currently you cannot specify a partition when submitting a MapReduce job.
+                     However, if you submit a MapReduce job to a queue that has a default partition
+                     expression, the default partition is applied to the MapReduce job.
+Using default partition expressions tends to constrain larger portions of the
+                     cluster, which at some point starts to become counter-productive for jobs -
+                     such as MapReduce jobs - that benefit from the advantages offered by
+                     distributed parallel processing.
+
+
+
+
+Parent topic: Partition configuration

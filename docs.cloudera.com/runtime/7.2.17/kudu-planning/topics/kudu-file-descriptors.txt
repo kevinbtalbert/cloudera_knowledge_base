@@ -1,0 +1,122 @@
+File descriptorsCloudera Docs
+File descriptors
+Processes are allotted a maximum number of open file descriptors (also referred to as
+    fds). If a tablet server attempts to open too many fds, it will typically crash with a message
+    saying something like "too many open files".
+The
+      following table summarizes the sources of file descriptor usage in a Kudu tablet server
+      process: 
+Table 1. Tablet server file descriptor usage
+
+
+                Type
+              
+
+                Multiplier
+              
+
+                Description
+              
+
+
+
+
+                File cache
+              
+
+                Fixed by --block_manager_max_open_files (default 40% of process
+                maximum)
+              
+
+                Maximum allowed open fds reserved for use by the file cache.
+              
+
+
+
+                Hot replicas
+              
+
+                2 per WAL segment, 1 per WAL index
+              
+
+                Number of fds used by hot replicas. See below for more explanation.
+              
+
+
+
+                Cold replicas
+              
+
+                3 per cold replica
+              
+
+                Number of fds used per cold replica: 2 for the single WAL segment and 1 for the
+                single WAL index.
+              
+
+
+
+        Every replica has at least one WAL segment and at least one WAL index, and should have
+        the same number of segments and indices; however, the number of segments and indices can
+        be greater for a replica if one of its peer replicas is falling behind. WAL segment and
+        index fds are closed as WALs are garbage collected.
+      
+
+        Using this information for the example load gives the following breakdown of file
+        descriptor usage, under the assumption that some replicas are lagging and using 10 WAL
+        segments:
+      
+Table 2. Example tablet server file descriptor usage
+
+
+                Type
+              
+
+                Amount
+              
+
+
+
+
+                file cache
+              
+
+                40% * 32000 fds = 12800 fds
+              
+
+
+
+                1600 cold replicas
+              
+
+                1600 cold replicas * 3 fds / cold replica = 4800 fds
+              
+
+
+
+                200 hot replicas
+              
+
+                (2 / segment * 10 segments/hot replica * 200 hot replicas) + (1 / index * 10
+                indices / hot replica * 200 hot replicas) = 6000 fds
+              
+
+
+
+                Total
+              
+
+                23600 fds
+              
+
+
+
+        So for this example, the tablet server process has about 32000 - 23600 = 8400 fds to
+        spare.
+      
+
+        There is typically no downside to configuring a higher file descriptor limit if
+        approaching the currently configured limit.
+      
+
+Parent topic: Scaling Kudu

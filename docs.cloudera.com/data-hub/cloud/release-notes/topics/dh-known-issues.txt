@@ -1,0 +1,64 @@
+Known issuesCloudera Docs
+Known issues
+This section lists known issues that you might run into while using the Data Hub
+  service.
+CB-11925: Knox Load Balancer API requests initiated from Knox Gateway hosts can fail
+        with Connection timeout error
+Problem: When logged into a Data Lake or Data Hub node that has a Knox Gateway
+        service instance configured on it, making Knox API calls through the Knox load balancer can
+        result in a connection timeout error. This is because for security reasons, the IP address
+        of the request is preserved in the traffic passed through the load balancer. Preserving the
+        IP address means that the load balancer will reject "loopback" traffic, meaning traffic that
+        originates and is directed back to the same node.
+Workaround: If Knox API calls need to be made while logged into a Knox gateway node,
+        use the hostname of the node instead of the load balancer hostname in the API call.
+The Knox load balancer hostname can be identified by the "-gateway" suffix in the first
+        clause of the hostname with no numeric identifier. For example:
+        <cluster-name>-gateway.<env-shortname>.<hash>.cloudera.site is the load balancer
+        hostname, and <cluster-name>-gateway0.<env-shortname>.<hash>.cloudera.site is a
+        direct node hostname. 
+Technical Service Bulletins
+
+
+TSB 2022-568: HBase normalizer must be disabled for Salted
+            Phoenix tables
+When Apache Phoenix (“Phoenix”) creates a salted table, it pre-splits the table
+            according to the number of salt regions. These regions must always be kept separate,
+            otherwise Phoenix does not work correctly.The HBase normalizer is not aware of this
+              requirement, and in some cases the pre-split regions are merged automatically. This
+              causes failure in Phoenix.The same requirement applies when merging regions of
+              salted tables manually: regions containing different salt keys (the first byte of the
+              rowkey) must never be merged. Note that either automatic or manual splitting of
+              the regions for a salted table does not cause a problem. The problem only occurs when
+              adjacent regions containing different salt keys are merged.
+
+Upstream JIRA
+PHOENIX-4906
+Impact
+Customers using the salted table feature of Phoenix.
+Action required
+
+
+Checking for affected tables:
+Run the following query from phoenix-sqlline to find the
+                    salted
+                    tables:select TABLE_SCHEM,TABLE_NAME from system.catalog where salt_buckets>0;
+From hbase shell run describe 'SCHEMA.TABLE' for each salted
+                    table, substituting the schema and table (for tables without schema, use just
+                    the table name) and look for {NORMALIZATION_ENABLED => 'true'}
+                    in the output.
+
+If normalizer has been enabled on a salted Phoenix table, the HBase normalizer
+                must be disabled manually. From HBase shell, run the following command for each
+                salted Phoenix
+                table:alter 'SCHEMA_NAME.TABLE_NAME', {NORMALIZATION_ENABLED => 'false'} 
+(If the table is in the default schema, just use 'TABLE_NAME')
+
+
+Knowledge article
+For the latest update on this issue, see the corresponding Knowledge article: TSB 2022-568: Hbase normalizer must be disabled for
+              Salted Phoenix tables 
+
+
+
+

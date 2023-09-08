@@ -1,0 +1,175 @@
+Setting capacity estimations and goalsCloudera Docs
+Setting capacity estimations and goals
+Cruise Control rebalancing works using capacity estimations and goals. You need to
+  configure the capacity estimates based on your resources, and set the goals for Cruise Control to
+  achieve the Kafka partition rebalancing that meets your requirements.
+When configuring Cruise Control, you need to make sure that the Kafka topics and partitions,
+   the capacity estimates, and the proper goals are provided so the rebalancing process works as
+   expected.
+You can find the capacity estimate and goal configurations at the following location in
+   Cloudera Manager:
+Navigate to Management Console > Environments, and select the
+     environment where you have created your cluster.
+Select Cloudera Manager from the services.
+Select Clusters > Cruise Control.
+Click Configuration.
+Select Main from the Filters.
+
+
+
+Configuring capacity estimations
+The values for capacity estimation needs to be provided based on your available
+  resources for CPU and network. Beside the capacity estimation, you also need to provide
+  information about the broker and partition metrics. You can set the capacity estimations and Kafka
+  properties in Cloudera Manager.
+For the rebalancing, you need to provide the capacity values of your resources. These values
+   are used for specifying the rebalancing criteria for your deployment. The following capacity
+   values must be set:
+
+Capacity
+Description
+
+
+
+capacity.default.cpu
+100 by default
+
+
+capacity.default.network-in
+Given by the internet provider
+
+
+capacity.default.network-out
+
+
+noteFor the capacity estimates, the disk capacity value is also needed. However, Cruise Control
+   automatically retrieves the disk capacity value from the
+    kafka_log_directory_disk_total_space Kafka metric.
+The optimizers in Cruise Control use the network incoming and outgoing capacities to define a
+   boundary for optimization. The capacity estimates are generated and read by Cruise Control. A
+    capacity.json file is generated when Cruise Control is started. When a new
+   broker is added, Cruise Control uses the default broker capacity values. However, in case disk
+   related goals are used, Cruise Control must be restarted to load the actual disk capacity metrics
+   of the new broker.
+The following table lists all the configurations that are needed to configure Cruise Control
+   specifically to your environment:
+
+noteThe security settings are not listed in the table below.
+
+
+
+
+Configuration
+Description
+
+
+
+num.metric.fetchers
+Parallel threads for fetching metrics from the Cloudera Manager database
+
+
+partition.metric.sample.store.topic
+Storing Cruise Control metrics
+
+
+broker.metric.sample.store.topic
+Storing Cruise Control metircs
+
+
+partition.metrics.window.ms
+Time window size for partition metrics
+
+
+broker.metrics.window.ms
+Time window size for broker metrics
+
+
+num.partition.metrics.windows
+Number of stored partition windows
+
+
+num.broker.metrics.windows
+Number of stored broker windows
+
+
+
+
+
+Configuring goals
+After setting the capacity estimates, you can provide different goals that define the
+  optimization proposals given by Cruise Control.
+Default.goals are used to pre-compute optimization proposals that can be
+   applied regardless of any anomalies. These default goal settings on a healthy cluster can
+   optimize resource utilization. Supported goals are also available to assist the optimized
+   rebalancing process. When these goals are fulfilled, the rebalancing is successful. When the
+   goals are violated, self-healing can be used and rebalancing must be carried out.
+Cruise Control has an anomaly detection feature where goal violations can also be set. The
+    anomaly.detection.goals configuration defines when the goals are not met, thus
+   causing a violation. These anomalies can be fixed by the proposal generated from the
+    self.healing.goals configuration. In case there is no self-healing goal
+   specified, Cruise Control uses the default.goals setting. Hard goals can also be
+   set to guarantee the fulfilment of any optimization or self-healing process.
+For more information about self-healing and goal violation, see the How Cruise Control self-healing works section.
+
+
+
+Configuration
+Description
+
+
+
+default.goals
+List of default goals
+
+
+goals
+List of supported goals
+
+
+hard.goals
+List of goals that any optimization proposal must fulfill
+
+
+self.healing.goals
+List of goals to be used for self-healing relevant anomalies
+
+
+anomaly.detection.goals
+List of goals that the anomaly detector should detect if they are violated
+
+
+
+
+
+Multi-level rack-aware distribution goal
+You can use the MultiLevelRackAwareDistributionGoal to ensure rack awareness on a higher
+  level than for the standard rack aware goal for Kafka clusters using Cruise Control.
+The MultiLevelRackAwareDistributionGoal behaves differently than the default
+    RackAwareGoal or RackAwareDistributionGoal in Cruise Control.
+   The standard goals have lighter requirements on rack awareness, and always optimize based on the
+   current state of the cluster and with the priority on making all replicas come back online.
+This means that in case a network partition failure occurs, and a data center goes offline, a
+   Cruise Control rebalance operation using a standard rack-aware goal ignores the data center that
+   is not working, and moves replicas around as if there were one fewer data center in the cluster.
+   For example, if a Kafka cluster has three data centers and one goes offline, the standard goals
+   are not aware of the existence of the third data center, and act as if only two data centers are
+   used in the cluster.
+The MultiLevelRackAwareDistributionGoal acts differently in the following
+    aspects:
+Handles rack IDs as multi-level rack IDs, respecting the hierarchy of racks when
+     distributing replicas
+Keeps track of the whole state of the cluster with caching previous states to make sure that
+     all racks are visible
+Prioritizes multi-level rack awareness guarantees over bringing all replicas back
+     online
+
+In the same failure situation, where one data center is offline out of three, the multi-level
+   rack-aware goal is still aware of the existence of the third data center. This means that the
+   offline replicas are not moved from the third data center if the migration violates the
+   multi-level rack awareness guarantees. The goal allows optimizations to pass even in the presence
+   of offline replicas, which can be configured with
+    cloudera.multi.level.rack.awareness.ensure.no.offline.replicas property. If the
+    cloudera.multi.level.rack.awareness.ensure.no.offline.replicas is set to
+    true, the goal causes the rebalance operation to fail if the replicas would
+   stay offline after the optimizations are implemented.
+

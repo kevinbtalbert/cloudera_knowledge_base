@@ -1,0 +1,375 @@
+Transitioning from the Cloudera Manager Embedded PostgreSQL Database Server to an External PostgreSQL DatabaseCloudera Docs
+Transitioning from the Cloudera Manager Embedded PostgreSQL Database Server to an External
+    PostgreSQL Database 
+
+Cloudera Manager provides an embedded PostgreSQL database server for
+      demonstration and proof of concept deployments when creating a cluster. To
+      remind users that this embedded database is not suitable for production,
+      Cloudera Manager displays the banner text: "You are running Cloudera
+      Manager in non-production mode, which uses an embedded PostgreSQL
+      database. Switch to using a supported external database before moving into
+      production." 
+If, however, you have already used the embedded database, and you are
+      unable to redeploy a fresh cluster, then you must migrate to an
+      external PostgreSQL database. 
+
+noteThis procedure does not describe how to migrate to a database server other than
+        PostgreSQL. Moving databases from one database server to a different type of database server
+        is a complex process that requires modification of the schema and matching the data in the
+        database tables to the new schema. It is strongly recommended that you engage with Cloudera
+        Professional Services if you wish to perform a transition to an external database server
+        other than PostgreSQL. 
+
+
+
+Parent topic: Supplemental Upgrade Topics
+Prerequisites
+    
+
+ Before migrating the Cloudera Manager embedded PostgreSQL database
+        to an external PostgreSQL database, ensure that your setup meets the
+        following conditions:
+
+
+
+            The external PostgreSQL database server is running.
+          
+
+            The database server is configured to accept remote
+            connections.
+          
+ The database server is configured to accept user logins using
+              md5. 
+ No one has manually created any databases in the external
+            database server for roles that will be migrated. noteTo view a
+              list of databases in the external database server (requires
+              default superuser
+              permission):sudo -u postgres psql -l
+ All health issues with your cluster have been resolved.
+
+
+ For details about configuring the database server, see Configuring and Starting the PostgreSQL
+          Server. 
+
+important Only perform the steps in Configuring and Starting the
+            PostgreSQL Server. Do not proceed with the creation of
+          databases as described in the subsequent section. 
+
+
+        For large clusters, Cloudera recommends running your database server
+        on a dedicated host. Engage Cloudera Professional Services or a
+        certified database administrator to correctly tune your external
+        database server.
+        
+
+
+
+ Identify Roles that Use the Embedded Database Server 
+
+ Before you can migrate to another database server, you must first
+        identify the databases using the embedded database server. When the
+        Cloudera Manager Embedded Database server is initialized, it creates the
+        Cloudera Manager database and databases for roles in the Management
+        Services. The Installation Wizard (which runs automatically the first
+        time you log in to Cloudera Manager) or Add Service action for a
+        cluster creates additional databases for roles when run. It is in this
+        context that you identify which roles are used in the embedded database
+        server.
+ To identify which roles are using the Cloudera Manager embedded database server: 
+ Obtain and save the cloudera-scm superuser password from the
+            embedded database server. You will need this password in subsequent
+            steps:head -1  /var/lib/cloudera-scm-server-db/data/generated_password.txt
+Make a list of all services that are using the embedded database server. Then, after
+            determining which services are not using the embedded database server, remove those
+            services from the list. The scm database must remain in your list. Use
+            the following table as a guide:Table 1.  Cloudera Manager Embedded Database Server Databases
+
+Service
+Role
+Default Database Name
+Default Username
+
+
+
+Cloudera Manager Server
+
+
+
+
+scm 
+
+scm
+
+
+Cloudera Management Service
+Activity Monitor
+
+amon 
+
+
+amon 
+
+
+
+Hive
+
+Hive Metastore Server
+
+
+hive
+
+hive
+
+
+Hue
+
+Hue Server
+
+hue
+
+7uu7uu7uhue
+
+
+
+Cloudera Management Service
+Navigator Audit Server
+nav
+nav
+
+
+Cloudera Management Service
+Navigator Metadata Server
+navms
+navms
+
+
+Oozie
+Oozie Server
+oozie_oozie_server
+oozie_oozie_server
+
+
+Cloudera Management Service
+Reports Manager
+rman
+rman
+
+
+Sentry
+Sentry Server 
+sentry
+sentry
+
+
+Verify which roles are using the embedded database. Roles using the embedded database
+            server always use port 7432 (the default port for the embedded database) on the Cloudera
+            Manager Server host. For Cloudera Management Services:
+Select Cloudera Management Service > Configuration, and type "7432"
+                in the Search field.
+Confirm that the hostname for the services being used is the same hostname used by
+                the Cloudera Manager Server.
+note
+If any of the following fields contain the value "7432", then the service is using
+                the embedded database:
+
+Activity Monitor
+Navigator Audit Server
+Navigator Metadata Server
+Reports Manager
+
+For the Oozie Service:
+Select Oozie service > Configuration, and type "7432" in the
+                    Search field.
+Confirm that the hostname is the Cloudera Manager Server.
+For Hive, Hue, and Sentry Services:
+Select the specific service > Configuration, and type "database host" in
+                  the Search field.
+Confirm that the hostname is the Cloudera Manager Server.
+In the Search field, type “database port” and confirm that the port is
+                  7432.
+Repeat these steps for each of the services (Hive, Hue and Sentry).
+
+Verify the database names in the embedded database server match the database names on
+            your list (Step 2). Databases that exist on the database server and not used by their
+            roles do not need to be migrated. This step is to confirm that your list is
+              correct.noteDo not add the postgres, template0, or
+                template1 databases to your list. These are used only by the
+              PostgreSQL server.psql -h localhost -p 7432 -U cloudera-scm -l
+Password for user cloudera-scm: <password>
+
+                                               List of databases
+       Name        |       Owner        | Encoding |  Collate   |   Ctype    |         Access
+--------------------+--------------------+----------+------------+------------+----------------
+amon               | amon               | UTF8     | en_US.UTF8 | en_US.UTF8 |
+hive               | hive               | UTF8     | en_US.UTF8 | en_US.UTF8 |
+hue                | hue                | UTF8     | en_US.UTF8 | en_US.UTF8 |
+nav                | nav                | UTF8     | en_US.UTF8 | en_US.UTF8 |
+navms              | navms              | UTF8     | en_US.UTF8 | en_US.UTF8 |
+oozie_oozie_server | oozie_oozie_server | UTF8     | en_US.UTF8 | en_US.UTF8 |
+postgres           | cloudera-scm       | UTF8     | en_US.UTF8 | en_US.UTF8 |
+rman               | rman               | UTF8     | en_US.UTF8 | en_US.UTF8 |
+scm                | scm                | UTF8     | en_US.UTF8 | en_US.UTF8 |
+sentry             | sentry             | UTF8     | en_US.UTF8 | en_US.UTF8 |
+template0          | cloudera-scm       | UTF8     | en_US.UTF8 | en_US.UTF8 | =c/"cloudera-scm"
+template1          | cloudera-scm       | UTF8     | en_US.UTF8 | en_US.UTF8 | =c/"cloudera-scm"
+(12 rows)
+ You should now have a list of all roles and database names that use the embedded
+        database server, and are ready to proceed with the transition of databases from the embedded
+        database server to the external PostgreSQL database server.
+
+
+
+Migrate Databases
+        from the Embedded Database Server to the External PostgreSQL Database
+        Server
+
+
+While performing this procedure, ensure that the Cloudera Manager
+        Agents remain running on all hosts. Unless otherwise specified, when
+        prompted for a password use the cloudera-scm password. 
+
+noteAfter completing this transition, you cannot delete the cloudera-scm
+            postgres superuser unless you remove the access privileges for the migrated
+          databases. Minimally, you should change the cloudera-scm postgres
+          superuser password.
+
+
+ In Cloudera Manager, stop the cluster services identified as using
+          the embedded database server (see Identify Roles that Use the Embedded Database Server). Be sure
+          to stop the Cloudera Management Service as well. Also be sure to stop
+          any services with dependencies on these services. The remaining
+          services will continue to run without downtime. noteIf you do not
+            stop the services from within Cloudera Manager before stopping
+            Cloudera Manager Server from the command line, they will continue to
+            run and maintain a network connection to the embedded database
+            server. If this occurs, then the embedded database server will
+            ignore any command line stop commands (Step 2) and require that you
+            manually kill the process, which in turn causes the services to
+            crash instead of stopping cleanly.
+Navigate to Hosts > All Hosts, and make note of the
+          number of roles assigned to hosts. Also take note whether or not they
+          are in a commissioned state. You will need this information later to
+          validate that your scm database was migrated
+          correctly. 
+Stop the Cloudera Manager Server. To stop the
+          server:sudo service cloudera-scm-server stop
+Obtain and save the embedded database superuser password (you will
+          need this password in subsequent steps) from the
+            generated_password.txt
+          file:head -1  /var/lib/cloudera-scm-server-db/data/generated_password.txt
+Export the PostgreSQL user roles from the embedded database server
+          to ensure the correct users, permissions, and passwords are preserved
+          for database access. Passwords are exported as an
+            md5sum and are not visible in plain text. To export
+          the database user roles (you will need the
+            cloudera-scm user
+          password):pg_dumpall -h localhost -p 7432 -U cloudera-scm -v --roles-only -f "/var/tmp/cloudera_user_roles.sql"
+Edit /var/tmp/cloudera_user_roles.sql to remove any
+            CREATE ROLE and ALTER ROLE
+          commands for databases not in your list. Leave the entries for
+            cloudera-scm untouched, because this user role is
+          used during the database import.
+Export the data from each of the databases on your list you created
+          in Identify Roles that Use the Embedded Database Server:pg_dump -F c -h localhost -p 7432 -U cloudera-scm [database_name]  > /var/tmp/[database_name]_db_backup-$(date +”%m-%d-%Y”).dumpFollowing
+            is a sample data export command for the scm
+            database:pg_dump -F c -h localhost -p 7432 -U cloudera-scm scm > /var/tmp/scm_db_backup-$(date +%m-%d-%Y).dump
+Password:
+Stop and disable the embedded database
+          server:service cloudera-scm-server-db stop
+chkconfig cloudera-scm-server-db off
+          Confirm that the embedded database server is
+          stopped:netstat -at | grep 7432
+Back up the Cloudera Manager Server database configuration
+          file:cp /etc/cloudera-scm-server/db.properties /etc/cloudera-scm-server/db.properties.embedded
+Copy the file /var/tmp/cloudera_user_roles.sql and
+          the database dump files from the embedded database server host to
+            /var/tmp on the external database server
+          host:cd /var/tmp
+scp cloudera_user_roles.sql *.dump <user>@<postgres-server>:/var/tmp
+Import the PostgreSQL user roles into the external database server.
+            The external PostgreSQL database server superuser password is
+            required to import the user roles. If the superuser role has been
+            changed, you will be prompted for the username and
+              password.noteOnly run the command that applies to your context;
+              do not execute both commands.
+ To import users when using the default PostgreSQL superuser
+                role:sudo -u postgres psql -f /var/tmp/cloudera_user_roles.sql
+ To import users when the superuser role has been
+                changed:psql -h <database-hostname> -p <database-port> -U <superuser> -f /var/tmp/cloudera_user_roles.sql
+                For
+                example:psql -h pg-server.example.com -p 5432 -U postgres -f /var/tmp/cloudera_user_roles.sqlPassword for user postgres
+
+Import the Cloudera Manager database on the external server. First
+          copy the database dump files from the Cloudera Manager Server host to
+          your external PostgreSQL database server, and then import the database
+            data:noteTo successfully run the pg_restore
+            command, there must be an existing database on the database server
+            to complete the connection; the existing database will not be
+            modified. If the -d <existing-database> option
+            is not included, then the pg_restore command will
+            fail.pg_restore -C -h <database-hostname> -p <database-port> -d <existing-database> -U cloudera-scm -v <data-file>
+          Repeat this import for each database.The following example is for
+            the scm
+          database:pg_restore -C -h pg-server.example.com -p 5432 -d postgres -U cloudera-scm -v /var/tmp/scm_server_db_backup-20180312.dump
+pg_restore: connecting to database for restore
+Password:
+Update the Cloudera Manager Server database configuration file to
+          use the external database server. Edit the
+            /etc/cloudera-scm-server/db.properties file as follows:
+Update the com.cloudera.cmf.db.host value with
+              the hostname and port number of the external database server.
+Change the com.cloudera.cmf.db.setupType value
+              from "EMBEDDED" to
+              "EXTERNAL".
+
+Start the Cloudera Manager Server and confirm it is
+          working:service cloudera-scm-server start
+          Note that if you start the Cloudera Manager GUI at this point, it may
+          take up to five minutes after executing the start command before it
+          becomes available.In Cloudera Manager Server, navigate to
+              Hosts > All Hosts and confirm the number of roles
+            assigned to hosts (this number should match what you found in Step
+            2); also confirm that they are in a commissioned state that matches
+            what you observed in Step 2.
+Update the role configurations to use the external database hostname
+          and port number. Only perform this task for services where the
+          database has been migrated.For Cloudera Management Services: 
+Select Cloudera Management Service >
+                  Configuration, and type "7432" in the Search
+                field.
+Change any database hostname properties from the embedded
+                database to the external database hostname and port number.
+Click Save Changes.
+ For the Oozie Service:
+Select Oozie service > Configuration, and type
+              "7432" in the Search field.
+Change any database hostname properties from the embedded
+              database to the external database hostname and port number.
+Click Save Changes.
+For Hive, Hue, and Sentry Services:
+Select the specific service > Configuration, and type
+                "database host" in the Search field.
+Change the hostname from the embedded database name to the
+                external database hostname.
+Click Save Changes.
+
+Start the Cloudera Management Service and confirm that all
+          management services are up and no health tests are failing. 
+Start all Services via the Cloudera Manager web UI. This should start all services that
+          were stopped for the database transition. Confirm that all services are up and no health
+          tests are failing.
+On the embedded database server host, remove the embedded PostgreSQL
+          database server:
+Make a backup of the
+                /var/lib/cloudera-scm-server-db/data
+              directory:tar czvf /var/tmp/embedded_db_data_backup-$(date +”%m-%d-%Y”).tgz /var/lib/cloudera-scm-server-db/data
+Remove the embedded database package: For RHEL/SLES:
+rpm --erase cloudera-manager-server-db-2
+For Ubuntu:
+apt-get remove cloudera-manager-server-db-2
+Delete the /var/lib/cloudera-scm-server-db/data
+              directory.
+
+
+
+

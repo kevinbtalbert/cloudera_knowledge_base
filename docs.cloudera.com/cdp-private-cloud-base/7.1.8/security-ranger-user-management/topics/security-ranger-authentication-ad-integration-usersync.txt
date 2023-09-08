@@ -1,0 +1,248 @@
+Ranger UsersyncCloudera Docs
+Ranger Usersync 
+How to configure Ranger Usersync to sync users and groups from AD/LDAP
+OverviewThe Ranger usersync service syncs users, groups, and group memberships from various sources, such
+                as Unix, File, or AD/LDAP into Ranger. Ranger usersync provides a set of rich and
+                flexible configuration properties to sync users, groups, and group memberships from
+                AD/LDAP supporting a wide variety of use cases.As a Ranger administrator, you will work with users and groups to configure policies in Ranger
+                and administer access to the Ranger UI. You will use group memberships only to
+                administer access to the Ranger UI. note Group memberships
+                    stored in Ranger are not used during authorization. Instead, individual
+                    components compute the group memberships for a given user on-demand, using
+                    utilities like id or group mappings, during authorization. The authority on this
+                    is the output of the id or groups command on the Linux OS, which is populated by
+                    SSSD from AD (or whichever LDAP provider is used).  For example:# idsp_test1 uid=40002(sp_test1) gid=40006(sp_test1) groups=40006(sp_test1),40003(cdf_puas),40005(cdf_policy_admins) # id sp_auditor  uid=40003(sp_auditor) gid=40007(sp_auditor)groups=40007(sp_auditor),40003(cdf_puas) uses id to show that users sp_test 1
+                        and user sp_auditor each belong to three groups, also
+                    #groups sp_test1  sp_test1 : sp_test1 cdf_puas cdf_policy_admins # groups sp_auditor  sp_auditor : sp_auditor cdf_puas  uses groups to show the groups that
+                    users sp_test1 and sp_auditor belong to.
+You must first understand the specific use-case before syncing users, groups, and
+                group memberships from AD/LDAP. For example, if you want to configure only
+                group-level policies, then you must sync groups to Ranger, but syncing users and
+                group memberships to Ranger is not required.Determining the users and
+                    groups to sync to Ranger:Typically, you must complete a three-step process to define the complete set of users and groups
+                that you will sync to Ranger:
+Define the customer use-case.3 common use cases:
+A customer Admin or Data Admin wants to configure only group-level
+                                policies and restrict access to the Ranger UI to only a few
+                                users.
+A customer’s Admin or Data Admin wants to configure only group-level
+                                policies and restrict access to the Ranger UI to only members of a
+                                group.
+A customer’s Admin or Data Admin wants to configure mostly
+                                group-level policies and a few user- level policies.
+
+Define all relevant sync source details. For every use-case, at least four
+                        key questions must by answered:
+What groups will sync to Ranger?
+Which organizational units (OUs) in AD/LDAP contain these
+                                groups?
+What users will sync to Ranger?
+Which organizational units (OUs) in AD/LDAP contain these
+                                users?
+
+Configure Usersync properties. This topic describes an example set of
+                            Usersync configuration properties and values, based on a simple use-case
+                            and example AD source repository.
+Example Use Case:First, consider the following use-case,
+                in order to better understand how to configure Usersync properties:A
+                customers Admin or Data Admin wants to configure only group-level policies and
+                restrict access to the Ranger UI to only members of a group.Example AD
+                    environment:Configuring Ranger Usersync with AD/LDAP depends highly on the customer environment. You must
+                understand the organization of users and groups in the customer environment. This
+                illustration shows users and groups organized in an Active Directory environment. Figure 1. Example Active Directory Structure
+
+Answering the key user and group questions, based on the example AD
+                    structure:In this example, the customer wants to configure
+                group-level policies for groups cdp_testing and
+                    cdp_prod and wants to provide admin access to the Ranger UI
+                only for users in the dev_ops group.Based on the example
+                Active Directory structure, answers to the four key user/group questions are:
+Q1:  What groups will be synced to Ranger?
+A1:   cdp_testing, cdp_prod,
+                            and dev_ops
+Q2:  What OUs contain these groups in AD?
+A2:    hadoop groups and security
+                                groups
+Q3:  What users will be synced to Ranger?
+A3:  asmith and acaroll (these
+                            users are dev_ops group members)
+Q4: What OUs contain these users in AD?
+A4:  vendors and service
+                                accounts
+
+To find the specific answers to these questions in a particular environment, use a
+                tool such as Ldapsearch, as shown in the following examples.
+Example: Ldapsearch command to search a particular group
+                            cdp_testing and determine what attributes are
+                        available for the group.
+
+Figure 2. Using Ldapsearch to find a specific group
+
+
+
+Above output shows all the available attributes for cn=cdp_testing.
+                            The highlighted attributes are those of interest for usersync
+                            configuration. In this case, cdp_testing has three “member” attributes:
+                            ASmith, BHall, and JDoe.
+Example: Ldapsearch command to search a particular user
+                            ASmith and determine what attributes are available
+                        for the user.
+
+Figure 3. Using Ldapsearch to find a specific user
+
+
+
+Above output shows all the available attributes for a
+                            user. The highlighted attributes are those of interest for usersync
+                            configuration. In this case, ASmith is a “memberof” 3 groups -
+                            cdp_testing, dev_ops, and cdp_prod.
+
+
+How to configure Usersync, based on the illustrated AD environment
+                example:
+In Cloudera Manager > Ranger > Configuration select the Ranger Usersync filter scope.
+
+Figure 4. Filtering the Ranger Configuration Properties for
+                                Usersync
+
+
+
+
+Filtering narrows the list to 87 configuration properties specific to Usersync. 
+
+
+To define the common configuration properties that control LDAP URL and bind
+                        credentials, scroll to Source for Syncing Users and
+                            Groups, then define the configurations properties
+                        appropriate for the environment. Configurations shown here match the Example
+                        AD environment. 
+
+Figure 5. Ranger Usersync common configuration settings
+
+Bind credentials are for the user to query Ldap service for
+                                        users and groups. Bind credentials contain two configuration
+                                            properties:
+Usersync Bind User (or bind dn) - specify the
+                                                username as complete DN (Distinguished Name)
+Usersync Bind User Password
+
+
+
+
+To define the required configuration properties that control group
+                        synchronization from AD, scroll to Usersync Enable User
+                            Search, then define the configurations properties
+                        appropriate for the environment. Configurations shown here match the Example
+                        AD environment. 
+
+Figure 6. Ranger Usersync group configuration settings
+
+
+
+A few specific points to consider about group config settings:
+ranger.usersync.ldap.groupname.caseconversion
+                                    - Used for converting the case of the groupname. Three possible
+                                    options are:
+None - Group names are synced to ranger as is from
+                                            AD/LDAP. This is the default setting.
+Lower - All the group names are converted to lowercase
+                                            while syncing to ranger. This is the recommended
+                                            setting.
+Upper - All the group names are converted to uppercase
+                                            while syncing to ranger
+note Policy authorization is case
+                                        sensitive. Therefore, usernames and groups names synced to
+                                        ranger must match the exact case of the users and groups
+                                        resolved by the services such as hdfs, hive, hbase, etc. For
+                                        example, consider dev_ops (all in lower
+                                        case). Ranger does not treat this as the same value as
+                                            Dev_Ops which may have been synced
+                                        from AD and applied to some
+                                        policies.ranger.usersync.group.searchbase
+                                    - Used to search a particular OU in AD for groups. Multiple OUs
+                                    can be specified with ; separated. For
+                                    example, the example AD shows two OUs that must be searched for
+                                        groups:
+ou=hadoop groups,dc=cloudera,dc=com (complete DN for
+                                            ou=hadoop groups)
+ou=security groups,dc=cloudera,dc=com (complete DN for
+                                            ou=security groups)
+
+ranger.usersync.group.searchfilter - In
+                                    this example, since only 3 groups exist in hadoop groups OU and
+                                    security groups OU and since all 3 require sync to Ranger, you
+                                    can specify the filter as cn=* . The
+                                    value for this property follows standard ldap search query
+                                    filter format. note Later, if a new
+                                        group is added in AD under these OUs and if the customer
+                                        wants those groups to be sync’d to ranger, no configuration
+                                        change to usersync is required.
+ranger.usersync.user.searchenabled - In
+                                    this example, since the customer wants to sync users from
+                                        dev_ops groups to provide admin access
+                                    to Ranger UI, this property is set to
+                                        true .
+
+To define the required configuration properties that control user
+                        synchronization from AD, scroll to Usersync User Search
+                            Base, then define the configurations properties appropriate
+                        for the environment. Configurations shown here match the Example AD
+                            environment.
+
+Figure 7. Ranger Usersync user configuration settings
+
+A few specific points to consider about user config
+                                            settings:
+ranger.usersync.ldap.user.searchbase
+                                                - This configuration is used to search a particular
+                                                location in AD for users. Specify multiple OUs with
+                                                  ; separated.note If users are distributed
+                                                  across several OUs, specifying a base directory,
+                                                  for example,
+                                                  dc=cloudera,dc=com might be
+                                                  convenient and is highly recommended to restrict
+                                                  the search with proper filters.
+ranger.usersync.ldap.user.searchfilter
+                                                - In this example, since the customer wants to sync
+                                                only the users that belong to
+                                                  dev_ops, the value for this
+                                                property is
+                                                  (memberof=cn=dev_ops,ou=security
+                                                  groups,dc=cloudera,dc=com) .note Wildcards are not supported
+                                                  only when the memberof
+                                                  attribute is used for searching. If you use
+                                                  attributes such as cn or
+                                                  samaccountname for
+                                                  filtering, you can specify wildcards. For example,
+                                                  (|(cn=asm*)(samaccountname=acar*))
+ranger.usersync.ldap.username.caseconversion
+                                                - Used for converting the case of the username.
+                                                Three possible options are:
+None - Usernames are synced to ranger as is
+                                                  from AD/LDAP. This is the default setting.
+Lower - All the usernames are converted to
+                                                  lowercase while syncing to ranger. This is the
+                                                  recommended setting.
+Upper - All the usernames are converted to
+                                                  uppercase while syncing to ranger
+note Policy
+                                                  authorization is case sensitive. Therefore,
+                                                  usernames and groups names synced to ranger must
+                                                  match the exact case of the users and groups
+                                                  resolved by the services such as hdfs, hive,
+                                                  hbase, etc. For example, consider
+                                                  asmith (all in lower case).
+                                                  Ranger does not treat this as the same value as
+                                                  ASmith which may have been
+                                                  synced from AD and applied to some
+                                                  policies.
+
+
+
+
+
+
+
+
+
+Adding default service users and roles for RangerCloudera Manager adds a property and default values that define roles for the minimum     set of service users by default.Configuring Usersync assignment of Admin usersHow to automatically assign Admin and Key Admin roles for external usersConfiguring Ranger Usersync for Deleted Users and GroupsHow to configure Ranger Usersync for users and groups that have been deleted from the       sync source.Configuring Ranger Usersync for invalid usernames How to configure Ranger Usersync to manage usernames containing invalid         characters.Setting credentials for Ranger Usersync custom keystoreHow to set the custom keystore file location and password for a Ranger Usersync         custom keystore.Enabling Ranger Usersync search to generate internallyYou can configure Ranger Usersync to generate a search filter internally when Search         includes a list of group names or group names with a wildcard character.

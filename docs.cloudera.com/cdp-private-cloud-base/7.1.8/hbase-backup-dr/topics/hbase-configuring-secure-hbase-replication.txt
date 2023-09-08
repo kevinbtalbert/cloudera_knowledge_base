@@ -1,0 +1,46 @@
+Configuring secure HBase replicationCloudera Docs
+Configuring secure HBase replication
+You must configure cross realm support for Kerberos, ZooKeeper, and Hadoop to
+        configure secure HBase replication.
+
+There must be at least one common encryption mode between the two realms. note
+                    HBase peer-to-peer replication from a non-Kerberized cluster to a Kerberized
+                    cluster is not supported.
+
+
+Create krbtgt principals for the two realms.
+For example, if you have two realms called EXAMPLE.com and
+                        COMPANY.TEST, you need to add the following principelas:
+                        krbtgt/EXAMPLE.COM@COMPANY.TEST and
+                        krbtgt/COMPANY.TEST@EXAMPLE.COM
+
+Add the two principals at both realms. 
+
+kadmin: addprinc -e "<enc_type_list>" krbtgt/EXAMPLE.COM@COMPANY.TEST
+kadmin: addprinc -e "<enc_type_list>" krbtgt/COMPANY.TEST@EXAMPLE.COM
+
+Add rules creating short names in ZooKeeper:
+Add a system level property in java.env, defined in the
+                        conf directory. 
+The following example rule illustrates how to add support for the realm called
+                        EXAMPLE.COM and have two members in the principal (such as
+                        service/instance@EXAMPLE.COM):-Dzookeeper.security.auth_to_local=RULE:[2:\$1@\$0](.*@\\QEXAMPLE.COM\\E$)s/@\\QEXAMPLE.COM\\E$//DEFAULTThis
+                        example adds support for the EXAMPLE.COM realm
+                        in a different realm. So, in the case of replication, you must add a rule
+                        for the primary cluster realm in the replica cluster realm.
+                            DEFAULT is for defining the default
+                        rule
+Add rules for creating short names in the Hadoop processes:
+Add the hadoop.security.auth_to_local property in the
+                        core-site.xml file in the replica cluster.
+For example to add support for the EXAMPLE.COM
+                    realm:<property>
+  <name>hadoop.security.auth_to_local</name>
+  <value>
+    RULE:[2:$1@$0](.*@\QEXAMPLE.COM\E$)s/@\QEXAMPLE.COM\E$//
+  DEFAULT
+  </value>
+</property>
+
+
+Parent topic: Using HBase replication

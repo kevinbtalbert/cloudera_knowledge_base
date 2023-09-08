@@ -1,0 +1,336 @@
+Creating HDFS replication policy to replicate HDFS dataCloudera Docs
+Creating HDFS replication policy to replicate HDFS data
+You must set up your clusters before you create an HDFS replication policy.
+
+Verify whether your cluster conforms to one of the supported replication scenarios. For
+          more information, see Support matrix for Replication Manager on CDP Private Cloud Base.
+
+If you are using different Kerberos principals for the source and destination clusters,
+          add the destination principal as a proxy user on the source cluster. For
+          example, if you are using the hdfssrc principal on the source cluster and
+          the hdfsdest principal on the destination cluster, add the following
+          properties to the HDFS service Cluster-wide Advanced Configuration Snippet
+            (Safety Valve) for core-site.xml property on the source
+          cluster:
+
+<property>
+    <name>hadoop.proxyuser.hdfsdest.groups</name>
+    <value>*</value>
+</property>
+<property>
+    <name>hadoop.proxyuser.hdfsdest.hosts</name>
+    <value>*</value>
+</property>
+Deploy the client configuration and restart all services on the source cluster,
+            if the source cluster is managed by a different Cloudera Manager server than the
+            destination cluster.
+
+
+Go to the Cloudera Manager > Replication > Replication Policies page, click Create Replication Policy.
+
+
+
+
+
+
+Select HDFS Replication Policy. 
+
+The Create HDFS Replication Policy wizard appears.
+
+
+Configure the following options on the General page:
+
+
+
+Option
+Description
+
+
+
+Name
+Enter a unique name for the replication policy.
+
+
+Source
+Select the source HDFS service. You can select HDFS services managed by
+                      a peer Cloudera Manager Server, local HDFS services (managed by the Cloudera
+                      Manager Server for the Admin Console you are logged into).
+
+
+Source Path
+Enter the directory (or file) you want to replicate.
+
+
+Destination
+Select the destination HDFS service from the HDFS services managed by the
+                    Cloudera Manager Server for the Admin Console you are logged into.
+
+
+Destination Path
+Enter the destination path to save the source files.
+
+
+Schedule
+Choose:
+Immediate to run the schedule immediately.
+Once to run the schedule one time in the future.
+                        Set the date and time.
+Recurring to run the schedule periodically in the
+                        future. Set the date, time, and interval between runs.
+
+
+
+Run As Username
+Enter the user to run the replication job in the field. By default this is
+                      hdfs. If you want to run the job as a different
+                      user, enter the user name. If you are using Kerberos, you must provide a user
+                      name here, and it must be one with an ID greater than 1000. (You can also
+                      configure the minimum user ID number with
+                        the min.user.id property in the YARN or MapReduce
+                      service.) Verify whether the user running the job has a home
+                      directory, /user/username, owned by username:supergroup in HDFS. This user
+                      must have permissions to read from the source directory and write to the
+                      destination directory. Note the following:
+The user must not be present in the list of banned users specified with
+                            the Banned System Users property in the YARN
+                          configuration. For security purposes, the hdfs user is banned by
+                          default from running YARN containers.
+The requirement for a user ID that is greater than 1000 can be
+                          overridden by adding the user to the "white list" of users that is
+                          specified with the Allowed System Users property.
+                        
+To view the properties, go to the YARN service and search for the
+                      properties on the Configuration tab.
+
+
+
+
+Configure the following options on the Resources page:
+
+
+
+Option
+Description
+
+
+
+Scheduler Pool
+(Optional) Enter the name of a resource pool in the field. The value you
+                    enter is used by the MapReduce Service you specified when
+                    Cloudera Manager executes the MapReduce job for the replication. The job
+                    specifies the value using one of these properties:
+
+MapReduce – Fair scheduler:
+                            mapred.fairscheduler.pool
+MapReduce – Capacity scheduler:
+                          queue.name
+YARN – mapreduce.job.queuename
+
+
+
+
+Maximum Map Slots
+Enter the number of map tasks that the DistCp MapReduce job can use for the
+                    replication policy. Default is 20.
+
+
+Maximum Bandwidth
+Enter the bandwidth limit for each mapper. Default is 100 MB.The total
+                      bandwidth used by the replication policy is equal to Maximum
+                        Bandwidth multiplied by Maximum Map
+                      Slots. Therefore, you must ensure that the bandwidth and map slots
+                      you choose do not impact other tasks or network resources in the target
+                      cluster.tipThe
+                        Throughput field on the Cloudera Manager > Replication Policies page shows the maximum bandwidth set for the replication policy
+                      during replication policy creation.
+
+
+File listing threads
+Choose the Override DistCp default option and
+                    configure the number of threads (a maximum of 128 threads) that the HDFS
+                    replication policy must use during the copylisting phase of replication. By
+                    default, Replication Manager uses the default value of 20 threads for the
+                    copylisting phase of replication.The default number of threads for
+                      the copylisting phase of replication (using replication policies) can be set
+                      in the core-site.xml or
+                        hdfs-site.xml file for the HDFS service.
+                      You
+                      can set a maximum of 128 threads only.importantIncreasing this value increases the load on the HDFS NameNode
+                      of the source cluster which in turn increases the network bandwidth used by
+                      the replication jobs.
+
+
+Replication Strategy
+Choose Static or Dynamic.
+                    Determines whether the file replication tasks must be distributed among the
+                    mappers statically or dynamically. The default is
+                    Dynamic. Static replication distributes file
+                      replication tasks among the mappers up front to achieve a uniform distribution
+                      based on the file sizes. Dynamic replication distributes file replication
+                      tasks in small sets to the mappers, and as each mapper completes its tasks, it
+                      dynamically acquires and processes the next unallocated set of
+                    tasks.
+
+
+
+
+Configure the following options on the Advanced Options
+          tab:
+
+
+
+Option
+Description
+
+
+
+Add Exclusion
+Click the link to exclude one or more paths from the replication. Enter a
+                    regular expression-based path in the Regular Expression-Based Path
+                      Exclusion field. When you add an exclusion, include the
+                      snapshotted relative path for the regex. For example, to exclude the
+                        /user/bdr directory, use the following regular expression,
+                      which includes the snapshots for the bdr directory:
+.*/user/\.snapshot/.+/bdr.*
+To exclude top-level directories from replication in a globbed
+                      source path, specify the relative path for the regex without including
+                        .snapshot in the path. For example, to exclude the
+                        bdr directory from replication, use the following regular
+                      expression:.*/user+/bdr.*You
+                      can add more than one regular expression to exclude.
+
+
+MapReduce Service
+Select the MapReduce or YARN service to use.
+
+
+Log path
+Enter an alternate path for the logs.
+
+
+Description
+Enter a description of the replication policy.
+
+
+Error Handling
+Select the following option based on your requirements:
+Skip Checksum Checks - Determines whether to skip
+                        checksum checks on the copied files. If selected, checksums are not
+                        validated. Checksums are checked by default.importantYou must skip checksum checks to prevent replication
+                          failure due to non-matching checksums in the following cases:
+Replications from an encrypted zone on the source cluster to an
+                              encrypted zone on a destination cluster.
+Replications from an encryption zone on the source cluster to an
+                              unencrypted zone on the destination cluster.
+Replications from an unencrypted zone on the source cluster to an
+                              encrypted zone on the destination cluster.
+Checksums are used for two purposes:
+To skip replication of files that have already been copied. If
+                                Skip Checksum Checks is selected, the
+                              replication job skips copying a file if the file lengths and
+                              modification times are identical between the source and destination
+                              clusters. Otherwise, the job copies the file from the source to the
+                              destination.
+To redundantly verify the integrity of data. However, checksums are
+                              not required to guarantee accurate transfers between clusters. HDFS
+                              data transfers are protected by checksums during transfer and storage
+                              hardware also uses checksums to ensure that data is accurately stored.
+                              These two mechanisms work together to validate the integrity of the
+                              copied data.
+
+Skip Listing Checksum Checks - Determines whether
+                        to skip checksum check when comparing two files to determine whether they
+                        are same or not. If skipped, the file size and last modified time are used
+                        to determine if files are the same or not. Skipping the check improves
+                        performance during the mapper phase. Note that if you select the
+                          Skip Checksum Checks option, this check is also
+                        skipped.
+Abort on Error - Determines whether to abort the
+                        job on an error. If selected, files copied up to that point remain on the
+                        destination, but no additional files are copied. Abort on
+                          Error is not selected by default.
+Abort on Snapshot Diff Failures - If a snapshot
+                        diff fails during replication, Replication Manager uses a complete copy to
+                        replicate data. If you select this option, the Replication Manager aborts
+                        the replication when it encounters an error instead.
+Restart replication using non-incremental (bootstrap)
+                          replication on replication failure - Select to run the next
+                        replication job as a bootstrap replication if the replication job
+                          fails.Replication Manager replicates all the specified directories and
+                          files in the first HDFS replication policy job. This is also called
+                          bootstrap replication or non-incremental replication. Subsequent
+                          replication jobs are snapshot-based incremental replication.importantWhen you choose this option for
+                          HDFS replication policies that are replicating huge amounts of data
+                          (otherwise called large policies), Replication Manager takes a long time
+                          to complete the bootstrap replication. This operation overwrites existing
+                          data and might consume more network resources to replicate the large
+                          amount of data.
+
+
+
+Preserve
+Whether to preserve the block size, replication count, permissions
+                    (including ACLs), and extended attributes (XAttrs) as they exist on the source
+                    file system, or to use the settings as configured on the destination file
+                    system. By default source system settings are preserved. When Permission
+                    is checked, and both the source and destination clusters support ACLs,
+                    replication preserves ACLs. Otherwise, ACLs are not replicated. When Extended
+                      attributes is checked, and both the source and destination clusters
+                    support extended attributes, replication preserves them. (This option only
+                    displays when both source and destination clusters support extended
+                      attributes.)noteTo preserve permissions to HDFS, you
+                      must be running as a superuser on the destination cluster. Use the
+                        Run As Username option to ensure that is the
+                      case.
+
+
+Delete Policy
+Determines whether files that were deleted on the source should also be
+                    deleted from the destination directory. This policy also determines the handling
+                    of files in the destination location that are unrelated to the source. Options
+                      include:
+Keep Deleted Files - Retains the destination files
+                        even when they no longer exist at the source. (This is the default.).
+Delete to Trash - If the HDFS trash is enabled,
+                        files are moved to the trash folder. 
+Delete Permanently - Uses the least amount of
+                        space; use with caution. This option does not delete the files and
+                        directories in the top level directory. This is in line with rsync/Hadoop
+                        DistCp behavior.
+
+
+
+Alerts
+Whether to generate alerts for various state changes in the replication
+                    workflow. You can alert on failure, on start, on success, or when the
+                    replication workflow is aborted.
+
+
+
+
+Click Save Policy.
+The replication policy appears in the Replication Policies
+          table. It can take up to 15 seconds for the task to appear.If you selected
+              Immediate in the Schedule field, the
+            replication job starts replicating after you click Save
+            Policy.
+
+
+
+If your replication job takes a long time to complete, see Improve network latency during
+            replication job run to improve network latency.
+If files change before the replication finishes, the replication might fail. For more
+          information, see Guidelines to add or delete source
+            data during replication job run.
+For efficient replication, consider making the directories snapshottable. For more
+          information, see Guidelines to use snapshot diff-based
+          replication.
+If your cluster has clients installed on hosts with limited resources, HDFS replication
+          may use these hosts to run commands for the replication, which might cause performance
+          degradation. To limit HDFS replication to run only on selected DataNodes, you can specify
+          a "whitelist" of DataNode hosts. For more information, see Specifying hosts to improve HDFS replication
+            policy performance.
+
+
+
+Parent topic: HDFS replication policies

@@ -1,0 +1,128 @@
+Set up GCP Cloud HSM for Ranger KMS, KTS, and KeyHSMCloudera Docs
+Set up GCP Cloud HSM for Ranger KMS, KTS, and KeyHSM
+ How to integrate Ranger KMS and KTS with with the Google Cloud Platform (GCP) HSM
+        service. 
+
+ This task describes how to set up the Google Cloud Platform (GCP) hardware security
+                moudule (HSM) service provided by Google. The process inlcudes setting up the GCP
+                HSM service on a client (host), setting up KeyHSM and using the GCP HSM to validate
+                keys.
+
+You must:
+Log in to the Google cloud console using your accout. (Requires Google account
+                    access).
+Have Ranger Key Management System, Key Trustee Server and Key HSM installed in
+                    your environment.
+Have Java (jdk1.8.0.232) installed. 
+See related topics for more information about installing Ranger KMS, KTS and
+                KeyHSM.
+
+Set Up Google Cloud HSM
+
+Login to Google Cloud console using Cloudera account.
+
+Create a generic service account by selecting or creating the Project.
+
+Create the key for that generic service account you created in the previous
+                    step.
+
+Download and save your generic service account key in JSON format.
+
+noteYou will use the generic service account key later in this process. Record
+                        the project ID, Location ID and JSON file.
+
+
+In GCP Console > Key Management create the key ring.
+
+
+
+Figure 1. Creating a key ring in Google Cloud Platform
+
+
+
+
+
+This example shows a project gcp-eng-sdx-daily,
+                    service account keyhsm, and key ring
+                        KeyHSMRing.
+Integrate GCP with KeyHSMnotePerform the following
+                    steps on both active and passive KTS nodes.
+In  your Key HSM root directory, copy the autthentication key (json file) you
+                    created in the setup process, and provided the appropriate access.
+
+# rpm -ivh keytrustee-keyhsm-*.rpm
+
+
+cd /usr/share/keytrustee-server-keyhsm/
+chown keyhsm:keytrustee <key.filename>.json                
+
+
+Set up the GCP HSM.
+
+keyhsm setup googlecloudhsm               
+
+
+keyhsm.management.address=127.0.0.1
+keyhsm.server.port=9090
+google.cloud.hsm.key.ring=KeyHSMRing 
+
+# Google App Credential File
+google.cloud.hsm.app.cred.file=<authentication file>.json 
+
+# Google HSM Project Id
+google.cloud.hsm.project.id=<project ID> 
+
+# Google HSM Location Id
+google.cloud.hsm.location.id=<location ID>
+note Use the key ring, authentication file, project ID,
+                        and location ID strings you created during setup.              
+
+
+Validate the Key HSM service.
+
+$ service keyhsm validate
+
+
+Check Key HSM is stopped             :[Successful]
+Configuration Available              :[Successful]
+Port 127.0.0.1:9090 available        :[Successful]
+Unlimited-Strength JCE               :[Successful]
+Validate cipher list                 :[Successful]
+HSM availability                     :[Successful]
+All services available:              :[Successful]                         
+
+
+Start the Key HSM service.
+
+$ service keyhsm start 
+
+
+Configure KTS to trust the Key HSM server.
+
+$ ktadmin keyhsm --server http://$(hostname -f):<port configured in setup> --trust
+
+
+$ktadmin keyhsm --server http://127.0.0.1:9090 --trust
+
+
+Restart Key HSM.
+
+$ service keyhsm restart 
+
+
+Restart the KTS from Cloudera Manager UI.
+
+Test the HSM.
+
+curl -k https://$(hostname -f):11371/test_hsm                
+
+
+Login to the Ranger UI using keyadmin user role for creating an encryption zone
+                    key.
+
+
+Keys will be created in the Key ring on GCP. 
+
+Further keys for zone operation can be created using Ranger UI with keyadmin role credentials and also using hadoop commands.
+
+Parent topic: Integrating Components for Encrypting Data at Rest

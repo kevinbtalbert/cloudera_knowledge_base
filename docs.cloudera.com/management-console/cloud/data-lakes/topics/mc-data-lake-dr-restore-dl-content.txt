@@ -1,0 +1,249 @@
+Configuring and running Data Lake restoreCloudera Docs
+Configuring and running Data Lake restore
+Data Lake restore replaces the Data Lake data content: the metadata managed by each of
+    the Data Lake services.
+
+You may need to restore a Data Lake backup when:
+You are migrating Data Lake content to a new environment.
+            
+A Data Lake repair fails.
+You need to delete and re-create a Data Lake.
+An upgrade fails or needs to be rolled back.
+
+The Data Lake restore removes existing data stores and recreates them from the
+        specified backup. This includes dropping database tables, dropping HBase tables, and
+        deleting Solr collections.
+noteWhen using the Data Lake backup and restore system, you should avoid using backups from
+        other sources: the backup operation minimizes inconsistencies among service metadata. If
+        data is restored from other sources such as an independent database backup, the restore
+        operation can't guarantee consistency across the Data Lake metadata.
+The system checks to make sure there isn't another backup or restore in
+        progress.
+
+There is downtime when a Data Lake restore is performed, as
+        some Data Lake services will be stopped. Additionally, access to the HMS/Ranger databases
+        will be blocked for the duration of the restore. Do not attempt to run workloads when you
+        are running Data Lake restore. For AWS:
+Apply the IAM policy for Data Lake restore to the following roles:
+DATALAKE_ADMIN_ROLE
+RANGER_AUDIT_ROLE
+LOG_ROLEFor more informaiton on IAM roles, see Minimal setup for cloud
+                  storage.In the IAM policy for Data Lake restore, be sure to replace
+                the <your-backup-bucket> variable with the backup location used.
+
+
+For Azure:
+Verify that the following identities have the "Storage Blob Data Contributor"
+          role on the container where the backup is stored:
+Data Lake Admin identity
+Ranger Audit Logger identity
+
+For GCP:Verify that the Logger Service account has the following
+        required permissions:
+
+storage.buckets.get
+storage.objects.create
+storage.objects.get
+storage.objects.list
+
+Verify that the Ranger Audit Service account has the following required
+        permissions:
+resourcemanager.projects.get
+resourcemanager.projects.list
+storage.buckets.get
+storage.objects.get
+storage.objects.getIamPolicy
+Note that the Ranger Audit service account permissions listed above should be granted
+        to a custom role, not the default Storage Object Admin role.
+noteIt is highly recommended to use the same data bucket (AWS and GCP)/storage
+          account/container (Azure) and IAM roles/identities in the new environment where the
+          metadata is restored.If you want to use a different data bucket (AWS and GCP)/storage
+            account/container (Azure) along with IAM Roles/Identities, additional steps are
+            required:
+Make sure the IAM Roles/Identities used in the new environment have read/write
+              permissions on the data location used in the older environment, as well as the backup
+              location.
+If a different data bucket (AWS and GCP)/storage account/container (Azure) is used,
+              understand that the new data will be stored in the new location provided and the
+              existing data would still be in the older location, causing the data to be distributed
+              in two different locations. This may not be desirable.
+
+For Cloudera Data Warehouse:If you are a CDW user restoring a Data Lake
+        to a new environment, perform the following steps from the CDW UI before running a Data Lake
+        restore:
+Record details of your Database Catalogs and Virtual Warehouses, such as:
+Number of Virtual Warehouses associated with each Database Catalog and their
+              names
+Configurations associated with each Virtual Warehouse and Database Catalog,
+              especially the configurations which were customized
+These configurations are not backed up and restored during the Data Lake backup
+            and restore process. When you activate CDW again in the new CDP environment, you must
+            re-apply the CDW configurations.
+Delete existing Virtual Warehouses and user-created Database Catalogs associated with
+          your CDW environment. The meta-data for the Virtual Warehouses associated with the default
+          Database Catalog are preserved. The data for your tables would be preserved, as long as
+          the cloud storage locations like S3 buckets are intact.
+Deactivate the CDW environment, which deletes the default Database Catalog.
+After you perform the Data Lake restore, you can activate the CDW environment from the
+        CDW UI and re-create any Virtual Warehouses.Important considerations
+          regarding CDW metadata and data after Data Lake restore:For Virtual
+        warehouses associated with Default Database Catalog:
+
+Metadata like databases, tables and views will be restored.
+
+
+Data associated with existing tables would be visible as long as the cloud
+            storage locations, such as objects in S3 buckets, were not deleted/modified after steps
+            2 and 3 above.
+
+
+Query historys and saved queries in Hue or DAS would not be visible.
+
+
+Any customizations to Virtual Warehouse or Database Catalog configurations
+            are not retained after restore.
+
+
+The Hive/Impala Runtime version in the Virtual Warehouse and Database Catalog
+            would be the latest inline with the corresponding CDW version.
+
+For Virtual warehouses associated with a non-default Database Catalog:
+
+No metadata or data would be restored/visible.
+
+Internal Ranger users password resetAs part of the restore operation, the RDS database will be
+        restored unless it is specifically excluded. Note that the passwords for internal Ranger
+        users (admin, keyadmin, etc.) are stored in RDS. When the RDS database is restored, it will
+        replace the passwords for all internal Ranger users with the password for that user that was
+        saved when the backup was originally done. This does not impact users that log into Ranger
+        via SSO.The user accounts impacted include, but are not limited to:
+admin user
+keyadmin user
+tagsync user
+usersync user
+After a restore, a user with Ranger admin access can log into the Ranger UI to update
+        the passwords of these users if desired.importantBecause the admin user is
+        impacted by this behavior, at least one SSO account on the Data Lake being restored to
+        should have Ranger administrative access, to prevent a potential loss of administrative
+        access if for some reason the admin user's password is not known after the
+      restore.
+
+Switch to a user account with environment admin role.
+
+Restore the backup.
+
+Use the following command to restore a Data Lake
+            backup:$ cdp datalake restore-datalake --datalake-name <name>where
+            the options are the following:
+
+Option
+Example
+Description
+
+
+
+--datalake-name
+finance-dl
+Name of the Data Lake as configured in the CDP environment.
+                      Required.
+
+
+--backup-id
+415927d9-9f7d-4d42-8000-71630e5938ca
+System-generated ID for the backup. If you don't know the ID, run the
+                      list-datalake-backups command to see the IDs.If neither an ID nor backup
+                        name is provided, the command restores the most recent successful backup
+                        operation. If both an ID and a backup name are provided and
+                        don't refer to the same backup, the backup specified by the ID is
+                      used.
+
+
+--backup-name
+
+User-supplied name for the backup. If a backup ID is provided,
+                      the backup name is not needed. 
+
+
+--include-database | --no-include-database
+TRUE
+DEPRECATED. The database is included in the restore by
+                      default. To skip it, use the –skip-database flag.
+
+
+--skip-ranger-hms-metadata |
+                      --no-skip-ranger-hms-metadata
+
+Skips the restore of the databases backing HMS/Ranger services. If this
+                      option is not provided, then by default the Atlas lineage will be restored if
+                      the backup used includes the Atlas lineage information.
+
+
+--skip-atlas-metadata | --no-skip-atlas-metadata
+
+Skips the restore of the Atlas metadata. If this option is not
+                      provided, then by default the Atlas metadata will be restored if the backup
+                      used includes the Atlas metadata.
+
+
+--skip-ranger-audits | --no-skip-ranger-audits
+
+Skips the restore of the Ranger audits. If this option is not provided,
+                      then by default the Ranger audits will be restored if the backup used includes
+                      the Ranger audits.
+
+
+--skip-validation | --no-skip-validation 
+
+Using --skip-validation skips the validation that
+                      occurs before the backup process begins. This validation checks for required
+                      permissions that are often the source of backup/restore failures. See
+                        Backup and restore for the Data Lake for more details.
+
+
+--validation-only | --no-validation-only
+
+--validation-only runs the pre-backup and restore
+                      validation process, but does not proceed to the actual backup/restore
+                      operation. Backup and restore for the Data Lake
+
+
+--backup-location-override
+s3a://acme-finance-admin-bucket/backup-archive /backup-archive
+Backup location. When provided, will be used to lookup the backup. If
+                      provided, the –backup-id parameter is required.
+
+
+
+
+$ cdp datalake restore-datalake
+--datalake-name finance-dl 
+--backup-id 415927d9-9f7d-4d42-8000-71630e5938ca
+--backup-name <value>]
+--no-skip-ranger-hms-metadata
+--no-skip-atlas-metadata
+--no-skip-ranger-audits
+--backup-location-override s3a://acme-finance-admin-bucket/backup-archive
+/backup-archive
+
+The output of the command shows the current status of the operation. Note the
+          internal state shows the status of each separate restore operation. If any of the
+          individual restore operations fail, the overall status is failed and the restoration is
+          stopped (not transactional). If this happens, review and correct the failure and run the
+          restore
+          again.{
+    "accountId": "8g49gju4-4has-97h7-b391-7jre9edve47n",
+    "restoreId": "f0gq74h7-3b13-477a-b07c-cb74v211b81c",
+    "backup-id": 415927d9-9f7d-4d42-8000-71630e5938ca",
+    "internalState": "{ATLAS_ENTITY_AUDIT_EVENTS_TABLE=IN_PROGRESS, EDGE_INDEX_COLLECTION=IN_PROGRESS, FULLTEXT_INDEX_COLLECTION=IN_PROGRESS, EDGE_INDEX_COLLECTION_DELETE=IN_PROGRESS, VERTEX_INDEX_COLLECITON_DELETE=IN_PROGRESS, RANGER_AUDITS_COLLECTION_DELETE=IN_PROGRESS, ATLAS_JANUS_TABLE=IN_PROGRESS, RANGER_AUDITS_COLLECTION=IN_PROGRESS, VERTEX_INDEX_COLLECITON=IN_PROGRESS, FULLTEXT_INDEX_COLLECTION_DELETE=IN_PROGRESS}",
+    "status": "IN_PROGRESS",
+    "startTIme": "2021-04-21 10:30:01.022"
+    "endTIme": ""
+    "backupLocation":"s3a://acme-finance-admin-bucket/backup-archive
+/backup-archive",
+    "failureReason": "null"
+}
+
+To see the status of the backup after the initial command, see
+        Checking the status of a Data Lake backup.
+
+Related informationBackup and restore for the Data LakeMinimal setup for cloud storage (AWS)Minimal setup for cloud storage (Azure)Parent topic: Backup and restore for the Data Lake

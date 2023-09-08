@@ -1,0 +1,46 @@
+Principal name mappingCloudera Docs
+Principal name mapping
+Kafka can be configured to translate certificate subject names into short names. This is
+    done by adding mapping rules to Kafka's configuration. These short names can be used as the
+    unique identifier of the user. Compared to subject names, short names are much easier to manage. 
+When a client authenticates using a TLS/SSL keystore, by default Kafka assumes that the
+      username for that client is the certificate's subject name, which is usually a Distinguished
+      Name such as the following:
+      cn=alice,cn=groups,cn=accounts,dc=hadoopsecurity,dc=local
+
+Working with these long names is difficult. Security policies and group mappings are usually
+      defined in terms of the user's short name (alice) rather than the full
+      Distinguished Name. Kafka can be configured to translate the certificate's subject into a
+      short name that can be used as the unique identifier of the user.
+This can be done by adding the necessary mapping rules to the
+        ssl.principal.mapping.rules Kafka property. However, this property is not directly
+      configurable in Cloudera Manager. As a result, you need to use the Kafka Broker
+        Advanced Configuration Snippet (Safety Valve) for kafka.properties property to
+      add it to your configuration. noteThe ssl.principal.mapping.rules property
+        is only supported in Kafka 2.4.0 or higher. In older versions of Kafka, a custom principal
+        builder needs to be created and provided.
+The rule takes the form of a regular expression to match the subject name of the certificate
+      and the transformation to apply to the match. The property accepts multiple rules. Each rule
+      has to be separated by a comma. The last rule is usually the DEFAULT rule,
+      which uses the full subject name.
+For example, consider the following
+      setting:ssl.principal.mapping.rules=RULE:^.*[Cc][Nn]=([a-zA-Z0-9.]*).*$/$1/L,DEFAULTThis
+      configuration has two rules which are processed in the following order:
+RULE:^[Cc][Nn]=([a-zA-Z0-9.]*).*$/$1/L
+DEFAULT
+
+The first rule to match the certificate's subject name is used, later ones are ignored. The
+        DEFAULT rule is a "catch all" rule. It always matches and does not do any
+      replacement if none of the previous ones were matched.
+The regular expression of the first rule,^[Cc][Nn]=([a-zA-Z0-9.]*).*$,
+      matches any subject that starts with CN=,cn=,
+        Cn=, or cN=, followed by the user's short name, that
+      contains characters ranging between a-z,A-Z, and
+        0-9, followed by any string. It then replaces the matched string with the
+      user's short name. The short name is the content matched inside the parenthesis and is
+      referenced in the second part of the rule as $1. The L at
+      the end of the rule converts the resulting string to lowercase. 
+For more information and examples on principal mapping rules, see the Apache Kafka
+      documentation.
+
+Related informationApache Kafka documentationParent topic: TLS/SSL client authentication

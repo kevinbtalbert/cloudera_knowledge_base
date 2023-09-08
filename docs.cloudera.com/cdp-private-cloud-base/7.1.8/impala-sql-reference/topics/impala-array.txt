@@ -1,0 +1,222 @@
+ARRAY complex typeCloudera Docs
+ARRAY complex type
+Review the syntax, usage, and restrictions related to the ARRAY data type which is a
+    complex data type that can represent an arbitrary number of ordered elements. The elements can
+    be scalars or another complex type (ARRAY, STRUCT, or
+      MAP). 
+Syntax:column_name ARRAY < type >
+
+type ::= primitive_type | complex_type
+
+Usage:
+Because complex types are often used in combination, for example an ARRAY of STRUCT
+        elements, if you are unfamiliar with the Impala complex types, start with Complex types for
+        background information and usage examples. The elements of the array have no names. You refer to the value of the array item using the
+          ITEM pseudocolumn, or its position in the array with the
+          POS pseudocolumn.
+      Each row can have a different number of elements (including none) in the array for that row.
+    
+        When an array contains items of scalar types, you can use aggregation functions on the array elements without using join notation. For
+        example, you can find the COUNT(), AVG(), SUM(), and so on of numeric array
+        elements, or the MAX() and MIN() of any scalar array elements by referring to
+        table_name.array_column in the FROM clause of the query. When
+        you need to cross-reference values from the array with scalar values from the same row, such as by including a GROUP
+        BY clause to produce a separate aggregated result for each row, then the join clause is required.
+      
+        A common usage pattern with complex types is to have an array as the top-level type for the column:
+        an array of structs, an array of maps, or an array of arrays.
+        For example, you can model a denormalized table by creating a column that is an ARRAY
+        of STRUCT elements; each item in the array represents a row from a table that would
+        normally be used in a join query. This kind of data structure lets you essentially denormalize tables by
+        associating multiple rows from one table with the matching row in another table.
+      
+        You typically do not create more than one top-level ARRAY column, because if there is
+        some relationship between the elements of multiple arrays, it is convenient to model the data as
+        an array of another complex type element (either STRUCT or MAP).
+      
+        You can pass a multi-part qualified name to DESCRIBE
+        to specify an ARRAY, STRUCT, or MAP
+        column and visualize its structure as if it were a table.
+        For example, if table T1 contains an ARRAY column
+        A1, you could issue the statement DESCRIBE t1.a1.
+        If table T1 contained a STRUCT column S1,
+        and a field F1 within the STRUCT was a MAP,
+        you could issue the statement DESCRIBE t1.s1.f1.
+        An ARRAY is shown as a two-column table, with
+        ITEM and POS columns.
+        A STRUCT is shown as a table with each field
+        representing a column in the table.
+        A MAP is shown as a two-column table, with
+        KEY and VALUE columns.
+      
+Restrictions:
+
+
+            Columns with this data type can only be used in tables or partitions with the Parquet file format.
+          
+
+
+
+            Columns with this data type cannot be used as partition key columns in a partitioned table.
+          
+
+
+
+            The COMPUTE STATS statement does not produce any statistics for columns of this data type.
+          
+
+
+
+            The maximum length of the column definition for any complex type, including declarations for any nested types,
+            is 4000 characters.
+          
+
+
+ See the Limitations and restrictions for complex types topic for a full
+            list of limitations and associated guidelines about complex type columns. 
+
+
+Kudu considerations:Currently, the data types CHAR,
+          ARRAY, MAP, and
+          STRUCT cannot be used with Kudu tables. 
+Examples:
+note Many of the complex type examples refer to tables such as CUSTOMER and REGION adapted
+        from the tables used in the TPC-H benchmark. See Sample Schema and Data for Experimenting
+        with Impala Complex Types for the table definitions.
+
+        The following example shows how to construct a table with various kinds of ARRAY columns,
+        both at the top level and nested within other complex types.
+        Whenever the ARRAY consists of a scalar value, such as in the PETS
+        column or the CHILDREN field, you can see that future expansion is limited.
+        For example, you could not easily evolve the schema to record the kind of pet or the child's birthday alongside the name.
+        Therefore, it is more common to use an ARRAY whose elements are of STRUCT type,
+        to associate multiple fields with each array element.
+      note
+        Practice the CREATE TABLE and query notation for complex type columns
+        using empty tables, until you can visualize a complex data structure and construct corresponding SQL statements reliably.
+      CREATE TABLE array_demo
+(
+  id BIGINT,
+  name STRING,
+-- An ARRAY of scalar type as a top-level column.
+  pets ARRAY <STRING>,
+
+-- An ARRAY with elements of complex type (STRUCT).
+  places_lived ARRAY < STRUCT <
+    place: STRING,
+    start_year: INT
+  >>,
+
+-- An ARRAY as a field (CHILDREN) within a STRUCT.
+-- (The STRUCT is inside another ARRAY, because it is rare
+-- for a STRUCT to be a top-level column.)
+  marriages ARRAY < STRUCT <
+    spouse: STRING,
+    children: ARRAY <STRING>
+  >>,
+
+-- An ARRAY as the value part of a MAP.
+-- The first MAP field (the key) would be a value such as
+-- 'Parent' or 'Grandparent', and the corresponding array would
+-- represent 2 parents, 4 grandparents, and so on.
+  ancestors MAP < STRING, ARRAY <STRING> >
+)
+STORED AS PARQUET;
+
+
+      The following example shows how to examine the structure of a table containing one or more ARRAY columns by using the
+      DESCRIBE statement. You can visualize each ARRAY as its own two-column table, with columns
+      ITEM and POS.
+    DESCRIBE array_demo;
++--------------+---------------------------+
+| name         | type                      |
++--------------+---------------------------+
+| id           | bigint                    |
+| name         | string                    |
+| pets         | array<string>             |
+| marriages    | array<struct<             |
+|              |   spouse:string,          |
+|              |   children:array<string>  |
+|              | >>                        |
+| places_lived | array<struct<             |
+|              |   place:string,           |
+|              |   start_year:int          |
+|              | >>                        |
+| ancestors    | map<string,array<string>> |
++--------------+---------------------------+
+
+DESCRIBE array_demo.pets;
++------+--------+
+| name | type   |
++------+--------+
+| item | string |
+| pos  | bigint |
++------+--------+
+
+DESCRIBE array_demo.marriages;
++------+--------------------------+
+| name | type                     |
++------+--------------------------+
+| item | struct<                  |
+|      |   spouse:string,         |
+|      |   children:array<string> |
+|      | >                        |
+| pos  | bigint                   |
++------+--------------------------+
+
+DESCRIBE array_demo.places_lived;
++------+------------------+
+| name | type             |
++------+------------------+
+| item | struct<          |
+|      |   place:string,  |
+|      |   start_year:int |
+|      | >                |
+| pos  | bigint           |
++------+------------------+
+
+DESCRIBE array_demo.ancestors;
++-------+---------------+
+| name  | type          |
++-------+---------------+
+| key   | string        |
+| value | array<string> |
++-------+---------------+
+
+
+      The following example shows queries involving ARRAY columns containing elements of scalar or complex types. You
+      unpack each ARRAY column by referring to it in a join query, as if it were a separate table with
+      ITEM and POS columns. If the array element is a scalar type, you refer to its value using the
+      ITEM pseudocolumn. If the array element is a STRUCT, you refer to the STRUCT fields
+      using dot notation and the field names. If the array element is another ARRAY or a MAP, you use
+      another level of join to unpack the nested collection elements.
+    -- Array of scalar values.
+-- Each array element represents a single string, plus we know its position in the array.
+SELECT id, name, pets.pos, pets.item FROM array_demo, array_demo.pets;
+
+-- Array of structs.
+-- Now each array element has named fields, possibly of different types.
+-- You can consider an ARRAY of STRUCT to represent a table inside another table.
+SELECT id, name, places_lived.pos, places_lived.item.place, places_lived.item.start_year
+FROM array_demo, array_demo.places_lived;
+
+-- The .ITEM name is optional for array elements that are structs.
+-- The following query is equivalent to the previous one, with .ITEM
+-- removed from the column references.
+SELECT id, name, places_lived.pos, places_lived.place, places_lived.start_year
+  FROM array_demo, array_demo.places_lived;
+
+-- To filter specific items from the array, do comparisons against the .POS or .ITEM
+-- pseudocolumns, or names of struct fields, in the WHERE clause.
+SELECT id, name, pets.item FROM array_demo, array_demo.pets
+  WHERE pets.pos in (0, 1, 3);
+
+SELECT id, name, pets.item FROM array_demo, array_demo.pets
+  WHERE pets.item LIKE 'Mr. %';
+
+SELECT id, name, places_lived.pos, places_lived.place, places_lived.start_year
+  FROM array_demo, array_demo.places_lived
+WHERE places_lived.place like '%California%';
+
+
+Related informationComplex typesParent topic: Impala SQL data types

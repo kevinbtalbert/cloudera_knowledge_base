@@ -1,0 +1,212 @@
+Virtual Warehouse sizing requirements for public cloud environmentsCloudera Docs
+Virtual Warehouse sizing requirements for public cloud environments
+You need to understand how to estimate size requirements for Cloudera Data Warehouse
+    (CDW) Public Cloud Virtual Warehouses to create a Virtual Warehouse that meets your
+    needs.
+Calculating public cloud requirements for on-premises data warehouse deployments
+Selecting the correct size of public cloud environment before you migrate your workloads
+       from CDH and HDP to Cloudera Data Warehouse (CDW) Public Cloud is critical for preserving
+       performance characteristics. Consider the following workload characteristics when you plan
+       for capacity on your public cloud environment:
+
+Query memory requirements
+CPU utilizations
+Disk bandwidth
+Working set size
+Concurrent query execution requirements
+
+As part of this calculation, it is important to understand the core hardware difference
+       between public cloud and on-premises hosts as explained in the following table:
+Table 1. Hardware differences between public cloud and on-premises hosts
+
+Hardware component
+On-premises
+AWS R5D.4xlarge instance
+Azure E16 v3 instance
+
+
+
+CPU cores
+20 - 80
+16
+16
+
+
+Memory
+
+128 GB minimum
+256 GB+ recommended
+
+128 GB
+128 GB
+
+
+Network
+
+10 Gbps minimum
+40 Gbps recommended
+
+Up to 10 Gbps
+Up to 8,000 Mbps
+
+
+Instance storage
+
+12 x 2 TB drives
+(1,000 MB/s sequential)
+
+
+2 x 300 GB NVMe SSD
+(1,100 MB/s sequential)
+noteOptimally EBS volumes can be added to scratch and spool space for Impala.
+
+400 GiB SSD
+
+
+Persistent storage performance
+
+At least 500 MB/s per disk
+With 20 disks, 10 GB/s per node
+
+1,156 MB/s per EC2 instance
+
+Maximum IOPS: 24,000
+Maximum Read: 375 MB/s
+Maximum Write: 187 MB/s
+
+
+
+An AWS R5D.4xlarge instance closely matches the CPU, memory, and bandwidth specifications
+        that are recommended for CDH clusters. AWS R5D.4xlarge instance specifications are the
+        default "instance type" for CDP. AWS EBS storage cannot be used as primary database storage
+        because it is transient and lacks sufficient capacity. This core difference makes it
+        necessary to use a different strategy for CDP than you used for CDH to achieve good scan
+        performance.
+
+Supported AWS instances
+You can choose an instance type other than the default AWS R5D.4xlarge , and also a fallback
+        instance type, using the CDP CLI. To fetch a string of available instance types, use the
+        following CLI
+        command:cdp dw describe-allowed-instance-typesExample
+        output: {
+     "aws": {
+     "default": [
+     "r5d.4xlarge"
+     ],
+     "allowed": [
+     "r5d.4xlarge",
+     ... For more information, see the DWX-1.5.1 November 22, 2022 release notes.
+
+Public cloud sizing and scaling
+Before you migrate data to CDW Public Cloud, plan for scaling and concurrency. In the cloud,
+     scaling and concurrency can elastically respond to workload demands, which enables the system
+     to operate at a lower cost than you might expect. If you configure your environment to
+     accommodate peak workloads as a constant default configuration, you may waste resources and
+     money when system demand falls below that level.
+In CDW, the size of the Virtual Warehouse determines the number of executor instances for
+       an individual cluster so it determines memory limits and performance capabilities of
+       individual queries:
+Table 2. Virtual Warehouse sizes
+
+Size
+Number of executors
+
+
+
+X-Small
+2
+
+
+Small
+10
+
+
+Medium
+20
+
+
+Large
+40
+
+
+Warehouse size in combination with auto-scaling settings determine how
+       many clusters are allocated to support concurrent query execution.
+The Virtual Warehouse size must be at least large enough to support the memory used by the
+       most data-intensive query. Usually, the Virtual Warehouse size does not need to be larger
+       that the most data-intensive query. Better caching is provided if there is commonality
+       between data sets accessed by queries. Increasing the Virtual Warehouse size can
+       increase single-user and multi-user capacity because additional memory and resources allows
+       larger datasets to be processed. Concurrent query execution is also supported by sharing
+       resources. If too small a size is configured for the Virtual Warehouse, poor data
+       caching and memory paging can result. If too large a size is configured, excessive public
+       cloud costs are incurred due to idle executors.
+The primary difference between CDW Public Cloud and CDH on-premises deployments when
+        choosing a warehouse size based on existing hardware: 
+With CDW Public Cloud all resources on an executor are dedicated to query
+            processing.
+With CDH on-premises deployments resources support other operations in addition to
+            query processing. For example, these on-premises resources are shared with other
+            services, such as HDFS or other locally hosted file systems. In particular Spark, HBase,
+            or MapReduce. These other services might consume significant resources.
+Consequently, you might be able to choose a much smaller Virtual Warehouse size in CDW
+        Public Cloud because resources are isolated in their own pod in the CDW Public Cloud
+        environment.
+In the case of Impala, it is useful to look at the Cloudera Manager per-process metrics to
+       isolate the impalad backend and the Impala front-end Java processes that
+       hold the Catalog cache. In CDW Public Cloud, the Impala coordinator and executor roles are separated
+       leaving the unused Catalog JVM memory free to support query execution. You should look at the
+     memory utilization metrics for executor-only impalad nodes (those not also
+       running the coordinator role) to estimate how much memory your current cluster of Impala
+       executors requires.
+
+Concurrency
+Concurrency is the number of queries that can be run at the same time. Determine the size
+       you need by considering the amount of resources your system needs to support peak concurrency.
+By default, Impala Virtual Warehouses can run 3 large queries per executor group. Executors
+       can handle more queries that are simpler and that do not utilize concurrency on the executor.
+     When you enable legacy multithreading, the Virtual Warehouse can run 12 queries per executor
+     group. For most read-only queries the default setting of 3 queries per executor group is
+     sufficient. Occasional peaks are handled transparently by the auto-scaling feature. When auto-scaling is triggered an
+       additional executor group is added thereby doubling query concurrency capacity. Scaling
+     the Virtual Warehouse by adding more clusters enables additional concurrent queries to run, but
+     does not improve single-user capacity or performance. Concurrently executed queries are routed
+     to the different clusters and execute independently. The number of clusters can be changed to
+     match concurrent usage by changing the auto-scaling parameters. For more details about
+     auto-scaling settings, see the links at the bottom of this page.
+importantThe number of very large queries that can be run might also be impacted
+       by memory limits on the executors.
+For Hive on LLAP Virtual Warehouses, each size setting indicates the number of concurrent
+       queries that can be run. For example, an X-Small Hive on LLAP Virtual Warehouse can run 2
+       concurrent queries. A Small Virtual Warehouse can run 10 concurrent queries. To run 20
+       concurrent queries in a Hive on LLAP Virtual Warehouse choose Medium size.
+
+Caching "Hot Datasets"
+Frequently accessed data is sometimes referred to as a "hot dataset." CDH supports caching
+        mechanisms on the compute nodes to cache the working set that is read from remote file
+        systems, such as remote HDFS data nodes, S3, ABFS, or ADLS. This offsets the input/output
+        performance difference.
+In CDW Public Cloud, frequently accessed data is cached in a storage layer on SSD so that it
+     can be quickly retrieved for subsequent queries. This boosts performance. Each executor can
+     have up to 200 GB of cache. For example, a Medium-sized Virtual Warehouse can keep 200 * 20 = 4
+     TB of data in its cache. For columnar formats, such as ORC, data in the cache is decompressed,
+     but not decoded. If the expected size of the hot dataset is 6 TB, which requires about 30
+     executors, you can over-provision by choosing a Large-sized warehouse to ensure full cache
+     coverage. A case can also be made to under-provision by choosing a Medium-sized warehouse to
+     reduce costs at the expense of having a lower cache hit rate. To offset this, keep in mind that
+     columnar formats allow optimizations such as column projection and predicate push-down, which
+    can significantly reduce cache requirements. In these cases, under-provisioning the cache might
+    have no negative performance effect.
+
+Scanned dataset size
+Scanning large datasets on Amazon S3 or Azure ADLS can be slow. A single R5D.4xlarge EC2
+       instance can only scan data at 1,156 MB/s maximum throughput according to standard S3
+         benchmarks. If a query must read 100 GB from S3, S3 scanning takes a minimum of 88
+       seconds on just one node. Depending on the number of files in the S3 directory, it might take
+     more than 3 minutes. In this case, if a query needs to scan 100 GB of data, if you use 10
+     nodes, you can get the scan time down to approximately 20 seconds.
+However, keep in mind that with columnar storage, minimum/maximum statistics in files, and
+       other conditions, often the amount of data read is significantly less than the total size of
+       the files for certain queries.
+
+
+Related tasksTuning Impala auto-scalingRelated informationTuning Virtual WarehousesParent topic: Creating a Virtual Warehouse

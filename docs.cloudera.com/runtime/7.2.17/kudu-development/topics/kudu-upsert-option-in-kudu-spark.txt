@@ -1,0 +1,49 @@
+Upsert option in Kudu SparkCloudera Docs
+Upsert option in Kudu Spark
+The upsert operation in kudu-spark supports an extra write option of ignoreNull. If set to true, it will avoid setting
+    existing column values in Kudu table to Null if the corresponding DataFrame column values are
+    Null. If unspecified, ignoreNull is false by
+    default. 
+val dataFrame = spark.read
+  .options(Map("kudu.master" -> "kudu.master:7051", "kudu.table" -> simpleTableName))
+  .format("kudu").load
+
+dataFrame.createOrReplaceTempView(simpleTableName)
+dataFrame.show()
+
+// Below is the original data in the table 'simpleTableName'
++---+---+
+|key|val|
++---+---+
+|  0|foo|
++---+---+
+
+// Upsert a row with existing key 0 and val Null with ignoreNull set to true
+val nullDF = spark.createDataFrame(Seq((0, null.asInstanceOf[String]))).toDF("key", "val")
+val wo = new KuduWriteOptions
+wo.ignoreNull = true
+kuduContext.upsertRows(nullDF, simpleTableName, wo)
+dataFrame.show()
+// The val field stays unchanged
++---+---+
+|key|val|
++---+---+
+|  0|foo|
++---+---+
+
+// Upsert a row with existing key 0 and val Null with ignoreNull default/set to false
+kuduContext.upsertRows(nullDF, simpleTableName)
+// Equivalent to:
+// val wo = new KuduWriteOptions
+// wo.ignoreNull = false
+// kuduContext.upsertRows(nullDF, simpleTableName, wo)
+df.show()
+// The val field is set to Null this time
++---+----+
+|key| val|
++---+----+
+|  0|null|
++---+----+
+
+
+Parent topic: Kudu integration with Spark

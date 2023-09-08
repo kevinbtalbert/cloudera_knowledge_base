@@ -1,0 +1,53 @@
+CDE Spark job exampleCloudera Docs
+CDE Spark job example
+
+In this example there is a local Spark jar my-app-0.1.0.jar, and a local
+   reference file my-ref.conf that the Spark job opens locally as part of its
+   execution. The Spark job reads data from the location in the first argument and writes data to
+   the location in the second argument. There is also a custom Spark configuration for tuning
+   performance.
+
+Make your job available for running in one of the following ways:You can submit the job
+          directly to CDE and have it run the job once, using the spark submit
+          command. In this case no permanent resources are created on CDE subsequently no cleanup is
+          necessary after the job run. This is ideal when testing a
+          job.cde spark submit my-app-0.1.0.jar \
+  --file my-ref.conf \
+  --conf spark.sql.shuffle.partitions=1000
+If you plan to run the same job several times it is is a good idea to
+          create and upload the resource and job and then run it on CDE using the job
+            run command. This is the preferable method in production
+        environments.> cde resource create --name my-resource
+> cde resource upload --name my-resource --local-path my-app-0.1.0.jar
+ 109.7MB/109.7MB 100% [==============================================] my-app-0.1.0.jar
+> cde resource upload --name my-resource --local-path my-ref.conf
+   135.0b/135.0b 100% [==============================================] my-ref.conf
+> cde job create \
+  --name my-job \
+  --type spark \
+  --mount-1-resource my-resource \
+  --application-file my-app-0.1.0.jar \
+  --conf spark.sql.shuffle.partitions=1000 \
+> cde job run --name my-job
+{
+  "id": 1
+}
+> cde run describe --id 1 | jq -r '.status'
+starting
+...
+> cde run describe --id 1 | jq -r '.status'
+finished
+
+Schedule your job:As the above created job stays in CDE permanently until you delete
+          it, you can schedule it to run regularly at a predefined time. This example schedules your
+          job to run daily at midnight, starting from January 1,
+        2021:> cde job update \
+  --name my-job \
+  --schedule-enabled=true \
+  --schedule-start 2021-01-01T00:00:00Z \
+  --every-days 1 \
+  --for-minutes-of-hour 0 \
+  --for-hours-of-day 0
+
+
+

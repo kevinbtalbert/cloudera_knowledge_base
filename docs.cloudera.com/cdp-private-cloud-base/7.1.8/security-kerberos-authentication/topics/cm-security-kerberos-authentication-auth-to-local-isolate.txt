@@ -1,0 +1,74 @@
+Using auth-to-local rules to isolate cluster usersCloudera Docs
+Using auth-to-local rules to isolate cluster users
+How to use auth-to-local rules to restrict user access to specific
+    clusters.
+
+By default, the Hadoop auth-to-local rules map a principal of the form
+          <username>/<hostname>@<REALM> to
+          <username>. This means if there are multiple clusters in the same
+        realm, then principals associated with hosts of one cluster would map to the same user in
+        all other clusters.
+For example, if you have two clusters, cluster1-host-[1..4].example.com
+        and cluster2-host- [1..4].example.com, that are part of the same Kerberos
+        realm, EXAMPLE.COM, then the cluster2 principal,
+          hdfs/cluster2-host1.example.com@EXAMPLE.COM, will map to the
+          hdfs user even on cluster1 hosts.
+To prevent this, use auth-to-local rules as follows to ensure only principals containing
+        hostnames of cluster1 are mapped to legitimate users.
+
+
+Go to the HDFS Service > Configuration tab.
+
+Select Scope > HDFS (Service-Wide).
+
+Select Category > Security.
+
+In the Search field, type Additional Rules to find the
+            Additional Rules to Map Kerberos Principals to Short Names
+          settings.
+
+Additional mapping rules can be added to the Additional Rules to Map
+            Kerberos Principals to Short Names property. These rules will be inserted
+          before the rules generated from the list of trusted realms (configured above) and before
+          the default rule.
+
+RULE:[2:$1/$2@$0](hdfs/cluster1-host1.example.com@EXAMPLE.COM)s/(.*)@EXAMPLE.COM/hdfs/
+RULE:[2:$1/$2@$0](hdfs/cluster1-host2.example.com@EXAMPLE.COM)s/(.*)@EXAMPLE.COM/hdfs/
+RULE:[2:$1/$2@$0](hdfs/cluster1-host3.example.com@EXAMPLE.COM)s/(.*)@EXAMPLE.COM/hdfs/
+RULE:[2:$1/$2@$0](hdfs/cluster1-host4.example.com@EXAMPLE.COM)s/(.*)@EXAMPLE.COM/hdfs/
+RULE:[2:$1/$2@$0](hdfs.*@EXAMPLE.COM)s/(.*)@EXAMPLE.COM/nobody/
+In the example, the principal hdfs/<hostname>@REALM is mapped to
+            the hdfs user if <hostname> is one of the
+            cluster hosts. Otherwise it gets mapped to nobody, thus ensuring that
+            principals from other clusters do not have access to cluster1.
+If the cluster hosts can be represented with a regular expression, that expression can
+            be used to make the configuration easier and more conducive to scaling. For example: 
+RULE:[2:$1/$2@$0](hdfs/cluster1-host[1-4].example.com@EXAMPLE.COM)s/(.*)@EXAMPLE.COM/hdfs/
+RULE:[2:$1/$2@$0](hdfs.*@EXAMPLE.COM)s/(.*)@EXAMPLE.COM/nobody/
+note
+It is not possible to use alternatives in capturing or non-capturing groups within
+              the matching portion of the rule, because the use of round brackets in the expression
+              is not currently supported. For example, the following rule would result in an
+              error:
+
+RULE:[2:$1/$2@$0](hdfs/cluster1-(hosta|hostb|hostc).example.com@EXAMPLE.COM)s/(.*)@EXAMPLE.COM/hdfs/
+
+
+
+
+note
+ In CM 7.3.1, added auth_to_local rules that map the first component of the principal
+              name to the lowercase system user name. 
+New behavior for CM 7.4.4 and later:  auth_to_local rules that map the first
+              component of the principal name to the lowercase system user name are added only when
+              you select the Set Rules to Map Kerberos Principals to Lower Case Short
+                Names check box and you enable Kerberos.
+
+
+
+Click Save Changes.
+
+Restart the HDFS service and any dependent services.
+
+
+Parent topic: Configuring Authentication in Cloudera Manager

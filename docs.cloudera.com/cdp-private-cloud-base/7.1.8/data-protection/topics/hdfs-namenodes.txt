@@ -1,0 +1,118 @@
+NameNodesCloudera Docs
+NameNodes
+Understand the HDFS metadata directory details taken from a NameNode.
+The following example shows an HDFS metadata directory taken from a NameNode.
+                    This shows the output of running the tree command on the metadata directory,
+                    which is configured by setting dfs.namenode.name.dir in
+                        hdfs-site.xml.
+data/dfs/name
+├── current│ 
+├── VERSION│ 
+├── edits_0000000000000000001-0000000000000000007
+│ ├── edits_0000000000000000008-0000000000000000015
+│ ├── edits_0000000000000000016-0000000000000000022
+│ ├── edits_0000000000000000023-0000000000000000029
+│ ├── edits_0000000000000000030-0000000000000000030
+│ ├── edits_0000000000000000031-0000000000000000031
+│ ├── edits_inprogress_0000000000000000032
+│ ├── fsimage_0000000000000000030
+│ ├── fsimage_0000000000000000030.md5
+│ ├── fsimage_0000000000000000031
+│ ├── fsimage_0000000000000000031.md5
+│ └── seen_txid
+└── in_use.lock
+In this example, the same directory has been used for both
+                        fsimage and edits. Alternative configuration
+                    options are available that allow separating fsimage and
+                        edits into different directories. Each file within this
+                    directory serves a specific purpose in the overall scheme of metadata
+                    persistence:
+
+
+VERSION
+
+
+Text file that contains the following elements:
+
+layoutVersion
+
+Version of the HDFS metadata format. When you add new
+                                            features that require a change to the metadata format,
+                                            you change this number. An HDFS upgrade is required when
+                                            the current HDFS software uses a layout version that is
+                                            newer than the current one.
+
+namespaceID/clusterID/blockpoolID
+
+Unique identifiers of an HDFS cluster. These
+                                            identifiers are used to prevent DataNodes from
+                                            registering accidentally with an incorrect NameNode that
+                                            is part of a different cluster. These identifiers also
+                                            are particularly important in a federated deployment.
+                                            Within a federated deployment, there are multiple
+                                            NameNodes working independently. Each NameNode serves a
+                                            unique portion of the namespace
+                                                (namespaceID) and manages a
+                                            unique set of blocks (blockpoolID).
+                                            The clusterID ties the whole cluster
+                                            together as a single logical unit. This structure is the
+                                            same across all nodes in the cluster.
+
+storageType
+
+Always NAME_NODE for the NameNode,
+                                            and never JOURNAL_NODE.
+
+cTime
+
+Creation time of file system state. This field is
+                                            updated during HDFS upgrades.
+
+
+
+edits_start transaction ID-end transaction ID
+
+Finalized and unmodifiable edit log segments. Each of these files
+                                contains all of the edit log transactions in the range defined by
+                                the file name. In an High Availability deployment, the standby can
+                                only read up through the finalized log segments. The standby
+                                NameNode is not up-to-date with the current edit log in progress.
+                                When an HA failover happens, the failover finalizes the current log
+                                segment so that it is completely caught up before switching to
+                                active.
+
+fsimage_end transaction ID
+
+Contains the complete metadata image up through . Each
+                                    fsimage file also has a corresponding .md5 file
+                                containing a MD5 checksum, which HDFS uses to guard against disk
+                                corruption.
+
+seen_txid
+
+Contains the last transaction ID of the last checkpoint (merge of
+                                    edits into an fsimage) or edit
+                                log roll (finalization of current edits_inprogress and
+                                creation of a new one). This is not the last transaction ID accepted
+                                by the NameNode. The file is not updated on every transaction, only
+                                on a checkpoint or an edit log roll. The purpose of this file is to
+                                try to identify if edits are missing during startup. It
+                                is possible to configure the NameNode to use separate directories
+                                for fsimage and edits files. If the
+                                    edits directory accidentally gets deleted, then all
+                                transactions since the last checkpoint would go away, and the
+                                NameNode starts up using just fsimage at an old state.
+                                To guard against this, NameNode startup also checks
+                                    seen_txid to verify that it can load
+                                transactions at least up through that number. It aborts startup if
+                                it cannot verify the load transactions.
+
+in_use.lock
+
+Lock file held by the NameNode process, used to prevent multiple
+                                NameNode processes from starting up and concurrently modifying the
+                                directory.
+
+
+
+Parent topic: Files and directories

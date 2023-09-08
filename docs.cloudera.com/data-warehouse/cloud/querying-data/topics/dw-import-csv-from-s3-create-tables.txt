@@ -1,0 +1,206 @@
+Creating tables by importing CSV files from AWS S3Cloudera Docs
+Creating tables by importing CSV files from AWS S3
+You can create tables in Hue by importing CSV files stored in S3 buckets. Hue
+        automatically detects the schema and the column types, thus helping you to create tables
+        without using the CREATE TABLE syntax.
+
+Only Hue Superusers can access S3 buckets and import files to create tables. To
+                create tables by importing files from S3, you must assign and authorize use of a
+                specific bucket on S3 bucket for your environment. The bucket then appears like a
+                home directory on the Hue web interface.
+The maximum file size supported is three gigabytes.
+
+
+
+
+Create roles and synchronize users to FreeIPA.Make sure that the
+                            users who want to create tables by importing CSV files have
+                            EnvironmentAdmin or EnvironmentUser roles, and that you have
+                            synchronized users to FreeIPA. This is required for users accessing the
+                            data lake. Ranger will allow these users to access the additional
+                            bucket.  To assign roles to users, see Assigning resources to
+                            users in the Management Console documentation.To synchronize
+                            users to FreeIPA, see Performing user sync in the Management Console
+                            documentation. 
+Add an S3 bucket to your CDW environment.If you add an S3 bucket
+                            and then try to access it from the Hue web interface without adding it
+                            to the CDW environment, then Impala or Hive may display the
+                            “AccessDeniedException 403” exception. Make sure that your Cloudera Data
+                            Warehouse (CDW) environment has access to the S3 buckets that you want
+                            to access from Hue. When you create a Virtual Warehouse in the
+                            CDW service, a cluster is created in your AWS account. Two buckets are
+                                generated:
+One bucket is used for managed data
+The other bucket is used for external data. 
+Access to these buckets is controlled by AWS instance profiles. To add
+                            read/write access to S3 buckets under the same AWS account as the CDW
+                            service cluster, or under a different account, see the corresponding
+                            links at the bottom of the page.To add an S3 bucket to your CDW
+                                environment:
+In the Data Warehouse service, expand the
+                                        Environments column by clicking the
+                                        More… menu on the left side of the
+                                    page.
+In the Environments column, click the
+                                    search icon and locate the environment in which you want to add
+                                    the S3 bucket.
+Click the edit icon in the tile. This launches the
+                                        Environment Details page.
+In the Environment Details page, toward the
+                                    bottom of the page, type the name of the AWS bucket you want to
+                                    configure access to in the Add External S3
+                                        Bucket text box.If the bucket belongs to
+                                        another AWS account, then select the Bucket
+                                            belongs to different AWS account
+                                    option.
+Select the access mode.Read-only access is sufficient to
+                                        import data in Hue.
+Click Add Bucket to save the
+                                    configuration. A success message displays at the top of the
+                                    page.
+Click Apply to update the CDW
+                                        environment.noteIf you configure read only access to an S3
+                                        bucket you add, there is no need to restart Virtual
+                                        Warehouses. However, if you configure read/write access to
+                                        an external S3 bucket, you must restart Virtual Warehouses
+                                        by suspending them and starting them again.
+
+Add users to the Hadoop SQL Ranger policiesYou must grant the
+                            Hadoop SQL Ranger permissions to enable your users to access specific
+                            tables and secure your data from unauthorized access.
+Sign in to Cloudera Data Warehouse.
+Click the More… option on your Database
+                                Catalog and click Open Ranger.
+
+
+On the Ranger Service Manager page, click
+                                    Hadoop SQL.
+Select the all - url policy.The
+                                        Edit Policy page is displayed.
+Under the Add Conditions section, add the
+                                users under the Select User column and add
+                                permissions such as Create, Alter, Drop, Select, and so on from the
+                                    Permissions column.
+
+
+Scroll to the bottom of the page and click
+                                    Save.
+
+Enable the S3 file browser in Hue.To enable access to S3 buckets
+                            from the Hue web UI, you must add the AWS environment details in the
+                            hue-safety-valve configuration from your Virtual Warehouse. After
+                            enabling the S3 file browser, you can browse the S3 buckets, create
+                            folders, and upload files from your computer, and import files to create
+                            tables.
+Sign in to Cloudera Data Warehouse.
+Go to the Virtual Warehouse from which you want to access the S3
+                                buckets and click its edit icon.
+On the Virtual Warehouses detail page, click the
+                                    Hue tab and select
+                                    hue-safety-valve from the drop-down
+                                menu.
+Add the following configuration for Hive or Impala Virtual Warehouse
+                                in the space provided:For Hive Virtual
+                                    Warehouse:[desktop]
+
+# Remove the file browser from the blocked list of apps.
+
+# Tweak the app_blacklist property to suit your app configuration.
+app_blacklist=oozie,search,hbase,security,pig,sqoop,spark,impala
+
+[aws]
+[[aws_accounts]]
+[[[default]]]
+access_key_id=[***AWS-ACCESS-KEY***]
+secret_access_key=[***SECRET-ACCESS-KEY***]
+region=[***AWS-REGION***]
+
+[filebrowser]
+# (Optional) To set a specific home directory path:
+remote_storage_home=s3a://[***S3-BUCKET-NAME***]For Impala Virtual
+                                    Warehouse:[desktop]
+
+# Remove the file browser from the blocked list of apps.
+
+# Tweak the app_blacklist property to suit your app configuration.
+app_blacklist=spark,zookeeper,hive,hbase,search,oozie,jobsub,pig,sqoop,security
+
+[aws]
+[[aws_accounts]]
+[[[default]]]
+access_key_id=[***AWS-ACCESS-KEY***]
+secret_access_key=[***SECRET-ACCESS-KEY***]
+region=[***AWS-REGION***]
+
+[filebrowser]
+# (Optional) To set a specific home directory path:
+remote_storage_home=s3a://[***S3-BUCKET-NAME***]
+Click Apply in the upper right corner of the
+                                    page.The S3 File Browser icon appears on the left Assist
+                                    panel on the Hue web UI after the Virtual Warehouse
+                                    restarts.
+
+
+
+To import the CSV file and create the table:
+
+
+In the CDW service Overview page, select the Virtual
+                    Warehouse in which you want to create the table, click the options menu in the
+                    upper right corner and click Open Hue.
+
+From the left assist panel, click on Importer. 
+
+On the Importer screen, click .. at the end of the
+                        Path field:
+
+
+
+
+
+Choose a file pop-up is displayed.
+
+Type s3a:// in the address text box and press
+                    enter.
+The S3 buckets associated with the CDW environment are displayed. You can
+                    narrow down the list of results using the search option.
+
+
+
+
+
+If the file is present on your computer, then you can upload it to S3 by
+                    clicking Upload a file. To do this, you must have enabled
+                    read/write access to the S3 bucket from the CDW environment.
+
+Select the CSV file that you want to import into Hue.
+Hue displays the preview of the table along with the format:
+
+
+
+
+
+Hue automatically detects the field separator, record separator, and the quote
+                    character from the CSV file. If you want to override a specific setting, then
+                    you can change it by selecting a different value from the dropdown menu. 
+
+Click Next.
+On this page, you can set the table destination, partitions, and change the
+                    column data types.
+
+
+
+
+
+
+Verify the settings and click Submit to create the
+                    table.
+The CREATE TABLE query is triggered:
+
+
+Hue displays the logs and opens the Table Browser from
+                    which you can view the newly created table when the operation completes
+                    successfully.
+
+
+Related informationAssigning resources to usersPerforming user syncAdding access to external S3 buckets for CDW clusters on AWSAdding CDW cluster access to external S3 buckets in the same AWS account

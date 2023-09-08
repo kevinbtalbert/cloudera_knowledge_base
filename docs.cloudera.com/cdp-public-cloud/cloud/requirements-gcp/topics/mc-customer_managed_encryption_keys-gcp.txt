@@ -1,0 +1,140 @@
+Customer managed encryption keysCloudera Docs
+Customer managed encryption keys
+By default, a Google-managed encryption key is used to encrypt disks and Cloud SQL
+  instances in Data Lake, FreeIPA, and Data Hub clusters, but you can optionally configure CDP to
+  use a customer-managed encryption key (CMEK) instead. 
+When a CMEK is provided during environment registration, all the Data Lake, FreeIPA,
+   and Data Hub disks and the Cloud SQL instances are encrypted using that key.
+To set up a CMEK, perform the following tasks:
+
+
+Review the CMEK requirements.
+
+
+Create a key ring and an encryption key.
+
+
+Assign the required permissions to the encryption key.
+
+
+This document guides you through all the required steps performed using the GCP
+   console and Google Cloud Shell. Once you’ve met the prerequisites, pass the encryption key when
+   creating a CDP environment via CDP web interface or CDP CLI.
+For general information about customer managed encryption keys, see Customer-managed
+     encryption keys (CMEK).
+Cloud HSM and Hosted Private HSM encryption
+
+
+CDP supports encryption using Cloud HSM encryption keys. The overall requirements
+      and steps are the same as usual, just when you create the encryption key, you need to select
+      the protection level to be “HSM”. The instructions provided here consider the scenario of a
+      Cloud HSM encryption key. 
+CDP also supports encryption using encryption keys from Hosted Private HSM. If you
+      wish to use Hosted Private HSM, the GCP support helps you configure the setup and then
+      provides you with the encryption key ARN. CDP can then use the key ARN. 
+For more information, see Cloud HSM and Hosted Private HSM.
+
+
+
+
+Parent topic: GCP resources and services
+CMEK requirements
+Ensure that the CMEK that you are planning to use for encrypting your CDP environment
+  meets the requirements.
+The CMEK must meet the following requirements: 
+
+
+CMEK needs to be in the same region as the environment. 
+
+
+The key should have the following permissions for the compute and cloud sql service
+     agents:
+Cloud KMS CryptoKey Encrypter/Decrypter
+
+
+The instructions below show you how to create a CMEK that meets these requirements. 
+
+
+Create key ring and encryption key
+Use the following instructions to create a key ring and an encryption key in Google
+  Cloud.
+note
+Key rotation and storage are Google-managed.
+
+Steps
+
+
+
+In the GCP console, navigate to Security > Key Management.
+
+
+Create a key ring or use any existing one. Ensure that the key ring location and
+      the location of the resources you create for the CDP environment are the same.
+
+
+
+
+Navigate to the key ring that you have previously created. 
+Click on +Create Key to create a new key inside the key ring.
+
+
+Under What type of key do you want to create?, select Generated key.
+Under Key name, enter the name for your key.
+From the Protection level dropdown:
+If you are using a standard CMEK, select Software.
+If you are using a Cloud HSM key, select HSM.
+
+From the Purpose dropdown, select Symmetric encrypt/decrypt.
+Use the default values for Rotation period and Starting on.
+Click Create.
+
+
+
+
+
+
+Assign the required permissions to the encryption key
+Once the key has been created, you need to assign the required permissions to it. The
+  following commands can be used to set it up using Google Cloud Shell.
+Prerequisites
+Make sure that you have the following available:
+
+
+The project number of the Google project number where the compute and SQL resources
+     are created (PROJECT_NUMBER).
+
+
+Copy the key ring resource name (KEYRING_RESOURCE_NAME) and the key resource name
+     (KEY_RESOURCE_NAME) from the Google cloud console. You can copy the key ring resource name from
+     the dropdown after clicking three vertical dots next to the key ring. You can copy the key
+     resource name in a similar manner.
+
+
+
+
+Steps
+
+
+If the cloud sql service agent does not exist in the project, create it using:
+gcloud beta services identity create --service=sqladmin.googleapis.com --project=<project_name>
+This command creates a service identity in the following format:
+service-108335612.5..@gcp-sa-cloud-sql.iam.gserviceaccount.com
+
+where "108335612.5.." is the PROJECT_NUMBER to be used in step 2 and 3.
+
+Assign the IAM policy to encrypt and decrypt KMS keys. Replace the variables in caps with the
+    values obtained
+    earlier:gcloud kms keys add-iam-policy-binding KEY_RESOURCE_NAME \
+ --location=GCP_REGION \
+ --keyring=KEYRING_RESOURCE_NAME \
+ --member=serviceAccount:service-PROJECT_NUMBER@gcp-sa-cloud-sql.iam.gserviceaccount.com \
+ --role=roles/cloudkms.cryptoKeyEncrypterDecrypter
+Assign the IAM policy to the compute service agent. Replace the variables in caps with the
+    values obtained
+    earlier:gcloud kms keys add-iam-policy-binding KEY_RESOURCE_NAME \
+ --location=GCP_REGION \
+ --keyring=KEYRING_RESOURCE_NAME \
+ --member=serviceAccount:service-PROJECT_NUMBER@compute-system.iam.gserviceaccount.com \
+ --role=roles/cloudkms.cryptoKeyEncrypterDecrypter
+
+

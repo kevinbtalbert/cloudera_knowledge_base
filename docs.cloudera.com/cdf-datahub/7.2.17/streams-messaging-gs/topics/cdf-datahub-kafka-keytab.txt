@@ -1,0 +1,75 @@
+Kerberos authentication using a keytabCloudera Docs
+Kerberos authentication using a keytab
+You can configure Kerberos authentication using a keytab. To do so, you download the
+        keytab from the environment where your Kafka cluster is running, copy the keytab to your
+        broker host, create a configuration file with required properties, and connect to
+        Kafka.
+As mentioned previously, instead of using a ticket from
+            the ticket cache you can also authenticate using a keytab.
+You must have produced data to a Kafka topic and consumed
+            data from the Kafka topic.
+
+Navigate to Management Console > User Management.
+
+Select the Machine User.
+
+Click Actions > Get Keytab.
+
+On the Get Keytab dialog box, select the environment
+                    where the Kafka cluster is running and click
+                    Download.
+
+Copy the keytab that was downloaded on your computer to the broker host you were connected to.
+
+The keytab file contains sensitive information. Ensure that its permissions are
+                    set restrictively:
+
+chmod 400 ./kafka-client.keytab
+
+
+Create the jaas-keytab.conf file with the following
+                    content:
+
+KafkaClient {
+  com.sun.security.auth.module.Krb5LoginModule required
+  useKeyTab=true
+  keyTab="./kafka-client.keytab"
+  principal="srv_kafka-client@XYZ.SITE";
+};
+Where the value of the keyTab property is the path of the
+                        keytab copied to the host and the value of the principal
+                        property is the Kerberos principal name of the Machine User account. You can
+                        find the principal name by listing the content of the keytab, as shown in
+                        the following example:
+$ klist -kt ./kafka-client.keytab
+Keytab name: FILE:kafka-client.keytab
+KVNO Timestamp           Principal
+---- ------------------- ------------------------------------------------------
+   0 05/07/2020 03:32:01 srv_kafka-client@XYZ.SITE
+   0 05/07/2020 03:32:01 srv_kafka-client@XYZ.SITE
+
+
+Run the following commands to connect to Kafka, authenticating with the
+                    Kerberos keytab.
+
+BROKER_HOST=$(hostname -f)
+
+export KAFKA_OPTS="-Djava.security.auth.login.config=./jaas-keytab.conf"
+
+kafka-console-consumer \
+  --bootstrap-server $BROKER_HOST:9093 \
+  --consumer.config client-kerberos.properties \
+  --topic machine-data \
+  --group machine-data-$RANDOM \
+  --from-beginning
+
+The KAFKA_OPTS environment variable is used to communicate the location of the
+                    the jaas-keytab.conf configuration file to
+                        kafka-console-consumer command.
+
+
+You see the content of the machine-data topic as follows:
+Hello, Kafka!
+
+
+Parent topic: Use Kerberos authentication

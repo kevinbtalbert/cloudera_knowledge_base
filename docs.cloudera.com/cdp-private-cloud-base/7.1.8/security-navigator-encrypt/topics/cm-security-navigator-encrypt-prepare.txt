@@ -1,0 +1,334 @@
+Preparing for Encryption Using Cloudera Navigator EncryptCloudera Docs
+Preparing for Encryption Using Cloudera Navigator Encrypt
+
+Before you can encrypt data, you must prepare a storage repository to
+      hold the encrypted data and a mount point through which to access the
+      encrypted data. The storage repository and mount point must exist before
+      encrypting data using the navencrypt-move command.
+Data stored and retrieved from the repository is encrypted and decrypted
+      transparently.
+Cloudera Navigator Encrypt does not support:
+Encrypting a directory that contains or is contained within a mount
+          point for another service (including Navigator Encrypt and NFS). See
+            Encrypting Data for
+          more information.
+Encrypting immutable files or directories containing immutable
+          files.
+Installation or use in chroot environments,
+          including creating chroot environments within an
+          encrypted directory.
+Encrypting HDFS data files.
+
+
+
+
+Navigator Encrypt Commands
+
+noteDo not run Navigator Encrypt commands with the
+          screen utility.
+The following table lists the commands used to encrypt data:Table 1. Navigator Encrypt Commands
+
+Command
+Description
+
+
+
+navencrypt
+Manage, update, and verify your data.
+
+
+navencrypt-prepare
+Prepare your system for encryption by creating
+                  mount-points and specifying storage.
+
+
+navencrypt-prepare --undo
+Remove a mountpoint that is no longer in use.
+
+
+navencrypt-move
+Encrypt/decrypt your data to/from the encrypted file system.
+
+
+navencrypt-profile
+Generate process profile information in JSON
+                  format.
+
+
+navencrypt-module-setup
+Build or rebuild the Navigator Encrypt kernel module. 
+
+
+
+
+
+Preparing for Encryption
+
+noteWhen using an HSM with Key Trustee Server and
+        Navigator Encrypt, encrypting many block devices may exceed the capacity
+        of the HSM. A key is created in the HSM for each encrypted block device,
+        so be sure that your HSM can support your encryption
+        requirements.
+To get an in-depth look at the details behind the
+          navencrypt-prepare command, or to use a unique
+        configuration, use the interactive prompt by executing
+          navencrypt-prepare with no options. This launches an
+        interactive console that guides you through the following operations:
+Creating internal encryption keys
+Registering internal keys in Navigator Key Trustee
+Registering mount point in
+            /etc/navencrypt/ztab
+Mounting current mount point
+Establishing encryption method (dm-crypt for
+            devices)
+
+Using the console, you can choose how you want your data stored and
+        accessed. Navigator Encrypt offers block-level encryption with
+          dm-crypt, which protects your data by encrypting the
+        entire device. This enables full disk encryption and is optimized for
+        some system configurations. You can use block-level encryption with
+        logical devices such as a loop device.
+See Block-Level Encryption with dm-crypt for more
+        information.
+To prepare for encryption, you must specify a location to store the
+        encrypted data and a mount point through which to access the data. The
+        storage location and mount point must be created before encrypting
+          data.noteIf you are performing a file system check as part of your
+          preparation work, then note that the crypto device must be mapped and
+          active. Also, be aware that if you run fsck in
+          force mode (-f) , there is a risk of data loss. If
+          the force operation fails, it could cause file system corruption at
+          the device header.
+
+
+
+Block-Level Encryption with dm-crypt
+
+When choosing block-level encryption in the interactive console, you
+        must specify two parameters:
+The first parameter is the block device that you want to store the
+            encrypted file system in. Because this device stores all of the
+            encrypted data, it must be as large as or larger than the target
+            data. The device must exist and be empty. Supported storage devices
+              are:
+Physical block devices (for example, a disk device)
+Virtual block devices (for example, a block device created by
+                  LVM)
+Loop devices (see Block-Level Encryption with a Loop Device for instructions on creating a loop device)
+                  importantIf the block device to be used for
+                  encryption was previously used by the host, entries for it
+                  must be removed from the file /etc/fstab
+                  before running the navencrypt-prepare
+                  command.
+
+The second parameter is the mount point for the encrypted file
+            system. This is the location where you can access the encrypted data
+            stored in the first parameter. The mount point must already exist.
+            It is not created by the navencrypt-prepare
+            command.
+
+The entire device in the first parameter is used for encrypted
+        data.
+noteDo not manually unmount the encryption mount
+        point (for example, using umount). If you do so, you
+        must manually close the dm-crypt device using the
+        following procedure:
+Run dmsetup table to list the
+              dm-crypt devices.
+Run cryptsetup luksClose
+                <device_name> to close the device
+            for the unmounted mount point.
+
+After specifying these two parameters and following the interactive
+        console (discussed further in Preparing for Encryption), you are ready to encrypt your data.
+The syntax for the prepare command is as
+        follows:sudo navencrypt-prepare <device_name> <mount_point>When
+        specifying the mount point path, do not use a trailing
+          / in the path names. The mount point directory must
+        exist prior to running the navencrypt-prepare command. 
+For RHEL 7, run the following command after the
+          navencrypt-prepare command
+        completes:sudo systemctl start navencrypt-mount
+The following example shows successful output from a
+          navencrypt-prepare command using
+          dm-crypt for block-level
+        encryption:$ sudo /usr/sbin/navencrypt-prepare urandom /mnt/dm_encrypted
+Type MASTER passphrase:
+Encryption Type:  dmCrypt (LUKS)
+Cipher:        aes
+Key Size:  256
+Random Interface: /dev/urandom
+Filesystem:    ext4
+Verifying MASTER key against Navigator Key Trustee (wait a moment) ... OK
+Generation Encryption Keys with /dev/urandom       ... OK
+Preparing dmCrypt device (--use-urandom)               ... OK
+Creating ext4 filesystem                               ... OK
+Registering Encryption Keys (wait a moment)        ... OK
+Mounting /dev/sda1                                    ... OKAfter
+        you have successfully prepared a client for encryption, you can encrypt
+        and decrypt data using the commands described in Encrypting and Decrypting Data Using Cloudera Navigator Encrypt.
+
+
+Block-Level Encryption with a Loop Device
+
+A block-level encrypted device can be a physical device or a storage
+          space treated as a device.
+
+To configure a loop device, use the dd command to
+          create a storage space:warningThe space for the loop
+            device is pre-allocated. After the loop device is created, the size cannot be changed.
+            Make sure you are allocating enough storage for the current encrypted data as well as
+            any future data.If your disks are mounted individually with a file system on each
+              disk, and your storage needs exceed the capacity of a single disk, you can create a
+              loop device on each disk for which you want to allocate space for encrypted data. If
+              you have consolidated storage (for example, using LVM), you can create a single loop
+              device or multiple devices.sudo dd if=/dev/zero of=/dmcrypt/storage bs=1G count=500
+The dd command above creates a 500 GB file. Modify
+          the bs and count values to generate
+          the required file size.
+After generating the file, run losetup -f to view
+          unused loop devices. Use the available loop device with the
+            navencrypt-prepare -d command, demonstrated
+          below.
+Specifically for loop devices, the -d parameter
+          enables Navigator Encrypt to manage the loop device association. You
+          no longer need to use the losetup command to
+          associate the file with the loop device, and the loop device is
+          automatically prepared at boot. For RHEL 7-compatible OS, you must run
+          the following commands to ensure that a loop device is available at
+          boot:sudo bash -c 'echo "loop" > /etc/modules-load.d/loop.conf'
+sudo bash -c 'echo "options loop max_loop=8" > /etc/modprobe.d/loop_options.conf'
+warning Loop devices are not created by Navigator
+          Encrypt. Instead, Navigator Encrypt assigns a datastore to a loop device when the
+          navencrypt-prepare --datastore option is used. So, it is up to the
+          system administrator to create persistent /dev/loopX devices, which are required to
+          prepare a virtual block device. If the loop device being prepared is not persistent, then
+          Navigator Encrypt will not mount the device upon a reboot. 
+The data storage directory name (/dmcrypt/storage in
+          the previous example) must contain only alphanumeric characters,
+          spaces, hyphens (-), or underscores
+            (_). Other special characters are not
+          supported.
+The following example shows the output from a successful
+          command:$ losetup -f
+/dev/loop0
+$ sudo navencrypt-prepare -d /dmcrypt/storage /dev/loop0 /dmcrypt/mountpoint
+Type MASTER passphrase:
+
+Encryption Type:  dmCrypt (LUKS)
+Cipher:           aes
+Key Size:         256
+Random Interface: OpenSSL
+Filesystem:       ext4
+Options:
+
+Verifying MASTER key against KeyTrustee (wait a moment)   ... OK
+Generation Encryption Keys with OpenSSL                   ... OK
+Assigning '/dev/loop0'->'/dmcrypt/storage'                ... OK
+Preparing dmCrypt device                                  ... OK
+Creating ext4 filesystem                                  ... OK
+Registering Encryption Keys (wait a moment)               ... OK
+Mounting /dev/loop0                                       ... OK
+
+For upgraded Navigator Encrypt clients that already use loop devices,
+          you can enable Navigator Encrypt to manage the loop device file
+          association (instead of configuring the system to run the
+            losetup command at boot) by adding the
+            nav_datastore option to the entry in
+            /etc/navencrypt/ztab. For
+          example:# <target mount-dir>        <source device>      <type>    <options>
+/dmcrypt/mountpoint     /dev/loop0      luks    key=keytrustee,nav_datastore='/dmcrypt/storage'
+importantUse caution when editing the
+            /etc/navencrypt/ztab file. Entries are
+          tab-separated (not space-separated). The ztab file
+          must not contain empty lines.
+After you have created the loop device, continue with the
+          instructions in Block-Level Encryption with dm-crypt.
+
+
+
+
+Navigator Encrypt and Device UUIDs
+
+Navigator Encrypt has always prepared and identified devices simply
+        using a device name, such as /dev/sdb1 or
+          /dev/loop0. However, we know that using a device name
+        or label could lead to a conflict and impact system operations.
+Navigator Encrypt also supports preparing devices using a UUID, in
+        addition to device name. This UUID is simply a symbolic link to the
+        actual device, and is created when preparing a device with Navigator
+        Encrypt during a navencrypt-prepare operation.
+The advantage of using a device UUID is that if a device’s name
+        changes, the UUID associated with that device does not change. To
+        ensure that Navigator Encrypt recognizes devices even when the device
+        name changes, enter the command:
+
+navencrypt-prepare --use-uuid /dev/sda1 /mountpoint
+
+To unprepare (ensure the device UUID is included), enter either of the
+        following
+        commands:navencrypt-prepare --undo-force /dev/disk/by-uuid/3a602a15-11f7-46ac-ae98-0a51e1b25cf9
+navencrypt-prepare --undo /dev/disk/by-uuid/3a602a15-11f7-46ac-ae98-0a51e1b25cf9
+
+noteWhile the device name is still used in the
+            navencrypt-prepare statement, rest assured that
+          Navigator Encrypt handles the device by the UUID, which is calculated
+          and used for mount during boot. The device name is used for
+          convenience so that you do not have to explicitly input the UUID in
+          the command. Ultimately, Navigator Encrypt handles the device via the
+          device UUID rather than the device name. 
+
+important UUID device support does not include
+        loop devices; rather, it only applies to physical devices. When preparing loop devices with
+        Navigator Encrypt, always use the device name by using the --use-name
+        option with the navencrypt-prepare command.
+
+
+
+Pass-through Mount Options for
+      navencrypt-prepare
+
+Navigator Encrypt 3.5 and higher provides the ability to specify
+        options to pass to the mount command that is executed
+        during /etc/init.d/navencrypt-mount start
+          (systemctl start navencrypt-mount on RHEL 7). These
+        options are specified with the -o option when preparing
+        a mountpoint with the navencrypt-prepare command.
+The following shows an example navencrypt-prepare
+        command output when passing mount options with the -o
+        option:$ sudo navencrypt-prepare -o discard,resize /mnt/t2 /mnt/t2
+Type MASTER passphrase:
+
+Encryption Type:  dmCrypt (LUKS)
+Cipher:           aes
+Key Size:         256
+Random Interface: OpenSSL
+Filesystem:       ext4
+Options:          discard,resize
+
+Verifying MASTER key against Navigator Key Trustee(wait a moment)     ... OK
+Generation Encryption Keys with OpenSSL                               ... OK
+Registering Encryption Keys (wait a moment)                           ... OK
+Mounting /mnt/t2                                                      ... OK
+You can verify the results by viewing the
+          /etc/navencrypt/ztab
+        file:$ cat /etc/navencrypt/ztab
+/mnt/t2 /mnt/t2 dmcrypt key=keytrustee,cipher=aes,keysize=256,discard,resize
+Options can be added or removed to existing mount points prepared with
+        versions of Navigator Encrypt prior to 3.5 by editing the
+          /etc/navencrypt/ztab file and adding the
+        comma-separated options (no spaces) to the end of each line as seen in
+        the previous example above.
+importantUse caution when editing the
+            /etc/navencrypt/ztab file. Entries are
+          tab-separated (not space-separated). The ztab file
+          must not contain empty lines.
+To see the mounted file systems and options, run
+        mount:$ mount
+/mnt/t2 on /mnt/t2 type dmcrypt (rw,dmcrypt_sig=6de3db1e87077adb,ecryptfs_unlink_sigs,noauto,\
+dmcrypt_cipher=aes,dmcrypt_key_bytes=32,discard,resize)
+For a list of available mount options, see the man
+        pages for cryptsetup and dmCrypt
+        respectively.
+
+

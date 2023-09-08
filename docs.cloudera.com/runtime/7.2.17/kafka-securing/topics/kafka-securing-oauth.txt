@@ -1,0 +1,80 @@
+OAuth2 authenticationCloudera Docs
+OAuth2 authentication
+ Learn about OAuth2 authentication and how OAuth2 is implemented in Apache
+    Kafka.
+OAuth2 is a set of open standards used for access delegation. It is used to enable
+      applications and services to access other services or resources. Using OAuth2 in Kafka is made
+      possible by an OAuth2 compatible token based mechanism called SASL OAUTHBEARER. The
+      OAUTHBEARER implementation in the version of Kafka shipped with Cloudera Runtime uses and
+      accepts signed JSON Web Tokens (JWTs). The mechanism can be used for client to broker
+      authentication.
+importantInter-broker authentication using OAuth2 is not supported.
+To ensure that the information transferred with JWTs is trusted, that is to make JWTs
+      tamper-proof, they can be signed. JWTs can be signed with a secret (using the HMAC algorithm)
+      or with a key pair consisting of a public and private key using RSA or ECDSA. While both
+      signature methods are viable options, Cloudera recommends that you use RSA or ECDSA. This is
+      because using RSA or ECDSA also certifies that the token is issued by the authorization
+      server.
+The authentication flow involves the client, an OAuth2 authorization server, and the Kafka
+      broker.
+Figure 1. OAuth2 authentication flow
+
+The Kafka Broker retrieves the JSON Web Key Set (JWKS) from the authorization
+          server.JWKS retrieval happens at broker startup and is optional. It is only done if the
+          broker is configured for online JWKS access. The broker can also be configured to access a
+          locally available JWKS (not shown on the diagram).
+The client obtains a signed JWT token from the authorization server.
+The client initiates a connection to the broker using the JWT token.
+The Kafka broker verifies the JWT token.
+If Ranger authorization is enabled for the Kafka service, the claim within the token
+        containing the user ID (principal) is checked against the policies configured for that user
+        in Ranger. The client is only allowed to carry out permitted operations.
+
+Token verification
+The broker verifies the tokens by checking the signature of the token as well as the claims
+        found within the token.  The broker can verify the following claims:
+
+“iat” (issued at/timestamp) and “exp” (expiry): Used
+          to verify that the token is valid and has not expired.
+"iss” (issuer): Used to verify that the token was issued by a trusted
+          issuer. The broker only verifies this claim if it is configured to do so. This is done by
+          providing the broker with an “iss” claim value that it should accept. If
+          the broker is not provided with an “iss” claim value, it does not verify
+          the claim.
+“aud” (audience/intended receiver): Used to verify that the token was
+          created specifically for accessing the broker. If the "aud" claim is
+          present in the JWTs presented to the broker, the broker must be provided with the
+            "aud" claim value found within the tokens. Otherwise, the token is
+          considered invalid. 
+
+
+JWKS access
+In order for the broker to be able to verify signed JWTs, it must have access to a JWKS.
+        The JWKS is a JSON object that contains the keys which the authorization server uses to sign
+        JWTs. Kafka brokers can be provided access to a JWKS in two different ways. These are as
+        follows:
+
+noteThe two JWKS access options are mutually exclusive. If you configure the broker for
+          both online and local JWKS access, the broker uses local JWKS access.
+
+Online JWKS access
+Kafka brokers can retrieve the JWKS directly from the authorization server. If an
+              endpoint is made available to the broker, using appropriate configuration property,
+              the broker connects to that endpoint at startup and fetches the JWKS.For online
+                JWKS access to work, the broker must be able to access the endpoint through the
+                network. As a result, you might need to set up firewall rules. Additionally, because
+                the broker attempts to retrieve the JWKS at startup, if for example the
+                authorization server is inaccessible or returns an error, the broker will fail to
+                start. 
+Local JWKS access
+If you do not want to rely on the availability of the authorization server to
+              retrieve the JWKS or if establishing a connection between the broker and the
+              authorization server is not possible, you can choose to have the Kafka broker use a
+              JWKS that is available locally on the cluster. For this method to work, you must
+              provide the JWKS JSON directly to the Kafka broker using an advanced configuration
+              snippet.
+
+
+
+
+Configuring OAuth2 authentication for Kafka brokersLearn how to enable and configure OAuth2 authentication for Kafka     brokers.Configuring OAuth2 authentication for Kafka clientsLearn how to enable and configure OAuth authentication for Kafka clients. Parent topic: Authentication

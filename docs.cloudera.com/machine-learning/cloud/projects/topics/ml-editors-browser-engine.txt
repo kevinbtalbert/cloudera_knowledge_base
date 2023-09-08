@@ -1,0 +1,151 @@
+Configure a Browser IDE at the Legacy Engine LevelCloudera Docs
+Configure a Browser IDE at the Legacy Engine Level
+You can make a browser IDE available to any project within a Cloudera Machine Learning
+    deployment by creating a customized legacy engine image, installing the editor to it, and adding
+    it to the trusted list for a project. Additionally, browser IDEs that require root permission to
+    install, such as RStudio, can only be used as part of a customized legacy engine
+    image.
+
+When a user launches a session, they can select the customized legacy engine with the
+        editors available. The following steps describe how to make a customized legacy engine image
+        for RStudio: 
+
+
+Create a Dockerfile for the new custom image. Note that the Base
+          Engine Image uses Ubuntu, and you must use Base Engine Image v9 or
+          higher.
+The following sample Dockerfile is for
+          RStudio:#Dockerfile
+
+FROM docker.repository.cloudera.com/cdsw/engine:9-cml1.1
+
+WORKDIR /tmp
+
+#Delete the Cloudera repository that is inaccessible because of the paywall
+
+RUN rm /etc/apt/sources.list.d/*
+
+#The RUN commands that install an editor
+#For example: RUN apt-get install myeditor
+
+RUN apt-get update && apt-get dist-upgrade -y && \
+    apt-get install -y --no-install-recommends \
+    libapparmor1 \
+    libclang-dev \
+    lsb-release \
+    psmisc \
+    sudo
+
+#The command that follows RUN is the same command you used to install the IDE to test it in a the session.
+RUN wget https://download2.rstudio.org/server/trusty/amd64/rstudio-server-1.2.1335-amd64.deb && \
+    dpkg -i rstudio-server-1.2.1335-amd64.deb
+
+COPY rserver.conf /etc/rstudio/rserver.conf
+
+COPY rstudio-cdsw /usr/local/bin/rstudio-cdsw
+
+RUN chmod +x /usr/local/bin/rstudio-cdsw
+
+Create rserver.conf:
+# Must match CDSW_APP_PORT
+www-port=8090
+server-app-armor-enabled=0
+server-daemonize=0
+www-address=127.0.0.1
+auth-none=1
+auth-validate-users=0Make
+          sure that the www-port property matches the port set in the
+            CDSW_APP_PORT environment variable (default 8090).
+
+Create rstudio-cdsw: 
+
+#!/bin/bash
+
+# This saves RStudio's user runtime information to /tmp, which ensures several
+# RStudio sessions can run in the same project simultaneously
+mkdir -p /tmp/rstudio/sessions/active
+mkdir -p /home/cdsw/.rstudio/sessions
+if [ -d /home/cdsw/.rstudio/sessions/active ]; then rm -rf /home/cdsw/.rstudio/sessions/active; fi
+ln -s /tmp/rstudio/sessions/active /home/cdsw/.rstudio/sessions/active
+
+# This ensures RStudio picks up the environment. This may not be necessary if
+# you are installing RStudio Professional. See
+# https://docs.rstudio.com/ide/server-pro/r-sessions.html#customizing-session-launches.
+# SPARK_DIST_CLASSPATH is treated as a special case to workaround a bug in R
+# with very long environment variables.
+env | grep -v ^SPARK_DIST_CLASSPATH >> /usr/local/lib/R/etc/Renviron.site
+echo "Sys.setenv(\"SPARK_DIST_CLASSPATH\"=\"${SPARK_DIST_CLASSPATH}\")" >> /usr/local/lib/R/etc/Rprofile.site
+
+# Now start RStudio
+/usr/sbin/rstudio-server start
+
+
+Build the Dockerfile:
+
+docker build -t <image-name>:<tag> . -f Dockerfile
+If you want to build your image on a Cloudera Machine Learning
+            workspace, you
+            must add the --network=host option to the build
+            command:docker build --network=host -t <image-name>:<tag> . -f Dockerfile
+
+
+Distribute the image:
+
+Push the image to a public registry such as DockerHub. For instructions, refer
+              the Docker documentation. 
+Push the image to your company's Docker registry.When using this method, make
+              sure to tag your image with the following
+              schema:docker tag <image-name> <company-registry>/<user-name>/<image-name>:<tag>Once
+              the image has been tagged properly, use the following command to push the
+            image:docker push <company-registry>/<user-name>/<image-name>:<tag>
+
+
+Add the image to the trusted list in Cloudera Machine Learning:
+
+
+Log in to the Cloudera Machine Learning web UI as a site administrator.
+
+
+Click Admin > Engines.
+
+
+Add
+                <company-registry>/<user-name>/<image-name>:<tag>
+              to the list of trusted engine images.
+
+
+
+Add the new legacy engine to the trusted list for a project:
+
+
+Go to the project Settings page.
+
+
+Click Engines.
+
+
+Select the new customized legacy engine from the dropdown list of available Docker
+              images. Sessions and jobs you run in your project will have access to this
+              engine.
+
+
+Configure RStudio for the project. When this is done, you will
+          be able to select RStudio from the dropdown list of editors on the
+            Launch New Sesssion page.
+Go to Settings > Editors and click New
+                Editor.
+Complete the fields:
+
+Name: Provide a name for the editor. For example,
+                    RStudio. This is the name that appears in the
+                  dropdown menu for Editors when you start a new
+                  session.
+Command: Enter the command to start the server for
+                  the editor.For example, the following command will start
+                    RStudio:/usr/local/bin/rstudio-cdsw
+
+
+Save the changes.
+
+
+Related informationDocker pushLimitationsParent topic: Configure a Browser IDE as an Editor

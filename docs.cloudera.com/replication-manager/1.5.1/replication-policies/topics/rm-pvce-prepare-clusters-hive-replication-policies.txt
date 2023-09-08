@@ -1,0 +1,200 @@
+Preparing clusters for Hive replication policiesCloudera Docs
+Preparing clusters for Hive replication policies
+Before you create a Hive replication policy, you must verify whether CDP Private
+        Cloud Data Services Replication Manager supports the clusters for replication, the required
+        ports are open, and the clusters for replication are added in the Management Console. You
+        can also enable Kerberos authentication for clusters supporting Kerberos.
+Complete the following checklist to ensure that the
+            clusters are ready to be used in a Hive replication policy:
+
+Have you configured the all-database, table, column
+                    Ranger policy for the hdfs user on the target cluster to perform
+                    all the operations on all databases and tables?
+The hdfs user role is used to import Hive Metastore and must have
+                    access to all Hive datasets, including all operations. Otherwise, Hive import
+                    fails during the replication process. On the target cluster, the
+                        hive user must have Ranger admin privileges. The same
+                        hive user performs the metadata import operation.tipTo provide access, go to the Ranger Admin UI > Service Manager > Hadoop_SQL Policies > Access section, and provide hdfs user permission to the
+                            all-database, table, column policy
+                    name.
+
+Have you added the source and target clusters on the Management Console > Clusters page? 
+For more information, see Adding clusters to a CDP Private Cloud Data
+                        Services deployment.
+
+importantConsider the following limitations
+                        before you add clusters:
+
+Only users with admin and
+                                        poweruser roles can add clusters to
+                                    use in Replication Manager.
+
+
+When Auto-TLS is enabled for a cluster, you must use
+                                    the Cloudera Manager hostname to add a cluster.
+
+If a Cloudera Manager instance manages multiple clusters,
+                                you cannot include those clusters for replication in CDP Private
+                                Cloud Data Services Replication Manager.
+
+
+
+Is the Hive Warehouse Directory enabled for snapshots to
+                    use in Hive replication policies?
+
+tipPerform the following steps to accomplish
+                        this task:
+Search for
+                                    hive.metastore.warehouse.dir on the Cloudera Manager > Hive service > Configuration tab.
+Enter the Hive warehouse directory path that is located in
+                                the HDFS file system for the Hive Warehouse
+                                    Directory property. By default, the Hive warehouse
+                                directory is located in the
+                                    /user/hive/warehouse location.
+
+
+
+Are the directories hosting the external tables that are not stored in the Hive
+                    warehouse directory snapshottable?
+A directory is snapshottable if it has been enabled for
+                    snapshots, or because a parent directory is enabled for snapshots.
+                    Subdirectories of a snapshottable directory are included in the snapshot.tipTo enable snapshots for an HDFS directory,
+                        click Enable Snapshots for the required directory on
+                        the Cloudera Manager > Clusters > HDFS Service > File Browser tab.
+
+Are the following ports open and available for Replication Manager?
+
+
+
+Port
+Service
+Description
+
+
+
+7180 or 7183
+Cloudera Manager Admin Console HTTP
+Open on the source cluster to enable source Cloudera
+                                        Manager to communicate with the target Cloudera Manager.
+                                    
+
+
+80 or 443
+Data transfer from secondary node for AWS / ADLS
+                                        Gen2
+Outgoing port. Open on all the HDFS nodes for AWS and
+                                        ADLS Gen2.
+
+
+
+
+Are the following additional configurations configured? You can configure one
+                    or all of the configurations as necessary.
+
+
+If your cluster has Hive clients installed on hosts with limited
+                            resources and the replication policies use these hosts to run the
+                            commands, the replication performance might degrade. To improve
+                            performance, you can specify the hosts (an “allowlist” ) that can be
+                            used during the replication process so that the lower-resource hosts are
+                            not used. To specify the hosts, perform the following steps:
+
+
+Go to the Cloudera Manager > Clusters > Hive service > Configuration page.
+Locate the Hive Replication Environment
+                                        Advanced Configuration Snippet (Safety Valve)
+                                    property.
+Add the HOST_WHITELIST
+                                    property, and enter a comma-separated list of hostnames to use
+                                    for Hive/Impala replication. For example,
+                                            HOST_WHITELIST=host-1.mycompany.com,host-2.mycompany.com.
+Click Save Changes.
+Restart the Hive service.
+
+
+
+
+If the Hive Metastore is constantly updated, by activities such as
+                            creating or deleting databases or tables, you might want to configure
+                            the following properties to optimize replication performance:
+
+
+Go to the Cloudera Manager > Clusters > Hive service > Configuration page for the source cluster.
+
+Search for the HDFS Client Advanced
+                                            Configuration Snippet (Safety Valve) for
+                                            hdfs-site.xml property.
+
+Add the following key-value pairs:
+Name =
+                                                replication.hive.ignoreDatabaseNotFound;
+                                            Value = true
+Name =
+                                                replication.hive.ignoreTableNotFound;
+                                            Value = true
+
+Click Save Changes.
+Restart the HDFS service.
+
+
+
+
+Hive replication policies replicate parameters of databases, tables,
+                            partitions, and indexes by default. Perform the following steps to
+                            disable replication of parameters:
+
+
+Go to the Cloudera Manager > Clusters > Hive service > Configuration page for the source cluster.
+Search for Hive Replication Environment
+                                        Advanced Configuration Snippet property.
+Add the following key-value pair:Name =
+                                            REPLICATE_PARAMETERS; Value =
+                                            false
+Click Save Changes.
+Restart the Hive service.
+
+
+
+
+
+Do the clusters support Kerberos? 
+
+
+Enable Kerberos authentication and configure additional
+                            settings on the clusters to enable replication. Perform the following
+                            steps to accomplish this task:
+Enable Kerberos authentication. For more information,
+                                    see Enabling Kerberos
+                                        authentication for CDP. 
+Enable replication between clusters using Kerberos
+                                    authentication. For more information, see Configuring kerberized clusters for replication.
+
+Add the destination principal as a proxy user
+                            on the source cluster if you are using different Kerberos principals for
+                            the source and destination clusters.For example, if you are
+                                using the hdfssrc principal on the source cluster
+                                and the hdfsdest principal on the destination
+                                cluster, add the following key-value pairs to the HDFS
+                                    service Cluster-wide Advanced Configuration Snippet (Safety
+                                    Valve) for core-site.xml property on the source
+                                cluster and then restart the HDFS service:
+
+Name =
+                                            hadoop.proxyuser.hdfsdest.groups;
+                                        Value = *
+
+
+Name =
+                                            hadoop.proxyuser.hdfsdest.hosts;
+                                        Value = *
+
+
+
+
+
+Do you need to replicate data securely? If so, ensure that the SSL/TLS
+                    certificate exchange between two Cloudera Manager instances that manage source
+                    and target clusters respectively is configured. For more information, see Configuring SSL/TLS certificate exchange between two Cloudera Manager instances.
+
+
+Parent topic: Hive replication policies

@@ -1,0 +1,47 @@
+Enable Transparent Huge PagesCloudera Docs
+Enable Transparent Huge Pages
+The Fastcapa probe performs its own memory management by leveraging Transparent Huge
+    Pages (THP). In Linux, you can use the Transparent Huge Pages to enable either dynamically or
+    automatically upon startup. Hortonworks recommends that these be allocated on boot to increase
+    the chance that a larger, physically contiguous chunk of memory allocated.
+For better performance, allocate 1 GB THPs if supported by your
+      CPU. Ensure that your CPU supports 1 GB THPs. A CPU flag pdpe1gb indicates whether
+          or not the CPU supports 1 GB THPs.  
+
+grep --color=always pdpe1gb /proc/cpuinfo | uniq
+
+ Edit /etc/default/grub to add the following book parameters at the line
+          starting with GRUB_CMDLINE_LINUX:  
+
+GRUB_CMDLINE_LINUX=... default_hugepagesz=1G hugepagesz=1G hugepages=16
+ Rebuild the Grub configuration then reboot. The location of the Grub configuration file will
+          differ across Linux distributions.  
+
+cp /etc/grub2-efi.cfg /etc/grub2-efi.cfg.orig
+/sbin/grub2-mkconfig -o /etc/grub2-efi.cfg
+ After the host reboots, ensure that the THPs were successfully allocated:    
+
+$ grep HugePage /proc/meminfo
+AnonHugePages:    933888 kB
+HugePages_Total:      16
+HugePages_Free:        0
+HugePages_Rsvd:        0
+HugePages_Surp:        0
+
+
+The total number of huge pages should be distributed fairly evenly across each
+          non-uniform memory access (NUMA) node. In the following example, a total of 16 requested
+          THPs are distributed as 8 to each of 2 NUMA nodes:
+
+$ cat /sys/devices/system/node/node*/hugepages/hugepages-1048576kB/nr_hugepages
+8
+8
+
+ After the THPs are reserved, mount them to make them available to the probe:  
+
+cp /etc/fstab /etc/fstab.orig
+mkdir -p /mnt/huge_1GB
+echo "nodev /mnt/huge_1GB hugetlbfs pagesize=1GB 0 0" >> /etc/fstab
+mount -fav
+
+Parent topic: Installing Fastcapa

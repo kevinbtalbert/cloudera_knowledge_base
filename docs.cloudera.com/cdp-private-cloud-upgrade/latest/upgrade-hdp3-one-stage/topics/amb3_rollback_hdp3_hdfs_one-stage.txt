@@ -1,0 +1,140 @@
+HDFSCloudera Docs
+HDFS
+Before starting the rollback procedure, make sure that all the HDFS service roles are
+        stopped.
+
+
+noteBefore the HDFS rollback, Zookeeper, Ranger, Ambari-Metrics, and Ambari-Infra
+                    has to be rolled back and started in Ambari UI. 
+
+
+
+Roll back all the JournalNodes. (Only required for clusters where high
+                    availability is enabled for HDFS). Use the JournalNode backup that you have
+                    created when you backed up HDFS before upgrading to the CDP Private Cloud
+                    Base.
+
+
+Log in to each JournalNode host and do the following:
+
+
+remove the $[dfs.journalnode.edits.dir]/current
+                                     directory
+restore the backup of
+                                        $[dfs.journalnode.edits.dir]/current into
+                                        $[dfs.journalnode.edits.dir]/current into
+                                        $[dfs.journalnode.edits.dir]/current
+
+
+
+
+
+Note down the target of the /etc/hadoop/conf symbolic link and
+                    remove it
+
+Move the backup of /etc/hadoop/conf back to its original
+                    place, and perform these steps on all the cluster nodes where HDFS roles are
+                    installed, so on all NameNodes, JournalNodes and DataNodes.
+
+Roll back all of the NameNodes.  
+noteIf high availability is not enabled on your cluster, then leave the
+                            Secondary NameNode as it is for now.Use the backup of the Hadoop
+                        configuration directory you created during the backup phase. Perform the
+                    following steps on all NameNode hosts:
+
+
+Start FailoverControllers and JournalNodes
+
+
+If you use Kerberos authentication, authenticate with kinit with the
+                            NameNode's principal, otherwise change to the hdfs service user (usually
+                                sudo -u hdfs)
+
+
+Run the following command: hdfs namenode
+                            -rollback
+
+
+Restart HDFS FailoverControllers and JournalNodes in Ambari, then start
+                            the NameNodes note that one of the NameNodes should start, and one of
+                            them will remain in the starting state. When one of the NameNodes are
+                            marked as started proceed to DataNode rollback.
+
+
+
+Roll back all of the DataNodes. Use the backup of the Hadoop configuration
+                    directory you created during the backup phase. Perform the following steps on
+                    all the DataNode hosts:
+
+
+If you use Kerberos authentication, authenticate with kinit with the
+                            NameNode's principal, otherwise change to the hdfs service user (usually
+                                sudo -u hdfs)
+
+
+Run the following commands: 
+
+
+export HADOOP_SECURE_DN_USER=<hdfs service
+                                        user>
+hdfs datanode -rollback
+Look for output from the command similar to the following that
+                                    indicates when the DataNode rollback is complete. wait until all
+                                    storage directories are rolled
+                                        back:INFO common.Storage: Layout version rolled back to -57 for storage /storage/dir_x
+INFO common.Storage (DataStorage.java:doRollback(952)) - Rollback of /storage/dir_x is completenoteIf
+                                        you do not see the output, check for the
+                                            privileged-root-datanode-${hostname}.err file
+                                        in the DataNode's log directory. If you see these log
+                                        messages in the output, or in the
+                                            privileged-root-datanode-${hostname}.err file
+                                        for all of your DataNode data folders, then stop the process
+                                        by typing ctrl+c as the DataNode rollback is
+                                    ready.
+
+
+
+
+
+If your cluster is not configured for NameNode High Availability, roll back the
+                    Secondary NameNode. Perform the following steps on the Secondary NameNode host: 
+
+
+Move the Secondary NameNode data directory to a backup location.
+                                ($[dfs.namenode.name.dir])
+
+
+If you use Kerberos authentication, authenticate with kinit with the
+                            NameNode's principal, otherwise change to the hdfs service user (usually
+                                sudo -u hdfs) 
+
+
+Run the following command: hdfs secondarynamenode
+                                -format
+
+After rolling back the Secondary NameNode, terminate the console
+                                session by typing Control-C. Look for output from the command
+                                similar to the following that indicates when the DataNode rollback
+                                is
+                                complete:INFO namenode.SecondaryNameNode: Web server init done
+
+
+
+
+Restore the original symlink with the noted target as
+                        /etc/hadoop/conf on all the nodes where it has
+                    changed.
+
+Restart the HDFS service. Open Ambari, and go to the
+                        HDFS service page, in the Service
+                        actions dropdown select Start.
+
+Monitor the service, and if everything comes up fine, check the HDFS file
+                    system availability, you can run an hdfs fsck / or generate the
+                    file system listing with hdfs dfs -ls -R / and compare it with
+                    the one that you did as part of the backup procedure to see if everything got
+                    rolled back properly. In case of any issues, please contact Cloudera Support
+                    before you proceed. 
+
+
+Parent topic: Manual rollback

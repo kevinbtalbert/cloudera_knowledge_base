@@ -1,0 +1,1906 @@
+kite-morphlines-core-stdlibCloudera Docs
+kite-morphlines-core-stdlib
+This maven module contains standard transformation commands, such as commands for
+    flexible log file analysis, regular expression based pattern matching and extraction, operations
+    on fields for assignment and comparison, operations on fields with list and set semantics,
+    if-then-else conditionals, string and timestamp conversions, scripting support for dynamic java
+    code, a small rules engine, logging, and metrics and counters.
+addCurrentTime
+The addCurrentTime command (source code) adds the result of System.currentTimeMillis() as a Long integer to a
+        given output field. Typically, a convertTimestamp command is subsequently used to convert this timestamp to an
+        application specific output format.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+field
+timestamp
+The name of the field to set.
+
+
+preserveExisting
+true
+Whether to preserve the field value if one is already present.
+
+
+Example usage:
+addCurrentTime {}
+
+addLocalHost
+The addLocalHost command (source code) adds the name or IP of the local host
+        to a given output field.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+field
+host
+The name of the field to set.
+
+
+preserveExisting
+true
+Whether to preserve the field value if one is already present.
+
+
+useIP
+true
+Whether to add the IP address or fully-qualified hostname.
+
+
+Example usage:
+addLocalHost {
+  field : my_host
+  useIP : false
+}
+
+addValues
+The addValues command (source code) adds a list of values (or the contents
+        of another field) to a given field. The command takes a set of outputField :
+          values pairs and performs the following steps: For each output field, adds the
+        given values to the field. The command can fetch the values of a record field using a
+          field expression, which is a string of the form @{fieldname}.
+Example usage:
+addValues {
+  # add values "text/log" and "text/log2" to the source_type output field
+  source_type : [text/log, text/log2]
+
+  # add integer 123 to the pid field
+  pid : [123]
+
+  # add all values contained in the first_name field to the name field
+  name : "@{first_name}"
+}
+
+addValuesIfAbsent
+The addValuesIfAbsent command (source code) adds a list of values (or the contents
+        of another field) to a given field if not already contained. This command is the same as the
+          addValues command, except that a given value is only added to the output field if
+        it is not already contained in the output field.
+Example usage:
+addValuesIfAbsent {
+  # add values "text/log" and "text/log2" to the source_type output field
+  # unless already present
+  source_type : [text/log, text/log2]
+
+  # add integer 123 to the pid field, unless already present
+  pid : [123]
+
+  # add all values contained in the first_name field to the name field
+  # unless already present
+  name : "@{first_name}"
+}
+
+callParentPipe
+The callParentPipe command (source code) implements recursion for extracting
+        data from container data formats. The command routes records to the enclosing pipe object.
+        Recall that a morphline is a pipe. Thus, unless a morphline contains nested pipes,
+        the parent pipe of a given command is the morphline itself, meaning that the first command
+        of the morphline is called with the given record. Thus, the callParentPipe
+        command effectively implements recursion, which is useful for extracting data from container
+        data formats in elegant and concise ways. For example, you could use this to extract data
+        from tar.gz files. This command is typically used in combination with the commands
+          detectMimeType, tryRules, decompress,
+          unpack, and possibly solrCell.
+Example usage:
+callParentPipe {}
+For a real world example, see the solrCell command.
+
+contains
+The contains command (source code) returns whether or not a given value is
+        contained in a given field. The command succeeds if one of the field values of the given
+        named field is equal to one of the the given values, and fails otherwise. Multiple fields
+        can be named, in which case the results are ANDed.
+Example usage:
+# succeed if the _attachment_mimetype field contains a value "avro/binary"
+# fail otherwise
+contains { _attachment_mimetype : [avro/binary] }
+
+# succeed if the tags field contains a value "version1" or "version2",
+# fail otherwise
+contains { tags : [version1, version2] }
+
+convertTimestamp
+The convertTimestamp command (source code) converts the timestamps in a given
+        field from one of a set of input date formats (in an input timezone) to an output date
+        format (in an output timezone), while respecting daylight savings time rules. The command
+        provides reasonable defaults for common use cases.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+field
+timestamp
+The name of the field to convert.
+
+
+inputFormats
+A list of common input date formats
+A list of SimpleDateFormat or "unixTimeInMillis" or
+                "unixTimeInSeconds". "unixTimeInMillis" and "unixTimeInSeconds" indicate the
+                difference, measured in milliseconds and seconds, respectively, between a timestamp
+                and midnight, January 1, 1970 UTC. Multiple input date formats can be specified. If
+                none of the input formats match the field value then the command fails.
+
+
+inputTimezone
+UTC
+The time zone to assume for the input timestamp.
+
+
+inputLocale
+""
+The Java Locale to assume for the input timestamp.
+
+
+outputFormat
+"yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+The SimpleDateFormat to which to convert. Can
+                also be "unixTimeInMillis" or "unixTimeInSeconds". "unixTimeInMillis" and
+                "unixTimeInSeconds" indicate the difference, measured in milliseconds and seconds,
+                respectively, between a timestamp and midnight, January 1, 1970 UTC.
+
+
+outputTimezone
+UTC
+The time zone to assume for the output timestamp.
+
+
+outputLocale
+""
+The Java Locale to assume for the output timestamp.
+
+
+Example usage with plain SimpleDateFormat:
+# convert the timestamp field to "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
+# The input may match one of "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+# or "yyyy-MM-dd'T'HH:mm:ss" or "yyyy-MM-dd".
+convertTimestamp {
+  field : timestamp
+  inputFormats : ["yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd"]
+  inputTimezone : America/Los_Angeles
+  outputFormat : "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'"
+  outputTimezone : UTC
+}
+Example usage with Solr date rounding:
+A SimpleDateFormat can also contain a literal string for Solr date rounding down to, say, the current hour, minute or
+        second. For example: '/MINUTE' to round to the current minute. This kind of
+        rounding results in fewer distinct values and improves the performance of Solr several
+        ways:
+
+
+it uses less memory for many functions, e.g. sorting by time, restricting by date
+            ranges etc.
+
+
+it improves speed of range queries based on time, e.g. "restrict documents to those
+            from the last 7 days"
+
+
+In the case of faceting by the values in the field it will improve both memory
+            requirements and speed.
+
+
+For these reasons, it's advisable to store dates in the coarsest granularity that's
+        appropriate for your application.
+Example usage with Solr date rounding:
+# convert the timestamp field to "yyyy-MM-dd'T'HH:mm:ss.SSSZ"
+# and indicate to Solr that it shall round the time down to the current minute
+# per http://lucene.apache.org/solr/4_4_0/solr-core/org/apache/solr/util/DateMathParser.html
+convertTimestamp {
+  ...
+  outputFormat : "yyyy-MM-dd'T'HH:mm:ss.SSS'Z/MINUTE'"
+  ...
+}
+
+decodeBase64
+The decodeBase64 command (source code) converts a Base64 encoded String to a
+        byte[] per Section 6.8. "Base64 Content-Transfer-Encoding" of RFC 2045.
+        The command converts each value in the given field and replaces it with the decoded
+        value.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+field
+n/a
+The name of the field to modify.
+
+
+Example usage:
+decodeBase64 { 
+  field : screenshot_base64
+}
+
+dropRecord
+The dropRecord command (source code) silently consumes records without ever
+        emitting any record. This is much like piping to /dev/null in Unix.
+Example usage:
+dropRecord {}
+
+equals
+The equals command (source code) succeeds if all field values of the
+        given named fields are equal to the the given values and fails otherwise. Multiple fields
+        can be named, in which case a logical AND is applied to the results.
+Example usage:
+# succeed if the _attachment_mimetype field contains the value "avro/binary"
+# and nothing else, fail otherwise
+equals { _attachment_mimetype : [avro/binary] }
+
+# succeed if the tags field contains nothing but the values "version1"
+# and "highPriority", in that order, fail otherwise
+equals { tags : [version1, highPriority] }
+
+extractURIComponents
+The extractURIComponents command (source code) extracts the following subcomponents
+        from the URIs contained in the given input field and adds them to output fields with the
+        given prefix: scheme, authority, host, port, path, query, fragment, schemeSpecificPart,
+        userInfo.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+inputField
+n/a
+The name of the input field that contains zero or more URIs.
+
+
+outputFieldPrefix
+""
+A prefix to prepend to output field names.
+
+
+failOnInvalidURI
+false
+If an URI is syntactically invalid (i.e. throws a URISyntaxException on
+                parsing), fail the command (true) or ignore this URI (false).
+
+
+Example usage:
+extractURIComponents {
+  inputField : my_uri
+  outputFieldPrefix : uri_component_
+}
+For example, given the input field myUri with the value
+          http://userinfo@www.bar.com:8080/errors.log?foo=x&bar=y&foo=z#fragment
+        the expected output is as follows:
+
+
+Name
+Value
+
+
+
+myUri
+http://userinfo@www.bar.com:8080/errors.log?foo=x&bar=y&foo=z#fragment
+
+
+uri_component_authority
+userinfo@www.bar.com:8080
+
+
+uri_component_fragment
+fragment
+
+
+uri_component_host
+www.bar.com
+
+
+uri_component_path
+/errors.log
+
+
+uri_component_port
+8080
+
+
+uri_component_query
+foo=x&bar=y&foo=z
+
+
+uri_component_scheme
+http
+
+
+uri_component_schemeSpecificPart
+//userinfo@www.bar.com:8080/errors.log?foo=x&bar=y&foo=z
+
+
+uri_component_userInfo
+userinfo
+
+
+
+extractURIComponent
+The extractURIComponent command (source code) extracts a subcomponent from the URIs
+        contained in the given input field and adds it to the given output field. This is the same
+        as the extractURIComponents command,
+        except that only one component is extracted.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+inputField
+n/a
+The name of the input field that contains zero or more URIs.
+
+
+outputField
+n/a
+The field to add output values to.
+
+
+failOnInvalidURI
+false
+If an URI is syntactically invalid (i.e. throws a URISyntaxException on
+                parsing), fail the command (true) or ignore this URI (false).
+
+
+component
+n/a
+The type of information to extract. Can be one of scheme, authority, host,
+                port, path, query, fragment, schemeSpecificPart, userInfo
+
+
+Example usage:
+extractURIComponent {
+  inputField : my_uri
+  outputField : my_scheme
+  component : scheme
+}
+
+extractURIQueryParameters
+The extractURIQueryParameters command (source code) extracts the query parameters with a
+        given name from the URIs contained in the given input field and appends them to the given
+        output field.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+parameter
+n/a
+The name of the query parameter to find.
+
+
+inputField
+n/a
+The name of the input field that contains zero or more URI values.
+
+
+outputField
+n/a
+The field to add output values to.
+
+
+failOnInvalidURI
+false
+If an URI is syntactically invalid (i.e. throws a URISyntaxException on
+                parsing), fail the command (true) or ignore this URI (false).
+
+
+maxParameters
+1000000000
+The maximum number of values to append to the output field per input
+                field.
+
+
+charset
+UTF-8
+The character encoding to use, for example, UTF-8.
+
+
+Example usage:
+extractURIQueryParameters {
+  parameter : foo
+  inputField : myUri
+  outputField : my_query_params
+}
+For example, given the input field myUri with the value
+          http://userinfo@www.bar.com/errors.log?foo=x&bar=y&foo=z#fragment
+        the expected output record is:
+my_query_params:x
+my_query_params:z
+
+findReplace
+The findReplace command (source code) examines each string value in a given
+        field and replaces each substring of the string value that matches the given string literal
+        or grok pattern with the given replacement.
+This command also supports grok dictionaries and regexes in the same way as the grok command.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+field
+n/a
+The name of the field to modify.
+
+
+pattern
+n/a
+The search string to match.
+
+
+isRegex
+false
+Whether or not to interpret the pattern as a grok pattern (true) or string
+                literal (false).
+
+
+dictionaryFiles
+[]
+A list of zero or more local files or directory trees from which to load
+                dictionaries. Only applicable if isRegex is true. See grok command.
+
+
+dictionaryString
+null
+An optional inline string from which to load a dictionary. Only applicable if
+                isRegex is true. See grok command.
+
+
+replacement
+n/a
+The replacement pattern (isRegex is true) or string literal (isRegex is
+                false).
+
+
+replaceFirst
+false
+For each field value, whether or not to skip any matches beyond the first
+                match.
+
+
+Example usage with grok pattern:
+findReplace { 
+  field : message
+  dictionaryFiles : [kite-morphlines-core/src/test/resources/grok-dictionaries]                               
+  pattern : """%{WORD:myGroup}"""
+  #pattern : """(\b\w+\b)"""      
+  isRegex : true
+  replacement : "${myGroup}!"
+  #replacement : "$1!"
+  #replacement : ""
+  replaceFirst : false
+}
+Input: "hello world"
+Expected output: "hello! world!"
+
+generateUUID
+The generateUUID command (source code) sets a universally unique identifier on
+        all records that are intercepted. An example UUID is b5755073-77a9-43c1-8fad-b7a586fc1b97,
+        which represents a 128bit value.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+field
+id
+The name of the field to set.
+
+
+preserveExisting
+true
+Whether to preserve the field value if one is already present.
+
+
+prefix
+""
+The prefix string constant to prepend to each generated UUID.
+
+
+type
+secure
+This parameter must be one of "secure" or "nonSecure" and indicates the
+                algorithm used for UUID generation. Unfortunately, the cryptographically "secure"
+                algorithm can be comparatively slow - if it uses /dev/random on Linux, it can block
+                waiting for sufficient entropy to build up. In contrast, the "nonSecure" algorithm
+                never blocks and is much faster. The "nonSecure" algorithm uses a secure random seed
+                but is otherwise deterministic, though it is one of the strongest uniform
+                  pseudo random number generators known so far.
+
+
+Example usage:
+generateUUID {
+  field : my_id
+}
+
+grok
+The grok command (source code) uses regular expression pattern
+        matching to extract structured fields from unstructured log data.
+This is well suited for syslog logs, apache, and other webserver logs, mysql logs, and in
+        general, any log format that is generally written for humans and not computer
+        consumption.
+A grok command can load zero or more dictionaries. A dictionary is a file, file on the
+        classpath, or string that contains zero or more REGEXNAME to REGEX mappings, one per line,
+        separated by space. Here is an example dictionary:
+INT (?:[+-]?(?:[0-9]+))
+HOSTNAME \b(?:[0-9A-Za-z][0-9A-Za-z-]{0,62})(?:\.(?:[0-9A-Za-z][0-9A-Za-z-]{0,62}))*(\.?|\b)
+In this example, the regex named "INT" is associated with the following regex pattern:
+[+-]?(?:[0-9]+)
+and matches strings like "123", whereas the regex named "HOSTNAME" is associated with the
+        following regex pattern:
+\b(?:[0-9A-Za-z][0-9A-Za-z-]{0,62})(?:\.(?:[0-9A-Za-z][0-9A-Za-z-]{0,62}))*(\.?|\b)
+and matches strings like "www.cloudera.com".
+Morphlines ships with several standard grok dictionaries. Dictionaries may
+        be loaded from a file or directory of files on the local filesystem (see "dictionaryFiles"),
+        files found on the classpath (see "dictionaryResources"), or literal inline strings in the
+        morphlines configuration file (see "dictionaryString").
+A grok command can contain zero or more grok expressions. Each grok expression refers to a
+        record input field name and can contain zero or more grok patterns. The following is an
+        example grok expression that refers to the input field named "quot;message" and contains two
+        grok patterns:
+expressions : {
+  message : """\s+%{INT:pid} %{HOSTNAME:my_name_servers}"""
+}
+The syntax for a grok pattern is
+%{REGEX_NAME:GROUP_NAME}
+for example
+%{INT:pid}
+or
+%{HOSTNAME:my_name_servers}
+The REGEXNAME is the name of a regex within a loaded dictionary.
+The GROUPNAME is the name of an output field.
+If all expressions of the grok command match the input record, then the command succeeds
+        and the content of the named capturing group is added to this output field of the output
+        record. Otherwise, the record remains unchanged and the grok command fails, causing
+        backtracking of the command chain.
+Note: The morphline configuration file is implemented using the HOCON format (Human
+        Optimized Config Object Notation). HOCON is basically JSON slightly adjusted for the
+        configuration file use case. HOCON syntax is defined at HOCON github page and as such, multi-line strings are similar to
+        Python or Scala, using triple quotes. If the three-character sequence """
+        appears, then all Unicode characters until a closing """ sequence are used
+        unmodified to create a string value.
+In addition, the grok command supports the following parameters:
+
+
+Property Name
+Default
+Description
+
+
+
+dictionaryFiles
+[]
+A list of zero or more local files or directory trees from which to load
+                dictionaries.
+
+
+dictionaryResources
+[]
+A list of zero or more classpath resources (i.e. dictionary files on the
+                classpath) from which to load dictionaries. Unlike "dictionaryFiles" it is not
+                possible to specify directories.
+
+
+dictionaryString
+null
+An optional inline string from which to load a dictionary.
+
+
+extract
+true
+Can be "false", "true", or "inplace". Add the content of named capturing groups
+                to the input record ("inplace"), to a copy of the input record ("true"), or to no
+                record ("false").
+
+
+numRequiredMatches
+atLeastOnce
+Indicates the minimum and maximum number of field values that must match a
+                given grok expression for each input field name. Can be "atLeastOnce" (default),
+                "once", or "all".
+
+
+findSubstrings
+false
+Indicates whether the grok expression must match the entire input field value
+                or merely a substring within.
+
+
+addEmptyStrings
+false
+Indicates whether zero length strings stemming from empty (but matching)
+                capturing groups shall be added to the output record.
+
+
+Example usage:
+# Index syslog formatted files
+#
+# Example input line:
+#
+# <164>Feb  4 10:46:14 syslog sshd[607]: listening on 0.0.0.0 port 22.
+#
+# Expected output record fields:
+#
+# syslog_pri:164
+# syslog_timestamp:Feb  4 10:46:14
+# syslog_hostname:syslog
+# syslog_program:sshd
+# syslog_pid:607
+# syslog_message:listening on 0.0.0.0 port 22.
+#
+grok {
+  dictionaryFiles : [kite-morphlines-core/src/test/resources/grok-dictionaries]
+  expressions : {
+    message : """<%{POSINT:syslog_pri}>%{SYSLOGTIMESTAMP:syslog_timestamp} %{SYSLOGHOST:syslog_hostname} %{DATA:syslog_program}(?:\[%{POSINT:syslog_pid}\])?: %{GREEDYDATA:syslog_message}"""
+
+    #message2 : "(?<queue_field>.*)"
+    #message4 : "%{NUMBER:queue_field}"
+  }
+}
+More example usage:
+# Split a line on one or more whitespace into substrings,
+# and add the substrings to the "columns" output field.
+#
+# Example input line with tabs:
+#
+# "hello\t\tworld\tfoo"
+#
+# Expected output record fields:
+#
+# columns:hello
+# columns:world
+# columns:foo
+#
+grok {
+  expressions : {
+    message : """(?<columns>.+?)(\s+|\z)"""
+  }
+  findSubstrings : true
+}
+Even more example usage:
+# Index a custom variant of syslog files where subfacility is optional.
+#
+# Dictionaries in this example are loaded from three places:
+# * The my-jar-dictionaries/my-commands file found on the classpath.
+# * The local file kite-morphlines-core/src/test/resources/grok-dictionaries.
+# * The inline definition shown in dictionaryString.
+#
+# Example input line:
+#
+# <179>Jun 10 04:42:51 www.foo.com Jun 10 2013 04:42:51 : %myproduct-3-mysubfacility-123456: Health probe failed
+#
+# Expected output record fields:
+#
+# my_message_code:%myproduct-3-mysubfacility-123456
+# my_product:myproduct
+# my_level:3
+# my_subfacility:mysubfacility
+# my_message_id:123456
+# syslog_message:%myproduct-3-mysubfacility-123456: Health probe failed
+#
+grok {
+  dictionaryResources : [my-jar-dictionaries/my-commands]
+  dictionaryFiles : [kite-morphlines-core/src/test/resources/grok-dictionaries]
+  dictionaryString : """
+    MY_CUSTOM_TIMESTAMP %{MONTH} %{MONTHDAY} %{YEAR} %{TIME}
+  """
+
+  expressions : {
+    message : """<%{POSINT}>%{SYSLOGTIMESTAMP} %{SYSLOGHOST} %{MY_CUSTOM_TIMESTAMP} : (?<syslog_message>(?<my_message_code>%%{\w+:my_product}-%{\w+:my_level}(-%{\w+:my_subfacility})?-%{\w+:my_message_id}): %{GREEDYDATA})"""
+  }
+}
+Note: An easy way to test grok out is to use an online grok debugger. 
+
+head
+The head command (source code) ignores all input records beyond the
+        N-th record, thus emitting at most N records, akin to the Unix head
+        command. This can be helpful to quickly test a morphline with the first few records from a
+        larger dataset.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+limit
+-1
+The maximum number of records to emit. -1 indicates never ignore any
+                records.
+
+
+Example usage:
+# emit only the first 10 records
+head {
+  limit : 10
+}
+
+if
+The if command (source code) implements if-then-else conditional
+        control flow. It consists of a chain of zero or more conditions commands, as well as an
+        optional chain of zero or or more commands that are processed if all conditions succeed
+          ("then commands"), as well as an optional chain of zero or more commands
+        that are processed if one of the conditions fails ("else commands").
+If one of the commands in the then chain or else chain
+        fails, then the entire if command fails and any remaining commands in the
+          then or else branch are skipped.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+conditions
+[]
+A list of zero or more commands.
+
+
+then
+[]
+A list of zero or more commands.
+
+
+else
+[]
+A list of zero or more commands.
+
+
+Example usage:
+if {
+  conditions : [
+    { contains { _attachment_mimetype : [avro/binary] } }
+  ]
+  then : [
+    { logInfo { format : "processing then..." } }
+  ]
+  else : [
+    { logInfo { format : "processing else..." } }
+  ]
+}
+More example usage - Ignore all records that don't have an id field:
+if {
+  conditions : [
+    { equals { id : [] } }
+  ]
+  then : [
+    { logTrace { format : "Ignoring record because it has no id: {}", args : ["@{}"] } }
+    { dropRecord {} }    
+  ]
+}
+More example usage - Ignore all records that contain at least one value in the
+          malformed field:
+if {
+  conditions : [
+    { not { equals { malformed : [] } } }
+  ]
+  then : [
+    { logTrace { format : "Ignoring record containing at least one malformed value: {}", args : ["@{}"] } }
+    { dropRecord {} }    
+  ]
+}
+
+java
+The java command (source code) provides scripting support for Java.
+        The command compiles and executes the given Java code block, wrapped into a Java method with
+        a Boolean return type and several parameters, along with a Java class definition that
+        contains the given import statements.
+The following enclosing method declaration is used to pass parameters to the Java code
+        block:
+public static boolean evaluate(Record
+record, com.typesafe.config.Config config,
+Command
+parent,
+Command
+child,
+MorphlineContext
+context, org.slf4j.Logger logger) {
+  // your custom java code block goes here...
+}
+Compilation is done in main memory, meaning without writing to the filesystem.
+The result is an object that can be executed (and reused) any number of times. This is a
+        high performance implementation, using an optimized variant of JSR 223 Java Scripting". Calling
+          eval() just means calling Method.invoke(), and, as such,
+        has the same minimal runtime cost. As a result of the low cost, this command can be called
+        on the order of 100 million times per second per CPU core on industry standard hardware.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+imports
+A default list sufficient for typical usage.
+A string containing zero or more Java import declarations.
+
+
+code
+[]
+A Java code block as defined in the Java language specification. Must return a
+                Boolean value.
+
+
+Example usage:
+java {
+  imports : "import java.util.*;"
+  code: """
+    // Update some custom metrics - see http://metrics.codahale.com/getting-started/
+    context.getMetricRegistry().counter("myMetrics.myCounter").inc(1);
+    context.getMetricRegistry().meter("myMetrics.myMeter").mark(1);
+    context.getMetricRegistry().histogram("myMetrics.myHistogram").update(100);
+    com.codahale.metrics.Timer.Context timerContext = context.getMetricRegistry().timer("myMetrics.myTimer").time();
+                
+    // manipulate the contents of a record field
+    List tags = record.get("tags");
+    if (!tags.contains("hello")) {
+      return false;
+    }
+    tags.add("world");
+    
+    logger.debug("tags: {} for record: {}", tags, record); // log to SLF4J
+    timerContext.stop(); // measure how much time the code block took
+    return child.process(record); // pass record to next command in chain
+        """
+}
+The main disadvantage of the scripting "java" command is that you can't reuse things like
+        compiled regexes across command invocations so you end up having to compile the same regex
+        over and over again, for each record again. The main advantage is that you can implement
+        your custom logic exactly the way you want, without recourse to perhaps overly generic
+        features of certain existing commands.
+
+logTrace, logDebug, logInfo, logWarn, logError
+These commands log a message at the given log level to SLF4J. The command can fetch the values of a record
+        field using a field expression, which is a string of the form @{fieldname}. The
+        special field expression @{} can be used to log the entire record.
+Example usage:
+# log the entire record at DEBUG level to SLF4J
+logDebug { format : "my record: {}", args : ["@{}"] }
+More example usage:
+# log the timestamp field and the entire record at INFO level to SLF4J
+logInfo {
+  format : "timestamp: {}, record: {}"
+  args : ["@{timestamp}", "@{}"]
+}
+To automatically print diagnostic information such as the content of records as they pass
+        through the morphline commands, consider enabling TRACE log level, for example by adding the
+        following line to your log4j.properties file:
+log4j.logger.org.kitesdk.morphline=TRACE
+
+not
+The not command (source code) inverts the boolean return value of a
+        nested command. The command consists of one nested command, the Boolean return value of
+        which is inverted.
+Example usage:
+if {
+  conditions : [
+    {
+      not {
+        grok {
+          ... some grok expressions go here
+        }
+      }
+    }
+  ]
+  then : [
+    { logDebug { format : "found no grok match: {}", args : ["@{}"] } }
+    { dropRecord {} }
+  ]
+  else : [
+    { logDebug { format : "found grok match: {}", args : ["@{}"] } }
+  ]
+}
+
+pipe
+The pipe command (source code) pipes a record through a chain of
+        commands. The pipe command has an identifier and contains a chain of zero
+        or more commands, through which records get piped. A command transforms the record into zero
+        or more records. The output records of a command are passed to the next command in the
+        chain. A command has a Boolean return code, indicating success or failure. If any command in
+        the pipe fails (meaning that it returns false), the whole pipe fails
+        (meaning that it returns false), which causes backtracking of the command
+        chain.
+Because a pipe is itself a command, a pipe can contain arbitrarily nested pipes. A
+          morphline is a pipe. "Morphline" is simply another name for the pipe at the root of
+        the command tree.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+id
+n/a
+An identifier for this pipe.
+
+
+importCommands
+[]
+A list of zero or more import specifications, each of which makes all morphline
+                commands that match the specification visible to the morphline. A specification can
+                import all commands in an entire Java package tree (specification ends with ".**"),
+                all commands in a Java package (specification ends with ".*"), or the command of a
+                specific fully qualified Java class (all other specifications). Other commands
+                present on the Java classpath are not visible to this morphline.
+
+
+commands
+[]
+A list of zero or more commands.
+
+
+Example usage demonstrating a pipe with two commands, namely addValues and
+          logDebug:
+pipe {
+  id : my_pipe
+
+  # Import all commands in these java packages, subpackages and classes.
+  # Other commands on the Java classpath are not visible to this morphline.
+  importCommands : [
+    "org.kitesdk.**",   # package and all subpackages
+    "org.apache.solr.**", # package and all subpackages
+    "com.mycompany.mypackage.*", # package only
+    "org.kitesdk.morphline.stdlib.GrokBuilder" # fully qualified class
+  ]
+
+  commands : [
+    { addValues { foo : bar }}
+    { logDebug { format : "output record: {}", args : ["@{}"] } }
+  ]
+}
+
+removeFields
+The removeFields command (source code) removes all record fields for which the
+        field name matches at least one of the given blacklist predicates, but matches none of the
+        given whitelist predicates.
+A predicate can be a regex pattern (e.g. "regex:foo.*") or POSIX glob pattern (e.g. "glob:foo*") or literal
+        pattern (e.g. "literal:foo") or "*" which is equivalent to "glob:*".
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+blacklist
+"*"
+The blacklist predicates to use. If the blacklist specification is absent it
+                defaults to MATCH ALL.
+
+
+whitelist
+""
+The whitelist predicates to use. If the whitelist specification is absent it
+                defaults to MATCH NONE.
+
+
+Example usage:
+# Remove all fields where the field name matches at least one of foo.* or bar* or baz, 
+# but matches none of foobar or baro*
+removeFields {
+  blacklist : ["regex:foo.*", "glob:bar*", "literal:baz"]
+  whitelist: ["literal:foobar", "glob:baro*"]
+}
+Input record:
+foo:data
+foobar:data
+barx:data
+barox:data
+baz:data
+hello:data 
+Expected output:
+foobar:data
+barox:data
+hello:data
+
+removeValues
+The removeValues command (source code) removes all record field values for
+        which all of the following conditions hold:
+​1) the field name matches at least one of the given nameBlacklist predicates but none of
+        the given nameWhitelist predicates.
+​2) the field value matches at least one of the given valueBlacklist predicates but none of
+        the given valueWhitelist predicates.
+A predicate can be a regex pattern (e.g. "regex:foo.*") or POSIX glob pattern (e.g. "glob:foo*") or literal
+        pattern (e.g. "literal:foo") or "*" which is equivalent to "glob:*".
+This command behaves in the same way as the replaceValues command except that maching values are removed rather than
+        replaced.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+nameBlacklist
+"*"
+The blacklist predicates to use for entry names (i.e. entry keys). If the
+                blacklist specification is absent it defaults to MATCH ALL.
+
+
+nameWhitelist
+""
+The whitelist predicates to use for entry names (i.e. entry keys). If the
+                whitelist specification is absent it defaults to MATCH NONE.
+
+
+valueBlacklist
+"*"
+The blacklist predicates to use for entry values. If the blacklist
+                specification is absent it defaults to MATCH ALL.
+
+
+valueWhitelist
+""
+The whitelist predicates to use for entry values. If the whitelist
+                specification is absent it defaults to MATCH NONE.
+
+
+Example usage:
+# Remove all field values where the field name and value matches at least one of foo.* or bar* or baz, 
+# but matches none of foobar or baro*
+removeValues {
+  nameBlacklist : ["regex:foo.*", "glob:bar*", "literal:baz", "literal:xxxx"]
+  nameWhitelist: ["literal:foobar", "glob:baro*"]
+  valueBlacklist : ["regex:foo.*", "glob:bar*", "literal:baz", "literal:xxxx"]
+  valueWhitelist: ["literal:foobar", "glob:baro*"]
+}
+Input record:
+foobar:data
+foo:[foo,foobar,barx,barox,baz,baz,hello]
+barx:foo
+barox:foo
+baz:[foo,foo]
+hello:foo 
+Expected output:
+foobar:data
+foo:[foobar,barox,hello]
+barox:foo
+hello:foo
+
+replaceValues
+The replaceValues command (source code) replaces all record field values for
+        which all of the following conditions hold:
+​1) the field name matches at least one of the given nameBlacklist predicates but none of
+        the given nameWhitelist predicates.
+​2) the field value matches at least one of the given valueBlacklist predicates but none of
+        the given valueWhitelist predicates.
+A predicate can be a regex pattern (e.g. "regex:foo.*") or POSIX glob pattern (e.g. "glob:foo*") or literal
+        pattern (e.g. "literal:foo") or "*" which is equivalent to "glob:*".
+This command behaves in the same way as the removeValues command except that maching values are replaced rather than
+        removed.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+nameBlacklist
+"*"
+The blacklist predicates to use for entry names (i.e. entry keys). If the
+                blacklist specification is absent it defaults to MATCH ALL.
+
+
+nameWhitelist
+""
+The whitelist predicates to use for entry names (i.e. entry keys). If the
+                whitelist specification is absent it defaults to MATCH NONE.
+
+
+valueBlacklist
+"*"
+The blacklist predicates to use for entry values. If the blacklist
+                specification is absent it defaults to MATCH ALL.
+
+
+valueWhitelist
+""
+The whitelist predicates to use for entry values. If the whitelist
+                specification is absent it defaults to MATCH NONE.
+
+
+replacement
+n/a
+The replacement string to use for matching entry values.
+
+
+Example usage:
+# Replace with "myReplacement" all field values where the field name and value  
+# matches at least one of foo.* or bar* or baz, but matches none of foobar or baro*
+replaceValues {
+  nameBlacklist : ["regex:foo.*", "glob:bar*", "literal:baz", "literal:xxxx"]
+  nameWhitelist: ["literal:foobar", "glob:baro*"]
+  valueBlacklist : ["regex:foo.*", "glob:bar*", "literal:baz", "literal:xxxx"]
+  valueWhitelist: ["literal:foobar", "glob:baro*"]
+  replacement : "myReplacement"
+}
+Input record:
+foobar:data
+foo:[foo,foobar,barx,barox,baz,baz,hello]
+barx:foo
+barox:foo
+baz:[foo,foo]
+hello:foo 
+Expected output:
+foobar:data
+foo:[myReplacement,foobar,myReplacement,barox,myReplacement,myReplacement,hello]
+barox:foo
+baz:[myReplacement,myReplacement]
+hello:foo
+
+sample
+The sample command (source code) forwards each input record with a given
+        probability to its child command, and silently ignores all other input records. Sampling is
+        based on a random number generator. This can be helpful to easily test a morphline with a
+        random subset of records from a large dataset.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+probability
+1.0
+The probability that any given record will be forwarded; must be in the range
+                0.0 (forward no records) to 1.0 (forward all records).
+
+
+seed
+null
+An optional long integer that ensures that the series of random numbers will be
+                identical on each morphline run. This can be helpful for deterministic unit testing
+                and debugging. If the seed parameter is absent the pseudo random number generator is
+                initialized with a seed that's obtained from a cryptographically "secure" algorithm,
+                leading to a different sample selection on each morphline run.
+
+
+Example usage:
+sample {
+  probability : 0.0001
+  seed : 12345
+}
+
+separateAttachments
+The separateAttachments command (source code) emits one output record for each
+        attachment in the input record's list of attachments. The result is many records, each of
+        which has at most one attachment.
+Example usage:
+separateAttachments {}
+
+setValues
+The setValues command (source code) assigns a given list of values (or the
+        contents of another field) to a given field. This command is the same as the addValues command, except that it first removes all
+        values from the given output field, and then it adds new values.
+Example usage:
+setValues {
+  # assign values "text/log" and "text/log2" to source_type output field
+  source_type : [text/log, text/log2]
+
+  # assign the integer 123 to the pid field
+  pid : [123]
+
+  # remove the url field
+  url : []
+
+  # assign all values contained in the first_name field to the name field
+  name : "@{first_name}"
+}
+
+split
+The split command (source code) divides strings into substrings, by
+        recognizing a separator (a.k.a. "delimiter") which can be expressed as a single
+        character, literal string, regular expression, or grok pattern. This class provides the functionality of Guava's Splitter class as a morphline command, plus it also
+        supports grok dictionaries and regexes in the same way as the grok command,
+        except it doesn't support the grok extraction features.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+inputField
+n/a
+The name of the input field.
+
+
+outputField
+null
+The name of the field to add output values to, i.e. a single string. Example:
+                tokens. One of outputField or outputFields must be present, but not both.
+
+
+outputFields
+null
+The names of the fields to add output values to, i.e. a list of strings.
+                Example: [firstName, lastName, "", age]. An empty string in a list indicates omit
+                this column in the output. One of outputField or outputFields must be present, but
+                not both.
+
+
+separator
+n/a
+The delimiting string to search for.
+
+
+isRegex
+false
+Whether or not to interpret the separator as a grok pattern (true) or string
+                literal (false).
+
+
+dictionaryFiles
+[]
+A list of zero or more local files or directory trees from which to load
+                dictionaries. Only applicable if isRegex is true. See grok command.
+
+
+dictionaryString
+null
+An optional inline string from which to load a dictionary. Only applicable if
+                isRegex is true. See grok command.
+
+
+trim
+true
+Whether or not to apply the String.trim() method on the output values to be
+                added.
+
+
+addEmptyStrings
+false
+Whether or not to add zero length strings to the output field.
+
+
+limit
+-1
+The maximum number of items to add to the output field per input field value.
+                -1 indicates unlimited.
+
+
+Example usage with multiple output field names and literal string as separator:
+split { 
+  inputField : message
+  outputFields : [first_name, last_name, "", age]          
+  separator : ","        
+  isRegex : false      
+  #separator : """\s*,\s*"""        
+  #isRegex : true      
+  addEmptyStrings : false
+  trim : true          
+}
+Input record:
+message:"Nadja,Redwood,female,8"
+Expected output:
+first_name:Nadja
+last_name:Redwood
+age:8
+More example usage with one output field and literal string as separator:
+split { 
+  inputField : message
+  outputField : substrings          
+  separator : ","        
+  isRegex : false      
+  #separator : """\s*,\s*"""        
+  #isRegex : true      
+  addEmptyStrings : false
+  trim : true          
+}
+Input record:
+message:"_a ,_b_ ,c__"
+Expected output contains a "substrings" field with three values:
+substrings:_a
+substrings:_b_
+substrings:c__
+More example usage with grok pattern or normal regex:
+split { 
+  inputField : message
+  outputField : substrings
+  # dictionaryFiles : [kite-morphlines-core/src/test/resources/grok-dictionaries] 
+  dictionaryString : """COMMA_SURROUNDED_BY_WHITESPACE \s*,\s*"""          
+  separator : """%{COMMA_SURROUNDED_BY_WHITESPACE}"""        
+  # separator : """\s*,\s*"""        
+  isRegex : true      
+  addEmptyStrings : true
+  trim : false          
+}
+
+splitKeyValue
+The splitKeyValue command (source code) iterates over the items in a given
+        record input field, interprets each item as a key-value pair where the key and value are
+        separated by the given separator, and adds the pair's value to the record field named after
+        the pair's key. Typically, the input field items have been placed there by an upstream split command with a single output field.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+inputField
+n/a
+The name of the input field.
+
+
+outputFieldPrefix
+""
+A string to be prepended to each output field name.
+
+
+separator
+"="
+The string separating the key from the value.
+
+
+isRegex
+false
+Whether or not to interpret the separator as a grok pattern (true) or string
+                literal (false).
+
+
+dictionaryFiles
+[]
+A list of zero or more local files or directory trees from which to load
+                dictionaries. Only applicable if isRegex is true. See grok command.
+
+
+dictionaryString
+null
+An optional inline string from which to load a dictionary. Only applicable if
+                isRegex is true. See grok command.
+
+
+trim
+true
+Whether or not to apply the String.trim() method on the output keys and values
+                to be added.
+
+
+addEmptyStrings
+false
+Whether or not to add zero length strings to the output field.
+
+
+Example usage:
+splitKeyValue { 
+  inputField : params
+  separator : "="
+  outputFieldPrefix : "/"
+}
+Input record:
+params:foo=x
+params: foo = y 
+params:foo 
+params:fragment=z
+Expected output:
+/foo:x
+/foo:y
+/fragment:z
+Example usage that extracts data from iptables log file
+# read each line in the file
+{ 
+  readLine {
+    charset : UTF-8
+  }
+} 
+                
+# extract timestamp and key value pair string
+{ 
+  grok { 
+    dictionaryFiles : [target/test-classes/grok-dictionaries/grok-patterns]
+    expressions : { 
+      message : """%{SYSLOGTIMESTAMP:timestamp} %{GREEDYDATA:key_value_pairs_string}"""
+    }
+  }
+}
+
+# split key value pair string on blanks into an array of key value pairs
+{ 
+  split { 
+    inputField : key_value_pairs_string
+    outputField : key_value_array          
+    separator : " "        
+  }
+}
+
+# split each key value pair on '=' char and extract its value into record fields named after the key
+{ 
+  splitKeyValue { 
+    inputField : key_value_array
+    outputFieldPrefix : ""          
+    separator : "="        
+    addEmptyStrings : false
+    trim : true          
+  }
+}
+
+# remove temporary work fields
+{ 
+  setValues {
+    key_value_pairs_string : []
+    key_value_array : []
+  }
+}
+Input file:
+Feb  6 12:04:42 IN=eth1 OUT=eth0 SRC=1.2.3.4 DST=6.7.8.9 ACK DF WINDOW=0
+Expected output record:
+timestamp:Feb  6 12:04:42
+IN:eth1
+OUT:eth0
+SRC:1.2.3.4
+DST:6.7.8.9
+WINDOW:0
+
+startReportingMetricsToCSV
+The startReportingMetricsToCSV command (source code) starts periodically appending the
+        metrics of all morphline commands to a set of CSV files. The CSV files are named after the
+        metrics.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+outputDir
+n/a
+The relative or absolute path of the output directory on the local file system.
+                The directory and it's parent directories will be created automatically if they
+                don't yet exist.
+
+
+frequency
+"10 seconds"
+The amount of time between reports to the output file, given in HOCON duration format.
+
+
+locale
+JVM default Locale
+Format numbers for the given Java Locale. Example: "en_US"
+
+
+defaultDurationUnit
+milliseconds
+Report output durations in the given time unit. One of nanoseconds,
+                microseconds, milliseconds, seconds, minutes, hours, days.
+
+
+defaultRateUnit
+seconds
+Report output rates in the given time unit. One of nanoseconds, microseconds,
+                milliseconds, seconds, minutes, hours, days. Example output: events/second
+
+
+metricFilter
+null
+Only report metrics which match the given (optional) filter, as described in
+                more detail below. If the filter is absent all metrics match.
+
+
+
+metricFilter
+
+A metricFilter uses pattern matching with include/exclude specifications to determine
+              if a given metric shall be reported to the output destination.
+A metric consists of a metric name and a metric class name. A metric matches the
+              filter if the metric matches at least one include specification, but matches none of
+              the exclude specifications. An include/exclude specification consists of zero or more
+              expression pairs. Each expression pair consists of an expression for the metric name,
+              as well as an expression for the metric's class name. Each expression can be a regex pattern (e.g. "regex:foo.*") or POSIX glob pattern (e.g. "glob:foo*") or
+              literal string (e.g. "literal:foo") or "*" which is equivalent to "glob:*". Each
+              expression pair defines one expression for the metric name and another expression for
+              the metric class name.
+If the include specification is absent it defaults to MATCH ALL. If the exclude
+              specification is absent it defaults to MATCH NONE.
+
+
+Example startReportingMetricsToCSV usage:
+startReportingMetricsToCSV {
+  outputDir : "mytest/metricsLogs"
+  frequency : "10 seconds"
+  locale : en_US
+}
+More example startReportingMetricsToCSV usage:
+startReportingMetricsToCSV {
+  outputDir : "mytest/metricsLogs"
+  frequency : "10 seconds"
+  locale : en_US
+  defaultDurationUnit : milliseconds
+  defaultRateUnit : seconds
+  metricFilter : {
+    includes : { # if absent defaults to match all
+      "literal:foo" : "glob:foo*"
+      "regex:.*" : "glob:*"
+    }
+    excludes : { # if absent defaults to match none
+      "literal:foo.bar" : "*"
+    }
+  }          
+}
+Example output log file:
+t,count,mean_rate,m1_rate,m5_rate,m15_rate,rate_unit
+1380054913,2,409.752100,0.000000,0.000000,0.000000,events/second
+1380055913,2,258.131131,0.000000,0.000000,0.000000,events/second
+
+startReportingMetricsToJMX
+The startReportingMetricsToJMX command (source code) starts publishing the metrics of all
+        morphline commands to JMX.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+domain
+metrics
+The name of the JMX domain (aka category) to publish to.
+
+
+durationUnits
+null
+Report output durations of the given metrics in the given time units. This
+                optional parameter is a JSON object where the key is the metric name and the value
+                is a time unit. The time unit can be one of nanoseconds, microseconds, milliseconds,
+                seconds, minutes, hours, days.
+
+
+defaultDurationUnit
+milliseconds
+Report all other output durations in the given time unit. One of nanoseconds,
+                microseconds, milliseconds, seconds, minutes, hours, days.
+
+
+rateUnits
+null
+Report output rates of the given metrics in the given time units. This optional
+                parameter is a JSON object where the key is the metric name and the value is a time
+                unit. The time unit can be one of nanoseconds, microseconds, milliseconds, seconds,
+                minutes, hours, days.
+
+
+defaultRateUnit
+seconds
+Report all other output rates in the given time unit. One of nanoseconds,
+                microseconds, milliseconds, seconds, minutes, hours, days. Example output:
+                events/second
+
+
+metricFilter
+null
+Only report metrics which match the given (optional) filter, as described in
+                more detail at  metricFilter. If the filter is absent all metrics
+                match.
+
+
+Example startReportingMetricsToJMX usage:
+startReportingMetricsToJMX {
+  domain : myMetrics
+}
+More example startReportingMetricsToJMX usage:
+startReportingMetricsToJMX {
+  domain : myMetrics
+  durationUnits : {
+    myMetrics.myTimer : minutes
+  }
+  defaultDurationUnit : milliseconds
+  rateUnits : {
+    myMetrics.myTimer : milliseconds
+    morphline.logDebug.numProcessCalls : milliseconds
+  }
+  defaultRateUnit : seconds
+  metricFilter : {
+    includes : { # if absent defaults to match all
+      "literal:foo" : "glob:foo*"
+      "regex:.*" : "glob:*"
+    }
+    excludes : { # if absent defaults to match none
+      "literal:foo.bar" : "*"
+    }
+  }          
+}
+
+startReportingMetricsToSLF4J
+The startReportingMetricsToSLF4J command (source code) starts periodically logging the metrics
+        of all morphline commands to SLF4J.
+The command provides the following configuration options:
+Property Name
+Default
+Description
+logger metrics The name of the SLF4J logger to write to. marker null The optional name of
+        the SLF4J marker object to associate with each logging request. frequency "10 seconds" The
+        amount of time between reports to the output file, given in HOCON duration format. defaultDurationUnit
+        milliseconds Report output durations in the given time unit. One of
+          nanoseconds, microseconds,
+        milliseconds, seconds, minutes,
+          hours, days. defaultRateUnit seconds Report output rates
+        in the given time unit. One of nanoseconds, microseconds,
+          milliseconds, seconds, minutes,
+          hours, days. Example output: events/second metricFilter
+        null Only report metrics which match the given (optional) filter, as described in more
+        detail at metricFilter. If the filter is absent all
+        metrics match.
+Example startReportingMetricsToSLF4J usage:
+startReportingMetricsToSLF4J {
+  logger : "org.kitesdk.morphline.domain1"
+  frequency : "10 seconds"
+}
+More example startReportingMetricsToSLF4J usage:
+startReportingMetricsToSLF4J {
+  logger : "org.kitesdk.morphline.domain1"
+  frequency : "10 seconds"
+  defaultDurationUnit : milliseconds
+  defaultRateUnit : seconds
+  metricFilter : {
+    includes : { # if absent defaults to match all
+      "literal:foo" : "glob:foo*"
+      "regex:.*" : "glob:*"
+    }
+    excludes : { # if absent defaults to match none
+      "literal:foo.bar" : "*"
+    }
+  }          
+}
+Example output log line:
+457  [metrics-logger-reporter-thread-1] INFO  org.kitesdk.morphline.domain1  - type=METER, name=morphline.logDebug.numProcessCalls, count=2, mean_rate=144.3001443001443, m1=0.0, m5=0.0, m15=0.0, rate_unit=events/second
+
+toByteArray
+The toByteArray command (source code) converts the Java objects in a given
+        field via Object.toString() to their string representation, and then via
+          String.getBytes(Charset) to their byte array representation. If the input
+        Java objects are already byte arrays the command does nothing.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+field
+n/a
+The name of the field to convert.
+
+
+charset
+UTF-8
+The character encoding to use.
+
+
+Example usage:
+toByteArray { field : _attachment_body }
+
+toString
+The toString command (source code) converts the Java objects in a given
+        field using the Object.toString() method to their string representation,
+        and optionally also applies the String.trim() method to remove leading and
+        trailing whitespace.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+field
+n/a
+The name of the field to convert.
+
+
+trim
+false
+Whether or not to apply the String.trim() method.
+
+
+Example usage:
+toString { field : source_type }
+
+translate
+The translate command (source code) examines each value in a given field
+        and replaces it with the replacement value defined in a given dictionary aka lookup hash
+        table.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+field
+n/a
+The name of the field to modify.
+
+
+dictionary
+n/a
+The lookup hash table to use for finding matches and replacement values
+
+
+fallback
+null
+The fallback value to use as replacement if no match is found. If no fallback
+                is defined and no match is found then the command fails.
+
+
+Example usage to translate Syslog severity level numeric codes to string
+        labels:
+translate {
+  field : level
+  dictionary : {
+     0 : Emergency
+     1 : Alert
+     2 : Critical
+     3 : Error
+     4 : Warning
+     5 : Notice
+     6 : Informational
+     7 : Debug
+  }
+  fallback : Unknown # if no fallback is defined and no match is found then the command fails
+}
+Input: level:0
+Expected output: level:Emergency
+Input: level:999
+Expected output: level:Unknown
+
+tryRules
+The tryRules command (source code) is a simple rule engine for handling a
+        list of heterogeneous input data formats. The command consists of zero or more rules. A rule
+        consists of zero or more commands.
+The rules of a tryRules command are processed in top-down order. If one of
+        the commands in a rule fails, the tryRules command stops processing this
+        rule, backtracks and tries the next rule, and so on, until a rule is found that runs all its
+        commands to completion without failure (the rule succeeds). If a rule succeeds, the
+        remaining rules of the current tryRules command are skipped. If no rule
+        succeeds the record remains unchanged, but a warning may be issued or an exception may be
+        thrown.
+Because a tryRules command is itself a command, a
+          tryRules command can contain arbitrarily nested tryRules
+        commands. By the same logic, a pipe command can contain arbitrarily nested
+          tryRules commands and a tryRules command can contain
+        arbitrarily nested pipe commands. This helps to implement complex
+        functionality for advanced usage.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+catchExceptions
+false
+Whether Java exceptions thrown by a rule shall be caught, with processing
+                continuing with the next rule (true), or whether such exceptions shall not be caught
+                and consequently propagate up the call chain (false).
+
+
+throwExceptionIfAllRulesFailed
+true
+Whether to throw a Java exception if no rule succeeds.
+
+
+Example usage:
+tryRules {
+  catchExceptions : false
+  throwExceptionIfAllRulesFailed : true
+  rules : [
+    # next rule of tryRules cmd:
+    {
+      commands : [
+        { contains { _attachment_mimetype : [avro/binary] } }
+        ... handle Avro data here
+        { logDebug { format : "output record: {}", args : ["@{}"] } }
+      ]
+    }
+
+    # next rule of tryRules cmd:
+    {
+      commands : [
+        { contains { _attachment_mimetype : [text/csv] } }
+        ... handle CSV data here
+        { logDebug { format : "output record: {}", args : ["@{}"] } }
+      ]
+    }
+    
+    # if desired, the last rule can serve as a fallback mechanism 
+    # for records that don't match any rule:
+    {
+      commands : [
+        { logWarn { format : "Ignoring record with unsupported input format: {}", args : ["@{}"] } }
+        { dropRecord {} }    
+      ]
+    }
+  ]
+}
+
+

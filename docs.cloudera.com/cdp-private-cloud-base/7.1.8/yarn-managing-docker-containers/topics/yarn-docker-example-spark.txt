@@ -1,0 +1,80 @@
+Docker on YARN example: Spark-on-Docker-on-YARNCloudera Docs
+Docker on YARN example: Spark-on-Docker-on-YARN
+Learn how to submit a Spark application to run in Docker containers on YARN.
+    
+
+Prepare a UNIX-based Docker image with Java and Python installed. For example,
+                    use any arbitrary docker image satisfying this condition or the one built from
+                    the following Dockerfile:
+
+FROM centos
+RUN yum -y install python36
+RUN ln -s /usr/bin/python3.6 /usr/local/bin/python
+RUN yum -y install java-1.8.0-openjdk
+ENV JAVA_HOME /usr/lib/jvm/jre
+
+
+
+In Cloudera Manager, select the YARN service.
+
+Click the Configuration tab.
+
+Use the Docker on YARN filter. 
+
+Find the Trusted Registries for Docker Containers
+                    property. 
+
+Add the registry of the docker image to the list of trusted registries. 
+
+Find the Allowed Read-Only Mounts for Docker Containers
+                    property. 
+
+Add /opt/cloudera/parcels, /etc/hadoop and
+                        /etc/passwd to the list of allowed read-only mounts. 
+
+Click Save Changes. 
+
+Restart the YARN service using Cloudera Manager.
+
+Select an arbitrary python Spark application.
+
+For example an application that initializes the SparkContext object and then
+                        prints the python version:
+import sys
+from pyspark import SparkConf, SparkContext
+conf = SparkConf().setAppName("Version app").setMaster("yarn")
+sc = SparkContext(conf=conf)
+if sys.version_info[0] == 3:
+    print(“Python 3”)
+elif sys.version_info[0] == 2:
+   print(“Python 2”)
+
+
+
+Submit the python script to the cluster by typing the following command: 
+
+spark-submit \
+  --master yarn \
+  --deploy-mode cluster \
+  --conf spark.yarn.appMasterEnv.YARN_CONTAINER_RUNTIME_TYPE=docker \
+  --conf spark.yarn.appMasterEnv.YARN_CONTAINER_RUNTIME_DOCKER_IMAGE=registry/image:tag \
+  --conf spark.yarn.appMasterEnv.YARN_CONTAINER_RUNTIME_DOCKER_MOUNTS=/etc/passwd:/etc/passwd:ro,/opt/cloudera/parcels:/opt/cloudera/parcels:ro,/etc/krb5.conf:/etc/krb5.conf:ro \   
+  --conf spark.executorEnv.YARN_CONTAINER_RUNTIME_TYPE=docker \
+  --conf spark.executorEnv.YARN_CONTAINER_RUNTIME_DOCKER_IMAGE=registry/image:tag \
+  --conf spark.executorEnv.YARN_CONTAINER_RUNTIME_DOCKER_MOUNTS="/etc/passwd:/etc/passwd:ro,/opt/cloudera/parcels/:/opt/cloudera/parcels/:ro,/etc/krb5.conf:/etc/krb5.conf:ro" \ 
+ <path to python script>
+
+
+
+Check the output of the script.
+
+
+Open the Spark history Server web UI.
+
+
+Search for the just submitted job.
+
+
+
+
+Parent topic: Running Dockerized Applications on YARN

@@ -1,0 +1,133 @@
+AWS LambdaCloudera Docs
+AWS Lambda
+This section helps you to check the list of actions you must perfom before you start
+    working on your function.
+
+
+You have the latest version of the AWS Lambda CLI.
+You have jq installed to extract some information from the JSON
+          responses when executing commands.
+
+
+
+Start by setting all the parameters required for deploying your function using the AWS
+          CLI.
+
+
+
+# Name of the binary file you downloaded from Cloudera DataFlow. Change it based on the version you downloaded.
+FILEKEY="naaf-aws-lambda-1.0.0.2.3.6.0-35-bin.zip"
+
+# Location where the function will be deployed. Change this value to match your needs/requirements.
+LOCATION=eu-west-2
+
+# Name of the bucket where the binary and NAR will be uploaded. Change this value to match your needs/requirements.
+BUCKET_NAME=mydffresizeimagebucketpvillard
+
+# Name of the function (only lower case letters). Change this value to match your needs/requirements.
+FUNCTIONNAME=resizeimagepvillard
+
+# Flow CRN. Add the Customer Resource Number you obtained from the DataFlow Catalog.
+FLOW_CRN=***YOUR VALUE HERE***
+
+# Credentials of the machine user
+DF_ACCESS_KEY=***YOUR VALUE HERE***
+DF_PRIVATE_KEY=***YOUR VALUE HERE***
+
+
+
+Download the function template from here and make it available locally.
+
+Execute the below commands:
+
+
+Create your S3
+              bucket.aws s3api create-bucket \
+    --bucket $BUCKET_NAME \
+    --region $LOCATION \
+    --create-bucket-configuration LocationConstraint=$LOCATION
+Copy the Lambda DataFlow Function binariy zip file to your
+              bucket.aws s3 cp $FILEKEY s3://$BUCKET_NAME/$FILEKEY
+Create the role for the
+              Lambda.ROLEARN=`aws iam create-role --role-name $FUNCTIONNAME\_lambda\_role --assume-role-policy-document '{"Version": "2012-10-17","Statement": [{ "Effect": "Allow", "Principal": {"Service": "lambda.amazonaws.com"}, "Action": "sts:AssumeRole"}]}' | jq -r ".Role.Arn" `
+aws iam attach-role-policy --role-name $FUNCTIONNAME\_lambda\_role --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+sleep 10
+Create the function.
+cp my-function-definition.json template.json
+
+sed -i '.bak' -e 's|BUCKETNAME|'"$BUCKET_NAME"'|g' \
+		-e 's|FUNCTIONNAME|'"$FUNCTIONNAME"'|g' \
+		-e 's|FLOWCRN|'"$FLOW_CRN"'|g' \
+		-e 's|DFACCESSKEY|'"$DF_ACCESS_KEY"'|g' \
+		-e 's|DFPRIVATEKEY|'"$DF_PRIVATE_KEY"'|g' \
+		-e 's|LAYERARN|'"$LAYERARNVERSION"'|g' \
+		-e 's|FILEKEY|'"$FILEKEY"'|g' \
+		-e 's|ROLEARN|'"$ROLEARN"'|g' template.json
+
+aws lambda create-function --cli-input-json file://template.json
+
+echo "please wait a bit more (30 sec)..."
+sleep 30
+
+aws lambda publish-version --function-name $FUNCTIONNAME
+
+
+When the execution is complete (it takes a few minutes), the function will be created
+            and a version will be published but without a trigger.
+
+
+Open the AWS Console UI and go to your Lambda.
+
+Find to the published version of the function and add the API Gateway trigger:
+
+
+
+
+This gives you the endpoint on which the Lambda is listening.
+For example:
+              https://aa2q99qo3i.execute-api.eu-west-2.amazonaws.com/default/resizeimage
+You can now use a tool like Postman to send your picture.
+You can add two custom headers (resize-width and
+              resize-height) to specify the resizing dimensions. If not specified,
+            the default values of the NiFi flow parameters are used.
+
+
+
+
+
+
+noteThe first attempt may fail due to a cold start and timeout
+              (30 sec timeout on the API Gateway). A subsequent retry after a minute should work and
+              should return the resized image much faster. For more information, see Cold start.
+
+It is possible to send a request to your function using
+            curl.
+For
+            example:curl -X POST https://3bftvfa66m.execute-api.us-east-2.amazonaws.com/default/cpresizeimage \
+-H "Content-Type: image/png" \
+-H "resize-width: 400" \
+-H "resize-height: 200" \
+--data-binary "@/Users/pierre/Desktop/test.png" \
+--output /tmp/my_resized_image.png
+
+
+noteThe function will be open to the internet. Make sure to
+              secure it if you want to keep it running (this is done when creating the API Gateway
+              trigger) or delete everything once you are done with this quickstart.
+
+You can delete the function using the following
+            command:aws lambda delete-function --function-name $FUNCTIONNAME --region $LOCATION
+
+aws iam detach-role-policy --role-name $FUNCTIONNAME\_lambda\_role --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+aws iam delete-role --role-name $FUNCTIONNAME\_lambda\_role
+
+aws s3 rm s3://$BUCKET_NAME --recursive --region $LOCATION
+aws s3api delete-bucket --bucket $BUCKET_NAME --region $LOCATION
+rm template.json template.json.bak
+
+You may also want to manually delete the API Gateway that you created
+              earlier.
+
+
+

@@ -1,0 +1,247 @@
+Ozone security architectureCloudera Docs
+Ozone security architecture
+Apache Ozone is a scalable, distributed, and high performance object store optimized for
+  big data workloads and can handle billions of objects of varying sizes. Applications that use
+  frameworks like Apache Spark, Apache YARN and Apache Hive work natively on Ozone without any
+  modifications. Therefore, it is essential to have robust security mechanisms to secure your
+  cluster and to protect your data in Ozone.
+There are various authentication and authorization mechanisms available in Apache Ozone.
+
+Parent topic: Introduction to Ozone
+Authentication in Ozone
+Authentication is the process of recognizing a user's identity for Ozone components.
+  Apache Ozone supports strong authentication using Kerberos and security tokens.
+Kerberos-based authentication
+Ozone depends on Kerberos to make the clusters secure. To enable security in an Ozone cluster,
+    you must set the following parameters:
+Property
+Value
+
+ozone.security.enabled
+true
+
+hadoop.security.authentication
+kerberos
+
+The following diagram illustrates how service components, such as Ozone Manager (OM), Storage
+    Container Manager (SCM), DataNodes, and Ozone Clients are authenticated with each other through
+    Kerberos:
+
+
+
+Each service must be configured with a valid Kerberos Principal Name and a corresponding
+    keytab file, which is used by the service to login at the start of the service in secure mode.
+    Correspondingly, Ozone clients must provide either a valid Kerberos ticket or security tokens to
+    access Ozone services, such as OM for metadata and DataNode for read/write blocks.
+
+Security tokens
+With Ozone serving thousands of requests every second, authenticating through Kerberos each
+    time can be overburdening and is ineffective. Therefore, once authentication is done, Ozone
+    issues delegation and block tokens to users or client applications authenticated with the help
+    of Kerberos, so that they can perform specified operations against the cluster, as if they have
+    valid kerberos tickets. 
+Ozone security token has a token identifier along with a signed signature from the issuer. The
+    signature of the token can be validated by token validators to verify the identity of the issuer
+    and a valid token holder can use the token to perform operations against the cluster.
+Delegation token
+Delegation tokens allow a user or client application to impersonate a user’s kerberos
+    credentials. The client initially authenticates with OM through Kerberos and obtains a
+    delegation token from OM. Delegation token issued by OM allows token holders to access metadata
+    services provided by OM, such as creating volumes or listing objects in a bucket.
+When OM receives a request from a client with a delegation token, it validates the token by
+    checking the signature using its public key. A delegation token can be transferred to other
+    client processes. When a token expires, the original client must request a new delegation token
+    and then pass it to the other client processes.
+Delegation token operations, such as get, renew, and cancel can only be performed over a
+    Kerberos authenticated connection.
+Block token
+Block tokens are similar to delegation tokens because they are issued/signed by OM. Block
+    tokens allow a user or client application to read or write a block in DataNodes. Unlike
+    delegation tokens, which are requested through get, renew, or cancel APIs, block tokens are
+    transparently provided to clients with information about the key or block location. When
+    DataNodes receive read/write requests from clients, block tokens are validated by DataNodes
+    using the certificate or public key of the issuer (OM). 
+Block tokens cannot be renewed by the client. When a block token expires, the client must
+    retrieve the key/block locations to get new block tokens.
+S3 token
+Ozone supports Amazon S3 protocol through Ozone S3 Gateway. In secure mode, OM issues an S3
+    secret key to Kerberos-authenticated users or client applications that are accessing Ozone using
+    S3 APIs. The access key ID secret access key can be added in the AWS configuration file for
+    Ozone to ensure that a particular user or client application can access Ozone buckets.
+S3 tokens are signed by S3 secret keys that are created by the Amazon S3 client. Ozone S3
+    gateway creates the token for every S3 client request. Users must have an S3 secret key to
+    create the S3 token and similar to the block token, S3 tokens are handled transparently for
+    clients.
+
+How does Ozone security token work?
+Ozone security uses a certificate-based approach to validate security tokens, which make the
+    tokens more secure as shared secret keys are never transported over the network.
+The following diagram illustrates the working of an Ozone security token:
+
+
+In secure mode, SCM bootstraps itself as a certifying authority (CA) and creates a
+     self-signed CA certificate. OM and DataNode must register with SCM CA through a Certificate
+     Signing Request (CSR). SCM validates the identity of OM and DataNode through Kerberos and signs
+     the component’s certificate. The signed certificates are then used by OM and DataNode to prove
+     their identity. This is especially useful for signing and validating delegation or block
+     tokens.
+In the case of block tokens, OM (token issuer) signs the token with its private key and
+    DataNodes (token validator) use OM’s certificate to validate block tokens because OM and
+    DataNode trust the SCM CA signed certificates.
+In the case of delegation tokens when OM (is both a token issuer and token validator) is
+     running in High Availability (HA) mode, there are several OM instances running simultaneously.
+     A delegation token issued and signed by OM instance 1 can be validated by OM instance 2 when
+     the leader OM instance changes. This is possible because both the instances trust the SCM CA
+     signed certificates.
+
+Certificate-based authentication for SCMs in High Availability
+Authentication between Ozone services, such as Storage Container Manager (SCM), Ozone Manager
+    (OM), and DataNodes is achieved using certificates and ensures secured communication in the
+    Ozone cluster. The certificates are issued by SCM to other services during installation.
+The following diagram illustrates how SCM issues certificates to other Ozone services:
+
+
+
+The primordial SCM in the HA configuration starts a root Certificate Authority (CA) with
+    self-signed certificates. The primordial SCM issues signed certificates to itself and the other
+    bootstrapped SCMs in the HA configuration. The primordial SCM also has a subordinate CA with a
+    signed certificate from the root CA.
+When an SCM is bootstrapped, it receives a signed certificate from the primordial SCM and
+    starts a subordinate CA of its own. The subordinate CA of any SCM that becomes the leader in the
+    HA configuration issues signed certificates to Ozone Managers and the DataNodes in the Ozone
+    cluster.
+
+
+Related informationKerberos principal and keytab properties for Ozone service daemonsKerberos principal and keytab properties for Ozone DataNodesConsiderations for enabling SCM HA security
+Authorization in Ozone
+Authorization is the process of specifying access rights to Ozone resources. Once a user
+  is authenticated, authorization enables you to specify what the user can do within an Ozone
+  cluster. For example, you can allow users to read volumes, buckets, and keys while restricting
+  them from creating volumes.  
+Ozone supports authorization through the Apache Ranger plugin or through native Access Control
+   Lists (ACLs).
+Using Ozone native ACLs for authorization
+Ozone’s native ACLs can be used independently or with Ozone ACL plugins, such as Ranger. If
+    Ranger authorization is enabled, the native ACLs are not evaluated.
+Ozone native ACLs are a superset of POSIX and S3. The format of an ACL is
+     object:who:rights.
+object
+In an ACL, an object can be the following:
+Volume - An Ozone volume. For example, /volume1.
+Bucket - An Ozone bucket. For example, /volume1/bucket1.
+Key - An object key or an object. For example,
+         /volume1/bucket1/key1.
+Prefix - A path prefix for a specific key. For example,
+          /volume1/bucket1/prefix1/prefix2.
+
+who
+In an ACL, a who can be the following:
+User - A user in the Kerberos domain. The user can be named or unnamed.
+Group - A group in the Kerberos domain. The group can be named or unnamed.
+World - All authenticated users in the Kerberos domain. This maps to others in the POSIX
+         domain.
+Anonymous - Indicates that the user field should be completely ignored. This value is
+         required for the S3 protocol to indicate anonymous users.noteOzone
+          Manager translates an S3 user accessing Ozone by using the AWS v4 signature protocol, to
+          the appropriate Kerberos user.
+
+rights
+In an ACL, a right can be the following:
+Create - Allows a user to create buckets in a volume and keys in a bucket.Only
+          administrators can create volumes.
+List - Allows a user to list buckets and keys. This ACL is attached to the volume and
+         buckets which allow listing of the child objects.The user and administrator can list
+          volumes owned by the user.
+Delete - Allows a user to delete a volume, bucket, or key.
+Read - Allows a user to read the metadata of a volume and bucket and data stream and
+         metadata of a key.
+Write - Allows a user to write the metadata of a volume and bucket and allows the user
+         to overwrite an existing ozone key.
+Read_ACL - Allows a user to read the ACL on a specific object.
+Write_ACL - Allows a user to write the ACL on a specific object.
+
+
+APIs for working with an Ozone ACL
+Ozone supports a set of APIs to modify or manipulate the ACLs. The supported APIs are as
+     follows:
+SetAcl - Accepts the user principal, the name and type of an Ozone object, and a list of
+      ACLs.
+GetAcl - Accepts the name and type of an Ozone object and returns the corresponding
+      ACLs.
+AddAcl - Accepts the name and type of the Ozone object, and the ACL to add it to existing
+      ACL entries of the Ozone object.
+RemoveAcl - Accepts the name and type of the Ozone object, and the ACL to remove.
+
+
+Using Ranger for authorization
+Apache Ranger provides a centralized security framework to manage access control through an
+    user interface that ensures consistent policy administration across Cloudera Data Platform (CDP)
+    components. For Ozone to work with Ranger, you can use Cloudera Manager and enable the Ranger
+    service instance with which you want to use Ozone. 
+If Ranger authorization is enabled, the native ACLs are ignored and ACLs specified through
+    Ranger are considered.
+The following table lists the Ranger permissions corresponding to the various Ozone
+     operations:
+Operation / Permission
+Volume Permission
+Bucket Permission
+Key Permission
+
+Create Volume
+CREATE
+
+
+
+List Volume
+LIST
+
+
+
+Get Volume Info
+READ
+
+
+
+Delete Volume
+DELETE
+
+
+
+Create Bucket
+READ
+CREATE
+
+
+List Bucket
+LIST, READ
+
+
+
+Get Bucket Info
+READ
+READ
+
+
+Delete Bucket
+READ
+DELETE
+
+
+List Key
+READ
+LIST, READ
+
+
+Write Key
+READ
+READ
+CREATE, WRITE
+
+Read Key
+READ
+READ
+READ
+
+
+
+Related informationEnabling Ranger service instance for Ozone

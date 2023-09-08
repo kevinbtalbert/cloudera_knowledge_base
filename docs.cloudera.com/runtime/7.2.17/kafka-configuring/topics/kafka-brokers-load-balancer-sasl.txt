@@ -1,0 +1,166 @@
+Setup for SASL with KerberosCloudera Docs
+Setup for SASL with Kerberos
+If you are using SASL with Kerberos for authentication, you must configure the load
+  balancer and select the relevant architecture in Cloudera Manager.
+
+
+Parent topic: Cluster discovery using load balancers
+Setting the Kafka Broker Load Balancer Host property
+Learn how to configure the Kafka Broker Load Balancer Host property to avoid a ticket
+        mismatch when using SASL with Kerberos.
+
+If you are using SASL with Kerberos in the system and your clients connect to a load
+                balancer that forwards requests to the actual brokers, the client gets a Kerberos
+                service ticket including the load balancer host. This happens because the client
+                believes that the load balancer does not forward requests but it is a broker.
+                Meanwhile, the Kafka brokers in the configured listeners are logged in to Kerberos
+                using their service principal that contains their corresponding FQDN. This results
+                in a ticket mismatch after the client is routed to an actual broker with the load
+                balancer related service ticket.
+If you are using SASL_SSL or SASL_PLAINTEXT security protocol in the cluster with
+                Kerberos, you have to set the load balancer’s host in Cloudera Manager for the Kafka
+                broker roles by setting the Kafka Broker Load Balancer Host
+                property.
+
+
+Ensure that you have reviewed Kerberos-related architecture options.
+
+
+In Cloudera Manager, select the Kafka service.
+
+Go to the Configuration tab.
+
+Find and configure the Kafka Broker Load Balancer Host
+                    property.
+Add the hostname of the load balancer.
+Optional: 
+Find and configure the Kafka Broker Load Balancer Listener
+                        Port property.
+
+importantSet the load balancer to forward
+                        requests to this port.
+
+
+Click Save Changes.
+
+Restart the Kafka service.
+
+
+After restarting the brokers, the following is automatically set:
+
+
+A new load balancer principal is added for each broker’s
+                            kafka.keytab:
+kafka_principal/load_balancer_host@REALM
+By default, the Kafka principal in the cluster is kafka.
+
+
+A new listener named LB is added to the
+                            kafka.properties:
+listeners=LB://HOST:9094
+The LB listener port can be configured by setting the Kafka Broker
+                            Load Balancer Listener Port property.
+
+
+Similarly to listeners, a new advertised listener is added to the
+                            kafka.properties:
+advertised.listeners=LB://HOST:9093
+The LB advertised listener  advertises the normal Kafka listener’s port that
+                        is also automatically set (9092 or 9093 depending on SSL settings).
+
+
+The security protocol for the new LB listener is added to its corresponding
+                        map configuration with the same security protocol as set for the normal
+                        listener the clients connect to without using the load balancer:
+listener.security.protocol.map=LB:SASL_SSL
+
+
+The JAAS configuration for the LB listener is set to log in with the load
+                        balancer principal using the actual Kafka process folder for the keytab
+                        path:
+listener.name.lb.gssapi.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule
+        required doNotPrompt=true useKeyTab=true storeKey=true
+        keyTab=”/process_folder/kafka.keytab”
+        principal=”kafka_principal/load_balancer_host@REALM”;”
+
+
+noteIf you have already set any of these properties using
+                advanced configuration snippets (safety valves), the feature does not overwrite your
+                changes. It might simply not work, so you have to extend your advanced configuration
+                snippets manually with the mentioned settings.
+LB can be used with uppercase letters if the load balancer
+                        listener should be referenced in property values.
+lb can be used with lowercase letters if the load balancer
+                        listener should be referenced in property keys.
+
+
+
+
+Turning off the load balancer listener
+If you are no longer using the load balancer, you need to turn off the load balancer
+        listener and restart the Kafka service.
+
+If the load balancer is not used anymore in front of Kafka brokers, it is enough to
+                clear the  Kafka Broker Load Balancer Host property to make
+                it empty and restart the Kafka service. The Kafka broker will not use the load
+                balancer listener port anymore with its listener.
+
+
+In Cloudera Manager, select the Kafka service.
+
+Go to the Configuration tab.
+
+Find and clear the Kafka Broker Load Balancer Host
+                    property.
+
+Click Save Changes.
+
+Restart the Kafka service.
+
+
+
+Kerberos-related architecture options for Kafka broker behind load balancer setup
+Learn about possible Kerberos-related architectures before setting up Kafka brokers
+  behind a load balancer to use SASL with Kerberos.
+There are possible Kerberos-related architectures with their own tradeoffs. It is important to
+   consider them to design the system according to needs before setting up Kafka brokers behind a
+   load balancer. There can be differences between the number of Cloudera Manager and Key
+   Distribution Center (KDC) instances connected with the Kafka clusters.
+
+
+Single Cloudera Manager , single KDC instance
+This is the simplest and easiest setup. All the Kafka clusters are managed by a single
+     Cloudera Manager instance that uses a single KDC instance. In this case, the load balancer
+     feature can be enabled in all the Kafka clusters and the rest is enabled automatically.
+
+
+Multiple Cloudera Manager, multiple KDC instances
+In this case, all the Kafka clusters have their own separate Cloudera Manager and KDC
+     instances. The load balancer feature can be enabled in all the Kafka clusters, but cross-realm
+     trust should be set by the system administrator for the client principals to be able to
+     authenticate to any of the Kafka services. The load balancer listeners log in into their own
+     KDC using the load balancer principal, and the Kafka client needs a credential that can log in
+     into any of the KDCs. 
+
+
+Multiple Cloudera Manager, single KDC instances
+If you use multiple Kafka clusters with multiple Cloudera Manager instances and yet they use
+     the same single KDC, the feature does not work, because the CM servers invalidate each other’s
+     load balancer principal credentials in the keytab when getting the load balancer principal.
+     Only one Cloudera Manager instance's Kafka cluster load balancer credentials will be fine,
+     others will be stale. In this case, after enabling the feature as mentioned above, it is
+     possible to override keytab or principal for the load balancer listener setting the following
+     property as safety valve:
+listener.name.lb.gssapi.sasl.jaas.config=com.sun.security.auth.module.Krb5LoginModule required doNotPrompt=true useKeyTab=true storeKey=true keyTab=”/tmp/loadbalancer.keytab” principal=”load_balancer_principal”;”
+
+The keytab can be created manually or the ones that are actually valid in one of the Kafka
+     clusters can be copied to other cluster brokers. It is important to make sure that the process
+     has permissions to read the keytab files because the permissions can change while copying
+     keytabs from one host to another. The mentioned safety valve is also a way to override the load
+     balancer principal if the generated one is not appropriate (or if the credentials are created
+     manually and the administrator chose a different principal name than the default Kafka).
+     Whichever option you  use, it is important for the host part to be the same as load balancer
+     host; otherwise, the forwarded requests will fail.
+
+
+

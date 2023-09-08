@@ -1,0 +1,50 @@
+Importing Confluent Schema Registry schemas into Cloudera Schema RegistryCloudera Docs
+Importing Confluent Schema Registry schemas into Cloudera Schema Registry
+If you are migrating away from Confluent's Schema Registry, you can use the
+        schema-import tool to import your schemas to the Cloudera Schema Registry service. 
+
+Confluent Schema Registry stores all schemas in a Kafka topic usually named
+                    _schemas. To import these schemas, copy the content to a
+                text file and upload to Cloudera's Schema Registry service.
+
+
+You must have the export-import access policy with the
+                    Create permission assigned to your user account.
+For more information on Schema Registry access policies, see Schema Registry
+                    Authorization through Ranger Access Policies.
+
+
+Copy the content of the Kafka topic (usually named
+                        _schemas) to a text file using the following command: 
+
+kafka-console-consumer --from-beginning --topic _schemas --formatter kafka.tools.DefaultMessageFormatter --property print.key=true --property print.value=true --bootstrap-server `hostname`:9092
+
+The following is an example of a text file with the content of the Kafka
+                    topic:
+                    {"keytype":"SCHEMA","subject":"Kafka-key","version":1,"magic":1}        {"subject":"Kafka-key","version":1,"id":1,"schema":"\"string\"","deleted":false}
+{"keytype":"SCHEMA","subject":"Car","version":1,"magic":1}      {"subject":"Car","version":1,"id":2,"schema":"{\"type\":\"record\",\"name\":\"Car\",\"namespace\":\"com.cloudera\",\"fields\":[{\"name\":\"model\",\"type\":\"string\"},{\"name\":\"color\",\"type\":\"string\",\"default\":\"blue\"},{\"name\":\"price\",\"type\":\"string\",\"default\":\"0\"},{\"name\":\"year\",\"type\":[\"null\",\"string\"],\"default\":null}]}","deleted":false}
+{"keytype":"SCHEMA","subject":"Car","version":2,"magic":1}      {"subject":"Car","version":2,"id":3,"schema":"{\"type\":\"record\",\"name\":\"Car\",\"namespace\":\"com.cloudera\",\"fields\":[{\"name\":\"model\",\"type\":\"string\"},{\"name\":\"color\",\"type\":\"string\",\"default\":\"blue\"},{\"name\":\"price\",\"type\":\"string\",\"default\":\"0\"}]}","deleted":false}
+
+Upload the text file to Cloudera's Schema Registry service by using the
+                    following endpoint: /api/v1/schemaregistry/import.
+Use the following command:
+                            curl -u : --negotiate --form file='<filename>' http://`hostname`:7788/api/v1/schemaregistry/import?format=1&failOnError=trueWhere,
+file='<filename>'
+Enter the name of the file.
+format
+Can be 0 or 1. However, for
+                                    schema content from Confluent, the file must be
+                                        1.
+failOnError=true
+This setting is useful if the process fails to import all the
+                                    schemas when one or more schemas already exist in the target
+                                    Schema Registry.
+
+
+The following is an example of the command:
+                        curl -u : --negotiate --form file='@schemadump.json' http://`hostname`:7788/api/v1/schemaregistry/import?format=1&failOnError=true
+The following is an example of the response:
+                        {"successCount":45,"failedCount":0,"failedIds":[]}
+
+
+

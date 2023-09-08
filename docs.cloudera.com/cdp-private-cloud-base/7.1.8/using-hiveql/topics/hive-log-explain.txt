@@ -1,0 +1,53 @@
+Verifing use of a query rewriteCloudera Docs
+Verifing use of a query rewrite
+ You can  use Apache Hive explain logging to check that a materialized view used a
+        query rewrite.
+ By default explain logging is set to false in CDP.
+
+In Cloudera Manager, enable explain logging: Navigate to Clusters > HIVE_ON_TEZ-1 > Configuration, search for hive.log.explain.output, check
+                    HiveServer2 Default Group, and click Save Changes.
+
+
+Verify that the query rewrite used the materialized view by running an extended
+                    EXPLAIN statement:
+
+EXPLAIN EXTENDED SELECT empid, deptname
+                        FROM emps
+                        JOIN depts
+                        ON (emps.deptno = depts.deptno)
+                        WHERE hire_date >= '2017-01-01'
+                        AND hire_date <= '2019-01-01';
+
+The output shows the alias default.mv1 for the
+                    materialized view in the TableScan section of the plan.
+                    OPTIMIZED SQL: SELECT `empid`, `deptname`          
+                        FROM `default`.`mv1`                               
+                        WHERE TIMESTAMP '2019-01-01 00:00:00.000000000' >= `hire_date` 
+                        STAGE DEPENDENCIES:                                
+                        Stage-0 is a root stage                          
+                        
+                        STAGE PLANS:                                       
+                        Stage: Stage-0                                   
+                        Fetch Operator                                 
+                        limit: -1                                    
+                        Processor Tree:                              
+                        TableScan                                  
+                        alias: default.mv1                       
+                        filterExpr: (hire_date <= TIMESTAMP'2019-01-01 
+                        00:00:00') (type: boolean) |
+                        GatherStats: false                       
+                        Filter Operator                          
+                        isSamplingPred: false                  
+                        predicate: (hire_date <= TIMESTAMP'2019-01-01 
+                        00:00:00') (type: boolean) 
+                        Select Operator                        
+                        expressions: empid (type: int), deptname (type: varchar(256)) 
+                        outputColumnNames: _col0, _col1      
+                        ListSink                             
+
+
+
+
+
+
+Parent topic: Creating and using a materialized view

@@ -1,0 +1,152 @@
+Configuring MySQL database to use SSL for Data WarehouseCloudera Docs
+Configuring MySQL database to use SSL for Data Warehouse
+SSL encrypts the connection between the MySQL server and the Hive MetaStore (HMS) on
+        the base cluster. You must enable SSL for the MySQL database before setting up the CDP
+        Private Cloud Data Services and add the MySQL root Certificate Authorities (CA) to the
+        Cloudera Manager truststore.
+
+SSH into the MySQL database host.
+
+Start the MySQL server:
+
+service mysqld start
+
+
+Establish an encrypted connection with the client:
+
+mysql -p --ssl-mode=required
+
+
+Verify whether SSL is enabled on MySQL by running the following command:
+
+mysql> show global variables like '%ssl%';
+
+If SSL is enabled, you see the value of have_ssl equal to
+                        YES, as follows. Otherwise, you see the value of
+                        have_ssl equal to
+                    DISABLED:+---------------+----------+
+| Variable_name | Value    |
++---------------+----------+
+| have_openssl  | YES      |
+| have_ssl      | YES      |
+| ...           | ...      | 
+If SSL is enabled, then skip to step 11.
+
+Create a certificate authority by running the following commands:
+
+mkdir /etc/my.cnf.d/ssl/
+cd /etc/my.cnf.d/ssl/  
+openssl genrsa 2048 > ca-key.pem
+
+
+Create a certificate for the server using the CA certificate generated earlier
+                    by running the following command:
+
+openssl req -new -x509 -nodes -days 365000 -key ca-key.pem -out ca-cert.pem
+openssl req -newkey rsa:2048 -days 365 -nodes -keyout server-key.pem -out server-req.pem
+openssl rsa -in server-key.pem -out server-key.pem
+
+
+Create a certificate for the clients using the same CA certificate by running
+                    the following command:
+
+openssl x509 -req -in server-req.pem -days 365 -CA ca-cert.pem -CAkey ca-key.pem -set_serial 01 -out server-cert.pem
+
+
+Add the following lines in the /etc/my.cnf.d/server.cnf
+                    file under the [mysqld] section:
+
+ssl-ca=/etc/my.cnf.d/ssl/ca-cert.pem
+ssl-cert=/etc/my.cnf.d/ssl/server-cert.pem
+ssl-key=/etc/my.cnf.d/ssl/server-key.pem
+bind-address=*
+
+You can view the content of the server.cnf file by running
+                    the following command:
+                    vim /etc/my.cnf.d/server.cnf
+
+Restart the MySQL server:
+
+service mysqld restart
+
+
+Check the SSL status by running the following commands:
+
+mysql -p --ssl-mode=required
+> SHOW VARIABLES LIKE '%ssl%';
+> status
+
+Sample output:
+                    > SHOW VARIABLES LIKE '%ssl%';
++-------------------------------------+-----------------+
+| Variable_name                       | Value           |
++-------------------------------------+-----------------+
+| admin_ssl_ca                        |                 |
+| admin_ssl_capath                    |                 |
+| admin_ssl_cert                      |                 |
+| admin_ssl_cipher                    |                 |
+| admin_ssl_crl                       |                 |
+| admin_ssl_crlpath                   |                 |
+| admin_ssl_key                       |                 |
+| have_openssl                        | YES             |
+| have_ssl                            | YES             |
+| mysqlx_ssl_ca                       |                 |
+| mysqlx_ssl_capath                   |                 |
+| mysqlx_ssl_cert                     |                 |
+| mysqlx_ssl_cipher                   |                 |
+| mysqlx_ssl_crl                      |                 |
+| mysqlx_ssl_crlpath                  |                 |
+| mysqlx_ssl_key                      |                 |
+| performance_schema_show_processlist | OFF             |
+| ssl_ca                              | ca.pem          |
+| ssl_capath                          |                 |
+| ssl_cert                            | server-cert.pem |
+| ssl_cipher                          |                 |
+| ssl_crl                             |                 |
+| ssl_crlpath                         |                 |
+| ssl_fips_mode                       | OFF             |
+| ssl_key                             | server-key.pem  |
++-------------------------------------+-----------------+
+
+> status
+SSL:			Cipher in use is ECDHE-RSA-AES128-GCM-SHA256
+
+View the contents of the ssl-client.xml file by running the
+                    following commands:
+
+export SSL_CLIENT=/etc/hadoop/conf/ssl-client.xml
+cat $SSL_CLIENT
+
+
+Obtain the truststore's location and password by running the following
+                    commands:
+
+export TRUSTSTORE_LOCATION=$(xmllint --xpath "//configuration/property[name='ssl.client.truststore.location']/value/text()" $SSL_CLIENT)
+
+
+export TRUSTSTORE_PASSWORD=$(xmllint --xpath "//configuration/property[name='ssl.client.truststore.password']/value/text()" $SSL_CLIENT)
+
+
+Verify the contents of the truststore by running the following command:
+
+/usr/java/default/bin/keytool -list -rfc -keystore $TRUSTSTORE_LOCATION -storetype JKS -storepass $TRUSTSTORE_PASSWORD
+
+
+Import the MySQL root certificate by running the following command:
+
+/usr/java/default/bin/keytool -importcert -alias mysql -file /var/lib/mysql/ca.pem -keystore $TRUSTSTORE_LOCATION -storetype jks -noprompt -storepass $TRUSTSTORE_PASSWORD
+
+
+Verify the contents of the truststore again by running the following
+                    command:
+
+/usr/java/default/bin/keytool -list -rfc -keystore $TRUSTSTORE_LOCATION -storetype JKS -storepass $TRUSTSTORE_PASSWORD
+
+
+When you install CDP Private Cloud Data Services after
+            adding the MySQL root CA to the Cloudera Manager truststore, the installer propogates
+            the MySQL root CA from the Cloudera Manager truststore to CDP Private Cloud. HMS in the
+            default Database Catalog can now connect to the MySQL server on the base cluster using
+            an SSL-encrypted connection.
+
+Parent topic: How to enable SSL for MariaDB, MySQL, and Oracle databases

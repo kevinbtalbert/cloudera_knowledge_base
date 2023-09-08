@@ -1,0 +1,102 @@
+Example for using THttpClient API in secure clusterCloudera Docs
+Example for using THttpClient API in secure cluster
+Refer to this example of using the THttpClient API in secure cluster.
+THttpClient API in secure cluster
+Let us consider that the cluster is secured with the configuration properties mentioned in
+        the HBase thrift configurations table under the Default value
+          (secured) column.
+Before proceeding, ensure that the following applications are installed on your system.
+
+python 3.6.8 and python 3-devel
+pip 21.3.1
+virtualenv 20.17.1
+
+Perform the following steps:
+
+Install virtualenv using pip3.
+pip3 install virtualenv
+
+Create a new virtual environment named py3env.
+virtualenv py3env
+
+Activate the virtual environment.
+source py3env/bin/activate
+
+Install the required Python packages and their specific versions. Consider you are
+          inside the python3 virtual environment.
+pip3 install kerberos==1.3.1 pure-sasl==0.6.2 setuptools==59.6.0 six==1.16.0 wheel==0.37.1
+
+
+This ensures that you have all the necessary dependencies and packages installed to proceed
+        with your project.
+from thrift.transport import THttpClient
+from thrift.protocol import TBinaryProtocol
+from hbase.Hbase import Client
+from subprocess import call
+import ssl
+import kerberos
+import os
+
+# Get the env parameters
+def get_env_params():
+    # Replace with your own parameters
+    hostname='your_hbase_thrift_hostname'
+    cert_file="your_cert_file"
+    key_file="your_key_file"
+    ca_file="your_ca_file"
+    key_pw='your_key_pw'
+    keytab_file='your_keytab'
+    principal = 'your_principal'
+    return hostname,cert_file,key_file,ca_file,keytab_file,principal,key_pw
+
+#Check if a valid Kerberos ticket is already present in the cache
+def check_kerberos_ticket():
+    ccache_file = os.getenv('KRB5CCNAME')
+    if ccache_file:
+        ccache = CCache.load_ccache(ccache_file)
+        if ccache.get_principal() and not ccache.get_principal().is_anonymous():
+            return True
+    return False
+
+# Obtain a Kerberos ticket by running kinit from keytab
+def kinit(keytab_file,principal):
+    call(['kinit', '-kt', keytab_file, principal])
+
+# Authenticate with Kerberos
+def kerberos_auth():
+    __, krb_context = kerberos.authGSSClientInit("HTTP")
+    kerberos.authGSSClientStep(krb_context, "")
+    negotiate_details = kerberos.authGSSClientResponse(krb_context)
+    headers = {'Authorization': 'Negotiate ' + negotiate_details, 'Content-Type': 'application/binary'}
+    return headers
+
+# Initializete an SSL context with certificate verification enabled
+def get_ssl_context():
+    ssl_context = ssl.create_default_context()
+    ssl_context.load_cert_chain(certfile=cert_file,keyfile=key_file,password=key_pw)
+    ssl_context.load_verify_locations(cafile=ca_file)
+    return ssl_context
+
+if __name__ == '__main__':
+    hostname,cert_file,key_file,ca_file,keytab_file,principal,key_pw=get_env_params()
+    # Check if a valid Kerberos ticket is not in the cache, then kinit.
+    if not check_kerberos_ticket():
+        kinit(keytab_file,principal)
+
+# create a THttpClient instance with the SSL context and custom headers
+    httpClient = THttpClient.THttpClient('https://' + hostname + ':9090/', ssl_context=get_ssl_context())
+    httpClient.setCustomHeaders(headers=kerberos_auth())
+
+# Initialize TBinaryProtocol with THttpClient
+    protocol = TBinaryProtocol.TBinaryProtocol(httpClient)
+
+# Create HBase client
+    client = Client(protocol)
+# Retrieve list of HBase tables
+    tables = client.getTableNames()
+    print(tables)
+# Close connection
+    httpClient.close()
+
+
+Related informationList of Thrift API and HBase configurationsParent topic: Using the Apache Thrift Proxy API

@@ -1,0 +1,319 @@
+Customer managed encryption keysCloudera Docs
+Customer managed encryption keys
+By default, local Data Lake, FreeIPA, and Data Hub disks attached to Azure VMs and the
+  PostgreSQL server instance used by the Data Lake and Data Hubs are encrypted with server-side
+  encryption (SSE) using Platform Managed Keys (PMK), but you can optionally configure SSE with
+  Customer Managed Keys (CMK). 
+The CMK can be specified during environment registration and, if present, is used for
+   encrypting Data Lake, FreeIPA, and Data Hub disks and PostgreSQL server instances.
+The disks that are attached to the VMs of the Data Lake, FreeIPA, and Data Hub
+   clusters will be associated with a Disk Encryption Set (DES) that is created with the key URL as
+   the underlying encryption key version. The DES dedicated to the CDP environment will be created
+   in the resource group of the environment before the FreeIPA launch at the beginning of the
+   environment creation process. 
+When meeting Azure requirements for CDP, you should do the following:
+
+Add additional permissions for CDP provisioning credential
+
+Create a key vault and a vault key 
+
+
+
+Parent topic: Azure resources and services
+Add additional permissions to your Azure policy
+Make sure that the following additional permissions are set up for the Azure credential
+  used in CDP environment creation, in addition to what is documented in Azure permissions. 
+All of them are actions and shall be granted at the scope of the resource group hosting the CDP
+   environment:
+"Microsoft.KeyVault/vaults/read", 
+"Microsoft.KeyVault/vaults/write",
+"Microsoft.KeyVault/vaults/deploy/action",
+"Microsoft.Compute/diskEncryptionSets/read",
+"Microsoft.Compute/diskEncryptionSets/write",
+"Microsoft.Compute/diskEncryptionSets/delete",
+"Microsoft.DBforPostgreSQL/servers/read",
+"Microsoft.DBforPostgreSQL/servers/keys/write",
+"Microsoft.KeyVault/vaults/accessPolicies/write"
+The following table explains why CDP needs these permissions:
+
+
+Permission
+Description
+
+
+
+
+Microsoft.KeyVault/vaults/read
+and 
+Microsoft.KeyVault/vaults/write
+
+
+Microsoft.KeyVault/vaults/read is required to read the vaults. Without
+        this, vaults in your subscription cannot be detected by CDP. Specifically, CDP must update
+        the Key Vault access policy to add an entry for the DES SP. For this, CDP invokes an "update
+        key vault" operation, which Azure implements as the following series of steps: 
+
+
+Read Key Vault details, including its original access policy (Requires
+           Microsoft.KeyVault/vaults/read). 
+
+
+Add entry for DES SP. 
+
+
+Write Key Vault details, including the updated access policy. In this step,
+           Microsoft.KeyVault/vaults/write is required for adding an entry for the DES SP for
+          the operations get, unwrap key and wrap key.
+
+
+
+
+
+Microsoft.KeyVault/vaults/write
+This is required to update the access policies for the DES created in the vault.
+      
+
+
+Microsoft.KeyVault/vaults/deploy/action
+This is required to create DES resources. Specifically, it’s required for DES SP
+       creation (performed automatically alongside the DES creation) that will ultimately be used to
+       access the Key Vault from the DES. 
+
+
+Microsoft.Compute/diskEncryptionSets/read
+This is required to check for the existence of and fetch the properties and status of
+       DES resources created by CDP. 
+
+
+Microsoft.Compute/diskEncryptionSets/write
+This is required to create DES resources. 
+
+
+Microsoft.Compute/diskEncryptionSets/delete
+This is required to delete the DES during environment termination.
+
+
+
+Microsoft.DBforPostgreSQL/servers/keys/write
+and
+Microsoft.KeyVault/vaults/accessPolicies/write
+
+This is required for setting up access policies and keys via an Azure Resource Manager
+       template. 
+
+
+
+
+Create a vault and add a vault key
+You can use your existing vault and vault key or create a new vault and vault
+  key.
+
+Regardless of which of the two options you choose, the vault and the vault key
+     must fulfill the following requirements: 
+
+The key vault must have purge protection enabled and be located in the same
+       subscription and region as the target CDP environment.
+
+
+The CMK must be an RSA key with a size of 2048 bits.
+noteThe CMK must be an RSA key with a size of 2048 bits as CDP uses same key for all the
+       resources and sizes other than 2048 bits are not supported by Azure for PostgreSQL.
+
+
+The number of Disk Encryption Set (DES) resources is limited to 1000 per region
+       per subscription. In the present implementation, a single DES is created for each CDP
+       environment, so this permits at most 1000 environments created in that region/subscription.
+       The actual practical limit may be lower due to the limits set for other resource types.
+
+You should also review the Azure-imposed restrictions for CMKs used for disk encryption,
+    described in Server-side encryption of Azure Disk Storage:
+      Restrictions in Azure documentation.
+
+Using an existing vault and vault key
+
+
+If you have an existing key vault in Key Vaults in your Azure Portal:
+
+
+Navigate to the key vault’s Overview page and verify that the following
+        parameters are set to the correct values: 
+
+
+The Region matches the target region of the CDP environment. Storage
+        accounts can be in different resource groups than the key vault, provided the
+        location/region is the same.
+
+
+The Purge protection is enabled. 
+
+
+
+
+
+
+Next, navigate to the vault key and:
+
+Make sure that it is an RSA key with a size of 2048 bits. 
+
+
+Copy the key identifier (which is a HTTPS URL) for the key that is created.
+          You will need to provide it during CDP environment registration later. 
+
+
+
+
+
+
+
+
+Creating a new vault and vault key
+To create a vault and vault key, perform the following steps on your Azure portal: 
+
+Create a key vault in the same region and resource group as the one that you would like to
+     use for registering the CDP environment.To create a key vault, navigate to Key
+       vaults in Azure Portal and click on +New or on Create key vault. When
+      providing key vault parameters, make sure that:
+
+The Region matches the target region of the CDP environment. Storage
+        accounts can be in different resource groups than the key vault, provided the
+        location/region is the same.
+
+
+The Purge protection is enabled. 
+
+
+Provide other parameters based on your organization's requirements. For
+        instructions, see Create a vault in Azure documentation. Once
+        done, click Create.
+
+The following screenshot points out these three important parameters when
+      creating a new key vault: 
+
+
+Generate or import a key in the previously created key vault. Make sure that it is an RSA
+     key with a size of 2048, 3072 or 4096 bits. To generate a key, on your key vault’s
+      properties pages, select Keys and then click on Generate/Import:
+
+Next provide key name and key type (make sure to select RSA). For detailed
+      instructions, see Add a key to Key Vault in Azure documentation.
+       
+
+
+Once the key has been created, navigate to the vault key details and copy the key identifier
+     (which is a HTTPS URL) for the key that is created. You will need to provide it during CDP
+     environment registration later. 
+
+
+If you need encryption on the Azure storage account, you can set it up using Azure portal
+     with the same or different encryption key. You can do this from the Encryption section
+     of your storage account settings. noteThe key used for Azure storage encryption can be the
+      same or different from the key vault used for disk encryption. Note that the storage account
+      can be in a different resource group, but should be in the same location/region and
+      subscription as the key vault.
+
+
+
+
+
+
+Encrypting a storage account with a key vault that has role-based access control
+To encrypt an ADLS Gen2 storage account that you would like to use with CDP with a key
+  vault which has role-based access control set up, you need to perform the following steps on Azure
+  Portal. 
+There are two scenarios described below:
+
+
+The first scenario assumes that you have not yet created the ADLS Gen2 storage
+          account required for CDP on Azure.
+
+
+The second scenario assumes that you have already created the ADLS Gen2 storage
+          account storage account required for CDP on Azure.
+
+
+New storage account
+The following steps should be performed in addition to the usual steps while creating the
+        ADLS Gen2 account that you are planning to use with CDP. 
+Steps
+
+
+Create a managed identity. Let’s call it "key-vault-rbac".
+
+
+Create a key vault. 
+The key vault should have "purge protection" and "soft-delete" enabled. 
+The key vault should be located in the same subscription and region as the target
+                CDP environment.
+Set up the key’s access policy to "Azure role-based access control".
+
+
+
+Navigate to the access control for this key vault and: 
+Click on Add role assignment. 
+Assign the "Key Vault Administrator" role to all of the following users:
+The user who created this key vault
+The user(s) who register a CDP environment using this key vault
+All the users/managed Identities who will be accessing this key vault
+noteWithout this step the key vault will not be accessible.
+
+
+
+Once the key vault is created, create an RSA key with the size of 2048
+            bits.
+
+
+Navigate to the access control for this key vault and:
+Click on Add role assignment. 
+Assign the "Key Vault Crypto Service Encryption User" role to the "key-vault-rbac"
+                managed identity created earlier. This will enable access to this key vault from the
+                storage account.
+
+
+
+Create the storage account and the managed Identities as mentioned in Minimal setup for cloud storage. During
+            storage account creation, choose the following options to enable the customer managed
+            key encryption for the storage account: 
+Set Enable support for customer-managed keys to "All
+                service types". noteThis is a mandatory step as this setting cannot be added or
+                  changed later.
+Set Identity type to "User-assigned".
+Set User-assigned identity to the "key-vault-rbac" managed
+                identity created earlier.
+
+
+
+
+Existing storage account
+In case your ADLA Gen2 storage account already exists, perform the following steps instead
+        of the ones above. The requirement is that the storage account must have been created with
+        "Enable support for customer-managed keys" set to "All service types". This cannot be set
+        once the storage account exists, so if the storage account does not have this set, you
+        cannot use it for this use case.
+Steps
+
+
+Create a managed identity. Let’s call it "key-vault-rbac".
+
+
+Navigate to the access control for the key vault that you are using for CDP
+              and:
+Click on Add role assignment. 
+Assign the "Key Vault Crypto Service Encryption User" role to the "key-vault-rbac"
+                managed identity created earlier. This will enable access to this key vault from the
+                storage account.
+
+
+
+To enable the customer managed key encryption for the storage account used in
+            CDP, the following options must be chosen during storage account creation: 
+Verify that Enable support for customer-managed keys is set
+                to "All service types". noteThis option can only be set during storage account
+                  creation and cannot be changed later.
+Set Identity type to "User-assigned".
+Set User-assigned identity to the "key-vault-rbac" managed
+                identity created earlier.
+
+
+
+
+

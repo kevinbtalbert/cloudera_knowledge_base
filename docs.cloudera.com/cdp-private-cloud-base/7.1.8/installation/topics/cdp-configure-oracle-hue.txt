@@ -1,0 +1,177 @@
+Configuring the Hue Server to Store Data in the Oracle databaseCloudera Docs
+Configuring the Hue Server to Store Data in the Oracle database
+You can connect Hue to your Oracle database while installing Cloudera Runtime (and
+    Hue).
+Parent topic: Install and Configure Oracle Database for CDP
+Connect Hue Service to Oracle
+
+If you want to connect Hue service to Oracle with an existing CDH installation, then
+        connect and restart Hue without saving the data in your current database. Alternatively, you
+        can migrate the old data into Oracle.
+
+
+New Cloudera Runtime Installation
+
+See Step 3: Install Cloudera Manager Server to install Cloudera
+          Manager (and its Installation Wizard), which you will use here to
+          install Cloudera Runtime and the Oracle client.
+noteCDP 7.1.8 uses Django version 3.2.13 which supports Oracle Database Server versions
+          12.2 and higher and cx_Oracle (the Python interface for Oracle database) versions 6.0 or
+          higher.
+For a complete setup, see Using Oracle database with Hue.
+
+
+
+Existing CDH Installation
+If you are using Oracle database with Hue and are upgrading to CDP 7.x from CDH 5
+        or CDH 6, then do the following:
+
+Deactivate the Oracle Client Parcel
+
+
+
+Log on to Cloudera Manager.
+Go to the Parcels page by clicking
+                    Hosts > Parcels (or clicking the
+                parcels icon ).
+Click the
+                    Configuration > Check
+                    for New Parcels.
+Find ORACLE_INSTANT_CLIENT and click
+                  Deactivate.
+
+
+
+Install Hue with Oracle database 12c and higher
+
+
+Download the zip files for the Instant Client Package, both Basic
+                  and SDK (with headers).noteIf you are using Oracle database 11g, then
+                    download the corresponding 11g Instant Client Package from the Oracle
+                    website.
+Switch to the host with the downloaded files and upload zip to the Hue server
+                  host:scp instantclient-*.zip root@<hue server hostname>:.
+Arrange the client libraries to mirror the tree structure in the image as shown
+                  in the following
+                    example:# Create nested directories: /usr/share/oracle/instantclient/lib/
+mkdir -pm 755 /usr/share/oracle/instantclient/lib
+
+# Unzip. The files expand into /usr/share/oracle/instantclient/instantclient_<ver>/
+unzip '*.zip' -d /usr/share/oracle/instantclient/
+
+# Move lib files from instantclient_<ver> to /usr/share/oracle/instantclient/lib/
+mv /usr/share/oracle/instantclient/`ls -l /usr/share/oracle/instantclient/ | grep instantclient_ | awk '{print $9}'`/lib* /usr/share/oracle/instantclient/lib/
+
+# Move rest of the files to /usr/share/oracle/instantclient/
+mv /usr/share/oracle/instantclient/`ls -l /usr/share/oracle/instantclient/ | grep instantclient_ | awk '{print $9}'`/* /usr/share/oracle/instantclient/
+
+# Create symbolic links. Remember to edit version numbers as necessary
+cd /usr/share/oracle/instantclient/lib
+ln -s libclntsh.so.<ver>.1 libclntsh.so
+ln -s libocci.so.<ver>.1 libocci.sowhere
+                      <ver> is the version of the Instant Client Package.
+                    Replace <ver> with the actual version of the Instant
+                    Client Package.
+Set the path for $ORACLE_HOME and $LD_LIBRARY_PATH as shown in the following
+                  example:export ORACLE_HOME=/usr/share/oracle/instantclient
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$ORACLE_HOME/lib
+
+
+
+
+
+
+Connect Hue to Oracle
+
+If you are not migrating the current (or old) database, simply
+            connect to your new Oracle database and restart Hue. 
+
+
+[migration only] Stop Hue Service
+In Cloudera Manager, navigate to
+                        Cluster > Hue.
+Select Actions > Stop.noteIf
+                      necessary, refresh the page to ensure the Hue service is
+                      stopped: .
+
+[migration only] Dump Current Database
+Select Actions > Dump Database.
+Click Dump Database. The file is
+                    written to /tmp/hue_database_dump.json on
+                    the host of the Hue server.
+Log on to the host of the Hue server in a
+                    command-line terminal. 
+Edit /tmp/hue_database_dump.json
+                    by removing all objects with
+                      useradmin.userprofile in the
+                      model field. For
+                    example:# Count number of objects
+grep -c useradmin.userprofile /tmp/hue_database_dump.jsonvi /tmp/hue_database_dump.json{
+  "pk": 1,
+  "model": "useradmin.userprofile",
+  "fields": {
+    "last_activity": "2016-10-03T10:06:13",
+    "creation_method": "HUE",
+    "first_login": false,
+    "user": 1,
+    "home_directory": "/user/admin"
+  }
+},
+{
+  "pk": 2,
+  "model": "useradmin.userprofile",
+  "fields": {
+    "last_activity": "2016-10-03T10:27:10",
+    "creation_method": "HUE",
+    "first_login": false,
+    "user": 2,
+    "home_directory": "/user/alice"
+  }
+},
+
+Connect to New Database
+Configure Database connections: 
+Go to Hue > Configuration and
+                        filter by category,
+                        Database.
+Set database properties and click Save
+                          Changes:
+Hue Database Type (or engine): Oracle
+Hue Database Hostname: <fqdn of host with Oracle server>
+Hue Database Port: 1521
+Hue Database Username: hue
+Hue Database Password: <hue database password>
+Hue Database Name (or SID): orcl
+Add support for a multi-threaded environment: 
+Filter by Category, Hue-service
+                        and Scope, Advanced.
+Set Hue Service Advanced Configuration
+                          Snippet (Safety Valve) for
+                          hue_safety_valve.ini and click
+                          Save Changes:
+[desktop]
+[[database]]
+options={"threaded":true}
+
+[migration only] Synchronize New Database
+Select Actions > Synchronize
+                    Database
+Click Synchronize Database.
+
+[migration only] Load Data from Old DatabaseimportantAll user tables in the Hue database must be
+                  empty.
+                sqlplus hue/<your hue password> < delete_from_tables.ddl
+Re/Start Hue service
+Navigate to
+                        Cluster > Hue.
+Select Actions > Start, and click
+                      Start.
+Click Hue Web UI to log on to Hue
+                    with a custom Oracle database.
+
+
+
+
+
+
+

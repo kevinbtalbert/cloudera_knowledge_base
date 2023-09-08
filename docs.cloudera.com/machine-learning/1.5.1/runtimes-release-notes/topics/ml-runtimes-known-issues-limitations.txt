@@ -1,0 +1,138 @@
+ML Runtimes Known Issues and LimitationsCloudera Docs
+ML Runtimes Known Issues and Limitations
+You might run into some known issues while using ML Runtimes.
+Packages can fail to load in a session
+When installing R or Python packages in a Session, the kernel might not be able to load the
+        package in the same session, if a previous version of the package or its newly installed
+        dependencies have been loaded in the same Session. Such issues are observable more often in
+        PBJ R Runtimes, which automatically load basic R packages like vctrs,
+          lifecycle, rlang, cli at session
+        startup.
+Workaround: Start a new session, import and use the newly installed package there.
+
+Python Runtimes in CML fail to import the setuptools Python library
+        and can fail installing some Python packages
+Python Runtimes in CML fail to import the setuptools Python library and
+        therefore can fail installing some Python packages when the library
+          setuptools is present on the Runtime or is installed into the CML project
+        with version 60.0.0 or higher.
+Python 3.10 Runtimes from the 2023.05 Runtime release ship with a newer version of
+          setuptools, so customers can run into this issue when they are using that
+        Runtime. Also they can run into this issue when they are using Custom Runtimes that has a
+        newer setuptools library version or when they install a new
+          setuptools version into their project (regardless of what Runtime they
+        use). 
+Workaround: Set the environmental variable
+          SETUPTOOLS_USE_DISTUTILS=stdlib either on a project level under
+          Project Settings -> Advanced or on a workspace level under
+          Site Administration -> Runtime -> Environment variables.
+
+Version of jupyter-client Python package must be less than version 8 for PBJ
+        Runtimes
+Upgrading the Python package jupyter-client with a version greater than
+        7.4.9 can temporarily break a Project. Workloads using PBJ Runtimes will not be able to
+        start Projects if the jupyter-client version is greater than 7.4.9.
+Workaround: Launch the same version of Python, but not on a PBJ Runtime (either
+        Workbench or JupyterLab). Open a Terminal window and uninstall the
+          jupyter-client package from the Project by executing pip3
+          uninstall jupyter-client. Verify your change by running pip3
+          list and checking that the version of the jupyter-client package
+        is less than version 8.
+
+DSE-9818 JupyterLab Conda Tech Preview Runtime
+
+
+Sessions
+When starting a Notebook or a Console for a specific environment, the installed
+              packages will be available and the interpreter used to evaluate the contents of the
+              Notebook or Console will be the one installed in the environment. However, the Conda
+              environment is not "activated" in these sessions, therefore commands like
+                !which python will return with the base Python 3.10 interpreter on
+              the Runtime. The recommended ways to modify a Conda environments or install packages
+              are the following:
+conda commands must be used with the -n or
+                    --name argument to specify the environment, for example
+                    conda -n myenv install pandas
+When installing packages with pip, use the %pip magic to
+                  install packages in the active kernel’s environment, for example %pip
+                    install pandas
+
+Applications and Jobs
+To start an Application or Job, first create a launcher Python script containing the
+              following line: !source activate <conda_env_name> && python <job
+                / application script.py>
+When starting the Application or Job, select the launcher script as the
+              "Script".
+Models
+Models are currently not supported for the Conda Runtime.
+Spark
+Spark is not supported in JupyterLab Notebooks and Consoles.
+Spark workloads are supported in activated Conda environments in JupyterLab
+              Terminals, or in Jobs or Applications.
+The CDSW libraries for Python and R are not available for the Conda Runtimes. 
+
+
+
+DSE-27222 Workbench editor for Python Runtimes and PBJ Runtimes cannot parse multiline
+        strings properly
+Workbench editor for Python 3.7 Runtime cannot parse multiline strings properly. Trying 
+        to evaluate multiline strings in some cases result in a "SyntaxError: EOF while scanning 
+        triple-quoted string literal" error message.
+Workaround: Transform multiline strings to single line strings in code that is
+        entered into the workbench directly.
+
+Adding a new ML Runtimes when using a custom root certificate might generate error
+        messages
+When trying to add new ML Runtimes, a number of error messages might appear in various
+        places when using a custom root certificate. For example, you might see: "Could not fetch
+        the image metadata" or "certificate signed by unknown authority". This is caused by the
+        runtime-puller pods not having access to the custom root certificate that is in use.
+Workaround:
+
+
+Create a directory at any location on the master node:For example:
+                mkdir -p /certs/
+Copy the full server certificate chain into this folder. It is usually easier to
+            create a single file with all of your certificates (server, intermediate(s), root): 
+# copy all certificates into a single file: 
+cat server-cert.pem intermediate.pem root.pem > /certs/cert-chain.crt
+
+(Optional) If you are using a custom docker registry that has its own certificate, you
+            need to copy this certificate chain into this same
+            file:cat docker-registry-cert.pem >> /certs/cert-chain.crt
+Copy the global CA certificates into this new file:
+            # cat /etc/ssl/certs/ca-bundle.crt >> /certs/cert-chain.crt
+Edit your deployment of runtime manager and add the new mount. Do not delete any
+              existing objects.#kubectl edit deployment
+            runtime-manager
+Under VolumeMounts, add the following lines. Note that the text is white-space
+              sensitive - use spaces and not tabs.
+- mountPath: /etc/ssl/certs/ca-certificates.crt 
+   name: mycert 
+   subPath: cert-chain.crt #this should match the new file name created in step 4
+                
+Under Volumes add the following text in the same edit:
+- hostPath: 
+   path: /certs/  #this needs to match the folder created in step 1
+   type: "" 
+name: mycert
+
+Save your changes: wq!Once saved, you will receive the
+              message "deployment.apps/runtime-manager edited" and the pod will be restarted with
+              your new changes. 
+To persist these changes across cluster restarts, use the following Knowledge Base
+            article to create a kubernetes patch file for the runtime-manager deployment: https://community.cloudera.com/t5/Customer/Patching-CDSW-Kubernetes-deployments/ta-p/90241
+
+
+Cloudera Bug:  DSE-20530
+
+Spark Runtime Add-on required for Spark 2 integration with Scala Runtimes
+Scala Runtimes on CML require Spark Runtime Addon to enable Spark2 integration. Spark3 is
+        not supported with the Scala Runtime. 
+
+DSE-17981 - Disable Scala runtimes in models, experiments and applications runtime
+        selection
+Scala Runtimes should not appear as an option for Models, Experiments, and Applications in
+        the user interface. Currently Scala Runtimes only support Session and Jobs. 
+
+

@@ -1,0 +1,143 @@
+BINARY data typeCloudera Docs
+BINARY data type
+This release adds support for BINARY columns for all table formats with the exception of Kudu. 
+Overview
+The BINARY data type is an arbitrary-length byte array data type that can be used in CREATE
+        TABLE and SELECT statements. This data type can contain data like images. The BINARY data
+        type is very similar to the STRING data type except that the BINARY data type is not
+        affected by UTF8_mode.
+Syntax
+The BINARY data type is defined in the column as shown here:
+create table binary_table (v varchar, b binary);
+Length
+Take the following considerations for BINARY lengths:
+
+The hard limit on the size of a BINARY and the total size of a row is 512KB. If a query
+          tries to process or create a BINARY larger than this limit, it will return an error to the
+          user.
+The limit is 1 GB on BINARY when writing to Parquet files.
+Queries operating on BINARYs with 32 KB or less will work reliably and will not cause
+          significant performance or memory problems (unless you have very complex queries, very
+          many columns, etc.)
+Performance and memory consumption may degrade with BINARYs larger than 32 KB.
+The row size, i.e. the total size of all BINARY and other columns, is subject to lower
+          limits at various points in query execution that support spill-to-disk. A few examples for
+          lower row size limits are:
+
+Rows coming from the right side of any hash join
+
+
+Rows coming from either side of a hash join that spills to disk
+
+
+Rows being sorted by the SORT operator without a limit
+
+
+Rows in a grouping aggregation
+
+
+
+Conversions:The only possible conversion for binary is explicit CAST from/to
+        STRING.
+Supported built-in functions
+The following list contains some of the supported built-in functions. 
+
+Scalar functions: length, concat, typeof, murmur_hash
+Conditional functions: if, coalesce
+Aggregate functions: min, max, count
+
+noteIf the query option UTF8_MODE is set to FALSE, then the built-ins function the same
+        way for STRING and BINARY.
+Restrictions on BINARY columns
+
+For both table types PARQUET and ORC min/max stat filtering can not be used for BINARY
+          columns, while it can be used for STRING columns. 
+Currently, this data type cannot be used with Kudu tables.
+
+Text table considerations:In textfiles Impala writes BINARY columns base64
+        encoded.
+PARQUET considerations:BINARY columns are stored as BYTE_ARRAY in Parquet similar to
+        string. For BINARY columns converted_type/logical type are never set, while they are set for
+        STRINGs if the query option parquet_annotate_strings_utf8 is set to true.
+ORC considerations:In ORC file format, there is an exclusive BINARY column type but
+        Impala reads STRING/VARCHAR/CHAR ORC columns also as BINARY.
+KUDU considerations:Currently, this data type cannot be used with Kudu tables.
+
+Differences between Impala and Hive
+As part of this release, behavior for Impala BINARY type is made to be consistent with Hive
+        in most cases. However, some differences were not resolved to be backward compatible with
+        older releases. You must be aware of these changes to run Hive queries, if needed, without
+        modifying them.
+
+
+
+Impala 
+Hive
+
+
+
+Impala doesn't treat STRINGs as UTF8, so BINARY and STRING become
+                    nearly identical.
+
+In Hive, the main difference between STRING and BINARY is that
+                  STRING is assumed to be UTF8 encoded, while BINARY can be any byte array.
+
+
+The only possible conversion for binary is explicit CAST from/to
+                  STRING.
+BINARY can be only implicitly cast from/to STRING
+
+
+
+INSERT ... VALUES () string literals need to be explicitly cast to
+                    BINARY in Impala.
+
+ In Hive, no explici t conversion needed
+
+
+
+Impala supports a small subset of built-in STRING functions for the
+                    BINARY type.
+If the query option UTF8_MODE is set to FALSE, then the STRING values behave
+                    like BINARY values. So you can store binary values as STRINGs and have all
+                    built-in functions available for them.
+
+Only a small subset of built-in STRING functions support
+                  BINARY.
+
+
+In textfiles Impala writes BINARY columns base64 encoded
+In several file formats (e.g. text) BINARY is base64
+                  encoded.
+
+
+
+No NDV is calculated during COMPUTE STATISTICS.
+
+No NDV is calculated during COMPUTE STATISTICS.
+
+
+
+All kinds of UDFs (native, Hive legacy, Hive generic) support
+                    BINARY
+
+
+In Hive UDFs is only supported if the argument and return types are
+                    set explicitly
+
+
+
+
+
+Example
+The following example demonstrates calls to string manipulation functions to concatenate
+        binary columns.
+select concat( cast("a" as binary), cast("b" as binary));
+The following examples demonstrate how to use the aggregate functions. These functions
+        calculate a return value across all the items in a result set, so they require a FROM clause
+        in the query.
+select count(a) from product_catalog;
+select max(height), avg(height) from census_data where age > 20;
+
+
+Parent topic: Impala SQL data types

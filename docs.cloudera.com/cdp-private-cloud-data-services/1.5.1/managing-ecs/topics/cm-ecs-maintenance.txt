@@ -1,0 +1,73 @@
+Performing maintenance on an Embedded Container Service clusterCloudera Docs
+Performing maintenance on an Embedded Container Service
+    cluster
+You can perform maintenance on the nodes in your ECS cluster by
+    shutting down the nodes one at a time while keeping your Data Services
+    running with slightly diminished capacity. 
+
+
+The containerized cluster must be configured for ECS Server high
+          availability. Contact Cloudera Professional Services for assistance in
+          setting up high availability. 
+You must be able to log into the nodes as root or have sudo
+          privileges. 
+The node to be maintained must have a status of
+            Ready. A status of
+            NotReady may suggest the node is having other
+          complicating issues. Run the following command on an ECS server node
+          to verify status of the nodes.
+          /var/lib/rancher/rke2/bin/kubectl --kubeconfig=/etc/rancher/rke2/rke2.yaml get nodes
+
+
+Inform Kubernetes that it should no longer use this node for
+          any new pods. This process is called cordon and
+          Kubernetes tracks the node status as Ready,SchedulingDisabled. 
+Run the following command to list the nodes:
+/var/lib/rancher/rke2/bin/kubectl --kubeconfig=/etc/rancher/rke2/rke2.yaml get nodes
+
+Run the following command for the node you are taking
+              off line:
+/var/lib/rancher/rke2/bin/kubectl --kubeconfig=/etc/rancher/rke2/rke2.yaml cordon **node-name**
+
+Run the following command to verify the node status
+              shows Ready,SchedulingDisabled:
+/var/lib/rancher/rke2/bin/kubectl --kubeconfig=/etc/rancher/rke2/rke2.yaml get nodes
+
+Inform Kubernetes to evict this node’s Data Services
+          pods and cleanly detach any storage volumes. This allows the pods to
+          be started up on other Ready nodes in the cluster and any
+          replica volumes are migrated. The process is invoked by the
+            drain command: 
+/var/lib/rancher/rke2/bin/kubectl --kubeconfig=/etc/rancher/rke2/rke2.yaml drain *node-name* --delete-emptydir-data --ignore-daemonsets --pod-selector='app!=csi-attacher,app!=csi-provisioner,app!=longhorn-admission-webhook,app!=longhorn-conversion-webhook,app!=longhorn-driver-deployer'
+You will see a
+          message “WARNING: ignoring DaemonSet-managed Pods:....You
+          can ignore this warning.You will see repeating messages
+            like
+            this:error when evicting pods/"instance-manager-r-xxxxxxxx" -n "longhorn-system" (will retry after 5s): Cannot evict pod as it would violate the pod's disruption budget.This
+            is normal, after several iterations those pods will be evicted and
+            the drain is completed.Log in to the Cloudera Manager Admin Console.Go to the ECS service page and verify that the Vault is not
+          sealed. This information displays in the Health Tests section.
+        If the Vault is sealed, click
+              Actions > Unseal
+              Vault.Click the Action menu next to the ECS cluster and select
+            Stop.Shutdown ECS roles. 
+Click the Instances
+            tab.
+Select the hosts where the ECS
+                Agent role is running and click
+                  Actions > Stop.
+Select two of the hosts running the ECS
+                Server role is running and  click
+                  Actions > Stop.
+Perform the maintenance.Reboot the hosts. Log in to the Cloudera Manager Admin Console.Click the Action menu next to the ECS cluster and select
+            Start.Uncordon the node to start the Data Services by running the
+          following command:
+/var/lib/rancher/rke2/bin/kubectl --kubeconfig=/etc/rancher/rke2/rke2.yaml uncordon **node-name**
+Run the following command to verify that the node status is
+            Ready:
+/var/lib/rancher/rke2/bin/kubectl get nodes
+Click
+              Actions > Refresh ECS
+              Cluster.
+
+Parent topic: The Embedded Container Service (ECS)

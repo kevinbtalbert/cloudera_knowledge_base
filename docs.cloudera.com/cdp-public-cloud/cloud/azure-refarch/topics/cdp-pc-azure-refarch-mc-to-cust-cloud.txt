@@ -1,0 +1,99 @@
+Management Console to customer cloud networkCloudera Docs
+Management Console to customer cloud network
+This topic explains the possible ways in which the CDP Control Plane can communicate
+  with the compute infrastructure in the customer network, in the context of the Management Console. 
+As described previously, the CDP admin would typically use the CDP Management Console
+   that runs in the CDP Control Plane to launch CDP environments with Data Lakes, FreeIPA, Data
+   Hubs, and data services into their cloud accounts. In order to accomplish this, the CDP Control
+   Plane and the compute infrastructure in the customer network (such as VMs, AKS clusters) should
+   be able to communicate with each other. Depending on the chosen network architecture, this
+   communication can occur in the ways described below.
+Publicly accessible networks
+In this model of publicly accessible networks, the compute infrastructure
+    must be reachable over the public internet from the Management Console. While this is fairly
+    easy to set up, it is usually not preferred by enterprise customers, as it implies that the VM
+    nodes or AKS nodes are assigned public IP addresses. While the access control rules for these
+    nodes can still be restricted to the IP addresses of the Management Console components, it is
+    still considered insecure for each of the network architectures described earlier.
+
+Semi-private networks
+Publicly accessible networks are easy to set up for connectivity, both from
+    the CDP Control Plane and the customer on-prem network, but have a large surface area of
+    exposure as all compute infrastructure has public IP addresses. In contrast, fully private
+     networks need special configuration to enable connectivity from the customer on-prem
+    network, due to having no surface area of exposure to any of the compute infrastructure. While
+    very secure, it is more complex to establish.
+There is a third configuration supported by CDP, semi-private networks, that
+    provides some trade-offs between these two options. In this configuration, the user deploys the
+    worker nodes of the compute infrastructure on fully private networks as described above.
+    However, the user chooses to expose UIs or APIs of the services fronting these worker nodes over
+    a public network load balancer. By using this capability, the data consumers can access the UIs
+    or APIs of the compute infrastructure through these load balancers. It is also possible to
+    restrict the IP ranges from which such access is allowed using security groups.
+While this option provides a trade-off between ease of setup and exposure levels, it
+    may not satisfy all use cases related to communication between various endpoints. For example,
+    some compute workloads involving Kafka or NiFi would not benefit from having a simple publicly
+    exposed load balancer. It is recommended that customers evaluate their use cases against the
+    trade-off and choose an appropriately convenient and secure model of setup.
+
+Fully private networks
+In this model of fully private networks, the compute infrastructure is not
+    assigned any public IP addresses. In this case, communication between the CDP Control Plane and
+    compute infrastructure is established using a “tunnel” that originates from the customer network
+    to the CDP Control Plane. All communication from the CDP Control Plane to the compute nodes is
+    then passed through this tunnel. From experience, Cloudera has determined that this is the
+    preferred model of communication for customers.
+To elaborate on the tunneling approach, Cloudera uses a solution called Cluster
+     Connectivity Manager (CCM). At a high level, the solution uses two components, an agent
+     (CCM agent) that runs on a VM provisioned in the customer network and a service (CCM
+     service) that runs on the CDP Control Plane. The CCM agent, at start-up time,
+    establishes a connection with the CCM service. This connection forms the tunnel. This
+    tunnel is secured by asymmetric encryption. The private key is shared with the agent over cloud
+    specific initialization mechanisms, such as a user-data script in Azure.
+When any service on the CDP Control Plane wants to send a request to a service
+    deployed on the customer environment (depicted in the below diagram as the “logical flow”), it
+    physically sends a request to the CCM service running in the CDP Control Plane. The
+     CCM agent and CCM service collaborate over the established tunnel to accept the
+    request, forward it to the appropriate service, and send a response over the tunnel to be handed
+    over the calling service on the CDP Control Plane.
+
+
+
+Currently, all AKS clusters provisioned by various CDP data services are enabled
+    with public and private cluster endpoints. The AKS public endpoint is needed to facilitate the
+    interactions between CDP Control Plane and the AKS cluster while worker nodes and Kubernetes
+    control plane interact over private API endpoints. CDW supports private AKS endpoints today (see
+     Enabling a private CDW environment in Azure Kubernetes Service). There are plans to
+    support private AKS endpoints for other data services in the future. When this occurs, the
+    documentation will be updated to reflect the same.
+
+Fully private outbound restricted networks
+Fully private outbound restricted networks is a variant of the fully
+     private network where customers would like to pass outbound traffic originating from their
+    cloud account through a proxy or firewall and explicitly allow-list URLs that are allowed to
+    pass through. CDP Public Cloud supports such configuration. If such network architecture is
+    chosen, the customer must ensure the following:
+
+
+Users configure a proxy for the environment via CDP, as documented in Using a
+       non-transparent proxy.
+
+
+Compute resources (such as VMs used by Data Hubs and data services) can connect to
+      the proxy or firewall via appropriate routing rules.
+
+
+The proxy or firewall is set up to allow connections to all hosts, IP ranges,
+      ports, and protocol types that are documented in Azure outbound network access
+       destinations.
+
+
+note
+Given that fully private networks is the recommended option of connectivity in most
+     cases, this document describes the architecture assuming a fully private network
+     setup.
+
+
+
+Related informationCluster Connectivity ManagerEnabling a private CDW environment in Azure Kubernetes
+                            ServiceUsing a non-transparent proxyAzure outbound network access destinationsParent topic: Taxonomy of network architectures

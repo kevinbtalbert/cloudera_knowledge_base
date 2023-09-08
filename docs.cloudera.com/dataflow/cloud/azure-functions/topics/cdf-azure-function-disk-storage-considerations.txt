@@ -1,0 +1,68 @@
+Disk storage considerationsCloudera Docs
+Disk storage considerations
+Azure Function Apps have two basic options for local storage used for downloading and
+    expanding NARs.
+
+
+
+Temporary storage, under C:\local\Temp - for Consumption
+            plans, the total local disk size is limited to 500 MB, including this Temp directory,
+            making the actual limit somewhat less than 500 MB. This limit can be increased
+            significantly with App Service and Functions Premium plans (for example, the Basic plan
+            starts at 11 GB). This storage is attached directly to the Function App container, and
+            is therefore much faster than the File Share option, discussed next. This storage also
+            requires no additional configuration, but caution must be taken not to fill up the disk.
+            Mitigations for this are discussed below.
+
+
+File Share storage, which is mapped to C:\home. When setting
+            up the initial function, you already attached a File share from your Storage account, so
+            this should already be available to you. The File share has a default limit of 5 TB, but
+            is not locally attached to your Function App container, and so can be significantly
+            slower than writing to the Temp directory.
+
+
+Although Temporary storage is faster, DataFlow Functions has a storage
+        optimization that reuses downloaded and unpacked extension NARs. Therefore, the recommended
+        approach is to use the File share for both the WORKING_DIR and
+          EXTENSIONS_DOWNLOAD_DIR. This will incur a significant time penalty on
+        the very first cold start, but afterwards the downloading and unpacking of NARs can be
+        skipped, greatly reducing the function execution time.
+noteBecause of the initial execution time cost, when using the File
+        share for either directory, it is recommended that you perform a single "warming" invocation
+        of your function in order to download and unpack all extension NARs for later reuse.
+You can use the File share for storage by doing the following:
+
+
+Navigate to your Storage account and click the File
+              shares blade on the left. Select your file share name on the right.
+
+
+Click the data directory (or create it if it does not yet exist).
+
+
+Click the + Add directory button, name it
+              extensions, and click OK. Repeat this for a directory called
+            working.
+
+
+In your Function App, click the Configuration blade on
+            the left, and add (or set) an Application Setting named
+              EXTENSIONS_DOWNLOAD_DIR with a value of
+              C:\home\data\extensions.
+
+
+In your Function App, click the Configuration blade on
+            the left, and add (or set) an Application Setting named WORKING_DIR
+            with a value of C:\home\data\working.
+
+
+Save the configuration.
+
+
+Optionally (but recommended), perform a single "warming" invocation of your
+            Function App.
+
+
+
+

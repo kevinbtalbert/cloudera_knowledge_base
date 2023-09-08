@@ -1,0 +1,41 @@
+Kudu transaction semanticsCloudera Docs
+Kudu transaction semantics
+This is a brief introduction to Kudu’s transaction and consistency semantics. Kudu's
+      core philosophy is to provide transactions with simple, strong semantics, without sacrificing
+      performance or the ability to tune to different requirements. Kudu’s transactional semantics
+      and architecture are inspired by state-of-the-art systems such as Spanner and Calvin. For an
+      in-depth technical exposition of what is mentioned here, see the Technical Report:
+         HybridTime - Accessible Global Consistency with High Clock Uncertainty.
+
+      Kudu currently allows the following operations:
+    
+
+
+
+Scans are read operations that can
+          traverse multiple tablets and read information with different levels
+          of consistency or correctness guarantees. Scans can also perform
+          time-travel reads. That is, you can set a scan timestamp from the past
+          and get back results that reflect the state of the storage engine at
+          that point in time. 
+
+
+
+Write operations are sets of rows to be
+          inserted, updated, or deleted in the storage engine, in a single
+          tablet with multiple replicas. Write operations do not have separate
+          "read sets", that is, they do not scan existing data before performing
+          the write. Each write is only concerned with the previous state of the
+          rows that are about to change. Writes are not "committed" explicitly
+          by the user. Instead, they are committed automatically by the system,
+          after completion. 
+
+
+
+      While Kudu is designed to eventually be fully ACID (Atomic, Consistent, Isolated,
+      Durable), multi-tablet transactions have not yet been implemented. As such, the
+      following discussion focuses on single-tablet write operations, and only briefly touches
+      multi-tablet reads.
+    
+
+Related informationSpannerCalvinTechnical Report: HybridTime - Accessible Global Consistency with High Clock UncertaintySingle tablet write operationsKudu employs Multiversion Concurrency Control (MVCC) and the Raft consensus algorithm.     Each write operation in Kudu must go through the following order of operations:Writing to multiple tabletsKudu does not support transactions that span multiple tablets. However, consistent     snapshot reads are possible (with caveats, as explained below). Writes from a Kudu client are     optionally buffered in memory until they are flushed and sent to the tablet server. When a     client’s session is flushed, the rows for each tablet are batched together, and sent to the     tablet server which hosts the leader replica of the tablet. Since there are no inter-tablet     transactions, each of these batches represents a single, independent write operation with its     own timestamp. However, the client API provides the option to impose some constraints on the     assigned timestamps and on how writes to different tablets are observed by clients.Read operations (scans)Scans are read operations performed by clients that may span one or more rows across       one or more tablets. When a server receives a scan request, it takes a snapshot of the MVCC       state and then proceeds in one of two ways depending on the read mode selected by the       user.Known issues and limitationsThere are several gaps and corner cases that currently prevent Kudu from being       strictly-serializable in certain situations. 

@@ -1,0 +1,311 @@
+Writing UDFsCloudera Docs
+Writing UDFs
+Before starting UDF development, make sure to install the development package and download
+        the UDF code samples. Install the Impala UDF development package as described in Installing the UDF development package.
+
+ When writing UDFs: 
+
+ Keep in mind the data type differences as you transfer values from
+          the high-level SQL to your lower-level UDF code. For example, in the
+          UDF code you might be much more aware of how many bytes different
+          kinds of integers require. 
+ Use best practices for function-oriented programming: choose
+          arguments carefully, avoid side effects, make each function do a
+          single thing, and so on. 
+
+
+Getting started with UDF coding
+
+ To understand the layout and member variables and functions of
+              the predefined UDF data types, examine the header file
+                /usr/include/impala_udf/udf.h: 
+// This is the only Impala header required to develop UDFs and UDAs. This header
+// contains the types that need to be used and the FunctionContext object. The context
+// object serves as the interface object between the UDF/UDA and the impala process. 
+ For the basic declarations needed to write a scalar UDF, see the
+              header file udf-sample.h within the sample build
+              environment, which defines a simple function named
+                AddUdf(): 
+#ifndef IMPALA_UDF_SAMPLE_UDF_H
+#define IMPALA_UDF_SAMPLE_UDF_H
+
+#include <impala_udf/udf.h>
+
+using namespace impala_udf;
+
+IntVal AddUdf(FunctionContext* context, const IntVal& arg1, const IntVal& arg2);
+
+#endif
+
+ For sample C++ code for a simple function named
+                AddUdf(), see the source file
+                udf-sample.cc within the sample build
+              environment: 
+#include "udf-sample.h"
+
+// In this sample we are declaring a UDF that adds two ints and returns an int.
+IntVal AddUdf(FunctionContext* context, const IntVal& arg1, const IntVal& arg2) {
+  if (arg1.is_null || arg2.is_null) return IntVal::null();
+  return IntVal(arg1.val + arg2.val);
+}
+
+// Multiple UDFs can be defined in the same file
+
+
+
+Data types for function arguments and return values
+
+ Each value that a user-defined function can accept as an
+              argument or return as a result value must map to a SQL data type
+              that you could specify for a table column. 
+
+        Currently, Impala UDFs cannot accept arguments or return values of the Impala complex types
+        (STRUCT, ARRAY, or MAP).
+      
+ Each data type has a corresponding structure defined in the C++
+              and Java header files, with two member fields and some predefined
+              comparison operators and constructors: 
+
+
+
+is_null indicates whether the value is
+                    NULL or not. val holds the
+                  actual argument or return value when it is
+                    non-NULL. 
+
+
+ Each struct also defines a null() member
+                  function that constructs an instance of the struct with the
+                    is_null flag set. 
+
+
+ The built-in SQL comparison operators and clauses such as
+                    <, >=,
+                    BETWEEN, and ORDER BY all
+                  work automatically based on the SQL return type of each UDF.
+                  For example, Impala knows how to evaluate BETWEEN 1
+                    AND udf_returning_int(col1) or ORDER BY
+                    udf_returning_string(col2) without you declaring
+                  any comparison operators within the UDF itself. 
+ For convenience within your UDF code, each struct defines
+                    == and != operators for
+                  comparisons with other structs of the same type. These are for
+                  typical C++ comparisons within your own code, not necessarily
+                  reproducing SQL semantics. For example, if the
+                    is_null flag is set in both structs, they
+                  compare as equal. That behavior of null
+                  comparisons is different from SQL (where NULL ==
+                    NULL is NULL rather than
+                    true), but more in line with typical C++
+                  behavior. 
+
+
+ Each kind of struct has one or more constructors that define
+                  a filled-in instance of the struct, optionally with default
+                  values. 
+
+
+ Impala cannot process UDFs that accept the composite or
+                  nested types as arguments or return them as result values.
+                  This limitation applies both to Impala UDFs written in C++ and
+                  Java-based Hive UDFs. 
+
+
+ You can overload functions by creating multiple functions
+                  with the same SQL name but different argument types. For
+                  overloaded functions, you must use different C++ or Java entry
+                  point names in the underlying functions. 
+
+
+ The data types defined on the C++ side (in
+                /usr/include/impala_udf/udf.h) are: 
+
+
+
+IntVal represents an INT
+                  column. 
+
+
+
+BigIntVal represents a
+                    BIGINT column. Even if you do not need the
+                  full range of a BIGINT value, it can be
+                  useful to code your function arguments as
+                    BigIntVal to make it convenient to call the
+                  function with different kinds of integer columns and
+                  expressions as arguments. Impala automatically casts smaller
+                  integer types to larger ones when appropriate, but does not
+                  implicitly cast large integer types to smaller ones. 
+
+
+
+SmallIntVal represents a
+                    SMALLINT column. 
+
+
+
+TinyIntVal represents a
+                    TINYINT column. 
+
+
+
+StringVal represents a
+                    STRING column. It has a
+                    len field representing the length of the
+                  string, and a ptr field pointing to the
+                  string data. It has constructors that create a new
+                    StringVal struct based on a null-terminated
+                  C-style string, or a pointer plus a length; these new structs
+                  still refer to the original string data rather than allocating
+                  a new buffer for the data. It also has a constructor that
+                  takes a pointer to a FunctionContext struct
+                  and a length, that does allocate space for a new copy of the
+                  string data, for use in UDFs that return string values. 
+
+
+
+BooleanVal represents a
+                    BOOLEAN column. 
+
+
+
+FloatVal represents a FLOAT
+                  column. 
+
+
+
+DoubleVal represents a
+                    DOUBLE column. 
+
+
+
+TimestampVal represents a
+                    TIMESTAMP column. It has a
+                    date field, a 32-bit integer representing
+                  the Gregorian date, that is, the days past the epoch date. It
+                  also has a time_of_day field, a 64-bit
+                  integer representing the current time of day in nanoseconds.
+                
+
+
+
+
+
+Variable-length argument lists
+
+ UDFs typically take a fixed number of arguments, with each one named explicitly in
+              the signature of your C++ function. Your function can also accept additional optional
+              arguments, all of the same type. For example, you can concatenate two strings, three
+              strings, four strings, and so on. Or you can compare two numbers, three numbers, four
+              numbers, and so on. 
+ To accept a variable-length argument list, code the signature of your function like
+              this: 
+StringVal Concat(FunctionContext* context, const StringVal& separator,
+  int num_var_args, const StringVal* args);
+ In the CREATE FUNCTION statement, after the type of the first
+              optional argument, include ... to indicate it could be followed by
+              more arguments of the same type. For example, the following function accepts a
+                STRING argument, followed by one or more additional
+                STRING arguments: 
+[localhost:21000] > create function my_concat(string, string ...) returns string location '/user/test_user/udfs/sample.so' symbol='Concat';
+
+ The call from the SQL query must pass at least one argument to the variable-length
+              portion of the argument list. 
+ When Impala calls the function, it fills in the initial set of required arguments,
+              then passes the number of extra arguments and a pointer to the first of those optional
+              arguments. 
+
+
+
+Handling NULL values
+
+ For correctness, performance, and reliability, it is important
+              for each UDF to handle all situations where any
+                NULL values are passed to your function. For
+              example, when passed a NULL, UDFs typically also
+              return NULL. In an aggregate function, which
+              could be passed a combination of real and NULL
+              values, you might make the final value into a
+                NULL (as in CONCAT()), ignore
+              the NULL value (as in AVG()), or
+              treat it the same as a numeric zero or empty string. 
+ Each parameter type, such as IntVal or
+                StringVal, has an is_null
+              Boolean member. Test this flag immediately for each argument to
+              your function, and if it is set, do not refer to the
+                val field of the argument structure. The
+                val field is undefined when the argument is
+                NULL, so your function could go into an
+              infinite loop or produce incorrect results if you skip the special
+              handling for NULL. 
+ If your function returns NULL when passed a
+                NULL value, or in other cases such as when a
+              search string is not found, you can construct a null instance of
+              the return type by using its null() member
+              function. 
+
+
+
+Memory allocation for UDFs
+
+ By default, memory allocated within a UDF is deallocated when
+              the function exits, which could be before the query is finished.
+              The input arguments remain allocated for the lifetime of the
+              function, so you can refer to them in the expressions for your
+              return values. If you use temporary variables to construct all-new
+              string values, use the StringVal() constructor
+              that takes an initial FunctionContext* argument
+              followed by a length, and copy the data into the newly allocated
+              memory buffer. 
+
+
+
+Thread-safe work area for UDFs
+
+ One way to improve performance of UDFs is to specify the
+              optional PREPARE_FN and CLOSE_FN
+              clauses on the CREATE FUNCTION statement. The
+                prepare function sets up a thread-safe data structure in
+              memory that you can use as a work area. The close function
+              deallocates that memory. Each subsequent call to the UDF within
+              the same thread can access that same memory area. There might be
+              several such memory areas allocated on the same host, as UDFs are
+              parallelized using multiple threads. 
+ Within this work area, you can set up predefined lookup tables,
+              or record the results of complex operations on data types such as
+                STRING or TIMESTAMP. Saving
+              the results of previous computations rather than repeating the
+              computation each time is an optimization known as Memoization. For
+              example, if your UDF performs a regular expression match or date
+              manipulation on a column that repeats the same value over and
+              over, you could store the last-computed value or a hash table of
+              already-computed values, and do a fast lookup to find the result
+              for subsequent iterations of the UDF. 
+ Each such function must have the signature: 
+void function_name(impala_udf::FunctionContext*, impala_udf::FunctionContext::FunctionScope)
+
+ Currently, only THREAD_SCOPE is implemented,
+              not FRAGMENT_SCOPE. See
+                udf.h for details about the scope values.
+            
+
+
+
+Error handling for UDFs
+
+ To handle errors in UDFs, you call functions that are members of
+              the initial FunctionContext* argument passed to
+              your function. 
+ A UDF can record one or more warnings, for conditions that
+              indicate minor, recoverable problems that do not cause the query
+              to stop. The signature for this function is: 
+bool AddWarning(const char* warning_msg);
+ For a serious problem that requires cancelling the query, a UDF
+              can set an error flag that prevents the query from returning any
+              results. The signature for this function is: 
+void SetError(const char* error_msg);
+
+
+
+
+Parent topic: User-defined functions (UDFs)

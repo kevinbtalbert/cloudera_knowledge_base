@@ -1,0 +1,58 @@
+Using Impala to query Kudu tablesCloudera Docs
+Using Impala to query Kudu tables
+If you want to use Impala to query Kudu tables, you have to create a mapping between
+      the Impala and Kudu tables.
+Neither Kudu nor Impala need special configuration in order for you to use the Impala Shell
+         or the Impala API to insert, update, delete, or query Kudu data using Impala. However, you
+         do need to create a mapping between the Impala and Kudu tables. Kudu provides the Impala
+         query to map to an existing Kudu table in the web UI. 
+
+
+ Make sure you are using the impala-shell binary provided by the
+               default CDP Impala binary. The following example shows how you can verify this using
+               the alternatives command on a RHEL 6
+               host. Do not copy and paste the alternatives
+                  --set command directly, because the file names are likely to differ.
+               $ sudo alternatives --display impala-shell
+
+impala-shell - status is auto.
+ link currently points to /opt/cloudera/parcels/<current_CDP_parcel>/bin/impala-shell
+/opt/cloudera/parcels/<current_CDP_parcel>/bin/impala-shell - priority 10
+Current `best' version is opt/cloudera/parcels/<current_CDP_parcel>/bin/impala-shell
+
+ Although not necessary, it is recommended that you configure
+               Impala with the locations of the Kudu Masters using the --kudu_master_hosts=<master1>[:port] flag. If this flag is not
+               set, you will need to manually provide this configuration each time you create a
+               table by specifying the kudu.master_addresses property inside a TBLPROPERTIES clause. If you are using
+               Cloudera Manager, no such configuration is needed. The Impala service will
+               automatically recognize the Kudu Master hosts. However, if your Impala queries don't
+               work as expected, use the following steps to make sure that the Impala service is set
+               to be dependent on Kudu:
+Go to the Impala service.
+Click the Configuration tab and search for
+                        kudu.
+Make sure that the Kudu Service property is set to the right
+                     Kudu service.
+Click Save Changes.
+ Before you carry out any of the operations listed within
+                  this section, make sure that this configuration has been set. 
+
+
+            Start Impala Shell using the impala-shell command. By default,
+            impala-shell attempts to connect to the Impala daemon on
+            localhost on port 21000. To connect to a different host, use the
+            -i <host:port> option.
+            
+              To automatically connect to a specific Impala database, use the -d
+              <database> option. For instance, if all your Kudu tables are in Impala
+              in the database impala_kudu, use -d impala_kudu
+              to use this database.
+            
+
+
+            To quit the Impala Shell, use the following command: quit;
+
+
+
+
+Query an existing Kudu table from ImpalaTables created through the Kudu API or other integrations such as Apache Spark are not       automatically visible in Impala.Create a new Kudu table from ImpalaCreating a new table in Kudu from Impala is similar to mapping an existing Kudu table     to an Impala table, except that you need to specify the schema and partitioning information     yourself. Use the examples in this section as a guideline. Impala first creates the table, then     creates the mapping.Use CREATE TABLE AS SELECTYou can create a table by querying any other table or tables in Impala, using a          CREATE TABLE ... AS SELECT       statement.Partitioning tablesTables are partitioned into tablets according to a partition schema on the primary key     columns. Each tablet is served by at least one tablet server. Ideally, a table should be split     into tablets that are distributed across a number of tablet servers to maximize parallel     operations. The details of the partitioning schema you use will depend entirely on the type of     data you store and how you access it. Optimize performance for evaluating SQL predicatesIf the WHERE clause of your query     includes comparisons with the operators =,       <=, <, >, >=, BETWEEN, or IN, Kudu evaluates the condition directly and only returns the relevant results.     This provides optimum performance, because Kudu only returns the relevant results to Impala. Insert data into Kudu using ImpalaUsing Impala you can index one or more rows, or you can insert in bulk. Before       inserting, learn about the syntax, and the advantages and disadvantages of the three inserting       in bulk methods.INSERT and primary key uniqueness violationsIn many relational databases, if you try to insert a row that has already been       inserted, the operation can fail because the primary key gets duplicated. Impala, however,       does not fail the query. Instead, it generates a warning and continues to run the       remainder of the insert statement. Update data in Kudu using ImpalaUsing Impala, you can update one or more rows, or update in bulk.Upsert a rowThe UPSERT command acts as a       combination of the INSERT and UPDATE statements.Alter a tableYou can use the ALTER TABLE statement       to change the default value, encoding, compression, or block size of existing columns in a       Kudu table, or to change Impala's metadata relating to a given Kudu table by altering the       table's properties. Delete data from Kudu using ImpalaYou can delete Kudu rows in near real time using Impala. Failures during INSERT, UPDATE, UPSERT, and DELETE operationsINSERT, UPDATE, and DELETE statements cannot be considered       transactional as a whole. If one of these operations fails part of the way through, the keys       may have already been created (in the case of INSERT) or the records may have already been modified or removed by another       process (in the case of UPDATE or DELETE). You should design your application with       this in mind.Drop a Kudu table using Impala You can drop internal tables in Impala using the DROP TABLE  syntax. If you want to       drop an external table, you first have to change it to internal.

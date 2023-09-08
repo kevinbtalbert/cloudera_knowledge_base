@@ -1,0 +1,85 @@
+Enabling ABFS File Browser in Hue with RAZ in DataHubCloudera Docs
+Enabling ABFS File Browser in Hue with RAZ in DataHub
+Hue offers you the capability to browse Azure Data Lake Storage (ADLS) Gen2 file
+        system, upload files to ABFS, and create tables by importing files from ABFS containers.
+        With RAZ, you can grant fine-grained access to per-user home directories and other
+        directories within the ADLS containers using Ranger policies.
+
+Hue administrators can create home directories for users by selecting the
+                    Create home directory option on the user's profile in
+                Hue. If fine-grained authorization is enabled to access ADLS containers, then user
+                home directories are automatically created when a user logs into Hue. You can
+                disable automatic creation of user directories.
+noteIf you have enabled RAZ while registering your Azure
+                environment with CDP, then Hue uses RAZ as the default mechanism for enabling the
+                ABFS File Browser
+
+You must enable RAZ while registering your environment with
+            CDP. See Introduction to RAZ on Azure environments” to get started with RAZ and complete
+            the following steps:
+Register an Azure environment with the Enable Ranger authorization
+                        for ADLS Gen2 option enabled. You can use the CDP web interface
+                    or the CDP CLI to complete this task.
+Create a Data Hub cluster with Data Engineering or Data Mart cluster
+                    template.
+Create the following Ranger policies:
+Hadoop SQL policy (all - database, table, column, all - url).noteYou must grant permissions to individual users
+                                or groups in these Ranger policies. To grant permissions to all
+                                users, you can specify {USER} in the Permission section.
+ABFS (cm_ADLS) policy (Default: User Home)You must specify the
+                                storage account name in the Storage Account
+                                field and the directory path of the container and its
+                                sub-directories in the Storage Account
+                                    Container field of the cm_ADLS Ranger
+                            policy.
+
+Grant appropriate permissions to the users in CDP User Management Service (UMS).
+                    For example, EnvironmentUser.
+
+
+Log in to the CDP web interface as an Administrator.
+
+Go to Management Console > Environments, select your environment and go to the Data
+                        Lake tab.
+
+Click on the CM URL to open Cloudera Manager.
+
+Go to Clusters > Ranger RAZ service > Instances > RAZ server > Processes and note the value of the
+                        fs.azure.ext.raz.rest.host.url property from the
+                        core-site.xml file. You need this to specify the value of
+                    the api_url property in the Hue configuration.
+
+Go to Clusters > Hue service > Configuration > Hue Service Advanced Configuration Snippet (Safety Valve) for
+                            hue_safety_valve.ini and add the following lines:
+
+[desktop]
+app_blacklist=spark,zookeeper,hbase,impala,search,sqoop,security,pig
+[[raz]]
+is_enabled=true
+api_url=[***fs.azure.ext.raz.rest.host.url***]
+
+[azure]
+[[abfs_clusters]]
+[[[default]]]
+fs_defaultfs=abfs://[***CONTAINER-FOR-DATA-ACCESS***]@[***STORAGE-ACCOUNT***].dfs.core.windows.net
+# For example, fs_defaultfs=abfs://storage-fs@mystorage.dfs.core.windows.net
+webhdfs_url=https://[***STORAGE-ACCOUNT***].dfs.core.windows.net
+# For example, webhdfs_url=https://mystorage.dfs.core.windows.net
+
+[filebrowser]
+remote_storage_home=abfs://[***CONTAINER-FOR-DATA-ACCESS***]/user
+# For example, remote_storage_home=abfs://storage-fs/user
+noteRAZ HA is not supported. You cannot specify a
+                        comma-separated list of URLs in the api_url
+                        property.
+
+
+Click Save Changes.
+
+Restart the Hue service.
+
+ABFS File Browser icon is added to the left assist pane on the Hue web interface.
+            When you click on the ABFS File Browser icon, you are redirected to your user home
+            directory.
+
+Related informationIntroduction to RAZ on Azure environmentsDisabling the automatic creation of user home directoriesParent topic: Using Azure Data Lake Storage Gen2 with Hue

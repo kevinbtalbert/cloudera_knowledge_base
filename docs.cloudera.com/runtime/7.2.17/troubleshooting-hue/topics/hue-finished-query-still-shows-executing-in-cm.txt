@@ -1,0 +1,64 @@
+Query execution finished in Hue but shows as executing on Cloudera Manager Impala Queries PageCloudera Docs
+Query execution finished in Hue but shows as executing on Cloudera Manager Impala Queries
+  Page
+Cloudera Manager and the Impala demon web page may show a query in an executing
+  or In Flight state even though the query has finished executing on the Hue web UI. This can
+  happen due to various reasons.
+The three main reasons why the completed Hue query still shows as "executing" are:
+Hue does not close the connection to Impala until you click on the
+            Results page.Clicking the Results page in
+            Hue executes the fetchresults call to Impala.
+Impala queries are client-driven. Therefore, the query still remains in a running state
+          until the client sends a fetch command to complete fetching the entire result set.
+If a query has not been closed or unregistered, Impala shows the same in the
+            In Flight section on its web UI. Cloudera Manager shows all In
+          Flight queries in the Executing state.
+
+Impala query life cycle
+When you submit Impala queries, they are first registered by the system. The system identifies
+        the queries with the help of a coordinator. They also have a state, such as CREATED,
+        INITIALIZED, RUNNING, FINISHED, EXCEPTION, and some metadata.
+
+FINISHED implies that the rows are available but not all rows are ready to be
+     fetched. It is possible that Impala daemons are still executing the query.
+EXCEPTION implies that an error has occurred. For example, if the system runs out of
+     memory, then the query transitions to the EXCEPTION state.The query can also go into an
+      EXCEPTION state if it is cancelled.
+
+Query cancellations may be triggered explicitly with a HiveServer2/Beeswax call or if the
+        query times out. Query time-out may be set through a process-wide impalad argument or with a
+        per-query option.
+Currently, Impala does not have a state that explicitly indicates whether all Impala daemons
+    have finished executing the query and that all results have been fetched. Let us call it as End
+    of Statement (EOS), temporarily.
+When a query is in the EOS (FINISHED) or EXCEPTION state, the query is not doing any more
+    processing, but the query remains registered. It needs to remain registered because clients may
+    need to access the state.
+The query is unregistered only in the following two cases:
+The query is explicitly closed by a Close() API call
+The session associated with the query is closed explicitly or the session time-out is set
+            and the session times out
+
+
+noteHue does not close a query until you explicitly close it. When you close a browser tab on
+          which you are running the query in Hue, the browser sends a JavaScript
+            Close() callback request to close the query. If you leave the query
+          unattended, for example by closing the laptop through which you are accessing Hue or if
+          the browser crashes, then the Close() call is never sent to Hue. The
+          query may eventually time out, but
+          because
+          it was not cancelled explicitly, it does not properly clean up the resources.
+
+To optimize resource utilization, configure the Impala daemon to stop the idle sessions by
+        setting the session timeout value in the --idle_session_timeout impalad
+          argument:
+Sign in to Cloudera Manager as an Administrator.
+Go to Clusters > Impala service > Configuration.
+Specify the following in the Impala Command Line Argument Advanced
+              Configuration Snippet (Safety Valve)
+              field:--idle_session_timeout=<maximum lifetime of your queries in seconds>For
+              example, --idle_session_timeout=3600In this case, the
+              query will time out after one hour.
+
+
+

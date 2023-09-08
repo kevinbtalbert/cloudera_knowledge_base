@@ -1,0 +1,173 @@
+Changing a nameservice name for Highly Available HDFS using Cloudera ManagerCloudera Docs
+Changing a nameservice name for Highly Available HDFS using Cloudera Manager
+Based on your requirements, you can change a nameservice name for a cluster that has
+    HDFS HA configured.Before you start, make note of the NameNode data directory and JournalNode edits directory.
+      You can find dfs.namenode.name.dir and
+        dfs.journalnode.edits.dir from the configuration of HDFS service in the
+      Cloudera Manager Admin Console.Cloudera recommends you to take a backup for the
+        above directories so that if there is any operator error, you still have a chance to
+        recover. In this example, the following values are assumed: 
+The current nameservice name is nameservice1.
+The NameNode data directory is /data/dfs/nn.
+The JournalNode edits directory is /data/dfs/jn.
+
+Ensure that both NameNodes enter safemode and you save the current namespace and merge
+          all the recent edits to the same fsimage id for both NameNodes.
+
+
+Go to HDFS service >  Instance.
+
+
+Click NameNodes (Active) >  Actions >  Enter Safemode.
+
+
+Click NameNodes (Active) >  Actions >  Save Namespace.
+
+
+Click NameNodes (Standby) >  Actions >  Enter Safemode.
+
+
+Click NameNodes (Standby) >  Actions >  Save Namespace.
+
+
+ssh to both NameNodes data directories to ensure that the same fsimage is
+              generated.
+
+
+
+Delete the current nameservice znode from ZooKeeper CLI.
+
+
+Stop all services except ZooKeeper.
+
+
+On a ZooKeeper host, run zookeeper-client.
+
+
+Execute the following to remove the configured nameservice:
+
+deleteall /hadoop-ha/nameservice1
+
+
+Login as ZooKeeper super user if Kerberos is enabled, so that you have the
+                authorization to delete the protected znodes.
+
+
+
+
+In the Cloudera Manager Admin Console, change the NameNode nameservice name.
+
+
+Go to the HDFS service.
+
+
+Click Configuration.
+
+
+Type nameservice in the Search field.
+
+
+For the NameNode Nameservice property, change the
+              nameservice name in the NameNode (instance_name) field.
+The name must be unique and can contain only alphanumeric characters.
+
+
+Type quorum in the Search field.
+
+
+For the Quorum-based Storage Journal name property, change
+              the nameservice name in the NameNode (instance_name)
+              field.
+
+
+Save changes.
+
+
+
+Create a new nameservice znode.
+
+
+Click Instances.
+
+
+In the Federation and High Availability pane, select Actions >  Initialize High Availability State in ZooKeeper.
+
+
+On a ZooKeeper host, run zookeeper-client and verify that the new
+              nameservice znode is created.
+
+ls /hadoop-ha
+
+
+
+
+Update Hive Metastore NameNodes.
+
+
+Go to the Hive service.
+
+
+Select Actions >  Update Hive Metastore NameNodes.
+
+
+
+If you have an Impala service, restart the Impala service or run an INVALIDATE METADATA
+          query.
+
+Initialize JournalNode shared edits directory.
+
+
+Click Instances.
+
+
+Select the checkboxes next to the JournalNode role instances.
+
+
+Select Actions for Selected >  Start.
+
+
+Click any NameNode, select Actions >  Initialize Shared Edits Directory.
+
+
+ssh to JournalNode host to ensure that the JournalNode data directory has the new
+              nameservice folder generated.
+
+
+
+Start other HDFS roles.
+
+
+Click the Instance tab, select the checkboxes next to all
+              the HDFS role instances except for datanodes.
+
+
+Select Actions for Selected >  Start.
+You can see both NameNodes web UIs show Active and Standby, also nameservice names
+              are updated. However both NameNodes are in safemode waiting for DN to startup and send
+              block reports.
+
+
+Click Instances, start all the DN roles, wait for both NN to
+              exit safemode automatically.
+
+
+
+Redeploy client configuration files.
+
+Start all services except ZooKeeper.
+
+For clusters having Ranger service, change the references to new nameservice name, if
+          any.
+
+
+Go to Ranger Admin Web UI, click cm_hdfs, check available
+              policies and change the references to new nameservice name on HDFS path, if any.
+
+
+On Ranger Admin Web UI, click cm_hive, check available
+              policies and change the references to new nameservice name on Impala URI, if
+              any.
+
+
+
+Parent topic: Using Cloudera Manager to manage HDFS HA

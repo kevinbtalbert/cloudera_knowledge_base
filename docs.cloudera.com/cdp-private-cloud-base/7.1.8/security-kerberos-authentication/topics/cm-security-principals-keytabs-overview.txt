@@ -1,0 +1,168 @@
+Kerberos Security Artifacts OverviewCloudera Docs
+Kerberos Security Artifacts Overview
+How Cloudera Clusters use Kerberos artifacts such as principals, keytabs, and
+    delegation tokens. 
+Cloudera recommends using Kerberos for authentication because core Hadoop authentication
+      alone checks only for valid user:group membership in the context of HDFS, but
+      does not authenticate users or services across all network resources, as Kerberos does. Unlike
+      other mechanisms that may be far easier to deploy, the Kerberos protocol authenticates a
+      requesting user or service for a specific period of time only, and each service that the user
+      may want to use requires the appropriate Kerberos artifact in the context of the protocol.
+      This section describes how Cloudera clusters use some of these artifacts, such as Kerberos
+      principals and keytabs for user authentication, and how delegation tokens are used by the
+      system to authenticate jobs on behalf of authenticated users at runtime.
+
+
+Kerberos Principals
+
+Each user and service that needs to authenticate to Kerberos needs a
+          principal, an entity that uniquely identifies the user or
+        service in the context of possibly multiple Kerberos servers and related
+        subsystems. A principal includes up to three pieces of identifying
+        information, starting with the user or service name (called a
+          primary). Typically, the primary portion of the principal
+        consists of the user account name from the operating system, such as
+          jcarlos for the user's Unix account or
+          hdfs for the Linux account associated with the
+        service daemon on the host underlying cluster node.
+Principals for users typically consist solely of the primary and the
+        Kerberos realm name. The realm is a logical grouping of
+        principals tied to the same Key Distribution Center (KDC) which is
+        configured with many of the same properties, such as supported
+        encryption algorithms. Large organizations may use realms as means of
+        delegating administration to various groups or teams for specific sets
+        of users or functions and distributing the authentication-processing
+        tasks across multiple servers. 
+Standard practice is to use your organization's domain name as the Kerberos realm name (in
+        all uppercase characters) to easily distinguish it as part of a Kerberos principal, as shown
+        in this user principal pattern: 
+username@REALM.EXAMPLE.COM
+The combination of the primary and the realm name can distinguish one
+          user from another. For example,
+          jcarlos@SOME-REALM.EXAMPLE.COM and
+          jcarlos@ANOTHER-REALM.EXAMPLE.COM may be unique
+          individuals within the same organization. 
+For service role instance identities, the primary is the Unix
+        account name used by Hadoop daemons (hdfs, 
+          mapred, and so on) followed by
+        an instance name that identifies the specific host on which
+        the service runs. For example,
+          hdfs/hostname.fqdn.example.com@SOME-REALM.EXAMPLE.COM
+        is an example of the principal for an HDFS service instance. The forward
+        slash (/) separates the primary and the instance names using this basic
+        pattern:
+service-name/hostname.fqdn.example.com@REALM.EXAMPLE.COMThe
+        HTTP principal needed for Hadoop web service interfaces does not have a
+        Unix local account for its primary but rather is
+        HTTP.
+An instance name can also identify users with special roles, such as
+          administrators. For example, the principal
+          jcarlos@SOME-REALM.COM and the principal
+          jcarlos/admin@SOME-REALM.COM each have their own
+          passwords and privileges, and they may or may not be the same
+          individual.
+For example, the principal for the HDFS service role instance running
+        on a cluster in an organization with realms for each geographical
+        location might be as follows:
+        hdfs/hostname.fqdn.example.com@OAKLAND.EXAMPLE.COM
+      Generally, the service name is the Unix account name used by the given service role instance, such as
+        hdfs or mapred, as shown above. The
+          HTTP principal for securing web authentication to Hadoop service web
+          interfaces has no Unix account, so the primary for the principal is
+          HTTP. 
+
+
+
+Kerberos Keytabs
+
+A keytab is a file that contains the principal and the
+        encrypted key for the principal. A keytab file for a Hadoop daemon is
+        unique to each host since the principal names include the hostname. This
+        file is used to authenticate a principal on a host to Kerberos without
+        human interaction or storing a password in a plain text file. Because
+        having access to the keytab file for a principal allows one to act as
+        that principal, access to the keytab files should be tightly secured. 
+They should be readable by a minimal set of users, should be stored
+          on local disk, and should not be included in host backups, unless
+          access to those backups is as secure as access to the local host.
+
+
+
+Delegation Tokens
+
+Users in a Hadoop cluster authenticate themselves to the NameNode
+          using their Kerberos credentials. However, once the user is
+          authenticated, each job subsequently submitted must also be checked to
+          ensure it comes from an authenticated user. Since there could be a
+          time gap between a job being submitted and the job being executed,
+          during which the user could have logged off, user credentials are
+          passed to the NameNode using delegation tokens that can be used for
+          authentication in the future. 
+Delegation tokens are a secret key shared with the NameNode, that can be used to
+        impersonate a user to get a job executed. While these tokens can be renewed, new tokens can
+        only be obtained by clients authenticating to the NameNode using Kerberos credentials. By
+        default, delegation tokens are only valid for a day. However, since jobs can last longer
+        than a day, each token specifies a NodeManager as a renewer which is allowed to renew
+        the delegation token once a day, until the job completes, or for a maximum period of 7 days.
+        When the job is complete, the NodeManager requests the NameNode to cancel the delegation
+        token. 
+Token Format
+The NameNode uses a random masterKey to generate
+            delegation tokens. All active tokens are stored in memory with their
+            expiry date (maxDate). Delegation tokens can either
+            expire when the current time exceeds the expiry date, or, they can
+            be canceled by the owner of the token. Expired or canceled tokens
+            are then deleted from memory. The sequenceNumber
+            serves as a unique ID for the tokens. The following section
+            describes how the Delegation Token is used for
+            authentication.TokenID = {ownerID, renewerID, issueDate, maxDate, sequenceNumber}
+TokenAuthenticator = HMAC-SHA1(masterKey, TokenID) 
+Delegation Token = {TokenID, TokenAuthenticator}
+
+Authentication Process
+To begin the authentication process, the client first sends the
+            TokenID to the NameNode. The NameNode uses this TokenID and the
+            masterKey to once again generate the
+            corresponding TokenAuthenticator, and consequently, the Delegation
+            Token. If the NameNode finds that the token already exists in
+            memory, and that the current time is less than the expiry date
+            (maxDate) of the token, then the token is
+            considered valid. If valid, the client and the NameNode will then
+            authenticate each other by using the TokenAuthenticator that they
+            possess as the secret key, and MD5 as the protocol. Since the client
+            and NameNode do not actually exchange TokenAuthenticators during the
+            process, even if authentication fails, the tokens are not
+            compromised.
+
+Token Renewal
+Delegation tokens must be renewed periodically by the designated renewer
+            (renewerID). For example, if a NodeManager is the designated renewer,
+          the NodeManager will first authenticate itself to the NameNode. It will then send the
+          token to be authenticated to the NameNode. The NameNode verifies the following information
+          before renewing the token:
+The NodeManager requesting renewal is the same as the one identified in the token by
+                renewerID.
+The TokenAuthenticator generated by the NameNode using the TokenID
+              and the masterKey matches the one previously stored by the
+              NameNode.
+The current time must be less than the time specified by
+              maxDate.
+
+If the token renewal request is successful, the NameNode sets the
+            new expiry date to min(current time+renew period,
+              maxDate). If the NameNode was restarted at any time, it
+            will have lost all previous tokens from memory. In this case, the
+            token will be saved to memory once again, this time with a new
+            expiry date. Hence, designated renewers must renew all tokens with
+            the NameNode after a restart, and before relaunching any failed
+            tasks.
+A designated renewer can also revive an expired or canceled token
+            as long as the current time does not exceed
+            maxDate. The NameNode cannot tell the difference
+            between a token that was canceled, or has expired, and one that was
+            erased from memory due to a restart, since only the
+            masterKey persists in memory. The
+            masterKey must be updated regularly. 
+
+
+

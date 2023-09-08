@@ -1,0 +1,292 @@
+ML Upgrades using Backup/RestoreCloudera Docs
+ML Upgrades using Backup/Restore
+Cloudera strongly recommends following the CML release cadence by upgrading to every
+  version soon after they are released. Following this process ensures that the CML Workspace is up
+  to date with the latest security and bug fixes as well to benefit from new feature development.
+  This document will take you through some considerations to be aware of before performing an
+  upgrade, options you have when performing the upgrade, and the steps to complete the upgrade. 
+Before you begin
+If a CML workspace upgrade from a specific version could not be validated due to Kubernetes
+    version EOL or is deemed risky, in-place upgrades will be disabled for these versions.
+In-place upgrades will be disabled from CML versions if the underlying Kubernetes versions are
+    deprecated or going to be deprecated very soon. In such cases, depending on the version of CML
+    either the upgrade button is disabled or the in-place upgrade pre-flight check will fail, with a
+    failure message pops up that says: In-place upgrades from <existing_version> are not
+     supported. Follow the documentation for the backup based upgrade steps.
+In this case, it is recommended to go with ML Backup/Restore to upgrade to the latest CML
+    version, essentially performing a workspace upgrade with all your previous data in place. Since
+    a restore always installs the latest CML version, it essentially performs a workspace upgrade
+    with all your existing workspace data intact. Backup/Restore is the recommended path to upgrade
+    when a CML Workspace cannot be reliably in-place upgraded from its current version.
+
+Prerequisites
+Backup/Restore on AWS
+For AWS, Backup/Restore functionality is GA, and is usable from the UI. The documentation is
+    already available in Backing up ML workspaces. Please see the documentation for
+    prerequisites for using Backup/Restore on AWS.
+Backup/Restore on Azure
+Currently, Backup/Restore in Azure is available only through the CDP CLI.
+Additionally, the Backup/Restore feature does not perform a backup of NFS.
+
+Steps to upgrade workspaces using Backup/Restore
+There are five major steps to go through to upgrade older workspaces to the current version.
+    Make sure to go through the following steps in order.
+noteMake sure that disks are tagged to avoid garbage collection during backup, restore, upgrade,
+    or suspend operations on CML workspaces. For more information, see Tagging disks to avoid
+     garbage collection.
+
+
+Related informationUpgrading ML WorkspacesTagging disks to avoid garbage collection
+Step 1 : Backing up the workspace
+After Step 1, Backing up the workspace, you should follow steps 2 through 5 in order to
+  restore the workspace.
+Backing up AWS workspace
+For information on backing up workspaces, see Backing up ML workspaces.
+
+
+The time required to backup or restore AWS based workspaces mainly depends on the size of EFS
+    (File System for projects storage) associated with the workspace. To get the EFS ID associated
+    with the workspace, click on View Workspace Details from the UI and note
+    the Filesystem ID. The size associated with the EFS can be retrieved from
+    the AWS console using the Filesystem ID.
+The Backup timeout for storage volumes (EFS and EBS) is by default set to 12 hours, but the
+    user can customize the timeout. While clicking on the Backup Workspace,
+    there will be an option to specify Backup Timeout (in minutes), to
+    accommodate users with large EFS size.
+Similarly, if the user suspects that the EFS is too large to be restored within the default 12
+    hours, custom restore timeouts can be set in the advanced settings during restoring an AWS
+    workspace from a backup snapshot through the UI.
+Tracking running backups on AWS
+For AWS based backup jobs, CML prints out backup job completion percentage for all backup jobs
+    associated with a backup snapshot at an interval of 15 minutes as part of event logs. However,
+    the completion percentage is an estimate returned by AWS APIs, and CML just surfaces the same.
+    CML is not running any mechanisms/heuristics to calculate the completion percentage for a
+    particular backup.
+From our experience, we have seen that AWS-provided completion percentages can vary wildly,
+    jump abruptly and can be downright misleading. CML advises to take the percentage numbers with a
+    grain of salt.
+
+Canceling long running backups on AWS
+Backups generally take a long time if you have lots of data in EFS. This is expected behavior.
+    However if the backup is taking longer than expected, you can cancel the backup jobs from AWS
+    dashboard and CML will detect this in a while, and will fail the backup.
+To cancel the corresponding AWS backup jobs from AWS dashboard:
+
+Go to AWS Backup > Jobs > Backup Jobs and identify the running backups associated
+     with the backup snapshot. The backups should have started at approximately the same time you
+     triggered the backup from the CML console.
+Abort all such backup jobs.
+
+You can retry the backups again using the above mentioned steps for backing up the
+    workspace.
+
+Backing up Azure workspace
+Prerequisites
+There are a few prerequisites to Azure Backup/Restore:
+
+If your environment is configured with a pre-existing resource group, then CML backup
+     service would use the same resource group for taking snapshots of Azure Disks. Else, please
+     ensure that you have a resource group created in your Azure Account with the nomenclature
+      cml-snapshots-<azure_region> . For example, if your Azure workspace
+     resides in the westus2 region, there should be a resource group present
+     named cml-snapshots-westus2.
+Please refer to Azure documentation for roles needed to perform a backup:
+     Use Azure role-based access control to manage Azure Backup recovery points. 
+
+Suspending the workspace
+Suspend the workspace to ensure correctness of data in NFS on Azure during backup. Suspend the
+    workspace by clicking on the Suspend Workspace option for the workspace
+    and wait for the suspend operation to complete successfully. 
+Since the workspace is now in a suspended state, it is now guaranteed that no writes/mutations
+    are happening on the NFS or Azure disks associated with the workspace.
+Invoking Backup
+Once you have the prerequisites sorted, please note the workspace CRN from the View Workspace
+    Details page, and run the following command from CDPCLI to initiate workspace backup. Please
+    replace the values in brackets with your own values.
+$ cdp ml backup-workspace --workspace-crn <crn:cdp:ml:us-west-1:9d74eee4-1cad-45d7-b645-7ccf9edbb73d:workspace:792f8cfc-ba33-428d-9c80-b9bc6e799ce9> --backup-name <name-of-backup-for-upgrade>
+    
+    —-
+    {
+    "backupCrn": ""crn:cdp:ml:us-west-1:9d74eee4-1cad-45d7-b645-7ccf9edbb73d:workspace_backup:b6cee77e-9e38-4e30-9d72-481088f43de0""
+    }
+    
+Please note the backup CRN returned from the CLI call, as it is the backup snapshot which will
+    be used to restore into a new workspace.
+Use these variables to restore into a new workspace:
+
+backupCRN: The CRN returned in the response of CLI call for backup-workspace
+existingNFS: The existing NFS server path can be retrieved from View Workspace Details > Filesystem ID.
+existingNFSVersion: The existing NFS version can be retrieved from View Workspace Details > NFS Protocol version.
+
+notePlease do not perform any operations with the existing NFS in use with the suspended
+    workspace as we will attach the same NFS in the new (restored) workspace.
+
+
+
+Step 2: Restoring into a new workspace with a different workspace URL/domain
+  endpoint
+Restore into a new workspace with useStaticSubdomain set to
+      false in the CDP CLI. This brings up a workspace with a different URL/domain
+    endpoint from the original workspace that was backed up. This step is needed to ensure that we
+    can safely validate that restoration of the workspace is successful before executing Step 4
+    below to delete the original workspace. If any of the following steps fail, please contact your
+    customer support representative.
+Restore on AWS
+For information on this step, see Restore an ML workspace.
+
+The UI for restore is quite similar to the Provision workspace UI and
+        should be familiar. 
+
+Restore on Azure
+To restore into a new workspace from the backup taken above, please run the following CDP CLI
+    command. The workspace provisioning parameters of the request needs to be configured according
+    to your needs. Please ensure that no “write operations” are undertaken on this restored
+    workspace since we will be using the same NFS in Step 5. This is to ensure that there is no
+    state mismatch between the restored Azure disks and the NFS.
+$ cdp ml restore-workspace --cli-input-json ‘{
+  "newWorkspaceParameters": {
+    "environmentName": "eng-ml-dev-env-azure",
+    "workspaceName": "new-workspace",
+    "disableTLS": false,
+    "usePublicLoadBalancer": false,
+    "enableMonitoring": true,
+    "enableGovernance": true,
+    "enableModelMetrics": true,
+    "whitelistAuthorizedIPRanges": false,
+    "existingNFS": "<existingNFS>",
+    "nfsVersion": "<existingNFSVersion>",
+    "provisionK8sRequest": {
+      "instanceGroups": [
+        {
+          "instanceType": "Standard_DS3_v2",
+          "rootVolume": {
+            "size": 128
+          },
+          "autoscaling": {
+            "minInstances": 1,
+            "maxInstances": 10
+          }
+        }
+      ],
+      "environmentName": "eng-ml-dev-env-azure",
+      "tags": [],
+      "network": {
+        "topology": {
+          "subnets": []
+        }
+      }
+    },
+  },
+  "backupCrn": "<backupCRN>",
+  "useStaticSubdomain": false
+}
+‘
+
+
+—-
+{
+    "workspaceCrn": "crn:cdp:ml:us-west-1:9d74eee4-1cad-45d7-b645-7ccf9edbb73d:workspace:081ee5d2-4e82-487c-9404-2537a0ab4019"
+}
+
+
+Wait for the restore operation to succeed.
+After restore, please login to the newly created workspace and verify that all projects from
+    the original workspace are available. Do not launch any sessions or applications, create new
+    projects, or otherwise make any changes to the workspace, as that can make changes to the NFS
+    file system that will be incompatible with what will be restored in step 4 below.
+
+
+Related informationRestore an ML workspace
+Step 3: Delete the backed-up workspace
+If Step 2 completes successfully, then delete the old (original) workspace.
+After all is validated, and you confirm that the projects are in place, delete the original
+   backed up workspace. To do so, from the UI,  select Remove Workspace.
+
+
+Step 4: Restore into a new workspace with same URL/domain endpoint as backed up
+  workspace
+If Step 2 and 3 complete successfully, then restore into a new workspace with the same
+  URL/endpoint as the backed-up workspace.
+Since a restored workspace is a brand new workspace with data from an older workspace, a
+   restored workspace gets a new subdomain by default. This means that any endpoints (for models,
+   applications, etc.) that you were using from the old workspace is not valid.
+To maintain the endpoints that were configured with the older workspace,  check the option
+        useStaticSubdomain in the restore payload to provision the new
+      restored workspace with the same URL as the older one. Additionally, Use Static
+        Subdomain is also provided as a checkbox in the Restore UI.
+Restore on AWS
+To restore a workspace, see Restore as ML workspace. While restoring, please
+        ensure that Use Static Subdomain is checked in the restore UI.
+
+
+Restore on Azure
+To restore into a new workspace from the backup taken above, please run the following CDP CLI
+    command. You need to tune various parameters of the request to suit workspace configuration
+    needs.
+$ cdp ml restore-workspace --cli-input-json ‘{
+  "newWorkspaceParameters": {
+    "environmentName": "eng-ml-dev-env-azure",
+    "workspaceName": "new-workspace",
+    "disableTLS": false,
+    "usePublicLoadBalancer": false,
+    "enableMonitoring": true,
+    "enableGovernance": true,
+    "enableModelMetrics": true,
+    "whitelistAuthorizedIPRanges": false,
+    "existingNFS": "<existingNFS>",
+    "nfsVersion": "<existingNFSVersion>",
+    "provisionK8sRequest": {
+      "instanceGroups": [
+        {
+          "instanceType": "Standard_DS3_v2",
+          "rootVolume": {
+            "size": 128
+          },
+          "autoscaling": {
+            "minInstances": 1,
+            "maxInstances": 10
+          }
+        }
+      ],
+      "environmentName": "eng-ml-dev-env-azure",
+      "tags": [],
+      "network": {
+        "topology": {
+          "subnets": []
+        }
+      }
+    },
+  },
+  "backupCrn": "<backupCRN>",
+  "useStaticSubdomain": true
+}
+‘
+
+
+—-
+{
+    "workspaceCrn": "crn:cdp:ml:us-west-1:9d74eee4-1cad-45d7-b645-7ccf9edbb73d:workspace:081ee5d2-4e82-487c-9404-2537a0ab4019"
+}
+
+
+
+Related informationRestore an ML workspace
+Step 5: Delete the interim restored workspace
+The upgraded workspace which was restored from the backup, in order to check the sanity
+  of the restored workspace in Step 2, can now be safely deleted. Please identify the workspace from
+  your control plane UI and delete the same.
+
+Frequently Asked Questions
+Some frequently asked questions about upgrading workspaces with the Backup/Restore
+  feature.
+
+How long does it take for a CML workspace to be backed-up and/ or restored?
+CML relies on cloud provider’s native services for backup/ restore. Time consumed for backup
+     and restore depends on multiple factors such as infrastructure, network latency, data size,
+     file structure, number of files etc and can vary across workspaces. For internal test
+     parameters, the backup of 600GB data took approximately 10 hours on AWS.
+What happens to customizations done on Kubernetes Clusters during Restore?
+CML does not support applying customizations during Backup and Restore. All customizations
+     will have to be applied through automation or manually post CML Workspace Restore.
+
+

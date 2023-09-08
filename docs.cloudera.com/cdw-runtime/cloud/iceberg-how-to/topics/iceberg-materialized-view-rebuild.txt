@@ -1,0 +1,127 @@
+Materialized view rebuild featureCloudera Docs
+Materialized view rebuild feature
+Updates to materialized view contents when new data is added to the underlying table are
+  critical; otherwise, queries can return stale data. 
+An update can occur under the following conditions: 
+As a row-level incremental rebuild of the view after inserting data into a table Source
+     tables can be Iceberg V2 or Hive full ACID.
+As a full rebuild of the view
+A full rebuild can be expensive. An incremental rebuild updates only the affected parts of
+   the materialized view, decreasing rebuild step execution time.
+An incremental rebuild occurs automatically when you insert (append) data into a source table;
+   otherwise, after you make some other type of change, for example a delete, you must manually
+   start a full rebuild. 
+You use the ALTER command to manually start a full rebuild of the materialized view
+   from Hive as follows:
+Hive syntax
+ALTER MATERIALIZED VIEW <name of view> REBUILD;
+
+Full rebuild example
+In this example, first you set required properties. Next, you create Iceberg tables, a V1
+    table and a V2 table, from Hive. You insert data into the tables and create a materialized view
+    of the joined tables. You insert some new values into one of the source tables, rendering the
+    materialized view stale. Finally, you rebuild the materialized view using explain cbo to show
+    the rebuild plan The rebuild plan indicates a full rebuild will occur, which means the
+    definition query will be executed.
+
+drop table if exists tbl_ice;
+drop table if exists tbl_ice_v2;
+
+create external table tbl_ice(a int, b string, c int) stored by iceberg stored as orc tblproperties ('format-version'='1');
+create external table tbl_ice_v2(d int, e string, f int) stored by iceberg stored as orc tblproperties ('format-version'='2');
+
+insert into tbl_ice_v2 values (1, 'one v2', 50), (4, 'four v2', 53), (5, 'five v2', 54);
+
+create materialized view mat1 as
+select tbl_ice.b, tbl_ice.c, tbl_ice_v2.e from tbl_ice 
+join tbl_ice_v2 on tbl_ice.a=tbl_ice_v2.d where tbl_ice.c > 52;
+group by tbl_ice.b tbl_ice.c;
+
+-- view should be empty
+select * from mat1;
+
+-- view is up-to-date, use it
+explain cbo
+select tbl_ice.b, tbl_ice.c, tbl_ice_v2.e from tbl_ice join tbl_ice_v2 on tbl_ice.a=tbl_ice_v2.d where tbl_ice.c > 52;
+
+-- insert some new values to one of the source tables
+insert into tbl_ice values (1, 'one', 50), (2, 'two', 51), (3, 'three', 52), (4, 'four', 53), (5, 'five', 54);
+
+-- view is outdated, cannot be used
+explain cbo
+select tbl_ice.b, tbl_ice.c, tbl_ice_v2.e from tbl_ice join tbl_ice_v2 on tbl_ice.a=tbl_ice_v2.d where tbl_ice.c > 52;
+
+explain cbo
+alter materialized view mat1 rebuild;
+
+-- view should contain data
+select * from mat1;
+
+-- view is up-to-date again, use it
+explain cbo
+select tbl_ice.b, tbl_ice.c, tbl_ice_v2.e from tbl_ice join tbl_ice_v2 on tbl_ice.a=tbl_ice_v2.d where tbl_ice.c > 52;
+group by tbl_ice.b tbl_ice.c;
+
+Automatic query rewrite example
+In this example, you create an Iceberg table, insert some values, and create the materialized
+    view. The view is partitioned using a partition specification and stored in the Iceberg ORC
+    format. The v1 format version is specified in this example (the v2 format is also supported).
+    You then look at a description of the view and see that the query rewrite option is enabled by
+    default. An automatic incremental rebuild is possible when this option is enabled.
+
+   drop table if exists tbl_ice;
+   create external table tbl_ice(a int, b string, c int) stored by iceberg stored as orc tblproperties ('format-version'='1');
+   
+   -- insert some new values into one of the source tables
+   
+   insert into tbl_ice values (1, 'one', 50), (2, 'two', 51), (3, 'three', 52), (4, 'four', 53), (5, 'five', 54);
+   
+   explain 
+   create materialized view mat1 partitioned on spec (bucket(16, b), truncate(3, c)) stored by Iceberg stored as orc tblproperties(‘format-version’=’1’)as
+   select tbl_ice.b, tbl)ice.c from tbl_ice where tbl_ice.c > 52;
+   
+   -- the output query plan query indicates a rewrite is enabled
+   
+   POSTHOOK: query: explain
+   create materialized view mat1 …
+   …
+   STAGE PLANS
+  …
+-- In stage one, the materialized view is created by calling the Iceberg API to create the table object.
+rewrite enabled
+…
+You use the DESCRIBE command to see the output query plan, which shows details about the view, including if it can be used in automatic query rewrites.
+-- check the materialized view details
+    describe formatted mat1;
+    …
+    #col_name     data_type      comment
+    b             string
+    c             int
+    
+    #Partition Transform Information
+    #col_name     transform_type
+    b             bucket(16)
+    c             TRUNCATE[3]
+    
+    
+    #detailed table information
+    …
+    Table_type:    MATERIALIZED_VIEW
+    Table Parameters:
+    …
+    current-snapshot-id   563939E424367334713
+    …
+    metadata_location     …
+    …
+    Table_type            Iceberg
+    …
+    #Materialized View Information
+    Original Query:  …
+    Expanded Query:  …
+    Rewrite Enabled: Yes   
+With the query rewrite option enabled, you insert data into the source table, and incremental
+    rebuild occurs automatically. You do not need to rebuild the view manually before running
+    queries.
+
+
+Related informationMaterialized view featureParent topic: Apache Iceberg features

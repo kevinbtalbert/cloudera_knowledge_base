@@ -1,0 +1,200 @@
+Configure a CSV Extractor Configuration FileCloudera Docs
+Configure a CSV Extractor
+      Configuration File
+After you have chosen a threat intelligence feed source, you must configure an
+      extractor configuration file that describes the source.
+
+ Log in as root user to the host on which Metron is installed. 
+
+ Create a file called extractor_config_temp.json and add the
+               following content: 
+
+{
+"config" : {
+    "columns" : {
+        "domain" : 0
+        ,"source" : 1
+    }
+    ,"indicator_column" : "domain"
+    ,"type" : "zeusList"
+    ,"separator" : ","
+  }
+  ,"extractor" : "CSV"
+} 
+
+
+
+ You can transform and filter the enrichment data as it is loaded into HBase by
+               using Stellar extractor properties in the extractor configuration file. CCP supports
+               the following Stellar extractor properties: 
+
+
+
+value_transform
+
+
+Transforms fields defined in the columns mapping with
+                           Stellar transformations. New keys introduced in the transform are added
+                           to the key metadata. For example:
+"value_transform" : {
+   "domain" : "DOMAIN_REMOVE_TLD(domain)"
+
+
+value_filter
+
+
+Allows additional filtering with Stellar predicates based on results from
+                           the value transformations. In the following example, records whose domain
+                           property is empty after removing the TLD are omitted.
+"value_filter" : "LENGTH(domain) > 0",
+  "indicator_column" : "domain",
+
+
+indicator_transform
+
+
+Transforms the indicator column independent of the value
+                           transformations. You can refer to the original indicator value by using
+                              indicator as the variable name, as shown in the
+                           following example. In addition, if you prefer to piggyback your
+                           transformations, you can refer to the variable domain,
+                           which allows your indicator transforms to inherit transformations done to
+                           this value during the value transformations.
+"indicator_transform" : {
+   "indicator" : "DOMAIN_REMOVE_TLD(indicator)"
+
+
+indicator_filter
+
+
+Allows additional filtering with Stellar predicates based on results from
+                           the value transformations. In the following example, records whose
+                           indicator value is empty after removing the TLD are omitted.
+"indicator_filter" : "LENGTH(indicator) > 0",
+  "type" : "top_domains",
+
+
+
+If you include all of the supported Stellar extractor properties in the extractor
+               configuration file, it will look similar to the following:
+
+
+{
+  "config" : {
+    "zk_quorum" : "$ZOOKEEPER_HOST:2181",
+    "columns" : {
+       "rank" : 0,
+       "domain" : 1
+    },
+    "value_transform" : {
+       "domain" : "DOMAIN_REMOVE_TLD(domain)"
+    },
+    "value_filter" : "LENGTH(domain) > 0",
+    "indicator_column" : "domain",
+    "indicator_transform" : {
+       "indicator" : "DOMAIN_REMOVE_TLD(indicator)"
+    },
+    "indicator_filter" : "LENGTH(indicator) > 0",
+    "type" : "top_domains",
+    "separator" : ","
+  },
+  "extractor" : "CSV"
+}
+
+Running a file import with the above data and extractor configuration will result
+               in the following two extracted data records:
+
+
+
+Indicator
+Type
+Value
+
+
+
+google
+top_domains
+{ "rank" : "1", "domain" : "google" }
+
+
+yahoo
+top_domains
+{ "rank" : "2", "domain" : "yahoo" }
+
+
+
+
+ To access properties that reside in the global configuration file, provide a
+               ZooKeeper quorum via the zk_quorum property. If the global
+               configuration looks like "global_property" : "metron-ftw", enter the
+               following to expand the value_transform: 
+
+"value_transform" : {
+    "domain" : "DOMAIN_REMOVE_TLD(domain)",
+     "a-new-prop" : "global_property"
+ },
+
+The resulting value data will look like the following:
+
+
+
+Indicator
+Type
+Value
+
+
+
+google
+top_domains
+{ "rank" : "1", "domain" : "google", "a-new-prop" : "metron-ftw"
+                              }
+
+
+yahoo
+top_domains
+{ "rank" : "2", "domain" : "yahoo", "a-new-prop" : "metron-ftw"
+                              }
+
+
+
+
+ Remove any non-ASCII characters: 
+
+iconv -c -f utf-8 -t ascii extractor_config_temp.json -o extractor_config.json
+
+
+ Configure the mapping for the element-to-threat intelligence feed. 
+This step configures which element of a tuple to cross-reference with which threat
+               intelligence feed. This configuration is stored in ZooKeeper.
+
+
+Log in as root user to the host that has Metron installed.
+
+
+Cut and paste the following file into a file called
+                        enrichment_config_temp.json":
+
+{
+     "zkQuorum" : "$ZOOKEEPER_HOST:2181"
+    ,"sensorToFieldList" : {
+     "$DATASOURCE" : {
+          "type" : "THREAT_INTEL"
+         ,"fieldToEnrichmentTypes" : {
+               "domain_without_subdomains" : [ "zeusList" ]
+          }
+     }
+   }
+}
+
+
+
+
+Remove the non-ASCII characters:
+
+iconv -c -f utf-8 -t ascii enrichment_config_temp.json -o enrichment_config.json
+
+
+
+
+
+Parent topic: Bulk Loading CSV Threat Intelligence Sources

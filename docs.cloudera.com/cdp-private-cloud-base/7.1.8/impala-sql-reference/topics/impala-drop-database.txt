@@ -1,0 +1,124 @@
+DROP DATABASE statementCloudera Docs
+DROP DATABASE statement
+The DROP DATABASE statement removes a database from the system. The
+    physical operations involve removing the metadata for the database from the metastore, and
+    deleting the corresponding *.db directory from HDFS.
+Syntax:
+DROP (DATABASE|SCHEMA) [IF EXISTS] database_name [RESTRICT | CASCADE];
+Statement type: DDL
+      
+Usage notes:
+
+      By default, the database must be empty before it can be dropped, to avoid losing any data.
+     In Impala 2.3 and higher, you can include the CASCADE clause to
+        make Impala drop all tables and other objects in the database before dropping the database
+        itself. The RESTRICT clause enforces the original requirement that the
+        database be empty before being dropped. Because the RESTRICT behavior is
+        still the default, this clause is optional. 
+      The automatic dropping resulting from the CASCADE clause follows the same rules as the
+      corresponding DROP TABLE, DROP VIEW, and DROP FUNCTION statements.
+      In particular, the HDFS directories and data files for any external tables are left behind when the
+      tables are removed.
+    
+      When you do not use the CASCADE clause, drop or move all the objects inside the database manually
+      before dropping the database itself:
+    
+
+
+          Use the SHOW TABLES statement to locate all tables and views in the database,
+          and issue DROP TABLE and DROP VIEW statements to remove them all.
+        
+
+
+
+          Use the SHOW FUNCTIONS and SHOW AGGREGATE FUNCTIONS statements
+          to locate all user-defined functions in the database, and issue DROP FUNCTION
+          and DROP AGGREGATE FUNCTION statements to remove them all.
+        
+
+
+
+          To keep tables or views contained by a database while removing the database itself, use
+          ALTER TABLE and ALTER VIEW to move the relevant
+          objects to a different database before dropping the original database.
+        
+
+
+      You cannot drop the current database, that is, the database your session connected to
+      either through the USE statement or the -d option of impala-shell.
+      Issue a USE statement to switch to a different database first.
+      Because the default database is always available, issuing
+      USE default is a convenient way to leave the current database
+      before dropping it.
+    
+Hive considerations:
+
+      When you drop a database in Impala, the database can no longer be used by Hive.
+    
+Examples:
+ See CREATE DATABASE statement for examples covering CREATE
+          DATABASE, USE, and DROP DATABASE. 
+Amazon S3 considerations:
+ In Impala 2.6 and higher, Impala DDL
+        statements such as CREATE DATABASE, CREATE TABLE,
+          DROP DATABASE CASCADE, DROP TABLE, and ALTER
+          TABLE [ADD|DROP] PARTITION can create or remove folders as needed in the Amazon
+        S3 system. Prior to Impala 2.6, you had to create folders yourself and point Impala
+        database, tables, or partitions at them, and manually remove folders when no longer needed.
+Cancellation: Cannot be cancelled.
+      
+HDFS permissions:
+
+      The user ID that the impalad daemon runs under,
+      typically the impala user, must have write
+      permission for the directory associated with the database.
+    
+Examples:
+create database first_db;
+use first_db;
+create table t1 (x int);
+
+create database second_db;
+use second_db;
+-- Each database has its own namespace for tables.
+-- You can reuse the same table names in each database.
+create table t1 (s string);
+
+create database temp;
+
+-- You can either USE a database after creating it,
+-- or qualify all references to the table name with the name of the database.
+-- Here, tables T2 and T3 are both created in the TEMP database.
+
+create table temp.t2 (x int, y int);
+use database temp;
+create table t3 (s string);
+
+-- You cannot drop a database while it is selected by the USE statement.
+drop database temp;
+ERROR: AnalysisException: Cannot drop current default database: temp
+
+-- The always-available database 'default' is a convenient one to USE
+-- before dropping a database you created.
+use default;
+
+-- Before dropping a database, first drop all the tables inside it,
+-- or in Impala 2.3 and higher use the CASCADE clause.
+drop database temp;
+ERROR: ImpalaRuntimeException: Error making 'dropDatabase' RPC to Hive Metastore:
+CAUSED BY: InvalidOperationException: Database temp is not empty
+show tables in temp;
++------+
+| name |
++------+
+| t3   |
++------+
+
+-- Impala 2.3 and higher:
+drop database temp cascade;
+
+-- Earlier releases:
+drop table temp.t3;
+drop database temp;
+
+Related informationCREATE DATABASE statementImpala with Amazon S3Parent topic: Impala SQL statements

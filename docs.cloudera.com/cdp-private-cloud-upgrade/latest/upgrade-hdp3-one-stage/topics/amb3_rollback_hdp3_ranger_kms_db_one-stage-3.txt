@@ -1,0 +1,66 @@
+Restore Ranger KMS DatabaseCloudera Docs
+Restore Ranger KMS Database
+Restoring Ranger KMS involves steps for restoring MSQL, POSTGRES, and Oracle
+        databases. 
+MySQL
+To restore the database, perform the folllowing: 
+Delete the existing database. 
+Create an empty new database on the Database host. 
+Restore the database using below msyql command.
+                    mysql -u root
+drop database rangerkms;
+create database rangerkms;
+GRANT ALL PRIVILEGES ON rangerkms.* TO 'rangerkms'@'localhost';
+$ mysql -u [username] -p  existing_empty_db_name < dump_fileName.sql
+Examplemysql -u rangerkms -p rangerkms < /root/backups/ranger/db/kms/rangerkms.sql
+Press the Enter key. Type the database password when the password prompts. 
+POSTGRES
+To restore data, perform the folllowing: 
+
+Delete the existing database. 
+Create an empty new database in its place.  
+Run the below command on postgres database host.
+
+dropdb -U owner_username dbname; [Enter db owner password at the prompt]
+Example
+dropdb -U rangerkms  rangerkms;
+
+su  -  postgres
+psql 
+create database rangerkms; 
+ALTER DATABASE rangerkms OWNER TO rangerkms;
+\q
+exit
+psql -U rangerkms rangerkms < /root/backups/ranger/db/kms/rangerkms.sql 
+[Enter db owner password at the prompt as rangeradmin]
+For
+            Oraclerm -rf del_kms_tbl_cmd.sql
+        	sqlplus -s rangerkms/rangerkms << EOF
+               spool on
+        	spool del_kms_tbl_cmd.sql
+        	SELECT 'DROP TABLE "' || TABLE_NAME || '" CASCADE CONSTRAINTS;' FROM user_tables
+        			union ALL
+        			select 'drop '||object_type||' '|| object_name || ';' from user_objects 
+        			where object_type in ('VIEW','PACKAGE','SEQUENCE', 'PROCEDURE', 'FUNCTION')
+        			union ALL
+        			SELECT 'drop '
+        			||object_type
+        			||' '
+        			|| object_name
+        			|| ' force;'
+        			FROM user_objects
+        			WHERE object_type IN ('TYPE');
+        	spool off
+	@del_kms_tbl_cmd.sql
+	exit;
+EOF
+
+Press Enter and then run the following command.
+            imp rangerkms/rangerkms file=backups/ranger/db/kms/orcl12c.sql 
+log=backups/ranger/db/kms/restore.log
+
+noteIf you have performed Ambari-Infra rollback already, then there are no additional
+                rollback steps required to restore the Solr Collections.
+
+
+Parent topic: Ranger

@@ -1,0 +1,425 @@
+Known Issues in Apache OzoneCloudera Docs
+Known Issues in Apache Ozone
+Learn about the known issues in Ozone, the impact or changes to the functionality,
+        and the workaround.
+
+
+CDPD-44777: Ozone List Volume CLI does not look up Ranger ACLs when Ranger is enabled. It shows native Ozone ACL which is not supported by Cloudera and is actually not used in other operations when Ranger is enabled.
+None. This is only a display issue and does not affect actual permissions.
+
+
+CDPD-50447: When SCM High Availability is enabled, each of
+                    the SCM web UIs report the host of the web ui as the leader of HA, and the other
+                    two as followers. This gives wrong information
+Correct output is available by running the
+                        ozone admin scm roles --service-id=<ID> command.
+
+
+OPSAPS-66501: Currently it is not possible to configure High Availability for SCM roles in Ozone post deployment. We should be able to change the HA configuration through CM, bringing it in line with other services.
+At present it requires deleting Ozone and then adding it back with the SCM HA configuration in place and manually cleanup the Ozone data in between. For more
+                    information, read the KB article.
+
+
+OPSAPS-66500: Currently, it is not possible to enable Kerberos in Ozone after it has been deployed, despite all the required configuration changes being created when the box is checked in the Ozone configurations in Cloudera Manager.
+Ozone must be deleted and redeployed with Kerberos enabled. Due to OPSAPS-66499, this requires manual data cleanup in between. For more
+                    information, read the KB article.
+
+
+OPSAPS-66499: When you delete Ozone from a cluster using
+                    Cloudera Manager, Ozone data is not cleaned up. This may cause issues when Ozone
+                    is redeployed.
+You must clean up the data manually. For more
+                    information, read the KB article.
+
+
+OPSAPS-62327: In an Ozone cluster without any gateway roles, Ozone is unable to deploy client configurations and displays the ConfigGenException error.
+You must add the Ozone gateway roles to the cluster.
+
+
+HDDS-7132: NullPointerException if Hive/Impala tries to create database on an Ozone path without permission.
+If Hive or Impala attempts to access an Ozone path that
+                    does not exist or if you do not have necessary permission to access, the
+                    NullPointerException is displayed instead of showing the full stack trace. 
+Check the HiveMetaStore log file to see the full
+                    stack trace. Make sure the Impala or Hive user has the necessary permission. For
+                    example, if Impala tries to creates a database abc and the Hive Warehouse
+                    Directory is at ofs://ozone/vol1/bucket1/managed/hive,
+                    grant All permissions to the impala user at path
+                        ofs://ozone/vol1/bucket1/managed/hive/abc.db
+
+
+CDPD-46877: Ozone Internal SSL certificate expiration for versions
+                    7.1.8 CHF3 and higher
+To force renew internal certificates, you can restart the Ozone service.If
+                        the cluster is restarted within 28 days before the internal certificates
+                        expire, then the internal certificates are renewed during the restart. The
+                        28 days period is configurable with the help of  the
+                            hdds.x509.renew.grace.duration Ozone configuration
+                        property. The expiration date of the certificates in the system can be
+                        checked with the help of ozone admin cert list command by
+                        administrators through the Ozone command line interface.
+
+
+Ozone Internal SSL certificate expiration for versions
+                    7.1.8 CHF2 and lower
+
+Internally the Ozone services use a separate Public Key Infrastructure (PKI), which creates individual SSL certificates under an internal root CA certificate that is trusted amongst the Ozone service roles. These certificates are created during the security bootstrap (first startup of the services). The setup uses 2048-bit long RSA key pairs that are used for signing tokens and mutual TLS authentication for internal communications.
+The Primordial SCM (Storage Container Manager) service acts as the root CA,
+                        which generates subordinate CA certificates for all the SCM nodes, and for
+                        other service roles their certificates are signed by one of these
+                        subordinate CA certificates. The CA certificates has a lifetime of 5 years
+                        and the service role certificates have a validity of 1 year.
+The service currently does not support certificate revocation and certificate
+                        renewal. Both the features are currently under development. Until then,
+                        there is a manual workaround available when the certificates expire.
+
+The workaround is to remove the existing key
+                    material and certificates from the services metadata directory and allow the
+                    system to regenerate the certificates at startup. Procedure to force renew
+                        internal certificates:
+
+Stop all the Ozone roles except the Storage Container
+                                Managers (SCM)
+For every host with an Ozone role added, locate the directories that are
+                            storing Ozone internal certificates (Since SCM certificates expire in 5
+                            years, they can be untouched): find / -name ozone-metadata
+                                2>/dev/null | grep -v "scm" | while read line; do find $line -name
+                                certs; done
+Move these certs directories to a backup location
+For every host with an Ozone role added, locate the directories that are
+                            storing key material for Ozone internal certificates (do not touch
+                            SCMs): find / -name ozone-metadata 2>/dev/null | grep -v "scm"
+                                | while read line; do find $line -name keys; done
+Move these keys directories to a backup location
+For every host with an Ozone Manager role, locate the VERSION file of
+                            the Ozone Manager: find / -name om 2>/dev/null | while read
+                                line; do find $line -name VERSION; done | sort | uniq
+Backup the version file (just in case you need to restore for any
+                            reason)
+In the version file, remove the line starting with
+                                omCertSerialId in the file
+Start the stopped Ozone roles and certificates will be regenerated
+                            during startup
+
+
+Certificate revocation
+To revoke a certificate, remove the full trust chain to stop trusting a
+                        compromised certificate. For this, remove the SCM certificates or any other
+                        certificates from the system. During the startup of the system, new
+                        certificates are created and distributed. The old certificates are not
+                        trusted anymore as the root CA certificate changes as
+                            well.Procedure to force revoke internal certificates:
+Stop Ozone service and all of its roles including SCMs
+Include SCM's certs folders. Note that the Primordial SCM node will have
+                            two certs folder, one for the root CA and other for the intermediate CA
+                            that the node holds. Rest of the SCMs will have just one folder for the
+                            intermediate CA role that the node serves. The modified command is:
+                                find / -name ozone-metadata 2>/dev/null | while read line;
+                                do find $line -name certs; done
+Move these certs directories to a backup location
+Locate the key material and move it to a backup folder. The modified
+                            command is: find / -name ozone-metadata 2>/dev/null | while
+                                read line; do find $line -name keys; done
+Move these keys directories to a backup location
+The VERSION file of SCM has to be updated similarly to Ozone Manager's
+                                VERSION file. To locate both the
+                                SCM and OM VERSION files
+                            on the hosts, execute the following command: find / -name om -o
+                                -name scm 2>/dev/null | while read line; do find $line -name
+                                VERSION; done | sort | uniq
+Backup the version file (just in case you need to restore for any
+                            reason)
+In OM's VERSION file remove the line starting with
+                                omCertSerialId, in SCM's
+                                VERSION file remove the line starting with
+                                scmCertSerialId.
+Start the stopped Ozone roles and certificates will be regenerated
+                            during startup.
+
+
+
+CDPD-35632: The default block level checksum doesn't work when running distcp from HDFS to Ozone or the other way around, because the two file systems could well manage underlying blocks very differently.
+Use a file level checksum instead. For example, append `-Ddfs.checksum.combine.mode=COMPOSITE_CRC` to the distcp command.
+
+CDPD-43348: The following warnings and erros that are not
+                    necessary appear on the console output:
+Error messages: SCM realises late
+                    that one of the datanode is damaged and displays the Failed to
+                        execute command ReadChunk on the pipeline error. However, SCM
+                    reconstructs the datanode from the parity block after realising the datanode is
+                    offline.
+INFO/WARNING messages: The
+                    info/warning messages flood the console output with unhelpful messages that you
+                    must remove.
+You must scrap the shell log file and suppress the
+                    info/warning messages. Logs are suppressed until you specify the logs using the
+                    following environment variables: OZONE_LOGLEVEL and OZONE_ROOT_LOGGER. For
+                    example, by setting the environment variables, you can display only the info
+                    messages into the console output.
+                        OZONE_ROOT_LOGGER=INFO,console and
+                        OZONE_LOGLEVEL=info. For more information on the fix,
+                    see HDDS-7421
+
+
+CDPD-36539: Container move operations timeout. As a
+                    result, container does not move in current iteration. If there are source and
+                    target candidates for this container move in subsequent iteration, the container
+                    will be moved. This issue does not cause any failure in actual data path.
+None
+
+
+CDPD-43942: Requests to modify an Ozone S3 tenant may fail with the error "Timed out acquiring authorizer write lock. Another multi-tenancy request is in-progress." even if another request is not in progress.
+Retry the request.
+
+
+CDPD-36389: The configurations
+                    "datanodes.involved.max.percentage.per.iteration" and
+                    "size.moved.max.per.iteration" are meant to limit the max number of datanodes
+                    that'll be involved and max size that can move in an iteration. This bug will
+                    cause balancer to stop an iteration when it's 2 DNs or 1 Container size (5GB)
+                    away from hitting these limits. However, these datanodes can again be considered
+                    for balancing in the next iteration. This means the cluster will end up balanced
+                    after enough iterations, albeit a bit slowly. This bug is apparent in small
+                    clusters of around 4 DNs where the DN could be either the source or target for a
+                    lot of moves but the iteration gets stopped when 3 DNs have been involved. It'll
+                    take a higher number of iterations to eventually balance this cluster. While
+                    this is a performance issue, it doesn't prevent balancer from ultimately
+                    balancing the cluster. To find out if this bug is being hit, search for "Hit max
+                    datanodes to involve limit" and "Hit max size to move limit" in Debug logs.
+Increase the speed for balancing by decreasing the
+                    interval between each iteration using the configuration
+                    "balancing.iteration.interval". Note that the value of this configuration must
+                    be greater than "hdds.datanode.du.refresh.period".
+                    "size.moved.max.per.iteration" can be increased to allow more data to move in
+                    one iteration. 
+
+
+CDPD-22519: HDFS user is unable to ozone scm client CLI. As workaround, SCM client CLIs are run using scm user.
+None
+
+
+CDPD-30451:  Files lying at same level moves to different
+                    trash directory structure. o3fs ->
+                    /<vol>/<buck>/.Trash/<user>/Current/..<dir if any>.. ofs ->
+                    /<vol>/<buck>/.Trash/<user>/Current/<vol>/<buck>/..<dir if
+                    any>.
+None
+
+
+CDPD-34187: This is a usability issue where warnings are
+                    displayed on the console while running ozone fs/CLI commands, which are of no
+                    use and restricts user experience. We should suppress these messages from the
+                    user console but at the same time make sure they still get printed out in the
+                    SCM Logs so that we could use them for debugging purposes. 
+Instead of logging into the user console, you
+                    redirect these log messages to a file called ozone-shell-log4j.properties which
+                    should  avoid warnings to the user. Ozone-shell commands used earlier a similar
+                    method of directing messages to the LogFile. I have filed an apache Jira for it
+                    and have also fixed the issue. 
+
+
+CDPD-35141: Error: Error while compiling statement:
+                    FAILED: Execution Error, return code 40000 from
+                    org.apache.hadoop.hive.ql.exec.MoveTask. Unable to move source <bucket1> to
+                    destination <bucket2> (state=08S01,code=40000) java.sql.SQLException: Error
+                    while compiling statement: FAILED: Execution Error, return code 40000 from
+                    org.apache.hadoop.hive.ql.exec.MoveTask. Unable to move source <bucket1> to
+                    destination <bucket2>. We may see the above issue if the source and target
+                    buckets are different in Hive queries. For now, copying across the same bucket
+                    is only supported.
+Avoid different buckets in source and target path.
+
+
+CDPD-40594:  Ozone admin container create command doesn't
+                    work. The command fails at getCAList for the SCM Client to create a container. 
+Avoid using create container command
+
+
+CDPD-40966: df command on ozone returns incorrect result.
+None
+
+
+CDPD-41184: With LEGACY buckets, FileSystem op is not
+                    interoperating with the Ozone shell command. Cause:- The directory key entry in
+                    the DB KeyTable stored as "dir1/" with trailing slash. But while performing the
+                    described operation, Ozone shell (o3://) is normalizing the given path and
+                    removed the trailing slash "/" from it. That resulted in KEY_NOT_FOUND
+                    exception.
+There are three workarounds:
+                
+Use FileSystem API to Delete the Directories rather than Shell-Command API.
+Use FSO buckets instead of Legacy Buckets. As in FSO, you can create Intermediate Directories and Delete Directories using the Ozone shell commands.
+Disable and set the configuration
+                                ozone.om.enable.filesystem.pathsflag to false
+                            in order to delete the directories. This is generally not a preferred
+                            workaround because the cluster must be restarted again to pick up the
+                            new changes.
+
+
+
+
+CDPD-34867: Container Balancer might not balance if only
+                    Over-Utilized or only Under-Utilized datanodes are reported. The log line will
+                    look like this: "Container Balancer has identified x Over-Utilized and y
+                    Under-Utilized Datanodes that need to be balanced" where one of x or y will be
+                    0. 
+Decrease the threshold using
+                    "utilization.threshold". This will allow balancer to find non zero number of
+                    both over and under utilized nodes.
+
+
+CDPD-12966: Ozone du -s -h should report correct values with replication information.
+None
+
+
+CDPD-12542: Mount of Ozone filesystem with the help of FUSE fails.
+None
+
+
+CDPD-21530: Ozone Web Application Security issues.
+None
+
+
+CDPD-34817: This is an usability issue. Irrelevant warnings are displayed on console while running  ozone fs/CLI commands.
+None
+
+
+CDPD-31910: If its a non ranger deployment, the
+                    owner/group are shown based on kerberos user or sudo user.
+For correct owner/group, user would need a Ranger
+                    deployment.
+
+
+CDPD-42691: During the upgrade - all pipelines will be closed when the upgrade is finalized on SCM, temporarily bringing the cluster to a read-only state.
+When you execute the finalize command, the cluster will temporarily go into a read-only state.
+
+
+CDPD-42945: When many EC buckets are created with different EC chunk sizes, it creates pipeline for each chunk size. As a result, large number of pipelines are created in the system.
+None
+
+
+OPSAPS-60721: Ozone SCM Primordial Node ID is a required
+                    field which needs to be specified with one of the SCM hostnames during Ozone HA
+                    installation. In Cloudera Manager this field is not mandatory during Ozone
+                    deployment, this can cause end users continue further with installation which
+                    causes startup to fail in Ozone services.
+Make sure during ozone HA installation Ozone SCM Primordial Node ID is specified with one of the SCM hostname.
+
+
+CDPD-15602: Creating or deleting keys with a trailing forward slash (/) in the name is not supported via the Ozone shell or the S3 REST API. Such keys are internally treated as directories by the Ozone service for compatibility with the Hadoop filesystem interface. This will be supported in a later release of CDP.
+You can create or delete keys via the Hadoop Filesystem interface, either programmatically
+                    or via the filesystem Hadoop shell. For example, `ozone fs -rmdir
+                    <dir>`.
+
+
+CDPD-21837: 
+Adding new Ozone Manager (OM) role instances to an
+                    existing cluster will cause the cluster to behave erratically. It can possibly
+                    cause split-brain between the Ozone Managers or crash them.
+Adding new OM roles to an existing cluster is
+                    currently not supported and there is no workaround.
+
+
+OPSAPS-59647:
+Ozone has an optional role where it can deploy a
+                    pre-configured Prometheus instance. This prometheus instance's default port
+                    '9090' conflicts with HBase Thrift Server's port. Hence, one of the components
+                    will fail to start if they are on the same host.
+
+The prometheus port is a directly editable field on the CM UI, with the name
+                        'ozone.prometheus.http-port'. This can be changed to a non conflicting
+                        port.
+
+
+
+CDPD-24321:
+On a secure cluster with Kerberos enabled, the Recon
+                    dashboard shows a value of zero for volumes, buckets, and keys.
+
+
+Enable kerberos authentication for HTTP web consoles, if not already
+                            enabled, by configuring the
+                                ozone.security.http.kerberos.enabled property on
+                            Cloudera Manager.
+Add om/_HOST@REALM,recon/_HOST@REALM to
+                                ozone.administrators as an advanced configuration
+                            snippet by configuring the Ozone Service Advanced
+                                Configuration Snippet (Safety Valve) for
+                                ozone-conf/ozone-site.xml property on Cloudera
+                            Manager.
+
+
+
+
+HDDS-4209: S3A Filesystem does not work with Ozone S3 in
+                    file system compat mode. When you create a directory, the S3A filesystem creates
+                    an empty file. When the ozone.om.enable.filesystem.paths
+                    parameter is enabled, the hdfs dfs -mkdir -p
+                        s3a://b12345/d11/d12 command runs successfully. However, running
+                    the hdfs dfs -put /tmp/file1 s3a://b12345/d11/d12/file1
+                    command fails with an error: ERROR
+                        org.apache.hadoop.ozone.om.request.key.OMKeyCreateRequest: Key creation
+                        failed. 
+The HDDS-4209 Jira fixes the file system semantics
+                    and management in Ozone. On top of the flat name structure, which is Pure Object
+                    store, as a workaround the Hierarchical namespace structure is added. This
+                    ensures S3A compatibility with Ozone.
+
+
+CDPD-42897: EC writes are failing with "No enough datanodes to choose" after EC replication config set globally.
+EC writes starts failing when large number of pipelines are created as a result of multiple EC configs with different chunk sizes used to write keys.
+If standard EC configs (i.e, rs-3-2-1024k) are used to write keys, number of pipelines created per datanode will be limited to 5 and this issue is not seen with standard EC configs.
+The recommendation is not to create too many random chunk sizes. It is configurable because, users can decide based on their workload. But not to have separate chunksizes for each file.
+
+
+CDPD-41539: "No such file or directory" returned when EC file is read using older ofs client.
+You must upgrade the client before trying to read the key: vol1/ecbuck1/1GB_ec".
+
+
+CDPD-43347: When the blocks in one of the container replica is corrupted, SCM is unable to re-replicate the corrupted container replica.
+None
+
+
+CDPD-43327: Auto reload is disabled when the user wishes to freeze the current state of the Recon UI, if revisiting or switching to another tab turn auto reload back on. Disabling it does not work.
+None
+
+
+CDPD-43288: Partial offline reconstruction does not happen
+                    in ozone erasure coding. If number of available target datanodes is less than
+                    the number of failed datanodes in ozone EC container group, container is not
+                    constructed again.
+There should be enough number of datanodes present
+                    for re-replication
+
+
+CDPD-43366: Containers went into unhealthy state when container scanner ran. If the container replicas are unhealthy, these replicas would be ignored while  performing re-replication in case of any failure.
+None
+
+
+CDPD-40560:  Filesystem Operations via hadoop s3a
+                    connector on a FILE_SYSTEM_OPTIMIZED bucket is supposed to fail.
+                    org.apache.hadoop.ozone.om.exceptions.OMException: Unable to get file status:
+                    volume: s3v bucket: fso key: test/
+Don't run hadoop s3a commands on an
+                    FILE_SYSTEM_OPTIMIZED bucket. Use OBJECT_STORE bucket layouts.
+
+
+CDPD-42832:With this issue, any long running setup or a prod server will result in data corruption resulting due to inconsistency issues. This may result in major issues with the existing LEGACY layout type.
+The same test suites OzoneLongRunningTest ran with FILE_SYSTEM_OPTIMIZED("FSO") bucket layout type more than 65hrs without any issues. FSO provides atomicity and consistency guarantees for the path(dir or file) rename/delete operations irrespective of the large sub-dirs/files contained in it. This capabilities helps to make the long running test more consistent without any failures so far. Recommendation is to run bigdata HCFS workloads using the FSO bucket layout types.
+
+
+CDPD-43432: Ozone Service in fault state in DataNode - Long Running setup.
+Upgraded RocksDB to the latest version.
+
+
+OPSAPS-63999: In the newly installed cluster, the Finish
+                    upgrade option is clickable.
+None
+
+
+OPSAPS-64648: Failed to start ozone node via CM if default log path /var/log/hadoop-ozone does not exist. If this path does not exists, any Ozone nodes(for example SCM or data node) restart will fail.
+Run the following command sudo -u hdfs mkdir -p /var/log/hadoop-ozone or replace hdfs with the user Ozone roles that are running.
+
+
+
+Parent topic: Known issues in Cloudera Runtime 7.1.8

@@ -1,0 +1,81 @@
+Configuring Spark access for S3ACloudera Docs
+Configuring Spark access for S3A
+You must configure specific properties for client applications such as Spark to
+        access the Ozone data store using S3A.
+
+
+You must import the CA certificate to run Ozone S3 Gateway from the S3A
+                        filesystem. 
+You must create an ozone-s3.properties file with the following
+                    configuration to run the Spark word count program:
+                        spark.hadoop.fs.s3a.impl = org.apache.hadoop.fs.s3a.S3AFileSystem
+spark.hadoop.fs.s3a.access.key = <access key>
+spark.hadoop.fs.s3a.secret.key = <secret>
+spark.hadoop.fs.s3a.endpoint = <Ozone S3 endpoint url>
+spark.hadoop.fs.s3a.bucket.probe = 0
+spark.hadoop.fs.s3a.change.detection.version.required = false
+spark.hadoop.fs.s3a.change.detection.mode = none
+spark.hadoop.fs.s3a.path.style.access = true
+noteIn
+                        the list of configurations, replace the values of access
+                            key and secret from the output of
+                            ozone s3 getsecret --om-service-id=<ozone service
+                                id> and replace the Ozone S3 endpoint URL with
+                        the S3 Gateway URL of the Ozone cluster.
+
+
+The following procedure explains how you can configure Spark access to Ozone using
+            S3A and run a word count program from the Spark shell.
+
+Create an Ozone bucket.
+The following example shows how you can create a bucket named
+                        sparkbucket:ozone sh bucket create /s3v/sparkbucket
+
+Add data to the bucket.
+The following example shows how you can add data to the
+                        sparkbucket
+                    bucket:hadoop fs  -Dfs.s3a.bucket.probe=0 -Dfs.s3a.change.detection.version.required=false -Dfs.s3a.change.detection.mode=none -Dfs.s3a.access.key=<accesskey> -Dfs.s3a.secret.key=<secret> -Dfs.s3a.endpoint=<s3 endpoint url> -Dfs.s3a.path.style.access=true -Dfs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem -mkdir -p s3a://sparkbucket/inputhadoop fs  -Dfs.s3a.bucket.probe=0 -Dfs.s3a.change.detection.version.required=false -Dfs.s3a.change.detection.mode=none -Dfs.s3a.access.key=<accesskey> -Dfs.s3a.secret.key=<secret> -Dfs.s3a.endpoint=<s3 endpoint url> -Dfs.s3a.path.style.access=true -Dfs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem -put /tmp/key1 s3a://testbucket/input/key1
+
+Start the Spark shell and wait for the prompt to appear. 
+
+spark-shell --properties-file <ozone-s3.properties>
+
+
+Create a Resilient Distributed Dataset (RDD) from an Ozone file and enter the
+                    specified command on the Spark shell.
+
+var lines = sc.textFile("s3a://sparkbucket/input/key1")
+
+
+Convert each record in the file to a word.
+
+var words = lines.flatMap(_.split(" "))
+
+
+
+Convert each word to a key-value pair.
+
+var wordsKv = words.map((_, 1))
+
+
+Group each key-value pair by key and perform aggregation on each key.
+
+var wordCounts = wordsKv.reduceByKey(_ + _ )
+
+
+Save the results of the grouping and aggregation operations to Ozone.
+
+wordCounts.saveAsTextFile("s3a://sparkbucket/output")
+
+
+
+Exit the spark shell and view the results through S3A.
+
+hadoop fs  -Dfs.s3a.bucket.probe=0 -Dfs.s3a.change.detection.version.required=false -Dfs.s3a.change.detection.mode=none -Dfs.s3a.access.key=<accesskey> -Dfs.s3a.secret.key=<secret> -Dfs.s3a.endpoint=<ozone s3 endpoint url> -Dfs.s3a.path.style.access=true -Dfs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem -ls -R s3a://sparkbucket/
+
+
+hadoop fs  -Dfs.s3a.bucket.probe=0 -Dfs.s3a.change.detection.version.required=false -Dfs.s3a.change.detection.mode=none -Dfs.s3a.access.key=<accesskey> -Dfs.s3a.secret.key=<secret> -Dfs.s3a.endpoint=<ozone s3 endpoint url> -Dfs.s3a.path.style.access=true -Dfs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem -cat s3a://sparkbucket/output/part-00000
+
+
+
+Parent topic: Access Ozone S3 Gateway using the S3A filesystem

@@ -1,0 +1,153 @@
+Encrypting and Decrypting Data Using Cloudera Navigator EncryptCloudera Docs
+Encrypting and Decrypting Data Using Cloudera Navigator Encrypt
+
+warningBefore encrypting or decrypting
+      any data, stop all processes (for example, MySQL, MongoDB, PostgreSQL, and
+      so on) that have access to the target data. Failure to do so could lead
+        to data corruption.
+After the encrypted file system is created and initialized, it is ready
+      to hold data. All encryption and decryption functionality is performed
+      with a single command: navencrypt-move.
+Do not manually create directories or files under a Cloudera Navigator
+      Encrypt mount point; use only the navencrypt-move command
+      to encrypt and decrypt data. See Preparing for Encryption Using Cloudera Navigator Encrypt for more
+      information about mount points.
+After encrypting a file or directory, all data written and read through
+      the mount point is transparently encrypted and decrypted.
+
+
+
+Before You Begin
+
+Navigator Encrypt does not support encrypting data in certain
+        environments, including the following:
+
+Do not attempt to encrypt a directory that contains or is
+          contained within a mount point for another service (including
+          Navigator Encrypt and NFS). For example:
+If your encryption mount point is
+                /var/lib/navencrypt/mount, do not attempt to
+              encrypt /var, /var/lib,
+                /var/lib/navencrypt,
+                /var/lib/navencrypt/mount, or anything under
+                /var/lib/navencrypt/mount/.
+If you have mounted an NFS file system at /mnt/home, do not attempt
+              to encrypt /mnt, /mnt/home, or anything under
+                /mnt/home.
+
+Do not attempt to encrypt immutable files or directories containing
+          immutable files.
+Do not use Navigator Encrypt within a chroot
+          environment, or create a chroot environment within an
+          encrypted directory.
+If your Key Trustee Server is managed by Cloudera Manager, do
+            not encrypt the Cloudera Manager database with Navigator
+          Encrypt; doing so prevents Cloudera Manager from starting.
+
+
+
+
+Encrypting Data
+
+Do not manually create directories or files under a Navigator Encrypt
+        mount point; use only the navencrypt-move command to
+        encrypt data.
+Here is an example command to encrypt data, with an explanation for
+        each option:
+sudo navencrypt-move encrypt @<category> <directory_or_file_to_encrypt> <encrypted_mount_point>
+importantDo not run
+          navencrypt-move commands simultaneously in multiple
+        terminals. Doing so results in failure to encrypt or decrypt all of the
+        specified data. No data is lost, as the source data is not removed, but
+        you must re-run the failed operations sequentially.
+Table 1. navencrypt-move Command Options
+
+Command Option
+Explanation
+
+
+
+navencrypt-move
+
+Main command interface for all actions that require moving
+                  data either to or from the encrypted file system. For more
+                  information see the navencrypt-move
+man page (man
+                    navencrypt-move).
+
+
+
+encrypt
+
+Identifies the cryptographic operation, in this case,
+                  encrypting data. The decrypt option is
+                  described later in Decrypting Data.
+noteBy default, all Navigator Encrypt encryption commands
+                  require free space equal to twice the size of the encrypted
+                  data. If your environment does not have enough free space, add
+                    --per-file to the end of the command. This
+                  moves each file individually. Per-file encryption only
+                  requires free space equal to twice the size of the largest
+                  individual file, but is a slower operation.
+
+
+
+@<category>
+The access category that is applied to the data being
+                encrypted. Encrypted data is protected by process-based access controls that restrict access to
+                only the processes that you allow. You can use any naming
+                convention you want (the @ symbol is required),
+                but Cloudera recommends keeping it simple and memorable. For
+                example, you can use a name referencing the data type being
+                encrypted, such as @mysql for a MySQL
+                deployment. See Listing Categories
+                for instructions on viewing existing categories.
+
+
+<directory_or_file_to_encrypt>
+The data that you want to encrypt. This can be a single
+                file or an entire directory. Navigator Encrypt starts after the
+                system boots, so do not encrypt required system files and
+                directories (such as the root partition, /var,
+                and so on). Some examples of recommended data directories to
+                encrypt are /var/lib/mysql/data,
+                  /db/data, and so on.
+
+
+<encrypted_mount_point>
+Where you want to store the data. This is the path to the
+                mount point specified during the navencrypt-prepare command.
+
+
+When a file is encrypted, a symbolic link (symlink) is created which points to a mount
+        point @<category> directory. The navencrypt-move
+        command moves all specified data to the encrypted file system and replaces it with a symlink
+        to the mount point for that encrypted file system.
+Encrypting a directory is similar to encrypting a file. The following
+        command encrypts a
+        directory:sudo /usr/sbin/navencrypt-move encrypt @mycategory /path/to/directory_to_encrypt/ /path/to/mount
+In this command, a directory is specified instead of a file name, and a symlink is created
+        for that particular directory. To see the effects of this command,
+        run:ls -l <directory_to_encrypt>
+du -h <encrypted_storage_directory>
+The output demonstrates the new file system layout. Everything that was in the target
+        directory is now securely stored in the encrypted file system.
+
+
+
+Decrypting Data
+
+The decryption command requires only the path to the original data,
+        which is now a symbolic link, as an argument. The following example
+        demonstrates how to decrypt a file using the
+          navencrypt-move command:
+sudo /usr/sbin/navencrypt-move decrypt /path/to/encrypted/directory_or_file
+importantDo not run
+          navencrypt-move commands simultaneously in multiple
+        terminals. Doing so results in failure to encrypt or decrypt all of the
+        specified data. No data is lost, as the source data is not removed, but
+        you must re-run the failed operations sequentially.
+As with encryption, you can specify a directory instead of a
+        file:sudo /usr/sbin/navencrypt-move decrypt /path/to/encrypted/directory
+
+

@@ -1,0 +1,377 @@
+Integrating Ranger KMS DB with SafeNet Keysecure HSMCloudera Docs
+Integrating Ranger KMS DB with SafeNet Keysecure HSM
+How to integrate Ranger KMS DB with SafeNet Keysecure HSM.
+
+This task describes how to integrate Ranger KMS DB with Safenet Keysecure Hardware Security Module (HSM). This process includes setting up the SafeNet KeySecure Management Console , and configuring Ranger KMS to communicate with the Keysecure instance.
+
+Creating the user on SafeNet keysecure
+
+Login to keysecure with the user having admin privileges.
+Click on the Security tab.
+Go to the Users & Groups section.
+Click on Local Authentication, and click on Add to add a new user.
+Check both ‘User Administration Permission’ and ‘Change
+                            Password Permission’  when adding the new user.
+Save changes.
+
+
+
+Creating device on  SafeNet KeySecure
+
+Login to Keysecure with user having admin privilges.
+Go to Device > NAE-XMLprotocol.
+Click on Properties > Edit.
+Select the Allow Key and Policy Configuration Operations and Allow Key Export boxes.
+                
+
+
+Save changes.
+
+
+Configure SSL on Safenet Keysecure (NAE-XML)
+
+Creating a local CA
+
+Log in to the Management Console as an administrator with certificate
+                        uuthorities access control.
+Navigate to the Security, CAs & SSL Certificates section and
+                        click on Local CA's.
+Enter the required details and select Self-signed Root CA as the Certificate
+                        Authority Type.
+
+
+Click on Create.
+
+The Local CA is visble.
+
+
+
+
+
+Creating a Server Certificate Request on the Management Console
+
+Log on to the Management Console as an administrator with Certificates access control.
+Click on the Security tab and on the left side panel . 
+Navigate to the Device CAs & SSL Certificates section.
+Click on SSL certificates link and modify the fields as needed.
+                    
+
+
+Click Create Certificate Request. This creates the certificate request
+                            and places it in the Certificate List section of the Certificate and CA
+                            Configuration page. The new entry shows that the Certificate Purpose is
+                            Certificate Request and that the Certificate Status is Request Pending. 
+
+
+
+
+
+
+
+Signing a Server Certificate Request with a Local CA
+
+Log on to the Management Console as an Administrator with Certificates and Certificate Authorities access controls.
+Navigate to the Security Tab -> Device, CAs and SSL Certificates section.
+Click on the SSL Certificates link.
+Select the certificate request (cert50) and click Properties.
+
+
+Copy the text of the certificate request. The copied text must include the
+                        header (-----BEGIN CERTIFICATE REQUEST-----) and footer (-----END
+                        CERTIFICATE REQUEST-----).
+Navigate to the Security Tab -> Device, CAs & SSL Certificates
+                        section.
+Click on the Local CAs link and select the CA name from the given
+                        list.
+Click Sign Request to access the Sign Certificate Request
+                            section.
+
+
+On the Sign Certificate Request screen, select Server as certificate
+                        Purpose.
+Enter the life-span of the certificate for Certificate Duration (days).
+Paste all text copied from the server certificate request, including the
+                        header and footer in Certificate Request.
+
+
+Click Sign Request. This will take you to the CA Certificate Information
+                        section.
+Copy the actual (e.g KSCAN) certificate text. The copied text must
+                        include the header (-----BEGIN CERTIFICATE-----) and footer (-----END
+                        CERTIFICATE-----).
+Navigate back to the Certificate List section (Device, CAs & SSL
+                        Certificates )and click on SSL Certificates. 
+Select your certificate request and click on properties.
+Click Install Certificate.
+Paste the actual certificate in the Certificate Response.
+
+
+Click Save. The Management Console returns you to the Certificate List
+                            section. The section will now show that the Certificate Purpose is
+                            Server and that the Certificate Status is Active.
+
+
+
+
+
+
+
+Enable SSL on Keysecure (NAE-XML)
+Once SSL has been configured in Safenet KeySecure, perform the following steps.
+
+Log in to keysecure with admin privileges.
+Go to Device tab -> Select NAE-XML protocol -> click on properties -> click on
+                    edit. 
+
+
+Check Use SSL.
+Select the Server Certificate from the given dropdown (e.g. cert50).
+Save changes.
+
+
+
+Parent topic: Integrating Components for Encrypting Data at Rest
+Fresh Installation Of Ranger KMS with SafeNet KeySecure (NAE-XML)
+These are the steps required to configure Ranger KMS DB to interact with Safenet
+        KeySecure HSM. These steps need to be performed only when the cluster is ready with all the
+        required services and no encryption zone keys are created.
+
+SSH into the Ranger KMS host.
+
+Create a directory and copy the files IngrianNAE.properties, libIngPKCS11.so and
+                            sunpkcs11.cfg from Gemalto SafeNet KeySecure to the directory.
+mkdir -p /opt/safenetConf/64/8.3.1 and then copy the
+                    above mentioned files under this location. 
+
+noteMake sure you have provided read-write access (chmod 775) to Ranger KMS
+                        service users (chown kms:kms) to all the 3 files. 
+
+
+If SSL is enabled on KeySecure ,then download the CA certificate file (e.g. KSCAN.crt) created on key secure cluster while configuring SSL on keysecure instance.
+
+
+Log in to KeySecure.
+
+
+Click on  Security tab and then go to Device CAs and SSL Certificates section 
+
+
+Click on Local CA’s link
+
+
+Select the appropriate certificate and click on download as shown in the below image.
+                        
+
+
+
+
+
+Once the certificate is downloaded, copy/scp it to the Ranger KMS host at location “/etc/security/serverKeys/”.
+Make sure the Ranger KMS user has read-write access to the file.
+                            chown  kms:kms /etc/security/serverKeys/KSCAN.crt
+chmod  755 /etc/security/serverKeys/KSCAN.crt
+
+
+
+
+Update the IngrianNAE.propertiesfile and initialize the below mentioned
+                    properties.
+
+NAE_IP = Your SafeNet KeySecure IP address (Provide public IP if its on a different network.)
+NAE_Port=9000 (should be the same port provided on KeySecure instance under Device tab) 
+Protocol=tcp (valid values ssl or tcp, should be the same protocol provided on KeySecure instance)
+
+
+Initialize the following property only when the protocol of the KeySecure
+                    instance is SSL. This is the location of the certificate downloaded from
+                    KeySecure and copied on Ranger KMS host.
+
+CA_File=/etc/security/serverKeys/KSCAN.crt 
+
+
+Go to CM > Ranger KMS > Configuration > Search for Ranger KMS Server Advanced Configuration Snippet and click on + icon to add the properties.
+
+Add the following properties:
+IngrianNAE_Properties_Conf_Slot_ID_Max=100
+IngrianNAE_Properties_Conf_SessionID_Max=100
+NAE_Properties_Conf_Filename=/opt/safenetConf/64/8.3.1/IngrianNAE.properties
+
+
+
+Save changes.
+
+Search for the following properties and set the values as follows:
+ranger.kms.keysecure.enabled = true
+                    
+ranger.kms.keysecure.UserPassword.Authentication = true
+                    
+ranger.kms.keysecure.masterkey.name = MasterKey1
+                    
+ranger.kms.keysecure.login.username = keysecure-username
+                    
+ranger.kms.keysecure.login.password = keysecure-password
+                    
+ranger.kms.keysecure.masterkey.size = 256
+
+ranger.kms.keysecure.sunpkcs11.cfg.filepath = /opt/safenetConf/64/8.3.1/sunpkcs11.cfg
+                
+
+Save changes.
+
+Restart Ranger KMS.
+
+The master key with alias MasterKey1 is created in KeySecure.
+        
+
+            Once Ranger KMS has started successfully, verify zone key creation, and zone
+            encryption/decryption.
+        
+
+
+Migrating the master key from Ranger KMS DB to KeySecure
+How to migrate the Ranger KMS DB Master Key to SafeNet KeySecure HSM. These steps
+        need to be performed when the cluster is ready with all the required services and encryption
+        zone keys are present in the Ranger KMS DB.
+
+Once Ranger KMS is installed and running, note down the KMS current running process directory.
+
+Stop the Ranger KMS service.
+
+If SSL is enabled on KeySecure ,then download the CA certificate file (e.g. KSCAN.crt) created on key secure cluster while configuring SSL on keysecure instance.
+
+
+Log in to KeySecure.
+
+
+Click on  Security tab and then go to Device CAs and SSL Certificates section 
+
+
+Click on Local CA’s link
+
+
+Select the appropriate certificate and click on download as shown in the below image.
+                        
+
+
+
+
+
+Once the certificate is downloaded, copy/scp it to the Ranger KMS host at location “/etc/security/serverKeys/”.
+Make sure the Ranger KMS user has read-write access to the file.
+                            chown  kms:kms /etc/security/serverKeys/KSCAN.crt
+chmod  755 /etc/security/serverKeys/KSCAN.crt
+
+
+
+
+Create a directory and copy the files IngrianNAE.properties, libIngPKCS11.so and
+                        sunpkcs11.cfg from Gemalto SafeNet KeySecure to the directory.
+mkdir -p /opt/safenetConf/64/8.3.1 and then copy the
+                    above mentioned files under this location. 
+
+noteMake sure you have provided read-write access (chmod 775) to Ranger KMS
+                        service users (chown kms:kms) to all the 3 files. 
+
+
+Update the IngrianNAE.propertiesfile and initialize the below mentioned
+                    properties.
+
+NAE_IP = Your SafeNet KeySecure IP address (Provide public IP if its on a different network.)
+NAE_Port=9000 (should be the same port provided on KeySecure instance under Device tab) 
+Protocol=tcp (valid values ssl or tcp, should be the same protocol provided on KeySecure instance)
+
+
+Initialize the following property only when the protocol of the KeySecure
+                    instance is SSL. This is the location of the certificate downloaded from
+                    KeySecure and copied on Ranger KMS host.
+
+CA_File=/etc/security/serverKeys/KSCAN.crt 
+
+
+Go to CM > Ranger KMS > Configuration > Search for Ranger KMS Server Advanced Configuration Snippet and click on + icon to add the properties.
+
+Add the following properties:
+IngrianNAE_Properties_Conf_Slot_ID_Max=100
+IngrianNAE_Properties_Conf_SessionID_Max=100
+NAE_Properties_Conf_Filename=/opt/safenetConf/64/8.3.1/IngrianNAE.properties
+
+
+
+Save changes.
+
+ Go to Ranger KMS home directory and export the environment variables.
+export JAVA_HOME=/usr/java/jdk1.8.0_232-cloudera
+export RANGER_KMS_HOME=/opt/cloudera/parcels/CDH/lib/ranger-kms
+export RANGER_KMS_CONF=/var/run/cloudera-scm-agent/process/current_procsess_dir-RANGER_KMS_SERVER/conf
+export SQL_CONNECTOR_JAR=/path/to/SQL-Connector.jar
+export HADOOP_CREDSTORE_PASSWORD=hadoop_cred_store_password                   
+
+
+Run the DBMKTOKEYSECURE.sh script.
+
+./DBMKTOKEYSECURE.sh masterKey-name keysecure-UserName keysecure-password /path/to/sunpkcs/config/file/sunpkcs11.cfg
+
+
+                    where keySecureMasterKeyName : Name of the key which needs to be created on KeySecure , 
+                    keySecureUsername  : User created on KeySecure cluster , and 
+                    keySecurePassword : Password of the user
+                
+Master Key from Ranger KMS DB has been successfully imported into
+                    CipherTrust Manager.
+
+Go to CM > Ranger KMS > Configuration.Search for the following properties and set the values.
+ranger.kms.keysecure.enabled = true
+ranger.kms.keysecure.UserPassword.Authentication = true
+ranger.kms.keysecure.masterkey.name = masterkeyname (must be the same name used above with migration utility ./DBMKTOKEYSECURE.sh )
+ranger.kms.keysecure.login.username = keysecure-username
+ranger.kms.keysecure.login.password = keysecure-password
+ranger.kms.keysecure.masterkey.size=256
+ranger.kms.keysecure.sunpkcs11.cfg.filepath=/opt/safenetConf/64/8.3.1/sunpkcs11.cfg               
+
+
+Restart Ranger KMS.
+
+Master Key from Ranger KMS DB has been successfully migrated to CipherTrust Manager.
+Once Ranger KMS has started successfully, verify zone key creation, and zone
+            encryption/decryption.
+
+
+Migrating the Master Key from KeySecure HSM to Ranger KMS DB
+How to migrate the Master key from KeySecure HSM to Ranger KMS DB. These steps need
+        to be performed when the cluster is ready with all the required services and encryption zone
+        keys are present in the Ranger KMS DB.
+
+Ensure Ranger KMS is running.
+
+Find the KMS current process directory.
+ps -ef | grep proc_rangerkms
+
+Stop Ranger KMS service from CM.
+
+Go to the Ranger KMS home directory and export the following environment variables.
+export JAVA_HOME = /usr/java/jdk1.8.0_232-cloudera
+export RANGER_KMS_HOME = /opt/cloudera/parcels/CDH/lib/ranger-kms
+export RANGER_KMS_CONF = /var/run/cloudera-scm-agent/process/current_procsess_dir-RANGER_KMS_SERVER/conf
+export SQL_CONNECTOR_JAR = /path/to/SQL-Connector.jar
+export HADOOP_CREDSTORE_PASSWORD = hadoop_cred_store_password                
+
+Run the ./KEYSECUREMKTOKMSDB script by passing the master key password.
+./KEYSECUREMKTOKMSDB masterKeyPassword 
+Master Key from Key Secure has been successfully imported into Ranger KMS DB.
+
+Once the script runs successfully, go toCM > Ranger KMS > Configuration. Search for dbks-site.xml and update the value of
+                    ranger.kms.keysecure.enabled to false.
+
+Search for ranger.db.encrypt.key.password and set its value to the
+                    master-key password which you used above while invoking the migration
+                    script.
+
+Restart Ranger KMS.
+noteWhile restarting KMS service, if seeing this error “[op=KeyNameQuery] [] Unsupported
+                                    custom attribute type for key names query” in the
+                            keysecure log , then SSH to KMS host , edit
+                                IngrianNAE.properties file , and set the value of
+                                Product_Code=HNWs to empty i.e. - Product_Code=
+
+Once Ranger KMS has started successfully, verify zone key creation, and zone encryption/decryption.
+

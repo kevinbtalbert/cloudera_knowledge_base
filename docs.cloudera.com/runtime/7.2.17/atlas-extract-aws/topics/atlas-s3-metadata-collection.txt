@@ -1,0 +1,109 @@
+Amazon S3 metadata collectionCloudera Docs
+Amazon S3 metadata collection
+
+Amazon
+          Simple Storage Service (S3) is a storage solution offered by Amazon Web
+      Services (AWS) that provides highly available storage in the cloud. Clusters deployed in the
+      AWS cloud and in on-premise data centers are using Amazon S3 as persistent storage. Common use
+      cases include BDR (backup and disaster recovery) and persistent storage for transient clusters
+      deployed to the cloud, such as storage for ETL workload input and output.
+As with data stored on HDFS and processed using compute engines like Hive and Impala, Atlas can obtain metadata and lineage from Amazon S3 storage. The S3 extraction logic is provided as stand-alone scripts for bulk and incremental metadata collection that you can configure to run through a scheduler.
+Typically, you would run the extractor in bulk mode once, then run the extractor in incremental mode on a regular schedule. This method allows Atlas to track changes that occur to data assets; it requires that the bucket publish events to an SQS Queue so the extractor can process all events relevant to the data assets being tracked.
+Alternatively, you can run the bulk extraction periodically. With this method, Atlas may miss updates that occur between extractions and will not acknowledge when data assets are deleted.
+When running the bulk extractor, Atlas collects metadata for current buckets and objects.
+
+
+
+The bulk S3 extractor collects metadata from S3 and publishes it on a Kafka topic.
+Atlas reads the message from the topic and compares it to existing metadata and lineage information.
+Atlas creates and updates the appropriate entities.
+
+When running the incremental extractor, events in S3 are communicated to Atlas through an SQS Queue:
+
+When an action occurs in the S3 bucket.
+The bucket publishes an event to an SQS queue.
+The incremental S3 extractor runs and collects the events from the SQS queue and converts them into Atlas entity metadata.
+The extractor publishes the metadata on a Kafka topic.
+Atlas reads the message from the topic and compares it to existing metadata and lineage information.
+Atlas creates and updates the appropriate entities.
+
+The following table lists some differences between object types and supported
+      features offered by Amazon S3 and how those are supported by Atlas:
+
+Feature
+Amazon S3
+Atlas
+
+
+
+System-defined metadata includes
+                properties such as Date, Content-Length,
+                  Last-Modified. Some system-defined properties comprise the
+                technical attributes for the object in Atlas.
+
+
+
+
+User-defined metadata consists of
+                custom key-value pairs (in which each key is prefixed with
+                  x-amz-meta-) that can be used to describe objects on Amazon S3.
+                Atlas does not collect this kind of metadata; Atlas collects system-defined metadata
+                and tags.
+
+
+
+
+
+Versioning. Atlas maintains a single version of a S3 object regardless
+                  of how many versions are created in S3. The extractor takes the latest version of
+                  an object and replaces previous versions in Atlas. The Atlas audit log will show
+                  the updates.
+If, after metadata is extracted, the latest object's version is
+                  deleted, the next extraction will update the Atlas entity metadata with that of
+                  the earlier version (which is now the latest). 
+
+
+
+
+
+Unnamed directories. Unnamed directories are ignored by Atlas.
+
+
+
+
+
+Object lifecycle rules. See Object Lifecycle Rules Constraints
+                  for more information.
+Atlas does not support lifecycle rules that remove objects from Amazon
+                  S3. For example, an object lifecycle rule that removes objects older than n days
+                  deletes the object from Amazon S3 but the event is not tracked by Atlas. This
+                  limitation applies to removing objects only.
+
+
+
+
+
+Amazon Simple Queue Service (SQS). If an SQS queue is configured,
+                Atlas uses Amazon SQS queue for incremental extraction. The queue holds event
+                messages such as notifications of updates or deletes that allow Atlas to track
+                changes for a given object, such as uploading a new version of an object.
+
+
+
+
+Hierarchy in object storage. Atlas uses metadata from S3 to produce a
+                file-system hierarchy. 
+
+
+
+
+Encryption. S3 supports bucket-level and object level encryption. Atlas
+                collects encryption information as metadata. For reading, assuming the AWS
+                credentials are configured such that Atlas can access buckets to collect metadata,
+                the encryption choices are transparent to Atlas.
+
+
+
+
+
+Accessing AWSAtlas is integrated with IDBroker for access to the AWS session credential using     Kerberos credentials for the atlas service user. AWS objects and inferred hierarchyAtlas recreates the inferred hierarchy of objects in S3 by creating relationships among     objects. AWS object lifecycleAtlas can represent the lifecycle of a given S3 object when you use the incremental     extractor to collect creation and deletion events from S3. 

@@ -1,0 +1,699 @@
+Manually Configuring TLS Encryption for Cloudera ManagerCloudera Docs
+Manually Configuring TLS Encryption for Cloudera Manager
+How to manually enable TLS encryption and certificate authentication for Cloudera
+    Manager.
+
+When you configure authentication and authorization on a cluster, Cloudera Manager Server
+        sends sensitive information over the network to cluster hosts, such as Kerberos keytabs and
+        configuration files that contain passwords. To secure this transfer, you must configure TLS
+        encryption between Cloudera Manager Server and all cluster hosts.
+TLS encryption is also used to secure client connections to the Cloudera Manager Admin
+        Interface, using HTTPS.
+Cloudera Manager also supports TLS authentication. Without certificate authentication, a
+        malicious user can add a host to Cloudera Manager by installing the Cloudera Manager Agent
+        software and configuring it to communicate with Cloudera Manager Server. To prevent this,
+        you must install certificates on each agent host and configure Cloudera Manager Server to
+        trust those certificates.
+This guide shows how to configure and enable TLS encryption and certificate authentication
+        for Cloudera Manager. The provided examples use an internal certificate authority (CA) to
+        sign all TLS certificates, so this guide also shows you how to establish trust with the CA.
+        (For certificates signed by a trusted public CA, establishing trust is not necessary,
+        because the Java Development Kit (JDK) already trusts them.)
+
+noteCloudera recommends using auto-TLS to configure TLS encryption for Cloudera
+          Manager and CDP components.Auto-TLS greatly simplifies the process of enabling and
+            managing TLS encryption on your cluster. It automates the creation of an internal
+            certificate authority (CA) and deployment of certificates across all cluster hosts. It
+            can also automate the distribution of existing certificates, such as those signed by a
+            public CA. Adding new cluster hosts or services to a cluster with auto-TLS enabled
+            creates and deploys the required certificates automatically.For instructions on
+            enabling auto-TLS, see Configuring TLS Encryption for Cloudera Manager Using Auto-TLS
+            .
+
+
+
+Related informationConfiguring TLS Encryption for Cloudera Manager Using Auto-TLS
+Generate TLS Certificates
+
+
+The following procedure assumes that an internal certificate authority (CA) is used, and
+          shows how to establish trust for that internal CA. If you are using a trusted public CA
+          (such as Symantec, GeoTrust, Comodo, and others), you do not need to explicitly establish
+          trust for the issued certificates, unless you are using an older JDK and a newer public
+          CA. Older JDKs might not trust newer public CAs by default.
+
+
+
+On Each Cluster Host:
+
+
+Complete the following steps on each cluster host, including the Cloudera Manager
+            Server host.
+
+
+Configure your environment to set JAVA_HOME to the Oracle JDK. For
+              example:
+export JAVA_HOME=/usr/java/jdk1.8.0_141-clouderaIf
+              you log out of the host before completing this procedure, make sure to set
+                JAVA_HOME again when you log in to complete the steps.
+
+Create the /opt/cloudera/security/pki directory:
+sudo mkdir -p /opt/cloudera/security/pkiIf
+              you choose to use a different directory, make sure you use the same directory on all
+              cluster hosts to simplify management and maintenance.
+
+Use the keytool utility to generate a Java keystore and
+              certificate signing request (CSR). Replace the OU,
+              O, L, ST, and C
+              entries with the values for your environment. When prompted, use the same password for
+              the keystore password and key password. Cloudera
+              Manager does not support using different passwords for the key and keystore.
+
+$JAVA_HOME/bin/keytool -genkeypair -alias $(hostname -f) -keyalg RSA -keystore /opt/cloudera/security/pki/$(hostname -f).jks -keysize 2048 -dname "CN=$(hostname -f),OU=Engineering,O=Cloudera,L=Palo Alto,ST=California,C=US" -ext san=dns:$(hostname -f)
+$JAVA_HOME/bin/keytool -certreq -alias $(hostname -f) -keystore /opt/cloudera/security/pki/$(hostname -f).jks -file /opt/cloudera/security/pki/$(hostname -f).csr -ext san=dns:$(hostname -f) -ext EKU=serverAuth,clientAuth
+noteYou must ensure that your Issuing Authority will issue the certificates with the
+                extensions CDP requires.
+
+
+Submit the CSR files (for example, cm01.example.com.csr) to your
+              certificate authority to obtain a server certificate. 
+For security purposes, many commercial CAs ignore requested extensions in a
+                CSR. Make sure that you inform the CA that you require certificates with both server
+                and client authentication options.If possible, obtain the certificate in PEM
+              (Base64 ASCII) format. The certificate file is in PEM format if it looks similar to
+              this (some lines
+                omitted):-----BEGIN CERTIFICATE-----
+MIIDAzCCAesCAQAwgY0xCzAJBgNVBAYTAlVTMRMwEQYDVQQIEwpDYWxpZm9ybmlh
+MRIwEAYDVQQHEwlQYWxvIEFsdG8xETAPBgNVBAoTCENsb3VkZXJhMRQwEgYDVQQL
+…
+tudY0C32LjGjWOg5ALliN9Oy1u2xRKGAVfapbzAZ2rchtlCZc7mtaT6BXgW8S+Db
+0HhuObn1/8TL4Ho9G+KlJB3MWik2oEbOvQt0rBidMr9qaNX86m0i7pouXZelZ5c5
+UnDPtrhW6A==
+-----END CERTIFICATE-----If
+                your issued certificate is in binary (DER) format, convert it to PEM
+              format.
+
+After you have received the signed certificate, copy the signed certificate to the
+              following location:
+
+/opt/cloudera/security/pki/$(hostname -f).pem
+
+
+Inspect the signed certificate to verify that both server and client authentication
+              options are present, as well as the subject alternative name:
+
+openssl x509 -in /opt/cloudera/security/pki/$(hostname -f).pem -noout -text
+Look for output similar to the following to verify the server and client
+                authentication options:
+            X509v3 Extended Key Usage:
+                TLS Web Server Authentication, TLS Web Client Authentication
+Look for output similar to the following to validate the subject alternative
+                name:
+            X509v3 Subject Alternative Name:
+                DNS:hostname.example.com
+important
+If the certificate does not have the DNS field, re-submit the CSR to the CA, and
+                  request that they generate a certificate that keeps the Subject Alternative Name
+                  field intact.
+If the certificate does not have both TLS Web Server
+                    Authentication and TLS Web Client Authentication
+                  listed in the X509v3 Extended Key Usage section, re-submit the
+                  CSR to the CA, and request that they generate a certificate that can be used for
+                  both server and client authentication.
+
+
+
+Copy the root and intermediate CA certificates to
+                /opt/cloudera/security/pki/rootca.pem and
+                /opt/cloudera/security/pki/intca.pem on each host. If you have a
+              concatenated file containing the root CA and an intermediate CA certificate, split the
+              file along the END CERTIFICATE/BEGIN CERTIFICATE
+              boundary into individual files. If there are multiple intermediate CA certificates,
+              use unique file names such as intca-1.pem,
+                intca-2.pem, and so on.
+
+Copy the JDK cacerts file to jssecacerts as
+              follows:
+
+sudo cp $JAVA_HOME/jre/lib/security/cacerts $JAVA_HOME/jre/lib/security/jssecacerts
+noteThe default password for the cacerts file is
+                  changeit. The same applies to the jssecacerts
+                file if you copied it from the cacerts before changing the
+                password. Cloudera recommends changing these passwords by running the following
+                commands:
+                $JAVA_HOME/bin/keytool -storepasswd -keystore $JAVA_HOME/jre/lib/security/cacerts$JAVA_HOME/bin/keytool -storepasswd -keystore $JAVA_HOME/jre/lib/security/jssecacerts
+The Oracle JDK uses the jssecacerts file for its default
+                truststore if it exists. Otherwise, it uses the cacerts file.
+                Creating the jssecacerts file allows you to trust an internal CA
+                without modifying the cacerts file that is included with the
+                JDK.
+noteIf you upgrade your JDK, make sure to copy your existing
+                  jssecacerts file to the new JDK (under
+                  $JAVA_HOME/jre/lib/security).
+
+
+Import the root CA certificate into the JDK truststore. 
+
+sudo $JAVA_HOME/bin/keytool -importcert -alias rootca -keystore $JAVA_HOME/jre/lib/security/jssecacerts -file /opt/cloudera/security/pki/rootca.pem
+If you see a message like the following, enter yes to
+                continue:
+Trust this certificate? [no]: yes
+You must see the following response verifying that the certificate has been
+                properly
+                imported:Certificate was added to keystore
+
+
+Perform these steps to replace the self-signed cert with CA issued cert. 
+cd /opt/cloudera/security/pki/; mv $(hostname -f).jks $(hostname -f)-orig.jks
+keytool -importkeystore -srcstoretype JKS -deststoretype PKCS12 -srckeystore $(hostname -f)-orig.jks -srcalias $(hostname -f) -destkeystore $(hostname -f).p12 
+openssl pkcs12 -in $(hostname -f).p12 -nodes -nocerts -out $(hostname -f)-pk.pem
+openssl pkcs12 -export -in $(hostname -f).pem -inkey $(hostname -f)-pk.pem -name $(hostname -f) -out $(hostname -f).pk12
+keytool -importkeystore -deststoretype JKS -srcstoretype PKCS12 -srckeystore  $(hostname -f).pk12 -destkeystore $(hostname -f).jks
+
+Append the intermediate CA certificate to the signed host certificate, and then
+              import it into the keystore. Make sure that you use the append operator
+                (>>) and not the overwrite operator (>):
+
+sudo cat /opt/cloudera/security/pki/intca.pem >> /opt/cloudera/security/pki/$(hostname -f).pem
+
+
+Create symbolic links (symlink) for the certificate and keystore files:
+
+sudo ln -s /opt/cloudera/security/pki/$(hostname -f).pem /opt/cloudera/security/pki/agent.pem
+This allows you to use the same /etc/cloudera-scm-agent/config.ini
+                file on all agent hosts rather than maintaining a file for each agent.
+
+
+
+
+
+On the Cloudera Manager Server Host
+
+
+On the Cloudera Manager Server host, create an additional symlink for the keystore
+            file:sudo ln -s /opt/cloudera/security/pki/$(hostname -f).jks /opt/cloudera/security/pki/server.jks
+
+
+
+
+
+Configure TLS for the Cloudera Manager Admin Console
+
+
+Minimum Required Role:
+Cluster
+            Administrator (also provided by Full
+          Administrator) This feature is not available when using Cloudera
+            Manager to manage Data Hub clusters.
+Use the following procedure to enable TLS encryption for the
+          Cloudera Manager Server admin interface. Make sure you have generated the host certificate
+          as described in Manually Configuring TLS Encryption for Cloudera Manager>On Each
+            Cluster Host.
+
+
+
+Step 1: Enable HTTPS for the Cloudera Manager Admin Console
+
+
+Log in to the Cloudera Manager Admin Console.
+
+Select Administration > Settings.
+
+Select the Security category.
+
+Configure the following TLS settings:
+
+
+
+Property
+Description
+
+
+
+Cloudera Manager TLS/SSL Server JKS Keystore File
+                        Location
+The complete path to the keystore file. For
+                        example:/opt/cloudera/security/pki/server.jks
+
+
+Cloudera Manager TLS/SSL Server JKS Keystore File
+                        Password
+The password for the
+                          /opt/cloudera/security/jks/server.jks keystore.
+
+
+Use TLS Encryption for Admin Console
+Check this box to enable TLS encryption for Cloudera Manager.
+
+
+
+
+Enter a Reason for Change, then click Save
+                Changes to save the settings.
+
+
+
+
+Step 2: Specify SSL Truststore Properties for Cloudera Management Services
+
+
+When enabling TLS for the Cloudera Manager Server admin interface, you must set the
+            Java truststore location and password in the Cloudera Management Services configuration.
+            Otherwise, roles such as Host Monitor and Service Monitor cannot connect to Cloudera
+            Manager Server and will not start.
+Configure the path and password for the
+              $JAVA_HOME/jre/lib/security/jssecacerts truststore that you created
+            earlier. Make sure that you have created this file on all hosts, including the Cloudera
+            Management Service hosts, as instructed in Manually Configuring TLS Encryption for
+              Cloudera Manager>On Each Cluster Host.
+
+
+Open the Cloudera Manager Administration Console and go to the Cloudera
+                Management Service service.
+
+Click the Configuration tab.
+
+Select Scope > Cloudera Management Service (Service-Wide).
+
+Select Category > Security.
+
+Edit the following TLS/SSL properties according to your cluster
+              configuration.
+
+
+
+Property
+Description
+
+
+
+TLS/SSL Client Truststore File Location 
+The path to the client truststore file used in HTTPS communication.
+                        This truststore contains certificates of trusted servers, or of Certificate
+                        Authorities trusted to identify servers. For this example, set the value
+                        to:<JAVA_HOME>/jre/lib/security/jssecacertsReplace
+                            <JAVA_HOME> with the path to the
+                        Oracle JDK.
+
+
+Cloudera Manager Server TLS/SSL Certificate Trust Store
+                        Password
+The password for the truststore file.
+
+
+
+
+Enter a Reason for Change, then click Save
+                Changes to save the settings.
+
+
+
+
+Step 3: Restart Cloudera Manager and Services
+
+
+You must restart both Cloudera Manager Server and the Cloudera Management Service for
+            TLS encryption to work. Otherwise, the Cloudera Management Services (such as Host
+            Monitor and Service Monitor) cannot communicate with Cloudera Manager Server.
+
+
+Restart the Cloudera Manager Server by running the following command on the
+              Cloudera Manager Server host:
+
+
+RHEL 7
+                  compatible:sudo systemctl restart cloudera-scm-server
+RHEL 6 compatible, SLES, Ubuntu:
+
+sudo service cloudera-scm-server restart
+
+
+
+
+After the restart completes, connect to the Cloudera Manager Admin Console using
+              the HTTPS URL (for example:
+                https://cm01.example.com:7183). If you used an
+              internal CA-signed certificate, you must configure your browser to trust the
+              certificate. Otherwise, you will see a warning in your browser any time you access the
+              Cloudera Manager Administration Console. By default, certificates issued by public
+              commercial CAs are trusted by most browsers, and no additional configuration is
+              necessary if your certificate is signed by one of them.
+
+Restart the Cloudera Management Service (Cloudera Management Service > Actions > Restart).
+
+
+
+
+
+Configure TLS for Cloudera Manager Agents
+
+
+Minimum Required Role:
+Cluster
+            Administrator (also provided by Full
+          Administrator) This feature is not available when using Cloudera
+            Manager to manage Data Hub clusters.
+Use the following procedure to encrypt the communication between
+          Cloudera Manager Server and Cloudera Manager Agents:
+
+
+
+Step 1: Enable TLS Encryption for Agents in Cloudera Manager
+
+
+Configure the TLS properties for Cloudera Manager Agents.
+
+
+Log in to the Cloudera Manager Admin Console.
+
+Select Administration > Settings.
+
+Select the Security category.
+
+Select the Use TLS Encryption for Agents option.
+
+Enter a Reason for Change, then click Save
+                Changes to save the settings.
+
+
+
+
+Step 2: Enable TLS on Cloudera Manager Agent Hosts
+
+
+To enable TLS between the Cloudera Manager agents and Cloudera Manager, you must
+            specify values for the TLS properties in the
+              /etc/cloudera-scm-agent/config.ini configuration file on all agent
+            hosts.
+
+
+On each agent host (including the Cloudera Manager Server host, which also has an
+              agent), open the /etc/cloudera-scm-agent/config.ini configuration
+              file and set the use_tls parameter in the [Security]
+              section as follows:
+
+use_tls=1
+Alternatively, you can edit the config.ini file on one host, and
+                then copy it to the other hosts because this file by default does not contain
+                host-specific information. If you have modified properties such as
+                  listening_hostname or listening_ip address in
+                  config.ini, you must edit the file individually on each host.
+
+
+
+
+
+Step 3: Restart Cloudera Manager Server and Agents
+
+
+Restart the Cloudera Manager Server by running the following command on the
+              Cloudera Manager Server host:
+
+
+RHEL 7
+                  compatible:sudo systemctl restart cloudera-scm-server
+RHEL 6 compatible, SLES, Ubuntu:
+
+sudo service cloudera-scm-server restart
+
+
+
+
+On each agent host (including the Cloudera Manager Server host), restart the
+              Cloudera Manager agent service:
+
+
+RHEL 7
+                  compatible:sudo systemctl restart cloudera-scm-agent
+RHEL 6 compatible, SLES, Ubuntu:
+
+sudo service cloudera-scm-agent restart
+
+
+
+
+
+
+
+Step 4: Verify that the Cloudera Manager Server and Agents are Communicating
+
+
+In the Cloudera Manager Admin Console, go to Hosts > All Hosts. If you see successful heartbeats reported in the Last
+              Heartbeat column after restarting the agents, TLS encryption is working
+            properly.
+
+
+
+
+
+Enable Server Certificate Verification on Cloudera Manager Agents
+
+
+Minimum Required Role:
+Cluster
+            Administrator (also provided by Full
+          Administrator) This feature is not available when using Cloudera
+            Manager to manage Data Hub clusters.
+If you have completed the previous sections, communication between Cloudera Manager
+          server and the agents is encrypted, but the certificate authenticity is not verified. For
+          full security, you must configure the agents to verify the Cloudera Manager server
+          certificate. If you are using a server certificate signed by an internal certificate
+          authority (CA), you must configure the agents to trust that CA:
+
+
+On each agent host (including the Cloudera Manager Server host), open the
+              /etc/cloudera-scm-agent/config.ini configuration file, and then
+            uncomment and set the following property:
+
+verify_cert_file=/opt/cloudera/security/pki/rootca.pem
+Alternatively, you can edit the config.ini file on one host, and
+              then copy it to the other hosts because this file by default does not contain
+              host-specific information. If you have modified properties such as
+                listening_hostname or listening_ip address in
+                config.ini, you must edit the file individually on each host.
+
+
+Restart the Cloudera Manager agents. On each agent host (including the Cloudera
+            Manager Server host), run the following command:
+
+
+RHEL 7
+                compatible:sudo systemctl restart cloudera-scm-agent
+RHEL 6 compatible, SLES, Ubuntu:
+
+sudo service cloudera-scm-agent restart
+
+
+
+
+Verify that the Cloudera Manager server and agents are communicating. In the Cloudera
+            Manager Admin Console, go to Hosts > All Hosts. If you see successful heartbeats reported in the Last
+              Heartbeat column after restarting the agents and management service, TLS
+            verification is working properly. If not, check the agent log
+              (/var/log/cloudera-scm-agent/cloudera-scm-agent.log) for
+            errors.
+
+
+
+
+Configure Agent Certificate Authentication
+
+
+importantPerform this procedure on each agent host, including the Cloudera
+            Manager Server host, which also has an agent.Without certificate authentication,
+          a malicious user can add a host to Cloudera Manager by installing the Cloudera Manager
+          agent software and configuring it to communicate with Cloudera Manager Server. To prevent
+          this, you must configure Cloudera Manager to trust the agent certificates.
+
+
+
+Step 1: Export the Private Key to a File
+
+
+On each Cloudera Manager Agent host, use the keytool utility to export
+            the private key and certificate to a PKCS12 file, which can then be
+            split up into individual key and certificate files using the openssl
+            command:
+
+
+Export the private key and certificate:
+
+sudo $JAVA_HOME/bin/keytool -importkeystore -srckeystore /opt/cloudera/security/pki/$(hostname -f).jks -destkeystore /opt/cloudera/security/pki/$(hostname -f)-key.p12 -deststoretype PKCS12 -srcalias $(hostname -f)
+
+
+Use the openssl command to export the private key into its own
+              file:
+
+sudo openssl pkcs12 -in /opt/cloudera/security/pki/$(hostname -f)-key.p12 -nocerts -out /opt/cloudera/security/pki/$(hostname -f).key
+
+
+Create a symbolic link for the .key file:
+
+sudo ln -s /opt/cloudera/security/pki/$(hostname -f).key /opt/cloudera/security/pki/agent.key
+This allows you to use the same /etc/cloudera-scm-agent/config.ini
+                file on all agent hosts rather than maintaining a file for each agent.
+
+
+
+
+
+Step 2: Create a Password File
+
+
+The Cloudera Manager agent obtains the password from a text file, not from a command
+            line parameter or environment variable. The password file allows you to use file
+            permissions to protect the password. For example, run the following commands on each
+            Cloudera Manager Agent host, or run them on one host and copy the file to the other
+            hosts:
+Create and secure the file containing the password used to protect the private key of
+            the Agent:
+
+
+Use a text editor to create a file called
+                /etc/cloudera-scm-agent/agentkey.pw that contains the
+              password.
+
+Change ownership of the file to root:
+
+sudo chown root:root /etc/cloudera-scm-agent/agentkey.pw
+
+
+Change the permissions of the file:
+
+sudo chmod 440 /etc/cloudera-scm-agent/agentkey.pw
+
+
+
+
+
+Step 3: Configure the Agent to Use Private Keys and Certificates
+
+
+On a Cloudera Manager Agent, open the
+              /etc/cloudera-scm-agent/config.ini configuration file, uncomment and
+            edit the following properties:
+
+Property
+Example Value
+Description
+
+
+
+client_key_file
+/opt/cloudera/security/pki/agent.key
+Path to the private key file.
+
+
+client_keypw_file
+/etc/cloudera-scm-agent/agentkey.pw
+Path to the private key password file.
+
+
+client_cert_file
+/opt/cloudera/security/pki/agent.pem
+Path to the client certificate file.
+
+
+Copy the file to all other cluster hosts. If you have modified properties such as
+              listening_hostname or listening_ip address in
+              config.ini, you must edit the file individually on each host.
+
+
+
+
+Step 4: Enable Agent Certificate Authentication
+
+
+Log in to the Cloudera Manager Admin Console.
+
+Select Administration > Settings.
+
+Click the Security category.
+
+Configure the following TLS settings:
+
+
+
+Setting
+Description
+
+
+
+Use TLS Authentication of Agents to
+                        Server
+Select this option to enable TLS authentication of agents to the
+                        server.
+
+
+Cloudera Manager TLS/SSL Certificate Trust Store
+                          File
+Specify the full filesystem path to the jssecacerts
+                        file located on the Cloudera Manager Server host. For this example, set the
+                        value
+                        to:<JAVA_HOME>/jre/lib/security/jssecacertsReplace
+                            <JAVA_HOME> with the path to the
+                        Oracle JDK.
+
+
+Cloudera Manager TLS/SSL Certificate Trust Store
+                          Password
+Specify the password for the jssecacerts
+                        truststore.
+
+
+
+
+Enter a Reason for Change, then click Save
+                Changes to save the settings.
+
+
+
+
+Step 5: Restart Cloudera Manager Server and Agents
+
+
+On the Cloudera Manager server host, restart the Cloudera Manager server:
+
+
+RHEL 7
+                  compatible:sudo systemctl restart cloudera-scm-server
+RHEL 6 compatible, SLES, Ubuntu:
+
+sudo service cloudera-scm-server restart
+
+
+
+
+On every agent host, restart the Cloudera Manager agent:
+
+
+RHEL 7
+                  compatible:sudo systemctl restart cloudera-scm-agent
+RHEL 6 compatible, SLES, Ubuntu:
+
+sudo service cloudera-scm-agent restart
+
+
+
+
+
+
+
+Step 6: Verify that Cloudera Manager Server and Agents are Communicating
+
+
+In the Cloudera Manager Admin Console, go to Hosts > All Hosts. If you see successful heartbeats reported in the Last
+              Heartbeat column after restarting the agents and server, TLS certificate
+            authentication is working properly. If not, check the agent log
+              (/var/log/cloudera-scm-agent/cloudera-scm-agent.log) for errors.
+For example, you might see the following error:
+WrongHost: Peer certificate commonName does not match host, expected 192.0.2.155, got cdh-1.example.com
+[02/May/2018 15:04:15 +0000] 4655 MainThread agent        ERROR    Heartbeating to 192.0.2.155:7182 failed
+For this scenario, make sure that your DNS and /etc/hosts file are
+            configured correctly, and that your server_host parameter in
+              /etc/cloudera-scm-agent/config.ini uses the Cloudera Manager Server
+            hostname, and not IP address.
+
+
+
+

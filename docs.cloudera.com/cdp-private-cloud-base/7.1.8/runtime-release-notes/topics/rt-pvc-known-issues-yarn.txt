@@ -1,0 +1,444 @@
+Known Issues in Apache Hadoop YARN and YARN Queue ManagerCloudera Docs
+Known Issues in Apache Hadoop YARN and YARN Queue Manager
+Learn about the known issues in Apache Hadoop YARN and YARN Queue Manager, the impact or
+    changes to the functionality, and the workaround. 
+Known Issues
+
+
+COMPX-12021 Queue Manager configurations on Scheduler
+            Configuration page are not working
+When setting the following properties on the YARN Queue Manager
+            UI, the properties are set in capacity-scheduler.xml which does not have any effect on
+            YARN. The properties need to be set in yarn-site.xml, which does not happen when you set
+            them through YARN Queue Manager.
+"Maximum Application Priority" – "yarn.cluster.max-application-priority"
+"Enable Monitoring Policies" –
+                "yarn.resourcemanager.scheduler.monitor.enable"
+"Monitoring Policies" – "yarn.resourcemanager.scheduler.monitor.policies"noteYou can also set this property on the YARN configuration
+                  page in Cloudera Manager as "Capacity Scheduler Preemption".
+"Preemption: Observe Only" –
+                "yarn.resourcemanager.monitor.capacity.preemption.observe_only"
+"Preemption: Monitoring Interval (ms)" –
+                "yarn.resourcemanager.monitor.capacity.preemption.monitoring_interval"
+"Preemption: Maximum Wait Before Kill (ms)" –
+                "yarn.resourcemanager.monitor.capacity.preemption.max_wait_before_kill"
+"Preemption: Total Resources Per Round" –
+                "yarn.resourcemanager.monitor.capacity.preemption.total_preemption_per_round"
+"Preemption: Over Capacity Tolerance" –
+                "yarn.resourcemanager.monitor.capacity.preemption.max_ignored_over_capacity"
+"Preemption: Maximum Termination Factor" –
+                "yarn.resourcemanager.monitor.capacity.preemption.natural_termination_factor"
+"Enable Intra Queue Preemption" –
+                "yarn.resourcemanager.monitor.capacity.preemption.intra-queue-preemption.enabled"
+
+
+
+In Cloudera Manager, select the YARN service.
+Click the Configuration tab.
+Search for yarn-site.xml.
+Under YARN Service Advanced Configuration Snippet (Safety Valve) for
+                  yarn-site.xml, add the corresponding parameter and value you
+                need.
+Click Save Changes.
+Restart the YARN services.
+
+
+
+
+COMPX-11380 Queue Manager displays an error stating that it is unable to complete a request
+If Queue Manager incorrectly detects an inactive Resource
+            Manager, it displays an error stating that it is unable to complete a request.
+Refresh the browser and reload the YARN Queue Manager UI.
+            If that does not solve the issue, either restart the current active ResourceManager or
+            the Queue Manager.
+
+
+COMPX-1445: Queue Manager operations are failing when Queue
+            Manager is installed separately from YARN
+If Queue Manager is not selected during YARN installation, Queue
+            Manager operation are failing. Queue Manager says 0 queues are configured and several
+            failures are present. That is because ZooKeeper configuration store is not enabled.
+
+
+In Cloudera Manager, select the YARN service.
+Click the Configuration tab.
+Find the Queue Manager Service property.
+Select the Queue Manager service that the YARN service instance depends on.
+Click Save Changes.
+Restart all services that are marked stale in Cloudera Manager.
+
+
+
+
+COMPX-3181: Application logs does not work for AZURE and AWS
+            cluster
+Yarn Application Log Aggregation will fail for any YARN job (MR,
+            Tez, Spark, etc) which do not use cloud storage, or use a cloud storage location other
+            than the one configured for YARN logs
+              (yarn.nodemanager.remote-app-log-dir).
+Configure the following: 
+
+For MapReduce job, set mapreduce.job.hdfs-servers in the
+                    mapred-site.xml file with all filesystems required for the
+                  job including the one set in
+                    yarn.nodemanager.remote-app-log-dir such as
+                    hdfs://nn1/,hdfs://nn2/.
+
+
+For Spark job, set the job level with all filesystems required for the job
+                  including the one set in yarn.nodemanager.remote-app-log-dir
+                  such as hdfs://nn1/,hdfs://nn2/ in
+                    spark.yarn.access.hadoopFileSystems and pass it through the
+                    --config option in spark-submit.
+
+
+For jobs submitted using the hadoop command, place a separate
+                    core-site.xml file with fs.defaultFS set
+                  to the filesystem set in yarn.nodemanager.remote-app-log-dir
+                  in a path. Add that directory path in --config when executing
+                  the hadoop command.
+
+
+
+
+COMPX-3303: Auto queue deletion is not supported in relative and
+            absolute resource allocation mode
+The auto queue deletion feature enabled by default and as a
+            result dynamicall created child queues are automaticallz deleted 300 seconds after the
+            last job finished on them. However, this feature is not supported in relative and
+            absolute resource allocation mode.
+Switch to weight resource allocation mode or delete the
+            dynamically created child queues manually. 
+
+
+COMPX-4992: Unable to switch to absolute mode after deleting a
+            partition using YARN Queue Manager
+ If you delete a partition (node label) which has been
+            associated with queues and those queues have capacities configured for that partition
+            (node label), the CS.xml still contains the partition (node label) information. Hence,
+            you cannot switch to absolute mode after deleting the partition (node label).
+It is recommended not to delete a partition (node label)
+            which has been associated with queues and those queues have capacities configured for
+            that partition (node label). 
+
+
+COMPX-5240: Restarting parent queue does not restart child
+            queues in weight mode
+When a dynamic auto child creation enabled parent queue is
+            stopped in weight mode, its static and dynamically created child queues are also
+            stopped. However, when the dynamic auto child creation enabled parent queue is
+            restarted, its child queues remain stopped. In addition, the dynamically created child
+            queues cannot be restarted manually through the YARN Queue Manager UI either.
+Delete the dynamic auto child creation enabled parent
+            queue. This action also deletes all its child queues, both static and dynamically
+            created child queues, including the stopped dynamic queues. Then recreate the parent
+            queue, enable the dynamic auto child creation feature for it and add any required static
+            child queues.
+
+
+COMPX-5244: Root queue should not be enabled for auto-queue
+            creation
+After dynamic auto child creation is enabled for a queue using
+            the YARN Queue Manager UI, you cannot disable it using the YARN Queue Manager UI. That
+            can cause problem when you want to switch between resource allocation modes, for example
+            from weight mode to relative mode. The YARN Queue Manager UI does not let you to switch
+            resource allocation mode if there is at least one dynamic auto child creation enabled
+            parent queue in your queue hierarchy.
+If the dynamic auto child creation enabled parent queue is
+            NOT the root or the root.default queue: Stop and remove the dynamic auto child creation
+            enabled parent queue. Note that this stops and remove all of its child queues as well. 
+If the dynamic auto child creation enabled parent queue is
+            the root or the root.default queue: You cannot stop and remove neither the root nor the
+            root.default queue. You have to change the configuration in the applicable configuration
+            file: 
+In Cloudera Manager, navigate to YARN >  Configuration.
+Find the Capacity Scheduler Configuration Advanced Configuration
+                  Snippet (Safety Valve) property. 
+Add the following configuration:
+                  yarn.scheduler.capacity.<queue-path>.auto-queue-creation-v2.enabled=false
+                For example:
+                  yarn.scheduler.capacity.root.default.auto-queue-creation-v2.enabled=false
+                Alternatively, you can remove the
+                  yarn.scheduler.capacity.<queue-path>.auto-queue-creation-v2.enabled
+                property from the configuration file. 
+Restart the Resource Manager.
+
+
+
+COMPX-5264: Unable to switch to Weight mode on creating a
+            managed parent queue in Relative mode
+In the current implemention, if there is an existing managed
+            queue in Relative mode, then conversion to Weight mode is not be allowed. 
+To proceed with the conversion from Relative mode to
+            Weight mode, there should not be any managed queues. You must first delete the managed
+            queues before conversion. In Weight mode, a parent queue can be converted into managed
+            parent queue.
+
+
+COMPX-5549: Queue Manager UI sets
+              maximum-capacity to null when you switch mode with multiple
+            partitions
+If you associate a partition with one or more queues and then
+            switch the allocation mode before assigning capacities to the queues, an
+              Operation Failed error is displayed as the
+              max-capacity is set to null. 
+
+After you associate a partition with one or more queues, in the YARN Queue Manager
+              UI, click Overview > <Partition name>
+              from the dropdown list and distribute capacity to the queues before switching
+              allocation mode or creating placement rules.
+
+
+
+COMPX-5589: Unable to add new queue to leaf queue with partition
+            capacity in Weight/Absolute mode
+Scenario 
+User creates one or more partitions. 
+ Assigns a partition to a parent with children
+ Switches to the partition to distribute the capacities
+ Creates a new child queue under one of the leaf queues but the following error is
+                displayed:
+Error :
+2021-03-05 17:21:26,734 ERROR 
+com.cloudera.cpx.server.api.repositories.SchedulerRepository: Validation failed for Add queue 
+operation. Error message: CapacityScheduler configuration validation failed:java.io.IOException: 
+Failed to re-init queues : Parent queue 'root.test2' have children queue used mixed of  weight 
+mode, percentage and absolute mode, it is not allowed, please double check, details:
+{Queue=root.test2.test2childNew, label= uses weight mode}. {Queue=root.test2.test2childNew, 
+label=partition uses percentage mode}             
+To create new queues under leaf queues without hitting
+            this error, perform the following: 
+Switch to Relative mode 
+Create the required queues 
+Create the required partitions 
+Assign partitions and set capacities 
+Switch back to Weight mode 
+
+
+
+Create the entire queue structure 
+Create the required partitions 
+Assign partition to queues 
+Set partition capacities 
+
+
+
+
+COMPX-6054: PlacementPolicy Rules(default rule) is not honoured
+             in case limit 2 is breached for AQC
+If there is a dynamic parent queue, the maximum of two rules
+            applies. So in case two levels of queues is to be created under this dynamic parent
+            queue, it should be detected as an invalid path, and fall through to the next rule.
+            However, it does not happen, but the queue creation fails and subsequently the
+            application submission fails too. This is essentially a discrepancy between AQC
+            validation and MappingRule validation.
+This issue can not be worked around currently, however,
+            resubmission of the application with a valid path should be successful.
+
+
+COMPX-6214: When there are more than 600 queues in a cluster,
+            potential timeouts occur due to performance reasons that are visible in the
+            Configuration Service.
+The Cloudera Manager proxy timeout configuration field is
+            added now. This issue is tracked in OPSAPS-60554. For this release, the timeout is
+            increased from 20 seconds to 5 minutes. However, if this problem occurs, Cloudera
+            recommends you to increase the proxy timeout value. 
+
+
+COMPX-6628: Unable to delete single leaf queue assigned to a
+            partition.
+
+In the current implementation, you cannot delete a single leaf queue assigned to a
+              partition.
+
+
+For each non-default partition, perform the following for the single
+              child leaf queue and its parent queues:
+In Cloudera Manager, click Cluster
+>
+YARN.
+Click the Configuration tab.
+Search for ResourceManager. In the
+                    Filters pane, under Scope, select
+                    ResourceManager. 
+Add the following in Capacity Scheduler Configuration Advanced
+                    Configuration Snippet (Safety Valve):
+                    Name: yarn.scheduler.capacity.<queuePath>.accessible-node-labels.<partition>.capacity
+Value: 0Set
+                    the value to 0 in Percentage mode, and
+                      0w in Weight mode, and
+                      [memory=0,vcores=0] in Absolute
+                    mode.Name: yarn.scheduler.capacity.<queuePath>.accessible-node-labels.<partition>.maximum-capacity  
+Value: 100Set
+                    the value to 100 in Percentage and
+                      Weight mode and [memory=0,vcores=0]
+                    in Absolute mode.
+Adjust the capacities of the siblings of the parent queue for the same
+                  partition.
+Click Save Changes.
+Restart the active ResourceManager service for the changes
+                  to apply.
+In Cloudera Manager, click Cluster
+>
+YARN Queue Manager UI.
+Delete the desired single child leaf queue.
+
+
+
+
+COMPX-8687: Missing access check for getAppAttemps
+When the Job ACL feature is enabled using Cloudera Manager (YARN >  Configuration >  Enablg JOB ACLproperty), the mapreduce.cluster.acls.enabled property is
+            not generated to all configuration files, including the yarn-site.xml
+            configuration file. As a result the ResourceManager process will use the
+            default value of this property. The default property of
+              mapreduce.cluster.acls.enabled is false. 
+Workaround: Enable the Job ACL feature using an advanced
+            configuration snippet:
+In Cloudera Manager select the YARN service.
+Click Configuration.
+Find the YARN Service MapReduce Advanced Configuration Snippet (Safety
+                  Valve) property.
+Click the plus icon and add the following:
+Name: mapreduce.cluster.acls.enabled
+Value: true
+
+Click Save Changes.
+
+
+
+COMPX-11564: Queue operations or YARN Queue Manager UI may slow
+            down if a large number of queues in a Kerberos or SSL enabled environment. 
+Queue operations or YARN Queue Manager UI may slow down if a
+            large number of queues, that is more than 500, in a Kerberos or SSL enabled environment.
+            If the queue size exceeds 1000 queues in a Kerberos or SSL enabled environment, queue
+            operations may time out.
+
+
+Third party applications do not launch if MapReduce framework
+            path is not included in the client configuration
+MapReduce application framework is loaded from HDFS instead of
+            being present on the NodeManagers. By default the
+              mapreduce.application.framework.path property is set to the
+            appropriate value, but third party applications with their own configurations will not
+            launch.
+Set the
+              mapreduce.application.framework.path property to the appropriate
+            configuration for third party applications.
+
+
+OPSAPS-52066: Stacks under Logs Directory for Hadoop daemons
+              are not accessible from Knox Gateway.
+Stacks under the Logs directory for Hadoop daemons, such as
+            NameNode, DataNode, ResourceManager, NodeManager, and JobHistoryServer are not
+            accessible from Knox Gateway.
+Administrators can SSH directly to the Hadoop Daemon
+            machine to collect stacks under the Logs directory.
+
+
+OPSAPS-57067: Yarn Service in Cloudera Manager reports stale
+            configuration yarn.cluster.scaling.recommendation.enable.
+This issue does not affect the functionality. Restarting
+            Yarn service will fix this issue.
+
+
+OPSAPS-61245: The YARN NodeManager container executor's
+            banned.users list is a static list that contains the default superusers to ensure no
+            container is launched by a user with elevated privileges. If the process user is changed
+            to a custom value it will not be included in the list automatically.
+To ensure no container is launched by the new process user the
+            users should be added to the banned.users list manually. 
+
+
+JobHistory URL mismatch after server relocation
+After moving the JobHistory Server to a new host, the URLs
+            listed for the JobHistory Server on the ResourceManager web UI still point to the old
+            JobHistory Server. This affects existing jobs only. New jobs started after the move are
+            not affected.
+For any existing jobs that have the incorrect JobHistory
+            Server URL, there is no option other than to allow the jobs to roll off the history over
+            time. For new jobs, make sure that all clients have the updated
+              mapred-site.xml that references the correct JobHistory Server.
+
+
+CDH-49165: History link in ResourceManager web UI broken for
+            killed Spark applications
+When a Spark application is killed, the history link in the
+            ResourceManager web UI does not work.
+To view the history for a killed Spark application, see
+            the Spark HistoryServer web UI instead.
+
+
+CDH-6808: Routable IP address required by ResourceManager
+ResourceManager requires routable host:port
+            addresses for yarn.resourcemanager.scheduler.address, and does not
+            support using the wildcard 0.0.0.0 address.
+Set the address, in the form host:port,
+            either in the client-side configuration, or on the command line when you submit the
+            job.
+
+
+CDPD-2936: Application logs are not accessible in WebUI2 or
+            Cloudera Manager
+Running Containers Logs from NodeManager local directory cannot
+            be accessed either in Cloudera Manager or in WebUI2 due to log aggregation.
+Use the YARN log CLI to access application logs. For
+            example:
+            yarn logs -applicationId <Application ID>
+
+Apache Issue:
+YARN-9725
+
+
+YARN cannot start if Kerberos principal name is changed
+If the Kerberos principal name is changed in Cloudera Manager
+            after launch, YARN will not be able to start. In such case the keytabs can be correctly
+            generated but YARN cannot access ZooKeeper with the new Kerberos principal name and old
+            ACLs.
+There are two possible workarounds:
+Delete the znode and restart the YARN service.
+Use the reset ZK ACLs command. This also sets the znodes below
+                  /rmstore/ZKRMStateRoot to world:anyone:cdrwa
+                which is less secure.
+
+
+Queue Manager does not open on using a custom user with a default Kerberos
+            principal
+If a custom user is used with the default Kerberos principal, the Queue Manager web UI
+            displays an HTTP ERROR 400 error.
+Ensure that the Queue Manager process_username property matches
+            the YARN process_username property.
+
+
+Unsupported Features
+
+
+
+
+The following YARN features are currently not supported in Cloudera Data Platform:
+Application Timeline Server v2 (ATSv2)
+Auxiliary Services
+Container Resizing
+Distributed or Centralized Allocation of Opportunistic Containers
+Distributed Scheduling
+Docker on YARN (DockerContainerExecutor) on Data Hub clusters
+Fair Scheduler
+GPU support for Docker
+Hadoop Pipes
+Moving jobs between queues
+Native Services
+Pluggable Scheduler Configuration
+Queue Priority Support
+Reservation REST APIs
+Resource Estimator Service
+Resource Profiles
+(non-Zookeeper) ResourceManager State Store
+Rolling Log Aggregation
+Shared Cache
+YARN Federation
+
+
+
+
+
+
+Parent topic: Known issues in Cloudera Runtime 7.1.8

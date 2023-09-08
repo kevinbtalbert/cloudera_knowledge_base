@@ -1,0 +1,256 @@
+Install and Configure Oracle Database for CDPCloudera Docs
+Install and Configure Oracle Database for CDP
+You can install an Oracle database for use with Cloudera Manager
+    and other components that require a database. 
+To use an Oracle database, follow these procedures. For information on
+      compatible versions of the Oracle database, see Database Requirements.
+
+Related informationConfiguring Oracle RAC for the Cloudera Manager databaseConfiguring Oracle RAC for the Cloudera Manager databaseConfiguring the Hue Server to Store Data in the Oracle databaseYou can connect Hue to your Oracle database while installing Cloudera Runtime (and     Hue).Parent topic: Step 5. Install and Configure Databases
+Collecting Oracle Database Information
+
+To configure Cloudera Manager to work with an Oracle database, get the
+        following information from your Oracle DBA:
+
+Hostname - The DNS name or the IP address of the host where the
+          Oracle database is installed.
+SID - The name of the schema that will store Cloudera Manager
+          information. 
+Username - A username for each schema that is storing information.
+          You could have four unique usernames for the four schema.
+Password - A password corresponding to each username.
+
+
+
+
+Configuring the Oracle Server
+
+noteIf you are making changes to an existing database, make sure to stop
+        any services that use the database before continuing.
+Adjusting Oracle Settings to Accommodate Larger
+          Clusters
+Cloudera Management services require high write throughput. Depending
+          on the size of your deployments, your DBA may need to modify Oracle
+          settings for monitoring services. These guidelines are for larger
+          clusters and do not apply to the Cloudera Manager configuration
+          database and to smaller clusters. Many factors help determine whether
+          you need to change your database settings, but in most cases, if your
+          cluster has more than 100 hosts, you should consider making the
+          following changes:
+Enable direct and asynchronous I/O by setting the
+                FILESYSTEMIO_OPTIONS parameter to
+                SETALL.
+Increase the RAM available to Oracle by changing the
+                MEMORY_TARGET parameter. The amount of memory
+              to assign depends on the size of the Hadoop cluster.
+Create more redo log groups and spread the redo log members
+              across separate disks or logical unit numbers.
+Increase the size of redo log members to be at least 1 GB.
+
+
+Reserving Ports for HiveServer 2
+HiveServer2 uses port 10000 by default, but Oracle database changes
+          the local port range. This can cause HiveServer2 to fail to start. 
+Manually reserve the default port for HiveServer2. For example, the
+          following command reserves port 10000 and inserts a comment indicating
+          the reason:
+echo << EOF > /etc/sysctl.cnf
+# HS2 uses port 10000
+net.ipv4.ip_local_reserved_ports = 10000
+EOF
+sysctl -q -w net.ipv4.ip_local_reserved_ports=10000
+
+Modifying the Maximum Number of Oracle Connections
+Work with your Oracle database administrator to ensure appropriate
+          values are applied for your Oracle database settings. You must
+          determine the number of connections, transactions, and sessions to be
+          allowed.
+Allow 100 maximum connections for each service that requires a database and then add 50
+          extra connections. For example, for two services, set the maximum connections to 250. If
+          you have four services that require a database on one host (the databases for Cloudera
+          Manager Server, Hue, Reports Manager, and Hive metastore), set the maximum connections to
+          450.
+From the maximum number of connections, you can determine the number
+          of anticipated sessions using the following formula:
+sessions = (1.1 * maximum_connections) + 5
+For example, if a host has a database for two services, anticipate
+          250 maximum connections. If you anticipate a maximum of 250
+          connections, plan for 280 sessions.
+Once you know the number of sessions, you can determine the number of
+          anticipated transactions using the following formula:
+transactions = 1.1 * sessions
+Continuing with the previous example, if you anticipate 280 sessions,
+          you can plan for 308 transactions.
+Work with your Oracle database administrator to apply these derived
+          values to your system.
+Using the sample values above, Oracle attributes would be set as
+          follows:
+alter system set processes=250;
+alter system set transactions=308;
+alter system set sessions=280;
+
+Ensuring Your Oracle Database Supports UTF8
+The database you use must support UTF8 character set encoding. You
+          can implement UTF8 character set encoding in Oracle databases by using
+          the dbca utility. In this case, you can use the
+            characterSet AL32UTF8 option to specify proper
+          encoding. Consult your DBA to ensure UTF8 encoding is properly
+          configured.
+
+
+
+
+Installing the Oracle JDBC Connector
+
+You must install the JDBC connector on the Cloudera Manager Server host
+        and any other hosts that use a database.
+Cloudera recommends that you assign all roles that require a database on the same host and
+        install the connector on that host. Locating all such roles on the same host is recommended
+        but not required. If you install a role, such as Reports Manager, on one host and other
+        roles on a separate host, you would install the JDBC connector on each host running roles
+        that access the database.
+
+Download the Oracle JDBC Driver from the Oracle website. For
+          example, the version 6 JAR file is named
+            ojdbc6.jar.For more information about supported
+            Java versions, see Java Requirements.To
+            download the JDBC driver, visit the Oracle JDBC and UCP
+              Downloads page, and click on the link for your Oracle
+            Database version. Download the ojdbc6.jar file (or
+              ojdbc8.jar, for Oracle Database 12.2).
+Copy the Oracle JDBC JAR file to
+            /usr/share/java/oracle-connector-java.jar. The
+          Cloudera Manager databases and the Hive Mestastore database use this
+          shared file. For
+          example:sudo mkdir -p /usr/share/java
+sudo cp /tmp/ojdbc8-12.2.0.1.jar /usr/share/java/oracle-connector-java.jar
+sudo chmod 644 /usr/share/java/oracle-connector-java.jar
+
+
+
+
+Creating Databases for Cloudera
+      Software
+
+Create schema and user accounts for components that require databases: 
+
+Cloudera Manager Server
+Cloudera Management Service roles:
+Reports Manager
+
+Data Analytics Studio (DAS) Supported with PostgreSQL only.
+Hue
+Each Hive metastore
+Oozie
+Data Analytics Studio
+Schema Registry
+Streams Messaging Manager 
+
+You can create the Oracle database, schema and users on the host where
+        the Cloudera Manager Server will run, or on any other hosts in the
+        cluster. For performance reasons, you should install each database on
+        the host on which the service runs, as determined by the roles you
+        assign during installation or upgrade. In larger deployments or in cases
+        where database administrators are managing the databases the services
+        use, you can separate databases from services, but use caution.
+The databases must be configured to support UTF-8 character set
+        encoding.
+Record the values you enter for database names, usernames, and
+        passwords. The Cloudera Manager installation wizard requires this
+        information to correctly connect to these databases.noteIf you are
+          deploying Oracle RAC (for high availability),  enter the database name
+          using the following format:
+          (DESCRIPTION=(LOAD_BALANCE=off)(FAILOVER=on)(CONNECT_TIMEOUT=5)(TRANSPORT_CONNECT_TIMEOUT=3)(RETRY_COUNT=3)(ADDRESS=(PROTOCOL=TCP)(HOST=[***hostname***])(PORT=[***port***]))(CONNECT_DATA=(SERVICE_NAME=[***service_name***])))
+
+Log into the Oracle client:
+          sqlplus system@localhostEnter password: ******
+Create a user and schema for each service you are using from the below
+            table:create user <user> identified by <password> default tablespace <tablespace>;
+grant CREATE SESSION to <user>;
+grant CREATE TABLE to <user>;
+grant CREATE SEQUENCE to <user>;You can use any
+            value you want for <schema>, <user>, and
+              <password>. The following examples are the default names
+            provided in the Cloudera Manager configuration settings, but you are not required to use
+            them:Table 1. Databases for Cloudera Software
+
+Service
+Database
+User
+
+
+
+Cloudera Manager Server
+scm
+scm
+
+
+Reports Manager
+rman
+rman
+
+
+Ranger RHEL/CentOS/Ubuntu
+ranger
+rangeradmin
+
+
+Ranger KMS RHEL/CentOS
+ranger
+rangerkms
+
+
+Hue
+hue
+hue
+
+
+Hive Metastore Server
+hive
+hive
+
+
+Oozie
+oozie
+oozie
+
+
+Data Analytics Studio (DAS) Supported with PostgreSQL only.
+das
+das
+
+
+Schema Registry
+schemaregistry
+schemaregistry
+
+
+Streams Messaging Manager 
+smm
+smm 
+
+
+Grant a quota on the tablespace (the default tablespace is SYSTEM) where tables will be
+          created:
+          ALTER USER <user> quota 100m on <tablespace>;or
+          for unlimited
+          space:ALTER USER <user> quota unlimited on <tablespace>;
+
+For further information about Oracle privileges, see Authorization: Privileges, Roles,
+          Profiles, and Resource Limitations.
+
+
+
+Next Steps
+
+
+If you plan to use Apache Ranger, see the following topic for instructions on creating
+          and configuring the Ranger database and to install the JDBC driver for the database. See
+            Configuring a Ranger or Ranger KMS Database: Oracle.
+If you plan to use Schema Registry or Streams Messaging Manager, see the following topic
+          for instructions on configuring the database: Configuring the Database for Streaming Components
+After you install and configure Oracle databases for Cloudera software, continue to
+            Set up and configure the Cloudera Manager
+            database to configure a database for Cloudera Manager.
+
+
+

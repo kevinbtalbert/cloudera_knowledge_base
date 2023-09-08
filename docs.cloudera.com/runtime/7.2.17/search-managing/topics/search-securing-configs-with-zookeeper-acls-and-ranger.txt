@@ -1,0 +1,48 @@
+Securing configs with ZooKeeper ACLs and RangerCloudera Docs
+Securing configs with ZooKeeper ACLs and Ranger
+Learn how you can restrict access to configuration sets by setting ZooKeeper Acces
+    control Lists (ACLs) on all znodes under and including the /solr
+    directory and using Ranger to control access to the ConfigSets API.
+Ranger requires Kerberos authentication.The solrctl instancedir command interacts directly with ZooKeeper, and
+      therefore cannot be protected by Ranger. Because the solrctl config
+      command is a wrapper script for the ConfigSets API, it can be protected by Ranger.To force users to use the ConfigSets API, you must set all ZooKeeper znodes under and including
+          /solr to read-only (except for the solr user). 
+After completing these steps, you cannot run commands such as solrctl instancedir
+          --create or solrctl instancedir --delete without first
+        authenticating as the solr@EXAMPLE.COM super user principal.
+        Unauthenticated users can still run solrctl instancedir --list and
+          solrctl instancedir --get, because those commands only perform read
+        operations against ZooKeeper.Create a jaas.conf file containing the
+              following:
+         Client {
+           com.sun.security.auth.module.Krb5LoginModule required
+           useKeyTab=false
+           useTicketCache=true
+           principal="solr@[***EXAMPLE.COM***]";
+           };
+         
+Replace [***EXAMPLE.COM***] with your Kerberos
+            realm name.
+Set the LOG4J_PROPS environment variable so that it points to a
+            log4j.properties file: 
+
+export LOG4J_PROPS=/etc/zookeeper/conf/log4j.properties
+
+Set the ZKCLI_JVM_FLAGS environment
+                variable:
+            
+export ZKCLI_JVM_FLAGS="-Djava.security.auth.login.config=[***PATH TO JAAS.CONF FILE***] \
+             -DzkACLProvider=org.apache.solr.common.cloud.SaslZkACLProvider \
+             -Droot.logger=INFO,console"Replace [***PATH TO
+              JAAS.CONF FILE***] with the path pointing to the
+            jaas.conf file you just created.Authenticate as the solr
+              user:
+         
+kinit solr@[***EXAMPLE.COM***]
+Replace [***EXAMPLE.COM***] with your Kerberos
+            realm name. Run the zkcli.sh script as follows:
+            
+/opt/cloudera/parcels/CDH/lib/solr/bin/zkcli.sh -zkhost [***ZOOKEEPER SERVER HOSTNAME***]:2181 -cmd updateacls /solr
+Replace [***ZOOKEEPER SERVER HOSTNAME***]  with
+            the hostname of a ZooKeeper server.
+Parent topic: Managing collection configuration using configs or instance directories

@@ -1,0 +1,224 @@
+Configuring and running Data Lake backupsCloudera Docs
+Configuring and running Data Lake backups
+The Data Lake provides a command line interface for managing Data Lake backup and
+    restore operations. The system checks to make sure there isn't another backup or restore in
+    progress.
+Configure the backup
+
+
+
+Create the S3, ABFS, or GCS backup location before performing the backup. For Azure, the
+          container where the backup is stored should be in the same storage account as the Data
+          Lake being backed up.
+Shut down principal services (see Principal services). This will help avoid mismatches between Data Lake metadata and data used by
+          workloads and mismatches among the metadata stored in the Data Lake.
+Stop all Data Hubs attached to the Data Lake before you perform any backup or restore
+          operations.
+Stop any Virtual Warehouses that are running.
+
+Configuring backups for AWS:
+
+Apply the IAM policy for Data Lake backup to the following roles:
+DATALAKE_ADMIN_ROLE
+RANGER_AUDIT_ROLEFor more informaiton on IAM roles, see Minimal setup for
+                  cloud storage.In the IAM policy for Data Lake backup, be sure to
+                replace the <BACKUP_BUCKET> variable with the backup location used.
+
+
+
+Note that if you plan to restore the Data Lake backup that you are taking, you must also
+        apply a restore policy to certain roles. For more information on restore see Configuring and running Data Lake restore.
+Configuring RAZ for backup
+This section applies only to RAZ-enabled AWS Data Lakes. For RAZ-enabled Azure Data
+        Lakes, see the section below.
+Add a RAZ policy to allow the backups to be written to and read from the backup
+        location.
+
+
+Open the Ranger UI.
+Go to the cm_s3 policy list.
+Add a new policy:
+Policy name: backup_policy
+S3 bucket: The bucket where backups will be stored
+Path: The path(s) in the bucket where backup will be writtenNote: If more
+                    than one bucket will be used for backup, create a separate policy for each
+                    bucket.
+
+Add read and write permissions for the atlas, hbase, hdfs, and
+              solr users under “Allow Conditions.”
+
+
+noteIf RAZ is enabled on the Data Lake, then during the backup you will see denied audit
+        logs in Ranger related to the HBase user attempting to change ownership of the backup
+        directory. These are expected and don't include a problem with the backup.
+Configuring backups for Azure:
+
+Verify that the following identities have the "Storage Blob Data Contributor"
+          role on the container where the backup is stored:
+Data Lake Admin identity
+Ranger Audit Logger identity
+
+
+Configuring RAZ for backup
+This section applies only to RAZ-enabled Azure Data Lakes. For RAZ-enabled AWS Data
+        Lakes, see the section above.
+Add a RAZ policy to allow the backups to be written to and read from the backup
+        location.
+
+
+Open the Ranger UI.
+Go to the cm_adls policy list.
+Add a new policy:
+Policy name: backup_policy
+Storage Account: The storage account where backups will be stored
+Storage Account Container: The container where backups will be stored
+Path: The path(s) in the bucket where backup will be writtenNote: If more
+                    than one storage account or container will be used for backup, create a separate
+                    policy for each account/container.
+
+Add read, write, list, delete, delete recursive, and move permissions for the
+              atlas, hbase, hdfs, and solr users under “Allow
+              Conditions."
+
+
+noteIf RAZ is enabled on the Data Lake, then during the backup you will see denied audit
+        logs in Ranger related to the HBase user attempting to change ownership of the backup
+        directory. These are expected and don't include a problem with the backup.
+Configuring backups for GCP:
+Verify that the Ranger Audit Service account has the following required permissions:
+resourcemanager.projects.get
+resourcemanager.projects.list
+storage.buckets.get
+storage.objects.create
+storage.objects.delete
+storage.objects.get
+storage.objects.getIamPolicy
+storage.objects.list
+storage.objects.setIamPolicy
+storage.objects.update
+
+Note that the Ranger Audit service account permissions listed above should be granted to a
+        custom role, not the default Storage Object Admin role.
+You should also modify the scope of the Data Lake Admin and Ranger Audit
+        service accounts to include the Backups bucket, if the bucket is different from the main
+        data storage bucket. For more information see Minimum setup for cloud storage.
+
+Run the backup
+
+
+Log into a computer that has connectivity to the Data Lake host.
+
+Install the CDP CLI Client.
+
+Switch to a user account that has the environment admin role.
+
+Run a backup. 
+Use the following command to run the Data Lake backup: $ cdp datalake
+            backup-datalake --datalake-name <name> --backup-location <cloud storage
+            location>Where the options are the following:
+
+Option
+Example
+Description
+
+
+
+--datalake-name
+finance-dl
+This is the name of the Data Lake as configured in the CDP environment.
+                      Required.
+
+
+--backup-location
+s3a://acme-finance-admin-bucket/backup-archiveor
+                        abfs://<container-name>@mydatalakesan.dfs.core.windows.net/backup_01/
+The fully qualified name of the S3 bucket and object or ABFS location
+                      where the backup operation writes files. For S3 use the "S3a" file system
+                      protocol. Required.
+
+
+--backup-name
+pre-upgrade0420
+An optional label that helps you identify one backup from another. The
+                      backup name can be used to identify a backup for restoring.
+
+
+--close-db-connections | --no-close-db-connections
+
+Specifies whether Ranger/HMS connections to the Data Lake should be
+                      closed or not during the backup. If you want to take the backup without
+                      workload downtime, use no-close-db-connections. Using this
+                      option means there could be changes to the Ranger/HMS data while the backup is
+                      performed. The connections are closed by default.
+
+
+--skip-validation | --no-skip-validation 
+
+Using --skip-validation skips the validation that
+                      occurs before the backup process begins. This validation checks for required
+                      permissions that are often the source of backup/restore failures. See
+                        Backup and restore for the Data Lake for more details.
+
+
+--validation-only | --no-validation-only
+
+--validation-only runs the pre-backup and restore
+                      validation process, but does not proceed to the actual backup/restore
+                      operation. See Backup and restore for the Data Lake for more
+                      details.
+
+
+--skip-ranger-hms-metadata | --no-skip-ranger-hms-metadata
+
+Skips the backup of the databases backing HMS/Ranger services. If this
+                      option is not provided, the HMS/Ranger services are backed up by
+                      default.
+
+
+--skip-atlas-metadata | --no-skip-atlas-metadata
+
+Skips the backup of the Atlas metadata. If this option is not provided,
+                      the Atlas metadata is backed up by default.
+
+
+--skip-ranger-audits | --no-skip-ranger-audits
+
+Skips the backup of the Ranger audits. If this option is not provided,
+                      Ranger audits are backed up by default.
+
+For backups, the --skip-ranger-hms-metadata and
+              --skip-atlas-metadata flags cannot be used at the same
+          time.
+
+On AWS: 
+$ cdp datalake backup-datalake --datalake-name finance-dl 
+     --backup-location s3a://acme-finance-admin-bucket/backup-archive 
+     --backup-name pre-upgrade0420
+On Azure:
+$ cdp datalake backup-datalake --datalake-name my-datalake 
+      --backup-location abfs://<container-name>@mydatalakesan.dfs.core.windows.net/backup_01/
+On GCP:
+$ cdp datalake backup-datalake --datalake-name my-datalake —backup-location gs://<bucket-name>/backup
+The output of the command shows the current status of the operation. Note the internal
+            state shows the status of each separate backup operation. If any of the individual
+            backups fail, the overall status is failed and the backup cannot be restored. (Line
+            breaks added for readability.)
+{
+    "accountId": "9d74eee4-1cad-45d7-b654-7ccf9edbb73d",
+    "backupId": "415927d9-9f7d-4d42-8000-71630e5938ca",
+    "internalState": "{ATLAS_ENTITY_AUDIT_EVENTS_TABLE=IN_PROGRESS, EDGE_INDEX_COLLECTION=IN_PROGRESS, DATABASE=SUCCESSFUL, FULLTEXT_INDEX_COLLECTION=IN_PROGRESS, ATLAS_JANUS_TABLE=IN_PROGRESS, RANGER_AUDITS_COLLECTION=IN_PROGRESS, VERTEX_INDEX_COLLECTION=IN_PROGRESS}",
+    "status": "IN_PROGRESS",
+    "startTIme": "2021-04-20 20:10:16.567"
+    "endTIme": "2021-04-20 20:10:45.341"
+    "backupLocation":"s3a://acme-finance-admin-bucket/backup-archive
+/backup-archive",
+    "backupName": "pre-upgrade0420"
+    "failureReason": ""
+}
+
+
+To see the status of the backup after the initial command, see Checking the status
+        of a Data Lake backup.
+
+
+Related informationBackup and restore for the Data LakeMinimal setup for cloud storage (AWS)Minimal setup for cloud storage (Azure)Minimum setup for cloud storage (GCP)Checking the status of a Data Lake backupParent topic: Backup and restore for the Data Lake

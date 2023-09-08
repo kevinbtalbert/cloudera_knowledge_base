@@ -1,0 +1,143 @@
+OVERCloudera Docs
+OVER
+The OVER clause is required for calls to pure
+              analytic functions such as LEAD(),
+                RANK(), and FIRST_VALUE().
+              When you include an OVER clause with calls to
+              aggregate functions such as MAX(),
+                COUNT(), or SUM(), they
+              operate as analytic functions.
+
+
+Syntax:
+
+function(args) OVER([partition_by_clause] [order_by_clause [window_clause]])
+
+partition_by_clause ::= PARTITION BY expr [, expr ...]
+order_by_clause ::= ORDER BY expr  [ASC | DESC] [NULLS FIRST | NULLS LAST]
+              [, expr [ASC | DESC] [NULLS FIRST | NULLS LAST] ...]
+window_clause: See Window clause
+
+
+PARTITION BY clause:
+
+ The PARTITION BY clause acts much like the
+                GROUP BY clause in the outermost block of a
+              query. It divides the rows into groups containing identical values
+              in one or more columns. These logical groups are known as
+                partitions. Throughout the discussion of analytic
+              functions, partitions refers to the groups produced by the
+                PARTITION BY clause, not to partitioned tables.
+              However, note the following limitation that applies specifically
+              to analytic function calls involving partitioned tables. 
+
+        In queries involving both analytic functions and partitioned tables, partition pruning only occurs for columns named in the PARTITION BY
+        clause of the analytic function call. For example, if an analytic function query has a clause such as WHERE year=2016,
+        the way to make the query prune all other YEAR partitions is to include PARTITION BY year in the analytic function call;
+        for example, OVER (PARTITION BY year,other_columns other_analytic_clauses).
+
+      
+ The sequence of results from an analytic function resets
+              for each new partition in the result set. That is, the set of
+              preceding or following rows considered by the analytic function
+              always come from a single partition. Any MAX(),
+                SUM(), ROW_NUMBER(), and so on
+              apply to each partition independently. Omit the PARTITION
+                BY clause to apply the analytic operation to all the
+              rows in the table. 
+
+ORDER BY clause:
+
+ The ORDER BY clause works much like the
+                ORDER BY clause in the outermost block of a
+              query. It defines the order in which rows are evaluated for the
+              entire input set, or for each group produced by a
+                PARTITION BY clause. You can order by one or
+              multiple expressions, and for each expression optionally choose
+              ascending or descending order and whether nulls come first or last
+              in the sort order. Because this ORDER BY clause
+              only defines the order in which rows are evaluated, if you want
+              the results to be output in a specific order, also include an
+                ORDER BY clause in the outer block of the
+              query. 
+ When the ORDER BY clause is omitted, the
+              analytic function applies to all items in the group produced by
+              the PARTITION BY clause. When the ORDER
+                BY clause is included, the analysis can apply to all or
+              a subset of the items in the group, depending on the optional
+              window clause. 
+ The order in which the rows are analyzed is only defined for
+              those columns specified in ORDER BY clauses. 
+ One difference between the analytic and outer uses of the
+                ORDER BY clause: inside the
+                OVER clause, ORDER BY 1 or
+              other integer value is interpreted as a constant sort value
+              (effectively a no-op) rather than referring to column 1. 
+
+Window clause:
+
+ The window clause is only allowed in combination with an
+                ORDER BY clause. If the ORDER
+                BY clause is specified but the window clause is not,
+              the default window is RANGE BETWEEN UNBOUNDED PRECEDING
+                AND CURRENT ROW.
+
+HBase considerations:
+
+ Because HBase tables are optimized for single-row lookups rather
+              than full scans, analytic functions using the
+                OVER() clause are not recommended for HBase
+              tables. Although such queries work, their performance is lower
+              than on comparable tables using HDFS data files. 
+
+Parquet considerations:
+
+ Analytic functions are very efficient for Parquet tables. The
+              data that is examined during evaluation of the
+                OVER() clause comes from a specified set of
+              columns, and the values for each column are arranged sequentially
+              within each data file. 
+
+Text table considerations:
+
+ Analytic functions are convenient to use with text tables for
+              exploratory business intelligence. When the volume of data is
+              substantial, prefer to use Parquet tables for performance-critical
+              analytic queries. 
+
+Examples:
+
+ The following example shows how to synthesize a numeric sequence
+              corresponding to all the rows in a table. The new table has the
+              same columns as the old one, plus an additional column
+                ID containing the integers 1, 2, 3, and so on,
+              corresponding to the order of a TIMESTAMP column
+              in the original table. 
+CREATE TABLE events_with_id AS
+  SELECT
+    row_number() OVER (ORDER BY date_and_time) AS id,
+    c1, c2, c3, c4
+  FROM events;
+
+ The following example shows how to determine the number of rows
+              containing each value for a column. Unlike a corresponding
+                GROUP BY query, this one can analyze a single
+              column and still return all values (not just the distinct ones)
+              from the other columns. 
+SELECT x, y, z,
+  count() OVER (PARTITION BY x) AS how_many_x
+FROM t1;
+
+
+Restrictions:
+
+ You cannot directly combine the DISTINCT
+              operator with analytic function calls. You can put the analytic
+              function call in a WITH clause or an inline view,
+              and apply the DISTINCT operator to its result
+              set. 
+WITH t1 AS (SELECT x, sum(x) OVER (PARTITION BY x) AS total FROM t1)
+  SELECT DISTINCT x, total FROM t1;
+
+
+

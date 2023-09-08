@@ -1,0 +1,73 @@
+Incrementally updating an imported tableCloudera Docs
+Incrementally updating an imported table
+In CDP Private Cloud Base, updating imported tables involves
+      importing incremental changes made to the original table using Apache Sqoop and then merging
+      changes with the tables imported into Apache Hive.
+After ingesting data from an operational database to Hive, you usually need to set up
+         a process for periodically synchronizing the imported table with the operational database
+         table. The base table is a Hive-managed table that was created during the first data
+         ingestion. Incrementally updating Hive tables from operational database systems involves
+         merging the base table and change records to reflect the latest record set. You create the
+         incremental table as a Hive external table, typically from CSV data in HDFS, to store the
+         change records. This external table contains the changes (INSERTs and UPDATEs) from the
+         operational database since the last data ingestion. Generally, the table is partitioned and
+         only the latest partition is updated, making this process more efficient.You can
+            automate the steps to incrementally update data in Hive by using Oozie.
+
+
+The first time the data was ingested into hive, you stored entire base table in Hive
+               in ORC format.
+The base table definition after moving it from the external table to a Hive-managed
+               table has the following
+               schema:CREATE TABLE base_table (
+id STRING,
+field1 STRING,
+modified_date DATE)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','; 
+
+
+
+Store the incremental table as an external table in Hive and to fetch records newer
+               than last_import_date, which is the
+               date of the last incremental data update.
+You frequently import incremental changes since the last time data was updated and
+               then merging it.
+
+using --check-column to fetch records
+use --query to fetch records
+
+
+sqoop import --connect jdbc:teradata://{host name}/Database=retail --connection-manager org.apache.sqoop.teradata.TeradataConnManager --username dbc --password dbc --table SOURCE_TBL --target-dir /user/hive/incremental_table -m 1 --check-column modified_date --incremental lastmodified --last-value {last_import_date}
+
+
+sqoop import --connect jdbc:teradata://{host name}/Database=retail --connection-manager org.apache.sqoop.teradata.TeradataConnManager --username dbc --password dbc --target-dir /user/hive/incremental_table -m 1 --query 'select * from SOURCE_TBL where modified_date > {last_import_date} AND $CONDITIONS’
+
+
+After the incremental table data is moved into HDFS using Sqoop, you can define an
+               external Hive table over it using the following command
+
+CREATE EXTERNAL TABLE incremental_table (
+  id STRING,
+  field1 STRING,
+  modified_date DATE)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE
+location '/user/hive/incremental_table';
+
+
+Use the MERGE command to merge the data and reconcile the base table records with
+               the new records:
+
+MERGE INTO base_table
+USING incremental_table ON base.id = incremental_table.id
+WHEN MATCHED THEN UPDATE SET
+fieldl1=incremental_table.email,
+modified_date=incremental_table.state
+WHEN NOT MATCHED THEN INSERT
+VALUES(incremental_table.id, incremental_table.field1, incremental_table.modified_data);
+
+
+
+Parent topic: HDFS to Apache Hive data migration

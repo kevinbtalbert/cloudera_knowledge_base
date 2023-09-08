@@ -1,0 +1,197 @@
+Installing Load BalancerCloudera Docs
+Installing Load Balancer
+To install the HAProxy Load Balancer, Cloudera uses an example that uses a single
+        instance of HAProxy, configured with round robin balancing and TCP mode. This allows for
+        non-terminating https (https passthrough). The HAProxy service can be configured for High
+        Availability using keepalived. 
+
+You must consult your operating system vendor’s documentation for requirements and
+                the install guide for configuring HAproxy with keepalived.
+To install a HAProxy Load Balancer, you must ssh into the HAProxy host, install, and then configure HAProxy:
+
+
+sudo su -
+
+yum install haproxy -y
+
+cp /etc/haproxy/haproxy.cfg
+                    /etc/haproxy/haproxy.cfg.bak
+
+cat > /etc/haproxy/haproxy.cfg << EOF
+
+
+global
+
+log
+127.0.0.1 local2
+
+chroot
+/var/lib/haproxy
+
+pidfile
+/var/run/haproxy.pid
+
+user
+haproxy
+
+group
+haproxy
+
+daemon
+
+
+
+defaults
+
+mode
+tcp
+
+log
+global
+
+option
+tcplog
+
+option
+dontlognull
+
+option
+redispatch
+
+retries
+3
+
+maxconn
+5000
+
+timeout connect
+5s
+
+timeout client
+50s
+
+timeout server
+50s
+
+
+listen stats
+
+
+bind *:8081
+
+
+mode http
+
+
+stats enable
+
+
+stats refresh 30s
+
+
+stats uri /stats
+
+
+monitor-uri /healthz
+
+
+
+frontend fe_k8s_80
+
+
+bind *:80 
+
+
+default_backend be_k8s_80 
+
+
+
+backend be_k8s_80
+
+
+ balance roundrobin  
+
+
+mode tcp
+
+
+ server ecs-server1.example.com 10.10.0.1:80 check
+                                    
+
+
+server ecs-server2.example.com 10.10.0.2:80 check
+
+
+server ecs-server3.example.com 10.10.0.3:80 check
+                                    
+
+
+
+frontend fe_k8s_443
+
+
+bind *:443
+
+
+default_backend be_k8s_443 
+
+
+
+backend be_k8s_443
+
+
+balance roundrobin 
+
+
+mode tcp 
+
+
+server ecs-server1.example.com 10.10.0.1:443 check
+                                    
+
+
+server ecs-server2.example.com 10.10.0.2:443
+                                        check
+
+
+server ecs-server3.example.com 10.10.0.3:443 check
+                                    
+
+
+
+EOF
+
+
+systemctl enable haproxy   
+
+
+systemctl restart haproxy
+
+
+systemctl status haproxy
+
+
+
+You can verify that all the hosts are shown from the HAproxy UI. However, at
+                    this point the hosts are not listening to the configured ports.
+
+
+
+importantSince you already have an ECS cluster running, you
+                            must alter your DNS wildcard to point to the IP address of the HAProxy
+                            server. You cannot change the Application Domain configured through the
+                            ECS wizard. So you must ensure that you send all ingress traffic to the
+                            HAProxy IP address by making that change in the IP address of your
+                            wildcard DNS Record.
+note
+
+Application Domain (app_domain property in Cloudera Manager) maps to your wildcard DNS record (For example, app_domain ecs.example.com maps to your DNS entry *.apps.ecs.example.com)
+The resolved IP address must be the host IP (or VIP) of your Load Balancer. For more information, see the Verify DNS Step 5 above.
+
+
+
+
+
+Load Balancer is now installed.
+
+Parent topic: Enable ECS Server HA and promote agents Post ECS Installation

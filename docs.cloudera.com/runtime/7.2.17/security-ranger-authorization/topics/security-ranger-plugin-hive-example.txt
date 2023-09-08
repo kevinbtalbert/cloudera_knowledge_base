@@ -1,0 +1,167 @@
+Ranger Hive PluginCloudera Docs
+Ranger Hive Plugin
+Describes how the Ranger Hive plugin enforces authorization.
+Ranger Hive Plugin is enabled in HiveServer2 which helps in storage-based authorization and
+   SQL-standard authorization. In storage-based authorization when a new table is created by running
+   CREATE TABLE statement in Beeline, which will submit query to HiveServer2 for processing, and
+   before HiveServer2 is able to run the query, it will check the policy cache file and make sure
+   the user who submits the query has the appropriate permission to perform the task. Once the
+   authorization passes, a query is submitted and a table created.
+Upon successful creation of the new table, two things will be triggered by Ranger’s Hive
+    plugin:
+Sends audit event to Solr and/or HDFS 
+Sends Kafka event to topic “ATLAS_HOOK”, to record that a new entity has been created, so
+     effectively Ranger’s Hive Plugin is the producer for “ATLAS_HOOK” topic in Kafka 
+
+SQL standard authorization provides grant/revoke functionality at database, table level. When a
+   grant command is executed in beeline it updates/creates a policy for that user and when revoke is
+   executed the user is added in the deny condition of the policy. 
+Ranger Hive Plugin Enforcement Example
+Prerequisite
+Create a database, table, column in hive service and also insert some data into it with
+     hive user.
+
+create database vehicle; 
+create table vehicle.cars(car_id int, car_name string, car_color string, car_price
+         int);" 
+insert into vehicle.cars(car_id, car_name, car_color, car_price) VALUES
+         (1,'car1','color1',100000), (2,'car2','color2',200000), (3,'car3','color3',300000),
+         (4,'car4','color4',400000); 
+select * from vehicle.cars; 
+
+
+
+Create external user 'externaluser1'
+
+Access Enforcement steps
+
+
+Let's try to access the vehicle.cars table using 'externaluser1'.
+'externaluser1' will be denied access, because 'externaluser1' lacks permission to access
+      the vehicle.cars table.
+
+
+Lets create a policy in ranger-hive for the user:
+
+
+Resource : [database=vehicle, table=cars, column=*]
+allow policy item : [user='externaluser1', permission=select]
+
+
+
+
+Let's try to access the vehicle.cars table using 'externaluser1'.
+'externaluser1' will be allowed access, because 'externaluser1' now has permission to access
+      the vehicle.cars table.
+
+You can check the logs related to these actions, using Ranger Admin Web UI > Access >   Audit  tab.
+
+Masking Enforcement steps
+Suppose you don't want to show the car_price to 'externaluser1’ user so we can mask the data
+    of that column for that user.
+
+
+Lets create a masking policy in ranger-hive for the user:
+Resource : [database=vehicle, table=cars, column=car_price]
+allow policy item : [user='externaluser1', permission=select, Select Masking
+        Option=Partial mask: show last 4]
+
+
+
+Now let's try to access the vehicle.cars table using 'externaluser1'
+'externaluser1' will see the car_price - only last 4 digits - because 'externaluser1' has
+      masked access to vehicle.cars table.
+
+
+Row Enforcement steps
+Suppose you don't want to show the only one row to 'externaluser1’ user so we can do it using
+    the row filter policy.
+
+
+Lets create a masking policy in ranger-hive for the user:
+
+Resource : [database=vehicle, table=cars]
+allow policy item : [user='externaluser1', permission=select, Row Level Filter=car_color =
+       'color4']
+
+
+
+Now let's try to access the vehicle.cars table using 'externaluser1'.
+ 'externaluser1' will see only the row whose car_color is 'color4'.
+
+
+Table 1. Hive Commands to Ranger Permission Mapping
+
+Permission
+Action
+
+
+
+SELECT
+Gives read access to an object.
+
+
+CREATE
+Hive Create Table statement is used to create table.
+
+
+UPDATE
+Gives the ability to run update queries on an object (table).
+
+
+ALTER
+
+You can rename the table and column of existing Hive tables.
+You can add a new column to the table.
+Rename Hive table column.
+Add or drop table partition.
+Add Hadoop archive option to Hive table.
+
+
+
+DROP
+DROP TABLE command in the hive is used to drop a table inside the hive.
+
+
+INDEX
+An Index is nothing but a pointer on a particular column of a table. Creating an index
+        means creating a pointer on a particular column of a table.
+
+
+LOCK
+Is used to lock the table.
+
+
+Read
+Read data from HDFS using hdfs or other cloud locations.
+
+
+Write
+Export Data to a location in hdfs or other cloud locations.
+
+
+ReplAdmin
+ReplAdmin privilege is related to REPL DUMP and REPL LOAD commands.
+
+
+Service Admin
+Enable hive ranger plugin to isolate various admin operations, in this case "Kill
+        Query". "Service Admin" won't be able to do DATABASE / TABLE / COLUMN operations as this
+        will all be taken care by the existing DATABASE/TABLE/COLUMN level permission model.
+
+
+Temporary UDF Admin
+Temporary UDF Admin is needed for creating UDFs.
+
+
+Refresh
+Refresh is used by only impala.
+
+
+ALL
+This is for all the permission mentioned above.
+
+
+
+
+Parent topic: Ranger plugin overview

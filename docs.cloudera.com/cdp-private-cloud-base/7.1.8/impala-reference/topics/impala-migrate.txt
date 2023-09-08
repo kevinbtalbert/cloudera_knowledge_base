@@ -1,0 +1,409 @@
+Migration GuideCloudera Docs
+Migration Guide
+This topic describes the important differences between Impala in
+    CDH and Impala in CDP. These changes were made in CDP for the optimal
+    interoperability between Hive and Impala for the improved user experience.
+    Review the changes before you migrate your Impala workload from CDH to
+    CDP.
+Default Value Changes in Configuration Options
+
+
+
+Configuration Option
+Scope
+Default in CDH 6.x
+Default in CDP
+
+
+
+DEFAULT_FILE_FORMAT
+Query
+TEXT
+PARQUET
+
+
+hms_event_polling_interval_s
+Catalogd
+0
+2
+
+
+ENABLE_ORC_SCANNER
+Query
+TRUE
+FALSE
+
+
+use_local_catalog
+Coordinator / Catalogd
+false
+true
+
+
+catalog_topic_mode
+Coordinator
+full
+minimal
+
+
+
+
+New Configuration Options
+
+
+
+Configuration Option
+Scope
+Default Value
+
+
+
+default_transactional_type
+Coordinator
+insert_only
+
+
+DEFAULT_TRANSACTIONAL_TYPE
+Query
+insert_only
+
+
+disable_hdfs_num_rows_estimate
+Impalad
+false
+
+
+disconnected_session_timeout
+Coordinator
+900
+
+
+PARQUET_OBJECT_STORE_SPLIT_SIZE
+Query
+256 MB
+
+
+SPOOL_QUERY_RESULTS
+Query
+FALSE
+
+
+MAX_RESULT_SPOOLING_MEM
+Query
+100 MB
+
+
+MAX_SPILLED_RESULT_SPOOLING_MEM
+Query
+1 GB
+
+
+FETCH_ROWS_TIMEOUT_MS
+Query
+10 s
+
+
+DISABLE_HBASE_NUM_ROWS_ESTIMATE
+Query
+FALSE
+
+
+
+
+Default File Format
+New default behavior:
+In CDP, the default file format of the tables is Parquet. 
+When you issue the CREATE TABLE statement without the STORED
+          AS clause, Impala creates a Parquet table instead of a Text table as in CDH.
+For example, if you create an external table based on a text file
+        without providing stored as clause and then tries to issue a select
+        query, the query will fail, in CDP, since Impala expects the file to be
+        in the Parquet file format.
+Steps to switch to the CDH behavior:
+Add the explicitly STORED AS clause to in the
+              CREATE TABLE statements if the file format is not
+            Parquet.
+Start Coordinator with the default_transactional_type flag set to
+              NONE for all tables to be created.
+Set the DEFAULT_FILE_FORMAT query option to
+              TEXT to revert to the default of the Text format
+            for one or more CREATE TABLE statements.
+
+
+Default Insert-only Transactional Tables
+New default behavior:
+By default, managed tables are transactional tables with the
+          insert_only property in CDP.
+You can no longer perform file system modifications (add/remove
+            files) on a managed table in CDP. The directory structure for
+            transactional tables is different than non-transactional tables, and
+            any out-of-band files which are added may or may not be picked up by
+            Hive and Impala.
+The insert_only transactional tables cannot be
+            currently altered in Impala. The ALTER TABLE
+            statement on a transactional table currently throws an error.
+Impala does not currently support compaction on transaction
+            tables. You should use Hive to compact the tables as needed. 
+The SELECT, INSERT,
+              INSERT OVERWRITE, TRUNCATE
+            statements are supported on the insert-only transactional
+            tables.
+
+Steps to switch to the CDH behavior:
+If you do not want transactional tables, set the
+              DEFAULT_TRANSACTIONAL_TYPE query option to
+              NONE so that any newly created managed tables are
+            not transactional by default.
+
+External tables do not drop the data files when the table is
+              dropped. If you wish to purge the data along with table when table
+              is dropped, add external.table.purge = true in
+              the table properties. When external.table.purge
+              is set to true, the data is removed when the
+                DROP TABLE statement is executed.
+
+
+
+Managed and External Tablespace Directories
+New default behavior:
+In CDP, there are separate HDFS directories for managed and external tables.
+The data files for managed tables are located in warehouse
+            location specified by the Cloudera Manager configuration setting,
+              hive_warehouse_directory.
+The data files for external tables are located in warehouse
+            location specified by the Cloudera Manager configuration setting,
+              hive_warehouse_external_directory.
+
+If you perform file system level operations for adding/removing files
+        on the table, you need to consider if its an external table or managed
+        table to find the location of the table directory.
+Steps to switch to the CDH behavior:
+Check the output of the DESCRIBE FORMATTED command to
+        find the table location.
+
+Hive Default File Format Interoperability
+New default behavior:
+The managed tables created by Hive are of ORC file format, by default,
+        and support full transactional capabilities. If you create a table
+        without specifying the STROED AS clause and load data
+        from Hive, then such tables are not readable or writable by Impala.
+Steps to switch to the CDH behavior:
+
+
+You must use the STORED AS PARQUET clause when
+            you create tables in Hive if you want interoperability with Impala
+            on those tables. 
+If you want to change this default file format at the system
+            level, in the Hive_on_Tez service configuration in Cloudera Manager,
+            set the hive_default_fileformat_managed field
+            to parquet.
+
+
+
+Statistics Interoperability Between Hive and Impala
+New default behavior:
+Statistics for tables are engine specific, namely, Hive or Impala, so
+        that each engine could use its own statistics and not overwrite the
+        statistics generated by the other engine.
+When you issue the COMPUTE STATS statement on Impala,
+        you need to issue the corresponding statement on Hive to ensure both
+        Hive and Impala statistics are accurate.
+Impala COMPUTE STATS command does not overwrite the
+        Hive stats for the same table.
+Steps to switch to the CDH behavior:
+There is no workaround.
+
+ORC Table Support Disabled
+New default behavior:
+ORC table support is disabled by default. The CDH queries against ORC
+        tables will fail in CDP.
+Steps to switch to the CDH behavior:
+Set the query option ENABLE_ORC_SCANNER to
+          TRUE to re-enable ORC table support. 
+Note that this option does not work on a full transactional ORC table,
+        and the queries will still return an error.
+
+Reconnect to HS2 Session
+New default behavior:
+Clients can disconnect from Impala while keeping the session running.
+        Clients can reconnect to the same session by presenting the
+        session_token. By default, disconnected sessions are terminated after 15 min.
+Your end users will not notice a difference in behaviour.
+If clients are disconnected without the driver explicitly closing
+            the session (e.g. because of a network fault), disconnected sessions
+            and the queries associated with them may remain open and continue
+            consuming resources until the disconnected session is timed out.
+            Administrators may notice these disconnected sessions and/or the
+            associated resource consumption.
+
+Steps to switch to the CDH behavior:
+You can adjust the --disconnected_session_timeout flag
+        to a lower value so that disconnected sessions are cleaned up more
+        quickly.
+
+Automatic Row Count Estimation when Statistics Are Not
+        Present
+New default behavior:
+If there are no statistics available on a table, Impala will try to
+        estimate the cardinality by estimating the size of table based on the
+        number of rows in the table. This behavior is turned on by default and
+        should result in better plans for most cases when stats are not
+        present.
+For some edge cases, it is possible that Impala will generate a bad
+        plan (when compared to the same query in CDH) when the statistics are
+        not present on that table and could negatively affect the query
+        performance.
+Steps to switch to the CDH behavior:
+Set the DISABLE_HDFS_NUM_ROWS_ESTIMATE query option to
+          TRUE to disable this optimization.
+
+Metadata V2
+All catalog metadata improvements are enabled by default in CDP,
+        resulting in many performance and scalability improvements, such as
+        reduced memory footprint on coordinators and automatic cache
+        eviction.
+See Impala Metadata Management for
+        the details about catalog improvements.
+
+Amazon EC2 Instances
+Impala Data Hub clusters in CDP are created using the Data Mart cluster
+        type. The recommended EC2 instance type for Impala Data Mart Data Hub
+        clusters is r5d.2xlarge. This instance type
+        provides a good balance of memory vs CPU and also includes fast
+        ephemeral SSD storage which is used by Impala data cache and spill. 
+When provisioning a Data Mart Data Hub cluster with the Cluster
+        Definition option in the UI (or the
+          --cluster-definition-name option in the CLI), the
+          r5d.2xlarge instance type will be selected by
+        default. 
+If you choose the Custom option to provision a cluster with the Data
+        Mart blueprint, you should explicitly specify the
+          r5d.2xlarge instance type since this isn’t the
+        default type for Custom clusters.
+Impala DWX clusters use the r5d.2xlarge instance
+        type for executor instances and it’s not possible to override this.
+
+Authorization Support by Ranger
+In CDP, Ranger is the authorization provider for Impala.
+New behavior:
+
+The CREATE ROLE, GRANT ROLE,
+            SHOW ROLE statements are not supported as Ranger
+          currently does not support roles.
+When a particular resource is renamed, currently, the policy is not
+          automatically transferred to the newly renamed resource.
+SHOW GRANT with an invalid user/group does not
+          return an error.
+
+The following table lists the different access type requirements to run
+        SQL statements in Hive and Impala.
+
+
+SQL Statement
+Impala Access Requirement
+Hive Access Requirement
+
+
+
+DESCRIBE
+view
+VIEW_METADATA on the underlying tables
+SELECT on the view
+
+
+ALTER TABLE RENAMEALTER VIEW
+                    RENAME
+ALL on the target table / viewALTER on the source table
+                  / view
+ALTER on the source table / view
+
+
+SHOW DATABASESSHOW
+                    TABLES
+VIEW_METADATA
+USE
+
+
+
+Governance Support by Atlas
+Both CDH  and CDP environments support governance functionality for
+        Impala operations. The two environments collect similar information to
+        describe Impala activities, including:
+
+
+Audits for Impala access requests
+Metadata describing Impala queries
+Metadata describing any new data assets created or updated by
+            Impala operations
+
+
+The services that support these operations are different in the two
+        environment. Functionality is distributed across services as
+          follows:
+
+Feature
+CDH
+CDP
+
+
+
+Auditing
+
+
+
+
+
+
+Access requests
+
+
+Audit tab in Navigator console
+Audit page in Ranger console
+
+
+
+
+Service operations that create or update metadata
+                      catalog entries
+
+
+Audit tab in Navigator console
+Audit tab for each entity in Atlas
+                  dashboard
+
+
+
+
+Service operations in general
+
+
+Audit tab in Navigator console
+No other audits collected.
+
+
+Metadata Catalog
+
+
+
+
+
+
+Impala operations: 
+CREATE TABLE AS SELECT
+CREATE VIEW
+ALTER VIEW AS SELECT
+INSERT INTO
+INSERT
+OVERWRITE
+
+
+
+Process and Process Execution
+                    entitiesColumn- and table-level lineage
+Process and Process Execution
+                    entitiesColumn- and table-level lineage
+
+
+
+
+Related informationOn-demand MetadataImpala AuthorizationImpala metadata collectionSQL transactions in Impala

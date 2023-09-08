@@ -1,0 +1,128 @@
+Changing HostnamesCloudera Docs
+Changing Hostnames
+After you have installed Cloudera Manager and created a cluster, you may need to update
+    the names of the hosts running the Cloudera Manager Server or cluster services.
+Minimum Required Role:
+Full
+            Administrator. This feature is not available when using Cloudera
+            Manager to manage Data Hub clusters.important
+
+The process described here requires Cloudera Manager and cluster downtime.
+If any user-created scripts reference specific hostnames, those must also be
+            updated.
+Due to the length and complexity of the following procedure, changing cluster
+            hostnames is not recommended by Cloudera.
+
+To update a deployment with new hostnames, follow these steps:
+Verify if TLS/SSL certificates have been issued for any of the services and make
+          sure to create new TLS/SSL certificates in advance for services protected by
+          TLS/SSL.Export the Cloudera Manager configuration using one of the following methods:
+Open a browser and go to this URL
+                http://cm_hostname:7180/api/api_version/cm/deployment.
+            Save the displayed configuration.
+From terminal type:$ curl -u admin:admin
+                  http://cm_hostname:7180/api/api_version/cm/deployment
+                > cme-cm-export.jsonIf Cloudera Manager SSL is in use, specify
+              the -k switch and the port number as 7183:$ curl -k -u
+                admin:admin
+                  https://cm_hostname:7183/api/api_version/cm/deployment
+                > cme-cm-export.jsonwhere cm_hostname is the name
+            of the Cloudera Manager host and api_version is the correct version
+            of the API for the version of Cloudera Manager you are using. For example,
+                http://tcdn5-1.ent.cloudera.com:7180/api/v49/cm/deployment.
+Stop all services on the cluster.Stop the Cloudera Management Service.Stop the Cloudera Manager Server.Stop the Cloudera Manager Agents on the hosts that you want to change the hostname
+          of.Back up the Cloudera Manager Server database using mysqldump,
+            pg_dump, or another preferred backup utility. Store the backup in a
+          safe location.Update names and principals:
+Update the target hosts using standard per-OS/name service methods
+                (/etc/hosts, dns,
+                /etc/sysconfig/network, hostname, and so on).
+              Ensure that you remove the old hostname.
+If you are changing the hostname of the host running Cloudera Manager Server
+              do the following:
+
+Change the hostname per Step 8.a.
+Update the Cloudera Manager hostname in
+                    /etc/cloudera-scm-agent/config.ini on all Agents.
+
+
+If the cluster is configured for Kerberos security, do the following:
+
+Remove the old hostname cluster principals.
+If you are using an MIT KDC, remove old hostname cluster service principals
+                      from the KDC database using one of the following:
+Use the delprinc command within
+                            kadmin.local interactive shell.OR
+From the command
+                            line:kadmin.local -q "listprincs" | grep -E "(HTTP|hbase|hdfs|hive|httpfs|hue|impala|mapred|solr|oozie|yarn|zookeeper)[^/]*/[^/]*@" > cluster-princ.txtOpen
+                              cluster-princ.txt and remove any noncluster service
+                            principal entries. Make sure that the default krbtgt
+                            and other principals you created, or that were created by Kerberos by
+                            default, are not removed by running the following: for i in `cat
+                              cluster-princ.txt`; do yes yes | kadmin.local -q "delprinc $i";
+                              done.
+
+For an Active Directory KDC, an AD administrator must manually delete the
+                      principals for the old hostname from Active Directory.
+
+Start the Cloudera Manager database and Cloudera Manager Server.
+Start the Cloudera Manager Agents on the newly renamed hosts. The Agents should
+                  show a current heartbeat in Cloudera Manager.
+Within the Cloudera Manager Admin Console click the Hosts
+                  tab.
+Select the checkbox next to the host with the new name.
+Select Actions > Regenerate
+                      Keytab.
+
+
+If one of the hosts that was renamed has a NameNode configured with high
+          availability and automatic failover enabled, reconfigure the ZooKeeper Failover Controller
+          znodes to reflect the new hostname.
+Start ZooKeeper Servers.
+warningAll other services, and most importantly HDFS, and the ZooKeeper
+                Failover Controller (FC) role within the HDFS, should not be running.
+
+On one of the hosts that has a ZooKeeper Server role, run
+                zookeeper-client.
+
+If the cluster is configured for Kerberos security, configure ZooKeeper
+                  authorization as follows:
+Go to the HDFS service.
+Click the Instances tab.
+Click the Failover Controller role.
+Click the Process tab.
+In the Configuration Files column of the hdfs/hdfs.sh
+                        ["zkfc"] program, expand Show.
+Inspect core-site.xml in the displayed list of files and
+                      determine the value of the ha.zookeeper.auth property, which
+                      will be something like:
+                        digest:hdfs-fcs:TEbW2bgoODa96rO3ZTn7ND5fSOGx0h. The part
+                      after digest:hdfs-fcs: is the password (in the example it is
+                        TEbW2bgoODa96rO3ZTn7ND5fSOGx0h)
+Run the addauth command with the
+                      password:addauth digest hdfs-fcs:TEbW2bgoODa96rO3ZTn7ND5fSOGx0h
+
+Verify that the HA znode exists: ls /hadoop-ha.
+Delete the HDFS znode: rmr /hadoop-ha/nameservice1.
+If you are not  running JobTracker in a high availability configuration,
+                  delete the HA znode: rmr /hadoop-ha.
+
+
+In the Cloudera Manager Admin Console, go to the HDFS
+            service.
+Click the Instances tab.
+Select Actions > Initialize High
+                  Availability State in ZooKeeper....
+Update the Hive metastore:
+Back up the Hive metastore database.
+In the Cloudera Manager Admin Console, go to the Hive
+            service.
+Select Actions > Update Hive
+                  Metastore NameNodes and confirm the
+            command.
+Update the Database Hostname property for each of the cluster roles for
+          which a database is located on the host being renamed. This is required for both Cloudera
+          Management Service roles (Reports Manager, Activity Monitor, Navigator Audit and Metadata
+          Server) and for cluster services such as Hue, Hive, and so on.Start all cluster services.Start the Cloudera Management Service.Deploy client configurations.
+
+Parent topic: Managing Hosts

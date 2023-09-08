@@ -1,0 +1,77 @@
+Stored procedure examplesCloudera Docs
+Stored procedure examples
+You see by example some of the frequently used and useful HPL/SQL code. HPL/SQL is an Apache open source procedural extension for SQL for Hive
+    users.
+Greeting function
+The following example creates a function that takes the input of your name and returns "hello
+   <name>":
+
+CREATE PROCEDURE greet(name STRING)
+BEGIN
+  PRINT 'Hello ' || name;
+END;
+
+Pass a cursor to return records 
+This example of a procedure, called from another procedure, takes a cursor parameter declared
+    OUT; an OPEN-FOR statement opens the cursor and executes the SELECT query. The query returns a
+    subset of the records to the test_even procedure from the numbers table, created in a previous
+    topic.
+
+CREATE PROCEDURE even(cur OUT SYS_REFCURSOR)
+BEGIN
+OPEN cur FOR 
+SELECT n FROM numbers 
+WHERE MOD(n, 2) == 0;
+END;  
+
+The test_even procedure below calls the even procedure above, passing the cursor of type
+    SYS_REFCURSOR to fetch each row containing an even number. 
+CREATE PROCEDURE test_even()
+BEGIN
+ DECLARE curs SYS_REFCURSOR;
+ DECLARE n INT = 0;
+ DECLARE result STRING = 'Even numbers are: ';
+ even(curs);
+ FETCH curs INTO n;
+ WHILE (SQLCODE = 0) DO
+    result = result || n || ' ';
+    FETCH curs INTO n;
+ END WHILE;
+ CLOSE curs;
+ PRINT result;
+END;        
+
+Using table types to index fields in records
+You can set up table types and reference fields in records using indexing. This example
+        assumes you created the emp table.
+-- CREATE TABLE emp (name string, age int);
+
+TYPE emp_type IS TABLE OF emp%ROWTYPE INDEX BY BINARY_INTEGER;
+TYPE emp_age_type IS TABLE OF emp.age%TYPE INDEX BY BINARY_INTEGER;
+TYPE emp_name_type IS TABLE OF STRING INDEX BY BINARY_INTEGER;
+
+DECLARE rows emp_type;
+DECLARE ages emp_age_type;
+
+SELECT * INTO rows(1) FROM emp WHERE name = 'alice';
+PRINT 'name=' || rows(1).name || ' age=' || rows(1).age;
+
+SELECT age INTO ages(1) FROM emp WHERE name = 'alice';
+PRINT 'age=' || ages(1);   
+
+BULK COLLECT
+Using BULK COLLECT, you can retrieve multiple rows in a single fetch quickly.
+TYPE emp_type IS TABLE OF emp%ROWTYPE INDEX BY BINARY_INTEGER;
+    DECLARE rows emp_type;
+    
+    SELECT * BULK COLLECT INTO rows FROM emp;
+    
+    
+    DECLARE idx INT = rows.FIRST;
+    WHILE idx IS NOT NULL LOOP
+    PRINT rows(idx).name || ' = ' || rows(idx).age;
+    idx = rows.NEXT(idx);
+    END LOOP;
+
+
+Related informationHPL/SQL ReferenceParent topic: HPL/SQL stored procedures in Data Hub

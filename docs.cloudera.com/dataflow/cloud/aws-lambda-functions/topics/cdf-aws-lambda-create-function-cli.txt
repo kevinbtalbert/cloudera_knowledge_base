@@ -1,0 +1,123 @@
+Creating a Lambda function using CLICloudera Docs
+Creating a Lambda function using CLI
+Follow these steps to deploy a DataFlow Function using the AWS CLI.
+
+
+
+Your NiFi flow definition is stored in the DataFlow Catalog and you have the
+            CRN corresponding to the flow version you want to execute as a function
+
+
+You have created a Machine User with the proper role and you have its Access
+            Key and Private Key credentials
+
+
+You have installed and configured the AWS CLI on your local machine
+
+
+
+
+Create a role for your Lambda.
+
+aws iam create-role --role-name my_function_role --assume-role-policy-document '{"Version": "2012-10-17","Statement": [{ "Effect": "Allow", "Principal": {"Service": "lambda.amazonaws.com"}, "Action": "sts:AssumeRole"}]}'
+
+
+
+Attach the basic AWS Lambda policy to your role.
+
+aws iam attach-role-policy --role-name my_function_role --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+
+
+Copy the following file as a local file named
+            my-function-definition.json.
+
+{
+    "FunctionName": "first-cli-function",
+    "Description": "my first cli function",
+    "Timeout": 300,
+    "MemorySize": 1024,
+    "Environment": {
+        "Variables": {
+            "DF_ACCESS_KEY": "00000000-0000-0000-0000-000000000000",
+            "DF_PRIVATE_KEY": "00000000000000000000000000000000000",
+            "FLOW_CRN": "crn:cdp:df:us-west-1:00000000-0000-0000-0000-000000000000:flow:my-flow/v.1"
+        }
+    },
+    "Tags": {
+        "tagKey": "tagValue"
+    },
+
+
+    "EphemeralStorage": {
+        "Size": 2048
+    },
+    "Code": {
+        "S3Bucket": "my-bucket",
+        "S3Key": "naaf-aws-lambda-1.0.0-bin.zip"
+    },
+    "Role": "arn:aws:iam::327162129569:role/service-role/My-Role",
+
+
+    "Runtime": "java11",
+    "Handler": "com.cloudera.naaf.aws.lambda.StatelessNiFiFunctionHandler::handleRequest",
+    "Publish": false,
+    "PackageType": "Zip",
+    "Architectures": [
+        "x86_64"
+    ]
+}
+
+note
+Executing  aws lambda create-function --generate-cli-skeleton gives
+              you additional information that you can add in this JSON payload if you want to
+              further customize your deployment.
+
+
+
+Update the three sections of the JSON file.
+The JSON file is generally structured into three sections.
+
+
+The first section is expected to be updated with each function. It includes
+              Function Name, Description, Timeout, Memory Size, Tags, and Environment
+              Variables.
+
+The Environment Variables must include the following 3 environment variables:
+DF_ACCESS_KEY: The Cloudera DataFlow Access Key
+DF_PRIVATE_KEY: The Cloudera DaFlow Private Key
+FLOW_CRN: The CRN of the specific version of the DataFlow in
+                    the DataFlow Catalog. This always ends with
+                    /v.<number>.
+
+Additionally, you can use environment variables to specify parameters for
+                the dataflow.
+
+
+
+The second section of the JSON file contains fields that will likely be updated
+              once when customizing the template for your particular organization. You should add
+              the ARN of the role you created during the first step.
+
+
+ The third section of the JSON file contains fields that will likely remain the
+              same.
+
+
+
+Create the Lambda function.
+
+aws lambda create-function --cli-input-json file://my-function-definition.json
+The function is now created. You can check it on the AWS Lambda UI and test the
+            configuration.
+
+
+Use the AWS Lambda UI or CLI to publish a version of the function.
+
+aws lambda publish-version --function-name <function name or function ARN>
+
+
+Use the AWS Lambda UI or CLI to specify the appropriate trigger for your published
+          version.
+
+

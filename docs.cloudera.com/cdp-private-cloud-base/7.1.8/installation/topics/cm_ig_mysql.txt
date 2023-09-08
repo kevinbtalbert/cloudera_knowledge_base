@@ -1,0 +1,504 @@
+Install and Configure MySQL for CDPCloudera Docs
+Install and Configure MySQL for CDP
+You can install a MySQL database for use with Cloudera Manager and other components
+    that require a database.
+To use a MySQL database, follow these
+      procedures. For information on compatible versions of the MySQL database,
+      see Database Requirements.
+Before you begin
+Ensure that the MySQL DB is configured with the InnoDB engine by running
+        the following command from the MySQL
+        shell:mysql> show table status;
+
+
+Parent topic: Step 5. Install and Configure Databases
+Installing the MySQL Server
+
+note
+
+If you already have a MySQL database set up, you can skip to the
+            section Configuring and Starting the MySQL Server to verify
+            that your MySQL configurations meet the requirements for Cloudera
+            Manager.
+For MySQL 5.6 and 5.7, you must install the
+              MySQL-shared-compat or MySQL-shared package. This is
+            required for the Cloudera Manager Agent package installation.
+It is important that the datadir directory,
+            which, by default, is /var/lib/mysql, is on a
+            partition that has sufficient free space.
+Cloudera Manager installation fails if GTID-based replication is
+            enabled in MySQL.
+
+
+
+Install the MySQL database:
+
+OS
+Command
+
+
+
+RHEL
+
+MySQL is no longer included with RHEL. You must download
+                      the repository from the MySQL site and install it
+                      directly. You can use the following commands to install
+                      MySQL. For more information, visit the MySQL website.
+wget <URL to MySQL RPM>
+sudo rpm -ivh <filename>.rpm
+sudo yum update
+sudo yum install mysql-server
+sudo systemctl start mysqld
+
+
+
+SLES
+
+sudo zypper install mysql libmysqlclient_r17
+
+
+
+Ubuntu
+
+sudo apt-get install mysql-server
+
+
+
+
+
+
+
+Configuring and Starting the MySQL Server
+
+noteIf you are making changes to an existing database, make sure to stop
+        any services that use the database before continuing.
+
+Stop the MySQL server if it is running.
+
+OS
+Command
+
+
+
+RHEL 7 compatible, SLES, and Ubuntu
+
+sudo systemctl stop mysqld
+
+
+
+Move old InnoDB log files
+            /var/lib/mysql/ib_logfile0 and
+            /var/lib/mysql/ib_logfile1 out of
+            /var/lib/mysql/ to a backup location.
+Determine the location of the option file,
+            my.cnf (/etc/my.cnf by
+          default).
+Update my.cnf so that it conforms to the following
+            requirements:
+To prevent deadlocks, set the isolation level to
+                READ-COMMITTED.
+Configure the InnoDB engine. importantCloudera Manager does not start if its tables are configured with
+                the MyISAM engine. (Typically, tables revert to MyISAM if the InnoDB engine is
+                misconfigured.)
+The default settings in the MySQL installations in most
+              distributions use conservative buffer sizes and memory usage.
+              Cloudera Management Service roles need high write throughput
+              because they might insert many records in the database. Cloudera
+              recommends that you set the innodb_flush_method
+              property to O_DIRECT.
+Set the max_connections property according to
+              the size of your cluster:
+Fewer than 50 hosts - You can store more than one database (for example, both
+                  the Cloudera Manager Server and Reports Manager) on the same host. If you do this,
+                  you should: 
+Put each database on its own physical disk for best performance. You can do
+                      this by manually setting up symbolic links or running multiple database
+                      instances (each instance uses a different data directory path).
+Allow 100 maximum connections for each database and then
+                        add 50 extra connections. For example, for two databases, set the maximum
+                        connections to 250. If you store four databases on one host (the databases
+                        for Cloudera Manager Server, Hue, Reports Manager, and Hive metastore), set
+                        the maximum connections to 450.
+
+More than 50 hosts - Do not store more than one database on
+                  the same host. Use a separate host for each database/host
+                  pair. The hosts do not need to be reserved exclusively for
+                  databases, but each database should be on a separate
+                  host.
+
+If the cluster has more than 1000 hosts, set
+              the max_allowed_packet  property to
+                16M. Without this setting, the cluster may fail
+              to start due to the following exception:
+                com.mysql.jdbc.PacketTooBigException.
+Binary logging is not a requirement for Cloudera Manager
+              installations. Binary logging provides benefits such as MySQL
+              replication or point-in-time incremental recovery after database
+              restore. Examples of this configuration follow. For more
+              information, see The Binary Log.
+Here is an option file with Cloudera recommended
+          settings:[mysqld]
+datadir=/var/lib/mysql
+socket=/var/lib/mysql/mysql.sock
+transaction-isolation = READ-COMMITTED
+# Disabling symbolic-links is recommended to prevent assorted security risks;
+# to do so, uncomment this line:
+symbolic-links = 0
+
+key_buffer_size = 32M
+max_allowed_packet = 16M
+thread_stack = 256K
+thread_cache_size = 64
+
+# The following 3 parameters only apply to MySQL version 5.7 and lower:
+query_cache_limit = 8M
+query_cache_size = 64M
+query_cache_type = 1
+
+max_connections = 550
+#expire_logs_days = 10
+#max_binlog_size = 100M
+
+#log_bin should be on a disk with enough free space.
+#Replace '/var/lib/mysql/mysql_binary_log' with an appropriate path for your
+#system and chown the specified folder to the mysql user.
+log_bin=/var/lib/mysql/mysql_binary_log
+
+#In later versions of MySQL, if you enable the binary log and do not set
+#a server_id, MySQL will not start. The server_id must be unique within
+#the replicating group.
+server_id=1
+
+binlog_format = mixed
+
+read_buffer_size = 2M
+read_rnd_buffer_size = 16M
+sort_buffer_size = 8M
+join_buffer_size = 8M
+
+# InnoDB settings
+innodb_file_per_table = 1
+innodb_flush_log_at_trx_commit  = 2
+innodb_log_buffer_size = 64M
+innodb_buffer_pool_size = 4G
+innodb_thread_concurrency = 8
+innodb_flush_method = O_DIRECT
+innodb_log_file_size = 512M
+
+[mysqld_safe]
+log-error=/var/log/mysqld.log
+pid-file=/var/run/mysqld/mysqld.pid
+
+sql_mode=STRICT_ALL_TABLES
+If you are using MySQL version 8, remove the following three
+          parameters from the options
+          file:query_cache_limit = 8M
+query_cache_size = 64M
+query_cache_type = 1
+If AppArmor is running on the host where MySQL is installed, you
+          might need to configure AppArmor to allow MySQL to write to the
+          binary.
+Ensure the MySQL server starts at boot:
+
+OS
+Command
+
+
+
+RHEL 7 compatible, SLES, and Ubuntu
+
+sudo systemctl enable mysqld
+
+
+
+Start the MySQL server:
+
+OS
+Command
+
+
+
+RHEL 7 compatible, SLES, and Ubuntu
+
+sudo systemctl start mysqld
+
+
+
+Run /usr/bin/mysql_secure_installation to set the
+          MySQL root password and other security-related settings. In a new
+          installation, the root password is blank. Press the
+            Enter key when you're prompted for the root password. For the
+          rest of the prompts, enter the responses listed below in
+          bold:sudo /usr/bin/mysql_secure_installation[...]
+Enter current password for root (enter for none):
+OK, successfully used password, moving on...
+[...]
+Set root password? [Y/n] Y
+New password:
+Re-enter new password:
+Remove anonymous users? [Y/n] Y
+[...]
+Disallow root login remotely? [Y/n] N
+[...]
+Remove test database and access to it [Y/n] Y
+[...]
+Reload privilege tables now? [Y/n] Y
+All done!
+
+
+
+
+Installing the MySQL JDBC Driver
+
+Install the JDBC driver on the Cloudera Manager
+        Server host, as well as any other hosts running services that require
+        database access.
+noteIf you already have the JDBC driver installed on the hosts that need
+        it, you can skip this section. However, MySQL 5.7 requires a 5.1 driver
+        version 5.1.x.. You can also use version 5.1.x.x to connect to MySQL
+        8.x.
+importantIf you are using TLS v1.2, you must use
+        version 5.1.48.
+Cloudera recommends that you consolidate all roles that require
+        databases on a limited number of hosts, and install the driver on those hosts. Locating all
+        such roles on the same hosts is recommended but not required. Make sure to install the JDBC
+        driver on each host running roles that access the database.noteCloudera recommends using
+          only version 5.1 of the JDBC driver.
+
+OS
+Command
+
+
+
+RHEL
+
+importantUsing the yum install
+                    command to install the MySQL driver package before
+                    installing a JDK installs OpenJDK, and then uses the Linux
+                      alternatives command to set the system
+                    JDK to be OpenJDK. If you intend to use an Oracle JDK, make
+                    sure that it is installed before
+                    installing the MySQL driver using yum
+                      install. If you want to use OpenJDK, you can
+                    install the driver using
+                      yum.Alternatively, use the following
+                      procedure to manually install the driver.
+
+Download the MySQL JDBC driver from http://www.mysql.com/downloads/connector/j/5.1.html
+                      (in .tar.gz format). As of the time of
+                      writing, you can download version 5.1.48 using
+                        wget as
+                      follows:wget https://dev.mysql.com/get/Downloads/Connector-J/mysql-connector-java-5.1.48.tar.gz
+Extract the JDBC driver JAR file from the downloaded
+                      file. For
+                      example:tar zxvf mysql-connector-java-5.1.48.tar.gz
+Copy the JDBC driver, renamed, to
+                        /usr/share/java/. If the target
+                      directory does not yet exist, create it. For
+                      example:sudo mkdir -p /usr/share/java/
+cd mysql-connector-java-5.1.48
+sudo cp mysql-connector-java-5.1.48-bin.jar /usr/share/java/mysql-connector-java.jar
+
+
+
+
+SLES
+
+sudo zypper install mysql-connector-java
+
+
+
+Ubuntu
+
+sudo apt-get install libmysql-java
+
+
+
+
+
+
+Installing the MySQL client
+CDP uses Python version 3.8. To use MySQL as a backend database for Hue, you must
+      install the MySQL client and other required dependencies on all the Hue hosts based on your
+      operating system.
+Cent OSRHEL 8SLES 12Ubuntu 18 and 20
+
+SSH into the Hue host as a root user.
+Download the MySQL yum repository as follows:
+              curl -sSLO https://dev.mysql.com/get/mysql80-community-release-el7-5.noarch.rpm
+Install the package as
+              follows:rpm -ivh mysql80-community-release-el7-5.noarch.rpm
+Install the required dependencies as follows:
+                yum install mysql-devel
+yum install -y xmlsec1  xmlsec1-opensslFor
+                MySQL version 8.0.27, add the mysql-community-client-8.0.25 client
+                package as follows:
+                yum install mysql-community-client-8.0.25
+Add the path where you installed the MySQL client and packages to the PATH
+              environment variable as follows:
+              export PATH=/usr/local/bin:$PATH
+Install the MySQL client as follows:
+              pip3.8 install mysqlclient
+
+
+
+SSH into the Hue host as a root user.
+Download the MySQL yum repository as follows:
+              curl -sSLO https://dev.mysql.com/get/mysql80-community-release-el7-5.noarch.rpm
+Install the package as
+              follows:rpm -ivh mysql80-community-release-el7-5.noarch.rpm
+Install the required dependencies as follows:
+              yum install mysql-devel
+yum install -y xmlsec1  xmlsec1-openssl
+Add the path where you installed the MySQL client and packages to the PATH
+              environment variable as follows:
+              export PATH=/usr/local/bin:$PATH
+Install the MySQL client as follows:
+              pip3.8 install mysqlclient
+
+
+
+SSH into the Hue host as a root user.
+Install the required packages and dependencies as follows:
+              zypper install libmysqlclient-devel
+zypper install xmlsec1
+zypper install xmlsec1-devel
+zypper install xmlsec1-openssl-devel
+Add the path where you installed the packages to the PATH environment variable as
+              follows: export PATH=/usr/local/bin:$PATH
+Install the MySQL client as follows:
+              pip3.8 install mysqlclient
+
+
+
+SSH into the Hue host as a root user.
+Install the required packages and dependencies as follows:
+              apt-get install libmysqlclient-dev
+apt-get install -y xmlsec1
+apt-get install libxmlsec1-openssl
+Add the path where you installed the packages to the PATH environment variable as
+              follows: export PATH=/usr/local/bin:$PATH
+Install the MySQL client as follows:
+              pip3.8 install mysqlclient
+
+
+
+
+
+Creating Databases for Cloudera Software
+
+Services that require databases
+Create databases and service accounts for components that require databases:
+
+Cloudera Manager Server
+Cloudera Management Service roles:
+Reports Manager
+
+Data Analytics Studio (DAS) Supported with PostgreSQL only.
+Hue
+Each Hive metastore
+Oozie
+Data Analytics Studio
+Schema Registry
+Streams Messaging Manager 
+
+
+Steps
+
+Log in as the root user, or another user with
+            privileges to create database and grant
+            privileges:mysql -u root -pEnter password:
+Create databases for each service deployed
+            in the cluster using the following commands. You can use any value
+            you want for the <database>,
+              <user>, and <password>
+            parameters. The Databases for Cloudera Software table, below
+            lists the default names provided in the Cloudera Manager
+            configuration settings, but you are not required to use
+              them.Configure all databases to use the utf8
+              character set.Include the character set for each database
+              when you run the CREATE DATABASE statements
+              described
+              below.CREATE DATABASE <database> DEFAULT CHARACTER SET utf8 DEFAULT COLLATE utf8_general_ci;Query OK, 1 row affected (0.00 sec)GRANT ALL ON <database>.* TO '<user>'@'%' IDENTIFIED BY '<password>';Query OK, 0 rows affected (0.00 sec)Table 1. Databases for Cloudera Software
+
+Service
+Database
+User
+
+
+
+Cloudera Manager Server
+scm
+scm
+
+
+Reports Manager
+rman
+rman
+
+
+Ranger RHEL/CentOS/Ubuntu
+ranger
+rangeradmin
+
+
+Ranger KMS RHEL/CentOS
+ranger
+rangerkms
+
+
+Hue
+hue
+hue
+
+
+Hive Metastore Server
+hive
+hive
+
+
+Oozie
+oozie
+oozie
+
+
+Data Analytics Studio (DAS) Supported with PostgreSQL only.
+das
+das
+
+
+Schema Registry
+schemaregistry
+schemaregistry
+
+
+Streams Messaging Manager 
+smm
+smm 
+
+
+Confirm that you have created all of the
+              databases:SHOW DATABASES;You
+              can also confirm the privilege grants for a given user by
+              running:SHOW GRANTS FOR '<user>'@'%';
+Record the values you enter for database names, usernames, and
+            passwords. The Cloudera Manager installation wizard requires this
+            information to correctly connect to these databases.
+
+
+
+
+
+Next Steps
+
+
+If you plan to use Apache Ranger, see the following topic for
+          instructions on creating and configuring the Ranger database. See
+            Configuring a Ranger or Ranger KMS Database: MySQL/MariaDB.
+If you plan to use Schema Registry or Streams Messaging Manager, see the following topic
+          for instructions on configuring the database: Configuring the Database for Streaming Components
+After you install and configure MySQL databases for Cloudera software, continue to Set up and configure the Cloudera Manager
+            database to configure a database for Cloudera Manager.
+
+
+

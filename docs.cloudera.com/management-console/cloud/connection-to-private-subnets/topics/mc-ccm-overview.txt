@@ -1,0 +1,227 @@
+Cluster Connectivity ManagerCloudera Docs
+Cluster Connectivity Manager
+CDP can communicate with Data Lake, Data Hubs, CDP data services workload clusters, and
+    on-prem classic clusters that are on private subnets. This communication occurs via the Cluster
+    Connectivity Manager (CCM). CCM is available for CDP deployments on AWS, Azure, and
+    GCP.
+note
+When you register a new AWS, Azure, or GCP environment in CDP via web interface, Cluster
+        Connectivity Manager (CCM) is enabled by default and the option to disable it has been
+        removed from the web interface. CCM is also enabled by default when registering an
+        environment via CDP CLI. 
+
+CCM enables the CDP Control Plane to communicate with workload clusters that do not expose
+      public IPs. Communication takes place over private IPs without any inbound network access
+      rules required, but CDP requires that clusters allow outbound connections to CDP Control
+      Plane.
+CCM provides enhanced security for communication between customer workload clusters
+      and the CDP Control Plane. A CDP environment supports public, private, and semi-private
+      networks for running workloads. In a public network, CDP Control Plane initiates a connection
+      to the nodes in a workload cluster; However, when using a private or semi-private environment,
+      this option is not available due to the private nature of the subnet and some of the hosts. In
+      such cases, CCM is required to simplify the network configuration in the customer’s subnet. 
+CCM implements an inverted proxy that initiates communication from the secure,
+      private workload subnet to CDP Control Plane. With CCM enabled, the traffic direction is
+      reversed so that the private workload subnet does not require inbound access from Cloudera's
+      network. In this setup, configuring security groups is not as critical as in the public
+      network setup. All communication via CCM is encrypted via TLS v1.2.
+From a data security perspective, no data or metadata leaves the workload subnet.
+      The CCM connection is used to send control signals, logs and heartbeats, and communicate the
+      health status of various components with the CDP Control Plane. 
+When deploying environments without public IPs, a mechanism for end users to
+      connect to the CDP endpoints should already be established via a Direct Connection, VPN or
+      some other network setup. In the background, the CDP Control Plane must also be able to
+      communicate with the entities deployed in your private network.
+The following diagram illustrates the CDP components that are responsible for
+      communication via CCM: 
+CCM was initially released as CCMv1 and later CCMv2 was released to replace it.
+      While CCMv1 establishes and uses a tunnel based on the SSH protocol, with CCMv2 the connection
+      is via HTTPS. All new environments created with Runtime 7.2.6 or newer use CCMv2. Existing
+      environments and new environments created with Runtime older than 7.2.6 continue to use CCMv1.
+      All newly registered classic clusters use CCMv2, but previously registered classic clusters
+      continue to use CCMv1.  
+The following diagram illustrates connectivity to a customer account without using
+      CCM: 
+
+
+
+Figure 1. Connectivity to customer account with CCM disabled
+
+
+
+
+
+
+
+CCMv2
+CCMv2 agents deployed on FreeIPA nodes initiate an HTTPS connection to the CDP
+        Control Plane. This connection is then used for all communication thereafter. Data Lake and
+        Data Hub instances receive connections from the CDP Control Plane via the agents deployed
+        onto FreeIPA nodes. This is illustrated in the diagram below.
+CCMv2 also supports classic clusters. You can use Replication Manager with your
+        on-premise CDH, HDP, and CDP Private Cloud Base clusters accessible via a private IPs to
+        assist with data migration and synchronization to cloud storage by first registering your
+        cluster using classic cluster registration. 
+When CCMv2 is enabled, the traffic direction is reversed so the environment does
+        not require inbound access from Cloudera’s network. Since in this setup, inbound traffic is
+        only allowed on the private subnets, configuring security groups is not as critical as in
+        the public IP mode outlined in the previous diagram; However, in case of bridged networks it
+        may be useful to restrict access to a certain range of private IPs.
+The following diagram illustrates connectivity to a customer account using CCMv2: 
+
+Figure 2. Connectivity to customer account with CCMv2 enabled
+
+
+
+
+CCMv2 with Token Authentication
+In the current scheme of things, the communication between agent and CDP Control
+        Plane services uses a two-way SSL or client certificate based authentication mechanism. 
+In order to enable traffic inspection which could further pave the way for
+        traffic monitoring and anomaly detection in traffic, the communication between agent and CDP
+        Control Plane can optionally be configured to use a combination of TLS (to validate the
+        server) and bespoke validation (to validate the client).
+This approach does away with the client certificate based agent authentication on
+        the Control Plane side and instead uses request signing and authorization to validate
+        incoming requests from the CCM agent.
+
+CCMv1
+The below diagram illustrates the CDP connectivity to a customer account with CCMv1
+        enabled. CCMv1 agents are deployed not only on the FreeIPA cluster (like in CCMv2), but also
+        on the Data Lake and Data Hub. While CCMv2 establishes a connection via HTTPS, CCMv1 uses a
+        tunnel based on the SSH protocol. Workload clusters initiate an SSH tunnel to the CDP
+        control plane, which is then used for all communication thereafter.
+Figure 3. Connectivity to customer account with CCMv1 enabled
+
+
+
+
+Supported services
+The following CDP services are supported by CCM: 
+CCMv2
+Supports environments with Runtime 7.2.6+
+
+
+
+CDP service
+AWS
+Azure
+GCP
+
+
+
+Data Lake
+GA
+GA
+GA
+
+
+FreeIPA
+GA
+GA
+GA
+
+
+Data Engineering
+
+GA
+
+
+
+Data Hub
+GA
+GA
+GA
+
+
+Data Warehouse
+
+GA
+
+
+
+DataFlow
+GA
+GA
+
+
+
+Machine Learning
+GA
+GA
+
+
+
+Operational Database
+GA
+GA
+GA
+
+
+
+CCMv1
+Supports environments with Runtime <7.2.6 and environments created prior to
+        CCMv2 GA.
+
+
+
+CDP service
+AWS
+Azure
+GCP
+
+
+
+Data Lake
+GA
+GA
+GA
+
+
+FreeIPA
+GA
+GA
+GA
+
+
+Data Engineering
+
+
+
+
+
+Data Hub
+GA
+GA
+GA
+
+
+Data Warehouse
+
+
+
+
+
+DataFlow
+
+
+
+
+
+Machine Learning
+
+
+
+
+
+Operational Database
+
+
+
+
+
+
+To learn more about CCM, refer to the following documentation:
+
+
+Upgrading from CCMv1 to CCMv2Upgrading from CCMv1 to CCMv2 is available for customers who created their environments   with CCMv1. The upgrade requires no downtime. If your environment needs to be updated, you will   see a notification printed in your environment details. Outbound network access destinations for CCMv2When using CCM in an environment with limited internet access or proxy, make sure to add   the following outbound network access destinations to the allow list.Configuring a private VPC in AWS When you create your CDP environment, you have two options: Have CDP set up your     private network and security groups or set up the VPC with your private IPs and security groups.     Either way, you must enable CCM. Configuring a VNet with private IPs in AzureWhen you create your CDP environment without public IPs, you have two options: Have CDP     set up your private network and security groups, or set up the VNet with your private IPs and     security groups. Either way, you must enable CCM. Configuring a VPC with private IPs in GCPPrior to registering your GCP environment in CDP, you should set up a VPC network with     private IPs, and create firewall rules.Enabling CCM in the Management Console You can enable the Cluster Connectivity Manager while creating the environment using     the CDP Management Console. Troubleshooting CCMv1You can troubleshoot cluster connection issues that might occur when you use CCMv1 by     referring to the syslog on your Cloudera Manager node for classic clusters and your gateway and     Knox nodes for data lake and data hub clusters. Troubleshooting CCMv2This page lists common issues related to troubleshooting workload connectivity using   CCMv2.Data Warehouse and private networkingCloudera Data Warehouse service supports private deployments in AWS, which use private     subnets.

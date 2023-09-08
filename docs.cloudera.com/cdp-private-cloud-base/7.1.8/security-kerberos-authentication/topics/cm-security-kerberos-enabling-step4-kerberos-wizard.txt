@@ -1,0 +1,315 @@
+Step 4: Enable Kerberos using the wizardCloudera Docs
+Step 4: Enable Kerberos using the wizard
+How to enable Kerberos using the Cloudera Manager wizard. 
+Related informationStep 3: Create the Kerberos Principal for Cloudera Manager ServerCustomizing Kerberos principalsParent topic: Enabling Kerberos Authentication for CDP
+1. Getting Started
+
+
+
+
+Set up a working KDC in Step 1 of the wizard as described below. Cloudera Manager
+              supports authentication with MIT KDC, Active Directory, and Red Hat Identity
+              Management/FreeIPA.
+Configure the KDC to allow renewable tickets with non-zero ticket lifetimes.
+                Active Directory allows renewable tickets with non-zero lifetimes by default. You
+                can verify this by checking Domain Security Settings > Account Policies > Kerberos Policy in Active Directory.For MIT KDC, make sure you have the
+                following lines in the
+                kdc.conf.max_life = 1d  
+max_renewable_life = 7d
+If you are using Active Directory, make sure LDAP over TLS/SSL (LDAPS) is enabled
+              for the Domain Controllers.
+Host names must be in lowercase. If you use uppercase letters in any host
+              name, the cluster services will not start after enabling Kerberos.
+Create an account for Cloudera Manager that has the permissions to create other
+              accounts in the KDC. This should have been completed as part of Step 3: Create the
+                Kerberos Principal for Cloudera Manager Server.
+
+
+important
+If YARN Resource Manager HA has been enabled in a non-secure cluster, before enabling
+            Kerberos you must clear the StateStore znode in ZooKeeper, as follows:
+
+Go to the Cloudera Manager Admin Console home page, click to the right of the YARN
+              service and select Stop.
+When you see a Finished status, the service has stopped.
+Go to the YARN service and select Actions > Format State Store.
+When the command completes, click Close.
+
+
+note
+Minimum Required Role:
+Full
+            Administrator. This feature is not available when using Cloudera
+            Manager to manage Data Hub clusters.
+
+
+
+To start the Kerberos wizard, open the Cloudera Manager Admin Console, click the
+            options menu for the applicable cluster, then click Enable Kerberos.
+
+
+
+
+
+
+After you open the Kerberos wizard, a Getting Started page appears. Select the
+            applicable KDC type to display configuration steps for your specific type of KDC. When
+            you have completed all of the configuration steps, select the I have completed all
+              the above steps check box, then click Continue. 
+
+
+
+
+
+
+
+
+
+2. Enter KDC Information
+
+
+Enter configuration information for the KDC you are using. note
+
+If you have multiple Domain Controllers (in case of AD) or MIT KDC servers, only
+                enter the name of any one of them in the KDC Server Host field.
+                Cloudera Manager will use that server only for creating accounts. Do not use a
+                round-robin DNS for KDCs in the krb5.conf file. If you choose to
+                use Cloudera Manager to manage the krb5.conf file, you can specify
+                the additional Domain Controllers using the Advanced Configuration
+                  Snippet (Safety Valve) for the Default Realm in krb5.conf property as
+                explained below. Fault tolerance and load balancing can be achieved by specifying
+                more than one (usually 2-3) KDCs, using their FQDNs or IP addresses. This, along
+                with a kdc_timeout parameter of 3-5 seconds, allows all Kerberos
+                clients (including Java GSS-API) to attempt communication with the next KDC in the
+                event of a KDC failure.
+Make sure the entries for the Kerberos Encryption Types field matches what
+                your KDC supports.
+If you are using an Active Directory KDC, you can configure Active Directory
+                account properties such as objectClass and
+                  accountExpires directly from the Cloudera Manager UI. You can
+                also enable Cloudera Manager to delete existing AD accounts so that new ones can be
+                created when Kerberos credentials are being regenerated.
+                
+To use AES encryption, make sure you have deployed JCE Unlimited Strength Policy
+                File, which is automatically included in Open JDK 1.8 232 (provided by Cloudera at
+                the time of install) and up, but may not be available on some of the earlier JDK 1.8
+                releases.
+
+
+
+
+In the Active Directory KDC example below, we entered values for the Kerberos
+              Security Realm, the KDC Server Host, and the Active Directory
+            Suffix, and also selected the Active Directory Delete Accounts on Credential
+              Regeneration check box.
+
+
+
+
+
+
+Click Continue to proceed.
+
+
+
+
+3. Manage krb5.conf
+
+
+You can use this page to specify whether or not Cloudera Manager deploys and manages the
+            krb5.conf file on your cluster. 
+
+
+If you select the Manage krb5.conf through Cloudera Manager check box, you can
+            use this page to configure the krb5.conf file properties. In
+            particular, the safety valves on this page can be used to configure cross-realm
+            authentication.
+            
+To configure multiple KDCs (as mentioned in the previous section), you can specify
+            the additional Domain Controllers using the Advanced Configuration Snippet
+              (Safety Valve) for the Default Realm in krb5.conf property box. For
+            example:  
+kdc = kdc2.supportlab.cloudera.com
+kdc = kdc3.supportlab.cloudera.com
+kdc = kdcN.supportlab.cloudera.com
+
+
+
+
+
+
+
+If left unchecked, you must ensure that the krb5.conf is deployed on
+            all hosts in the cluster, including the Cloudera Manager Server host.
+
+note
+If you are using Red Hat IdM/FreeIPA, by default the krb5.conf
+                file contains a line similar to the following:
+default_ccache_name = KEYRING:persistent:%{uid}
+CDP does not support the keyring credential cache. Comment out this line on every
+                cluster host by adding a hash mark (#) at the beginning, like
+                this:
+#default_ccache_name = KEYRING:persistent:%{uid}
+If you configure Cloudera Manager to manage the krb5.conf file,
+                you do not need to do anything.
+
+
+
+Click Continue to proceed.
+
+
+
+
+4. Enter Account Credentials
+
+
+
+noteEnter the REALM portion of the principal in upper-case only to conform to Kerberos
+            convention. 
+note
+Many enterprises employ policies that require all passwords to be changed after a
+              particular number of days. you can use the following steps to change the password in
+              Cloudera Manager for the Account Manager:
+
+In the Cloudera Manager Admin Console, select Administration > Security.
+Go to the Kerberos Credentials tab and click
+                  Import Kerberos Account Manager Credentials.
+In the Import Kerberos Account Manager Credentials dialog
+                box, enter the user name and password for the user that can create principals for
+                CDP cluster in the KDC. 
+
+
+
+
+
+Enter the user name and password for the user that can create principals for CDP
+            cluster in the KDC. This is the user/principal you created in Step 3: Create the
+              Kerberos Principal for Cloudera Manager Server. Cloudera Manager encrypts the user
+            name and password into a keytab and uses it as needed to create new principals.
+
+If you are using Red Hat IdM/FreeIPA, enter the IPA admin credentials here. These
+              admin credentials are not stored, and are used only to create a new user and role
+              (named cmadin-<random_id> and
+                cmadminrole, respectively) and retrieve its keytab. Cloudera
+              Manager stores this keytab for future Kerberos operations, such as regenerating the
+              credentials of the CDP service accounts.
+
+
+
+
+
+Click Continue to proceed.
+
+
+
+
+5. Command Details
+
+
+The Command Details page displays the outcome of the
+              Enter Account Credentials step. Click
+              Continue to proceed.
+
+
+
+
+
+
+
+
+
+6. Configure Kerberos
+
+
+If you have not already done so, run the provided commands on each cluster host to
+            install the Kerberos client libraries.
+
+
+
+
+
+
+The wizard automatically sets the privileged ports needed by the DataNode Transceiver
+            Protocol and the HTTP Web UI, but you can also specify alternate privileged ports.
+
+noteIf SSL is enabled, the assigned port numbers will be higher than 1024; if SSL is
+              not enabled, the assigned port numbers will be less than 1024. 
+
+
+To configure custom service principals, clear the Use Default Kerberos
+              Principals check box, and then specify a custom principal for each
+            service.
+
+noteBefore configuring custom service principals, see Customizing Kerberos
+                principals for additional information.
+
+
+Click Continue to proceed.
+
+
+
+
+7. Command Details
+
+
+The Command Details page displays the outcome of the
+              Enable Kerberos command. It may take a few minutes for these
+            steps to complete. 
+
+If an error message appears, you can fix the error, then click Resume. In the
+              following example, we select Administration > Settings > Kerberos, then enter
+              an invalid file name in the Custom Kerberos Keytab Retrieval Script box.  
+
+
+
+
+
+This causes a credential generation error. In this case we can remove the invalid
+              script setting, then click Resume to resume the Enable Kerberos command. 
+
+
+
+
+
+After the command finishes running, click Continue to
+              proceed.
+
+
+
+
+
+
+
+
+8. Summary
+
+
+The final step of the wizard lists the cluster(s) for which Kerberos has been
+          successfully enabled. Click Finish to return to the Cloudera Manager Admin Console
+          home page.
+
+
+
+
+
+To view details about Kerberos-enabled services, select Administration > Security,
+          then click the applicable row in the Kerberos column. 
+
+
+
+Click View Kerberos Configuration to view and edit configuration details for each
+          service. Click Save Changes to save any configuration updates. 
+
+
+
+
+note
+The first five steps of this wizard can also be performed before cluster creation by
+              selecting Administration > Security > Kerberos Credentials > Setup KDC for this
+                Cloudera Manager. If that has already been done, the first five steps of this
+              wizard do not appear. 
+
+
+
+
+

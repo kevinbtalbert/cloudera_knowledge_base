@@ -1,0 +1,94 @@
+Creating an Azure function using CLICloudera Docs
+Creating an Azure function using CLI
+Follow these steps to deploy a DataFlow Function using the Azure CLI.
+
+
+
+Your NiFi flow definition is stored in the DataFlow Catalog and you have the
+            CRN corresponding to the flow version you want to execute as a function
+
+
+You have created a Machine User with the proper role and you have its Access
+            Key and Private Key credentials
+
+
+You have installed and configured the Azure CLI on your local machine
+
+
+
+These steps provide an example for deploying a Function App
+      that listens for HTTPS requests with a publicly exposed endpoint. Cloudera recommends going
+      through the documented steps in the Azure Console UI to generate the appropriate templates and
+      use those templates for CLI-based deployments.
+
+Create a Resource Group that you will use for the Function App. You can skip this step
+          if you want to reuse an existing Resource Group.
+
+az group create -l francecentral -n MyDFFResourceGroup
+
+
+
+Download the template.json file available here.
+
+az deployment group create --resource-group MyDFFResourceGroup \
+	--template-file <path to template.json> \
+	--parameters \
+		subscriptionId=<existing subscription ID to use>  \
+		name=<name of your FunctionApp> \
+		location=<region where to deploy your Function App> \
+		hostingPlanName=<name of the plan to be created> \
+		resourceGroup=<name of the resource group previously created> \
+		storageAccountName=<name of the storage account to be created> \
+		FLOW_CRN=... \
+		DF_ACCESS_KEY=... \
+		DF_PRIVATE_KEY=...
+If you have additional parameters, you can add those in the
+              appSettings section of the template.json
+            file.
+noteFor sensitive parameters, Cloudera recommends to use Azure Key
+            Vault as explained in the Parameters documentation. This is not covered in
+            the provided template.
+Example:az deployment group create --resource-group MyDFFResourceGroup \
+	--template-file /tmp/template.json \
+	--parameters \
+	    subscriptionId=00000000-0000-0000-000000000000 \
+	    name=DFFResizeImage \
+	    location=francecentral \
+	    hostingPlanName=MyHostingPlanDFF \
+	    resourceGroup=MyDFFResourceGroup \
+	    storageAccountName=mydffstorageaccountname \
+	    FLOW_CRN=crn:cdp:df:us-west-1:00000000-0000-0000-0000-000000000000:flow:my-flow/v.1 \
+	    DF_ACCESS_KEY=00000000-0000-0000-0000-000000000000 \
+	    DF_PRIVATE_KEY=00000000000000000000000000000000000
+
+
+
+Retrieve the File Share name that has been created during the previous operation by
+          executing the below command:
+
+az storage share list --account-name mydffstorageaccountname
+You can automate the retrieval with jq using the below command:
+FILESHARE=`az storage share list --account-name mydffstorageaccountname | jq -r '.[0].name'`
+
+
+Create the directories in the File Share:
+
+az storage directory create --account-name mydffstorageaccountname --share-name dffresizeimageadcb --name data
+az storage directory create --account-name mydffstorageaccountname --share-name dffresizeimageadcb --name data/SitePackages
+
+
+
+Upload the binary to the File Share and create the package file:
+
+az storage file upload -s dffresizeimageadcb --source /tmp/NaafAzureFunctions.zip --path data/SitePackages/ --account-name mydffstorageaccountname
+
+echo "NaafAzureFunctions.zip" > /tmp/packagename.txt && az storage file upload -s dffresizeimageadcb --source /tmp/packagename.txt --path data/SitePackages/ --account-name mydffstorageaccountname && rm /tmp/packagename.txt
+
+
+
+
+Your function is now ready to be used with HTTPS triggers. See the documentation for more
+        details. If another type of trigger is required, you need to create an Event Grid
+        subscription as explained in Azure Function triggers.
+
+

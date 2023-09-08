@@ -1,0 +1,195 @@
+Update cdp-liftie-instance-profileCloudera Docs
+Update cdp-liftie-instance-profile
+When upgrading to CDF-PC 2.3.0 or higher from release 2.2.0-h4 or lower on AWS and
+        you use a pre-created IAM policy, you need to update the
+            cdp-liftie-instance-profile before the upgrade. Without these policy
+        changes, volumes provisioned by a pre-2.3.0 DataFlow version will be left behind if the
+        corresponding deployment is terminated or the data flow is disabled after the upgrade. 
+These updates are necessary because CDF-PC 2.3.0 has
+                migrated to use EKS k8s 1.23 and CSI EBS provisioner. This storage provisioner
+                requires updated policies to allow the creation and deletion of volumes from within
+                the EKS cluster.Update the cdp-liftie-instance-profile using
+            either the AWS UI or CLI.
+
+Add the ebs-csi policy to the
+                        cdp-liftie-instance-profile IAM profile. 
+
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": [
+                "ec2:CreateSnapshot",
+                "ec2:AttachVolume",
+                "ec2:DetachVolume",
+                "ec2:ModifyVolume",
+                "ec2:DescribeAvailabilityZones",
+                "ec2:DescribeInstances",
+                "ec2:DescribeSnapshots",
+                "ec2:DescribeTags",
+                "ec2:DescribeVolumes",
+                "ec2:DescribeVolumesModifications"
+            ],
+            "Resource": "*",
+            "Effect": "Allow"
+        },
+        {
+            "Condition": {
+                "StringEquals": {
+                    "ec2:CreateAction": [
+                        "CreateVolume",
+                        "CreateSnapshot"
+                    ]
+                }
+            },
+            "Action": [
+                "ec2:CreateTags"
+            ],
+            "Resource": [
+                "arn:aws:ec2:*:*:volume/*",
+                "arn:aws:ec2:*:*:snapshot/*"
+            ],
+            "Effect": "Allow"
+        },
+        {
+            "Action": [
+                "ec2:DeleteTags"
+            ],
+            "Resource": [
+                "arn:aws:ec2:*:*:volume/*",
+                "arn:aws:ec2:*:*:snapshot/*"
+            ],
+            "Effect": "Allow"
+        },
+        {
+            "Condition": {
+                "StringLike": {
+                    "aws:RequestTag/ebs.csi.aws.com/cluster": "true"
+                }
+            },
+            "Action": [
+                "ec2:CreateVolume"
+            ],
+            "Resource": "*",
+            "Effect": "Allow"
+        },
+        {
+            "Condition": {
+                "StringLike": {
+                    "aws:RequestTag/CSIVolumeName": "*"
+                }
+            },
+            "Action": [
+                "ec2:CreateVolume"
+            ],
+            "Resource": "*",
+            "Effect": "Allow"
+        },
+        {
+            "Condition": {
+                "StringLike": {
+                    "ec2:ResourceTag/ebs.csi.aws.com/cluster": "true"
+                }
+            },
+            "Action": [
+                "ec2:DeleteVolume"
+            ],
+            "Resource": "*",
+            "Effect": "Allow"
+        },
+        {
+            "Condition": {
+                "StringLike": {
+                    "ec2:ResourceTag/CSIVolumeName": "*"
+                }
+            },
+            "Action": [
+                "ec2:DeleteVolume"
+            ],
+            "Resource": "*",
+            "Effect": "Allow"
+        },
+        {
+            "Condition": {
+                "StringLike": {
+                    "ec2:ResourceTag/kubernetes.io/created-for/pvc/name": "*"
+                }
+            },
+            "Action": [
+                "ec2:DeleteVolume"
+            ],
+            "Resource": "*",
+            "Effect": "Allow"
+        },
+        {
+            "Condition": {
+                "StringLike": {
+                    "ec2:ResourceTag/CSIVolumeSnapshotName": "*"
+                }
+            },
+            "Action": [
+                "ec2:DeleteSnapshot"
+            ],
+            "Resource": "*",
+            "Effect": "Allow"
+        },
+        {
+            "Condition": {
+                "StringLike": {
+                    "ec2:ResourceTag/ebs.csi.aws.com/cluster": "true"
+                }
+            },
+            "Action": [
+                "ec2:DeleteSnapshot"
+            ],
+            "Resource": "*",
+            "Effect": "Allow"
+        }
+    ]
+}
+
+
+Add the efs-csi policy to the
+                        cdp-liftie-instance-profile IAM profile. 
+
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": [
+                "elasticfilesystem:DescribeAccessPoints",
+                "elasticfilesystem:DescribeFileSystems",
+                "elasticfilesystem:DescribeMountTargets"
+            ],
+            "Resource": "*",
+            "Effect": "Allow"
+        },
+        {
+            "Condition": {
+                "StringLike": {
+                    "aws:RequestTag/efs.csi.aws.com/cluster": "true"
+                }
+            },
+            "Action": [
+                "elasticfilesystem:CreateAccessPoint"
+            ],
+            "Resource": "*",
+            "Effect": "Allow"
+        },
+        {
+            "Condition": {
+                "StringEquals": {
+                    "aws:ResourceTag/efs.csi.aws.com/cluster": "true"
+                }
+            },
+            "Action": [
+                "elasticfilesystem:DeleteAccessPoint"
+            ],
+            "Resource": "*",
+            "Effect": "Allow"
+        }
+    ]
+}
+
+
+

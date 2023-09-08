@@ -1,0 +1,72 @@
+Kudu and Apache Ranger integrationCloudera Docs
+Kudu and Apache Ranger integration
+Learn about how Apache Ranger is integrated with Kudu in order to provide fine-grained authorization across servers.
+The Ranger models tabular objects are stored in a Kudu cluster in the following
+   hierarchy: Database, Table, Column.
+noteRanger allows you to add separate service repositories to manage privileges for different
+   Kudu clusters. Depending on the value of the ranger.plugin.kudu.service.name
+   configuration in the Ranger client, Kudu knows which service repository to connect to. For more
+   details about Ranger service repository, see the Apache Ranger documentation.
+Database: Kudu does not have the concept of a database. Therefore, a database is
+   indicated as a prefix of table names with the format <database>.<table>.
+   Since Kudu's only restriction on table names is that they be valid UTF-8 encoded strings, Kudu
+   considers special characters to be valid parts of database or table names. For example, if a
+   managed Kudu table created from Impala is named impala::bar.foo, its database
+   will be impala::bar.
+Table: Is a single Kudu table.
+Column: Is a column within a Kudu table.
+In Ranger, privileges are also associated with specific actions. Access to Kudu tables may rely
+   on privileges on the following actions:
+ALTER
+CREATE
+DELETE
+DROP
+INSERT
+UPDATE
+SELECT
+
+There are two additional access types:
+ALL
+METADATA
+
+If a user has the ALL privilege on a resource, they implicitly have privileges
+   to perform any action on that resource that does not require the users to be a delegated admin. 
+If a user is granted any privilege, they are able to perform actions requiring
+    METADATA (for example, opening a table) without having to explicitly grant them
+    METADATA privileges.
+Ranger supports a delegate admin flag which is independent of the action type.
+   It is not implied by ALL and does not imply METADATA. This is
+   similar to the GRANT OPTION part of the ALL WITH GRANT OPTION
+   in SQL as it is required to modify privileges in Ranger and change the owner of a Kudu table.
+Table creation requires CREATE ON DATABASE privilege. If the user
+   creates a table with a different owner, ALL and delegate admin are required.
+
+warningA user with delegate admin privilege
+    on a resource can grant any privilege to themselves and others.
+
+While the action types are hierarchical, in terms of privilege evaluation, Ranger does not have
+   the concept of hierarchy. For instance, if a user has SELECT privilege on a
+   database, it does not imply that the user has SELECT privilege on every table
+   belonging to that database.
+However, Ranger supports privilege wildcard matching. For example,
+    db=a->table=\* matches all the tables that belong to database
+    a. Therefore, in Ranger users actually need the SELECT
+   privilege granted on db=a->table=*->column=* to allow SELECT on
+   every table and every column in database a.
+Nevertheless, with Ranger integration, when a Kudu master receives a request, it consults
+   Ranger to determine what privileges a user has. And the required policies documented in the
+   <<security.adoc#policy-for-kudu-masters, policy section>> are enforced to determine whether
+   the user is authorized to perform the requested action or not.
+noteEven though Kudu table names remain case sensitive with Ranger integration, policies
+   authorization is considered case-insensitive.
+In addition to granting privileges to a user by username, privileges can also be granted to
+   table owners using the special {OWNER} username. These policies are evaluated
+   only when a user tries to perform an action on a table that they own. For example, a policy can
+   be defined for the {OWNER} user and db=*->table=* resource, and
+   it will automatically be applied when any table is accessed by its owner. This way administrators
+   do not need to choose between creating policies one by one for each table, and granting access to
+   a wide range of users.  warningIf a user has ALL and
+     delegate admin privileges on a table only by ownership and no privileges by
+    username, they can effectively lock themselves out by giving away the ownership.
+
+Related informationRanger User GuideParent topic: Kudu fine-grained authorization

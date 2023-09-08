@@ -1,0 +1,114 @@
+Troubleshooting Cloudera SearchCloudera Docs
+Troubleshooting Cloudera Search
+
+After installing and deploying Cloudera Search, use the information in this
+      section to troubleshoot problems.
+Troubleshooting
+The following table contains some common troubleshooting techniques.
+note
+In the URLs in the following table, you must replace entries such as
+            <server:port> with values from your environment. The port
+          defaults value is 8983, but see /etc/default/solr or
+            /opt/cloudera/parcels/CDH-*/etc/default/solr for the port if you are in
+          doubt.
+
+
+
+Symptom
+Explanation
+Recommendation
+
+
+
+All
+Varied
+Examine Solr log. By default, the log can be found at
+                  /var/log/solr/solr.out.
+
+
+No documents found
+Server may not be running
+Browse to http://server:port/solr to see
+                  if the server responds. Check that cores are present. Check
+                  the contents of cores to ensure that numDocs is more than 0.
+
+
+No documents found
+Core may not have documents
+Browsing http://server:port/solr/[collection
+                  name]/select?q=*:*&wt=json&indent=true should
+                  show numFound, which is near the top, to be
+                  more than 0.
+
+
+The secure Solr Server fails to respond to Solrj requests, but other clients
+                such as curl can communicate successfully
+This may be a version compatibility issue. Httpclient 4.2.3,
+                which ships with solrj in Search 1.x, has a dependency on
+                commons-codec 1.7. If an earlier version of
+                commons-codec is on the classpath,
+                httpclient may be unable to communicate using
+                Kerberos.
+Ensure your application is using commons-codec 1.7 or higher. Alternatively, use httpclient 4.2.5 instead of version 4.2.3 in your application. Version 4.2.3 behaves correctly with earlier versions of commons-codec.
+
+
+
+Dynamic Solr Analysis
+Any JMX-aware application can query Solr for information and display results
+        dynamically. For example, Zabbix, Nagios, and many others have been used
+        successfully. When completing Static Solr Log Analysis, many of the
+        items related to extracting data from the log files can be seen from
+        querying Solr, at least the last value (as opposed to the history which
+        is available from the log file). These are often useful for status
+        boards. In general, anything available from the Solr admin page can be
+        requested on a live basis from Solr. Some possibilities include:
+
+numDocs/maxDoc per core. This can be important
+          since the difference between these numbers indicates the number of
+          deleted documents in the index. Deleted documents take up disk space
+          and memory. If these numbers vary greatly, this may be a rare case
+          where optimizing is advisable.
+Cache statistics, including:
+Ratios that measures how effective a cache is at fulfilling requests for
+              content
+Autowarm times
+Evictions
+
+Almost anything available on the admin page. Note that drilling down into the
+          “schema browser” can be expensive.
+
+
+Other Troubleshooting Information
+Since the use cases for Solr and search vary, there is no single solution for
+        all cases. That said, here are some common challenges that many Search
+        users have encountered:
+
+Testing with unrealistic data sets. For example, a users may test a prototype
+          that uses faceting, grouping, sorting, and complex schemas against a
+          small data set. When this same system is used to load of real data,
+          performance issues occur. Using realistic data and use-cases is
+          essential to getting accurate results.
+If the scenario seems to be that the system is slow to ingest data, consider:
+Upstream speed. If you have a SolrJ program pumping data to your cluster and
+              ingesting documents at a rate of 100 docs/second, the gating
+              factor may be upstream speed. To test for limitations due to
+              upstream speed, comment out only the code that sends the data to
+              the server (for example,
+              SolrHttpServer.add(doclist)) and time the
+              program. If you see a throughput bump of less than around 10%,
+              this may indicate that your system is spending most or all of the
+              time getting the data from the system-of-record.
+This may require pre-processing.
+Indexing with a single thread from the client.
+              ConcurrentUpdateSolrServer can use multiple
+              threads to avoid I/O waits.
+Too-frequent commits. This was historically an attempt to get NRT processing,
+              but with SolrCloud hard commits this should be quite rare.
+The complexity of the analysis chain. Note that this is rarely the core issue. A
+              simple test is to change the schema definitions to use trivial
+              analysis chains and then measure performance.
+When the simple approaches fail to identify an issue, consider using profilers.
+
+
+
+

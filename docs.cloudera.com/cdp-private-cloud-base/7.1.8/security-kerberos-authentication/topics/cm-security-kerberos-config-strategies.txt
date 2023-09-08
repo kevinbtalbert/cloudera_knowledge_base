@@ -1,0 +1,127 @@
+Kerberos Configuration Strategies for CDPCloudera Docs
+Kerberos Configuration Strategies for CDP
+An overview of integration options when configuring Kerberos for Cloudera Data Platform
+  (CDP).
+
+Table 1. Kerberos Configuration Strategies for CDP
+
+
+A. Direct integration of Cloudera Manager with AD/MIT/IPA KDC
+B. Keytab retrieval through “keytab retrieval script"
+C. Manual deployment / configuration of keytab for services
+
+
+
+Brief description of functionality
+Cloudera Manager can create/delete service principals directly in the KDC as needed,
+        and Cloudera Manager will retrieve the keytabs for the created principals
+        automatically.
+Cloudera Manager will call an external script to retrieve a keytab for a given
+        principal.
+Cloudera Manager will maintain keytab/kerberos related configuration for services with
+        either the A or B column methods, but we will override the default location of the keytab
+        with a “Safety Valve” option.
+
+
+Example
+
+This is the default/recommended setup.
+
+Cloudera Manager will store/track the available keytabs, and can create
+          missing principals/keytabs after new services/role instances are added.
+Cloudera Manager can recreate existing principals / keytabs if needed for
+          some reason.
+
+
+
+
+Where direct integration with AD / KDC is not feasible due to internal
+          restrictions/policy.
+Could be used integrate Cloudera Manager with unsupported KDC types.
+
+
+Could be used where customizations are needed to the keytabs due to external
+        factors.
+
+
+Principal naming convention
+
+Kerberos principals used by CDP are following this naming convention:
+          service/fqdn@REALM.
+Most services use a single username across the cluster (like “hdfs” or “hive”)
+         for all roles of the service. The host part will vary based on the available hosts in the
+         cluster, so a single service will likely need multiple principals, where the username part
+         is the same, and the hostname will match one of the hosts where this service is running on.
+         The default usernames used by the services can be found in Hadoop Users (user:group) and
+          Kerberos Principals.
+
+
+
+Scripts involved
+ Cloudera Manager invokes these external shell scripts to perform credential
+        management: Base directory:
+         /opt/cloudera/cm/bindelete_credentials_ad.shdelete_credentials_ipa.shdelete_credentials.shgen_credentials_ad.shgen_credentials_ipa.shgen_credentials.shimport_credentials_ipa.shimport_credentials.shmerge_credentials.sh
+
+The “custom keytab retrieval script” will get a single principal name matching
+         the above naming convention, and it should write the matching keytab to a directory also
+         passed as an option to the script.
+There is a basic sample script provided in Using a custom Kerberos keytab
+          retrieval scrip.
+
+None
+
+
+Persistent storage of keytabs
+Keytabs that are successfully retrieved will be stored in the
+        Cloudera Manager-backed database to be deployed and used on demand.
+ None. Required keytabs should be stored on the hosts manually. 
+
+
+On-demand keytab merging
+
+In case a service (role instance) requires multiple principals for operation,
+         Cloudera Manager will merge the individual keytabs into a single combined keytab
+         automatically.
+For example: HDFS namenode uses both the “hdfs” and “HTTP” principal for operation.
+         Cloudera Manager will create a merged keytab that contains both these principals.
+
+None. In case a service (role instance) requires multiple principals for operation,
+        keytabs provided for the services (role instance) are needed to be merged manually.
+
+
+On-demand keytab deployment
+Cloudera Manager will automatically deploy the required
+        configuration and keytab files into the process directory of the given role instance through
+        the Cloudera Manager Agent when starting a service/role instance.
+None. All required keytabs will need to be present on the host(s) for a service before
+        starting it. Cloudera Manager should be used to configure the location of these keytab files
+        though.
+
+
+Keytab filename
+
+The keytab file & filename will be managed by Cloudera Manager. The keytab
+         file will be deployed by the Cloudera Manager agent to the services process folder
+         automatically.
+The filenames used by Cloudera Manager can be found in Hadoop Users
+          (user:group) and Kerberos Principals.
+
+The name & location of the keytab file has to be specified manually, so it can be
+        anything allowed by POSIX conventions.
+
+
+Keytab file ownership and permissions
+
+The “System User” of the respective service needs read-write access for the
+         keytab file. Cloudera Manager will set the proper owner/group on the file with permission
+         mode 600 (read-write for owner, no access for group/others)
+Default owner/group and permissions can also be found in Hadoop Users
+          (user:group) and Kerberos Principals.
+
+The “System User” of the respective service needs read-write access for the keytab
+        file. The proper permission and ownership of the file needs to be set manually.
+
+
+
+
+Related informationHadoop Users (user:group) and Kerberos PrincipalsUsing a custom Kerberos keytab retrieval script

@@ -1,0 +1,136 @@
+Phoenix-Spark connector usage examplesCloudera Docs
+Phoenix-Spark connector usage examples 
+You can refer to the following Phoenix-Spark connector examples: 
+Reading Phoenix tables
+Saving Phoenix tables
+Using PySpark to READ and WRITE tables
+Reading Phoenix tables
+For example, you have a Phoenix table with the following DDL, you can use
+                one of the following methods to load the table:
+
+As a DataFrame using the Data Source API 
+As a DataFrame using a configuration object
+As an RDD using a Zookeeper URL
+
+CREATE TABLE TABLE1 (ID BIGINT NOT NULL PRIMARY KEY, COL1 VARCHAR);
+UPSERT INTO TABLE1 (ID, COL1) VALUES (1, 'test_row_1');
+UPSERT INTO TABLE1 (ID, COL1) VALUES (2, 'test_row_2');
+Example: Load a DataFrame using the Data Source API
+import org.apache.spark.SparkContext
+import org.apache.spark.sql.SQLContext
+import org.apache.phoenix.spark._
+
+
+//delete the following line when running fom spark-shell
+val sc = new SparkContext("local", "phoenix-test")
+val sqlContext = new SQLContext(sc)
+
+val df = sqlContext.load(
+  "org.apache.phoenix.spark",
+  //replace "phoenix-server:2181" with the real ZK quorum
+  Map("table" -> "TABLE1", "zkUrl" -> "phoenix-server:2181")
+)
+
+df
+  .filter(df("COL1") === "test_row_1" && df("ID") === 1L)
+  .select(df("ID"))
+  .show
+Example: Load as a DataFrame directly using a Configuration object
+import org.apache.hadoop.conf.Configuration
+import org.apache.spark.SparkContext
+import org.apache.spark.sql.SQLContext
+import org.apache.phoenix.spark._
+
+val configuration = new Configuration()
+// Can set Phoenix-specific settings, requires 'hbase.zookeeper.quorum'
+
+//delete the following line when running fom spark-shell
+val sc = new SparkContext("local", "phoenix-test")
+val sqlContext = new SQLContext(sc)
+
+// Loads the columns 'ID' and 'COL1' from TABLE1 as a DataFrame
+val df = sqlContext.phoenixTableAsDataFrame(
+  "TABLE1", Array("ID", "COL1"), conf = configuration
+)
+
+df.show
+Example: Load as an RDD using a Zookeeper URL
+import org.apache.spark.SparkContext
+import org.apache.spark.sql.SQLContext
+import org.apache.phoenix.spark._
+import org.apache.spark.rdd.RDD
+
+//delete the following line when running fom spark-shell
+val sc = new SparkContext("local", "phoenix-test")
+
+// Loads the columns 'ID' and 'COL1' from TABLE1 as an RDD
+val rdd: RDD[Map[String, AnyRef]] = sc.phoenixTableAsRDD(
+//replace "phoenix-server:2181" with the real ZK quorum
+  "TABLE1", Seq("ID", "COL1"), zkUrl = Some("phoenix-server:2181")
+)
+
+rdd.count()
+
+val firstId = rdd.first()("ID").asInstanceOf[Long]
+val firstCol = rdd.first()("COL1").asInstanceOf[String]
+Saving Phoenix tables
+You can refer to the following examples for saving RDDs and DataFrames.
+Example: Saving RDDs
+For example, you have a Phoenix table with the following DDL, you can save it as an
+                RDD.
+CREATE TABLE OUTPUT_TEST_TABLE (id BIGINT NOT NULL PRIMARY KEY, col1 VARCHAR, col2 INTEGER);
+The saveToPhoenix method is an implicit method on RDD[Product], or an RDD of Tuples.
+                The data types must correspond to one of the Java types supported by Phoenix.
+import org.apache.spark.SparkContext
+import org.apache.phoenix.spark._
+
+//delete the following line when running fom spark-shell
+val sc = new SparkContext("local", "phoenix-test")
+val dataSet = List((1L, "1", 1), (2L, "2", 2), (3L, "3", 3))
+
+sc
+  .parallelize(dataSet)
+  .saveToPhoenix(
+    "OUTPUT_TEST_TABLE",
+    Seq("ID","COL1","COL2"),
+    //replace "phoenix-server:2181" with the real ZK quorum
+    zkUrl = Some("phoenix-server:2181")
+  )
+Example: Saving DataFrames
+The save is method on DataFrame allows passing in a data source type. You can use
+                org.apache.phoenix.spark, and must also pass in a table and zkUrl parameter to
+                specify which table and server to persist the DataFrame to. The column names are
+                derived from the DataFrame’s schema field names, and must match the Phoenix column
+                names. The save method also takes a SaveMode option, for which only
+                SaveMode.Overwrite is supported. For example, you have a two Phoenix tables with the
+                following DDL, you can save it as a DataFrames.
+Using PySpark to READ and WRITE tables
+With Spark’s DataFrame support, you can use pyspark to READ and WRITE from Phoenix
+                tables.
+Example: Load a DataFrame
+Given a table TABLE1 and a Zookeeper url of localhost:2181, you can load the table as
+                a DataFrame using the following Python code in pyspark:
+df = sqlContext.read \
+  .format("org.apache.phoenix.spark") \
+  .option("table", "TABLE1") \
+  .option("zkUrl", "localhost:2181") \
+  .load()
+Example: Save a DataFrame
+Given the same table and Zookeeper URLs above, you can save a DataFrame to a Phoenix
+                table using the following code:
+df.write \
+  .format("org.apache.phoenix.spark") \
+  .mode("overwrite") \
+  .option("table", "TABLE1") \
+  .option("zkUrl", "localhost:2181") \
+  .save()
+noteThe functions phoenixTableAsDataFrame,
+                    phoenixTableAsRDD and saveToPhoenix all
+                support optionally specifying a conf Hadoop configuration parameter with custom
+                Phoenix client settings, as well as an optional zkUrl parameter for
+                the Phoenix connection URL. If zkUrl isn’t specified, it’s assumed
+                that the hbase.zookeeper.quorum property has been set in the conf
+                parameter. Similarly, if no configuration is passed in, zkUrl must
+                be specified.
+
+Parent topic: Using Apache Phoenix-Spark connector

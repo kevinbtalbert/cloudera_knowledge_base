@@ -1,0 +1,85 @@
+Understanding Performance using EXPLAIN PlanCloudera Docs
+Understanding Performance using EXPLAIN Plan
+To understand the high-level performance considerations for Impala
+    queries, read the output of the EXPLAIN statement for the
+    query. You can get the EXPLAIN plan without actually
+    running the query itself.
+ The EXPLAIN statement gives you an outline of the
+      logical steps that a query will perform, such as how the work will be
+      distributed among the nodes and how intermediate results will be combined
+      to produce the final result set. You can see these details before actually
+      running the query. You can use this information to check that the query
+      will not operate in some very unexpected or inefficient way. 
+Read the EXPLAIN plan from bottom to top: 
+ The last part of the plan shows the low-level details such as the
+          expected amount of data that will be read, where you can judge the
+          effectiveness of your partitioning strategy and estimate how long it
+          will take to scan a table based on total data size and the size of the
+          cluster. 
+ As you work your way up, next you see the operations that will be
+          parallelized and performed on each Impala node. 
+ At the higher levels, you see how data flows when intermediate
+          result sets are combined and transmitted from one node to another. 
+ The EXPLAIN_LEVEL query option lets you customize
+          how much detail to show in the EXPLAIN plan depending
+          on whether you are doing high-level or low-level tuning, dealing with
+          logical or physical aspects of the query. 
+
+ Read the EXPLAIN plan from
+      bottom to top: 
+ The last part of the plan shows the low-level details such as the
+          expected amount of data that will be read, where you can judge the
+          effectiveness of your partitioning strategy and estimate how long it
+          will take to scan a table based on total data size and the size of the
+          cluster. 
+ As you work your way up, next you see the operations that will be
+          parallelized and performed on each Impala node. 
+ At the higher levels, you see how data flows when intermediate
+          result sets are combined and transmitted from one node to another.
+        
+ The EXPLAIN_LEVEL query option lets you customize
+          how much detail to show in the EXPLAIN plan depending
+          on whether you are doing high-level or low-level tuning, dealing with
+          logical or physical aspects of the query. 
+
+
+ The example below shows how the standard EXPLAIN output
+      moves from the lowest (physical) level to the higher (logical) levels. The
+      query begins by scanning a certain amount of data; each node performs an
+      aggregation operation (evaluating COUNT(*)) on some
+      subset of data that is local to that node; the intermediate results are
+      transmitted back to the coordinator node (labelled here as the
+        EXCHANGE node); lastly, the intermediate results are
+      summed to display the final result. 
+[impalad-host:21000] > EXPLAIN select count(*) from customer_address;
++----------------------------------------------------------+
+| Explain String                                           |
++----------------------------------------------------------+
+| Estimated Per-Host Requirements: Memory=42.00MB VCores=1 |
+|                                                          |
+| 03:AGGREGATE [MERGE FINALIZE]                            |
+| |  output: sum(count(*))                                 |
+| |                                                        |
+| 02:EXCHANGE [PARTITION=UNPARTITIONED]                    |
+| |                                                        |
+| 01:AGGREGATE                                             |
+| |  output: count(*)                                      |
+| |                                                        |
+| 00:SCAN HDFS [default.customer_address]                  |
+|    partitions=1/1 size=5.25MB                            |
++----------------------------------------------------------+
+
+ The EXPLAIN plan is also printed at the beginning of
+      the query PROFILE report to provide convenience in
+      examining both the logical and physical aspects of the query side-by-side. 
+ The amount of detail displayed in the EXPLAIN
+      output is controlled by the EXPLAIN_LEVEL query option.
+      You customize how much detail to show in the EXPLAIN plan
+      depending on whether you are doing high-level or low-level tuning, dealing
+      with logical or physical aspects of the query. You typically increase this
+      setting from standard to extended when
+      double-checking the presence of table and column statistics during
+      performance tuning, or when estimating query resource usage in conjunction
+      with the resource management features.
+
+Parent topic: Performance Considerations

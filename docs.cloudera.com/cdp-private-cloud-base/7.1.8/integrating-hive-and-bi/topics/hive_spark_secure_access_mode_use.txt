@@ -1,0 +1,71 @@
+Using secure access modeCloudera Docs
+Using secure access mode
+From the Cloudera Runtime 7.1.7 SP1 release onwards, you can use the secure access
+        mode to read an external table in the staging location.
+ In this task, you enter the following configuration options when you launch the
+            Spark shell. 
+spark.datasource.hive.warehouse.load.staging.dir=hdfs://my-cluster:8020/tmp/staging/hwc
+                    represents the temporary subdirectories per user, per session that are created
+                    under this directory. This is the temporary location where the output is staged
+                    for the duration of the session. Make sure to provide the absolute path, or
+                    fully qualified name, not the relative path of the staging dir.importantIf HDFS NameNode High Availability
+                        (HA) is enabled, then ensure that you refer to the nameservice URL in the
+                        staging path instead of the host and port combination. For example,
+                            hdfs://nameservice1/tmp/staging/hwc.
+spark.datasource.hive.warehouse.read.mode=secure_access starts
+                    using the staging output mode with fine-grained access control (FGAC). No code
+                    refactoring is required. You can use hive.sql() in your
+                    queries. 
+
+
+
+Your administrator set up ranger permissions for using secure access mode on
+                    Hive tables.
+Your administrator granted you permission to the staging location on your file
+                    system.
+
+
+
+Launch the Spark shell, configuring secure access mode.
+For example, use the Spark session user name
+                        zeppelin.[root@hwc-secure-1 ~]# sudo -u zeppelin spark-shell --master yarn  \
+--jars /opt/cloudera/parcels/CDH/jars/hive-warehouse-connector-assembly.jar  \
+--conf spark.datasource.hive.warehouse.read.mode=secure_access  \
+--conf spark.datasource.hive.warehouse.load.staging.dir=hdfs://hwc-secure-3.hwc-secure.root.hwx.site:8020/tmp/staging/hwc \
+--conf spark.sql.hive.hiveserver2.jdbc.url="jdbc:hive2://hwc-secure-3.hwc-secure.root.hwx.site:2181/default;retries=5;serviceDiscoveryMode=zooKeeper;zooKeeperNamespace=hiveserver2" \
+--conf spark.sql.hive.hiveserver2.jdbc.url.principal=hive/_HOST@ROOT.HWX.SITE                Output
+                        is:Setting default log level to "WARN".
+
+Spark context Web UI available at http://hwc-secure-1.hwc-secure.root.hwx.site:4040
+Spark context available as 'sc' (master = yarn, app id = application_1637657444149_0024).
+Spark session available as 'spark'.
+Welcome to
+      ____              __
+     / __/__  ___ _____/ /__
+    _\ \/ _ \/ _ `/ __/  '_/
+   /___/ .__/\_,_/_/ /_/\_\ 
+        /_/
+
+Using Scala version 2.11.12 (OpenJDK 64-Bit Server VM, Java 1.8.0_232)
+Type in expressions to have them evaluated.
+Type :help for more information.
+
+Read a Hive table.
+scala> val hive = com.hortonworks.hwc.HiveWarehouseSession.session(spark).build()
+hive: com.hortonworks.spark.sql.hive.llap.HiveWarehouseSessionImpl = com.hortonworks.spark.sql.hive.llap.HiveWarehouseSessionImpl@159b4611
+
+scala> hive.sql("select name, col3, col4 from anytable").show
+
++--------------------+----+-------------+
+|                name|col3|         col4|
++--------------------+----+-------------+
+|      aVerxxxxxxxxxx|   2|VeryLongName1|
+|namexxxxxxxxxxxxx...|   5|        name5|
+|      aVerxxxxxxxxxx|   2|VeryLongName1|
+|               namex|   5|        name5|
+|               namex|   2|        name2|
+|               namex|   5|        name5|
++--------------------+----+-------------+
+
+
+Related informationIntroduction to secure access modeSetting up secure access modeParent topic: Reading data through HWC

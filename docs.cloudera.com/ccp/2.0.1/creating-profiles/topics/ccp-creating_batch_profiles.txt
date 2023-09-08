@@ -1,0 +1,97 @@
+Create a Batch ProfileCloudera Docs
+Create a Batch
+      Profile
+Create a batch profile when you want to create a profile based on telemetry that was
+      captured in the past. Batch profiles can be used to understand the historical behaviors and
+      trends. 
+
+If a profile file does not already exist, create a profile definition by editing
+                  $METRON_HOME/config/zookeeper/profiler.json as follows:
+
+cat $METRON_HOME/config/zookeeper/profiler.json
+{
+  "profiles": [
+    {
+      "profile": "hello-world",
+      "foreach": "'global'",
+      "init":    { "count": "0" },
+      "update":  { "count": "count + 1" },
+      "result":  "count"
+    }
+  ],
+  "timestampField": "timestamp"
+}
+
+If you have not previously created a profile definition, you will need to create
+               the profiler.json file.
+
+noteAll of the properties listed above including the
+                     timestampField are required in the profiler definition.
+
+
+Upload the profile definition to ZooKeeper:
+
+source /etc/default/metron
+cd $METRON_HOME
+bin/zk_load_configs.sh -m PUSH -i config/zookeeper/ -z $ZOOKEEPER
+
+You can validate your upload by reading back the CCP configuration from ZooKeeper
+               using the same script:
+
+bin/zk_load_configs.sh -m DUMP -z $ZOOKEEPER
+...
+PROFILER Config: profiler
+{
+  "profiles": [
+    {
+      "profile": "hello-world",
+      "onlyif":  "exists(ip_src_addr)",
+      "foreach": "ip_src_addr",
+      "init":    { "count": "0" },
+      "update":  { "count": "count + 1" },
+      "result":  "count"
+    }
+  ]
+}
+
+
+Ensure that you have archived telemetry data available for the batch profiler to
+               consume. 
+By default, CCP stores this in HDFS at
+                  /apps/metron/indexing/indexed/*/*.
+
+hdfs dfs -cat /apps/metron/indexing/indexed/*/* | wc -l
+
+
+Check the HBase table to validate that the Profiler is writing the profile.
+Remember that the Profiler is flushing the profile every 15 minutes. You will need
+               to wait at least this long to start seeing profile data in HBase.
+
+/usr/hdp/current/hbase-client/bin/hbase shell
+hbase(main):001:0> count 'profiler'
+
+
+Review the batch profiler's properties located at
+                  $METRON_HOME/config/batch-profiler.properties to ensure that the
+               properties are set appropriately for the batch profiler you want to run.
+See Batch Profiler Properties for more information on these
+               properties.
+
+If you want to run DEBUG logging for the profiler, edit the log4j
+               properties file that resides in $SPARK_HOME/config:
+
+log4j.logger.org.apache.metron.profiler.spark=DEBUG
+
+If the log4j file does not exist, you can create one.
+
+Run the batch profiler.
+
+source /etc/default/metron
+cd $METRON_HOME
+$METRON_HOME/bin/start_batch_profiler.sh
+
+
+Query for the profile data using the Profiler
+         Client.
+
+Parent topic: Batch Profiler

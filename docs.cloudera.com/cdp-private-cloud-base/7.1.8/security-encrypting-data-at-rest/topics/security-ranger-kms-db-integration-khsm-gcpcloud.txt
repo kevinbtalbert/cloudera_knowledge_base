@@ -1,0 +1,168 @@
+Integrating Ranger KMS DB with Google Cloud HSMCloudera Docs
+Integrating Ranger KMS DB with Google Cloud HSM
+How to integrate Ranger KMS DB with Google Cloud HSM
+
+This task describes how to integrate Ranger KMS DB with Google Cloud Platform (GCP)
+                Hardware Security Module (HSM). This process includes setting up the GCP HSM service
+                on a client (host), configuring Ranger KMS with GCP, or migrating the Master Key
+                storage from the KMS database to the Google Cloud HSM.
+
+
+
+Ensure you can log in to the Google cloud console using your accout. (Requires
+                    Google account access).
+Ensure you have  Java (jdk1.8.0.232) installed. 
+
+
+
+Set Up Google Cloud HSM
+
+Log in to Google Cloud console using Cloudera account.
+
+Create the service account by selecting or creating the Project.
+
+Create the key.
+
+Download and save the key in JSON format.
+
+noteRecord the project ID, Location ID and save the JSON file.
+
+
+In GCP Console > Key Management create the key ring.
+
+
+
+Figure 1. Creating a key ring in Google Cloud Platform
+
+
+
+
+
+This example shows a project gcp-eng-sdx-daily,
+                 region Global, and key ring
+                        RangerKMSRing.
+
+The key ring is created.
+                Figure 2. RangerKMSRing created
+
+
+
+
+Parent topic: Integrating Components for Encrypting Data at Rest
+Fresh Install - Steps to Configure Ranger KMS with GCP
+These are the steps to configure Ranger KMS with the Google Cloud Platform ( GCP).
+        These steps need to be performed only when the cluster is ready with all the required
+        services and no encryption zone keys are present. 
+
+Stop the KMS service if running.
+
+Go to CM > Ranger KMS > Configuration > Search for Ranger KMS Server Advanced Configuration Snippet
+                            (Safety Valve) for conf/dbks-site.xml and click on + icon to add the properties.
+
+Add the following properties :
+
+
+Name
+Value
+
+
+
+ranger.kms.gcp.enabled
+true
+
+
+ranger.kms.gcp.keyring.id
+<Key Ring Name>
+
+
+ranger.kms.gcp.cred.file
+
+/path/to/downloadedCredFile.json 
+
+
+
+
+ranger.kms.gcp.project.id
+
+your-project-id
+
+
+ranger.kms.gcp.location.id
+
+project-location-id
+
+
+
+ranger.kms.gcp.masterkey.name
+
+YourMasterKeyName
+
+
+
+
+Figure 3. Adding properties to safety valve
+
+
+
+
+Save changes. Restart Ranger KMS
+
+Figure 4. A master key will be created in your keyring on GCP
+
+
+
+On restart,a master key will be created in your keyring on
+                    GCP.
+
+ Once Ranger KMS has started successfully, verify zone key creation, and zone
+            encryption/decryption.
+
+
+Migrating the Master Key From Ranger KMS Database To Google Cloud HSM
+These are the steps required to migrate the Master Key Storage from the KMS database
+        to Google Cloud HSM. These steps need to be performed when the cluster is ready with all the
+        required services and encryption zone keys are present in the Ranger KMS DB.
+noteThese steps are not required if Ranger KMS with GCP is being installed for the first time.
+Export the following as environment variables 
+                JAVA_HOME, RANGER_KMS_HOME, RANGER_KMS_CONF, SQL_CONNECTOR_JAR and HADOOP_CREDSTORE_PASSWORD.You can find the values of the environment variables as follows: 
+                
+
+
+SSH into one of the KMS hosts.
+
+
+Run the command to find the required environment variable value
+
+ps -ef | grep proc_rangerkms
+
+
+
+For HADOOP_CREDSTORE_PASSWORD move to
+
+
+cd /var/run/cloudera-scm-agent/process/xxx-ranger_kms-RANGER_KMS_SERVER
+
+
+
+Open the proc.json file and search for HADOOP_CREDSTORE_PASSWORD.
+
+
+export JAVA_HOME = /usr/java/jdk1.8.0_232-cloudera/ 
+export RANGER_KMS_HOME = /opt/cloudera/parcels/CDH-7.2.15-1.cdh7.2.15.p0.19846155/lib/ranger-kms 
+export RANGER_KMS_CONF = /var/run/cloudera-scm-agent/process/51-ranger_kms-RANGER_KMS_SERVER/conf/ 
+export SQL_CONNECTOR_JAR = /usr/share/java/mysql-connector-java.jar 
+export HADOOP_CREDSTORE_PASSWORD= hadoop_credstore_pwd 
+
+Stop the Ranger KMS service.
+
+Once the environment variables have been exported and  Ranger KMS
+                            service has been stopped, use the MigrateMKeyStorageDbToGCP.sh
+                            utility script to migrate the master key.
+${RANGER_KMS_HOME}/MigrateMKeyStorageDbToGCP.sh ApacheMasterKey1
+my_gcpProjectName my_gcpKeyRingName  my_gcpKeyRingLocationName my_pathOfJsonCredFile.json
+noteMigration of Master Key Storage from Google Cloud HSM To Ranger KMS DB is not supported as
+                        after creation, a key cannot be moved to another location or
+                        exported.
+
+Master Key from Ranger KMS DB has been successfully migrated to GCP.
+

@@ -1,0 +1,61 @@
+Concepts Used in FULL ACID v2 TablesCloudera Docs
+Concepts Used in FULL ACID v2 Tables
+Before beginning to use FULL ACID v2 tables you must be aware of these new concepts like
+  transactions, WriteIds, rowIDs, delta delete directories, locks, etc. that are added to FULL ACID
+  tables to achieve ACID semantics.
+Write IDs
+For every transaction, both read and write, Hive will assign a globally unique ID. For
+    transactional writes like INSERT and DELETE, it will also assign a table-wise unique ID,
+    a write ID. The write ID range will be encoded in the delta and delete directory names. Results
+    of a DML transactional query are allocated to a location under partition/table. This location is
+    derived by Write ID allocated to the transaction. This provides Isolation of DML queries and
+    such queries can run in parallel without interfering with each other.
+
+New Sub-directories
+New data files resulting from a DML query are written to a unique location derived from
+    WriteId of the transaction. You can find the results of an INSERT query in delta directories
+    under partition/table location. Depending on the operation type there can be two types of delta
+    directories:
+
+Delta Directory: This type is created for the results of INSERT statements and is named
+       delta_<writeId>_<writeId> under partition/table location.
+Delete Delta Directory: This delta directory is created for results of DELETE statements and is named
+      delete_delta_<writeId>_<writeId> under partition/table location.
+
+UPDATE operations create both delete and delta directories.
+
+Row IDs
+rowId is the auto-generated unique ID within the transaction and bucket. This is added to each
+    row to identify each row in a table. RowID is used during a DELETE operation. When a record is
+    deleted from a table, the rowId of the deleted row will be written to the delete_delta
+    directory. So for all subsequent READ operations all rows will be read except these rows.
+
+Schematic differences between INSERT-ONLY and FULL ACID tables
+INSERT-ONLY tables do not have a special schema. They store the data just
+    like plain original files from the non-ACID world. However, their files are organized
+    differently. For every INSERT statement the created files are put into a transactional directory
+    which has transactional information in its name.
+Full ACID tables do have a special schema. They have row identifiers to support row-level
+    DELETEs. So a row in Full ACID format looks like this:
+{
+   "operation": 0,
+   "originalTransaction": 1,
+   "bucket": 536870912,
+   "rowId": 0,
+   "currentTransaction": 1,
+   "row": {"i": 1}
+   }
+  
+
+The green columns are the hidden/system ACID columns.
+Field “row” holds the user data.
+operation 0 means INSERT, 1 UPDATE, and 2 DELETE. UPDATE will not appear because of the split-update technique (INSERT + DELETE).
+originalTransaction is the write ID of the INSERT operation that created this row.
+bucket is a 32-bit integer defined by BucketCodec class.
+rowId is the auto-generated unique ID within the transaction and bucket.
+currentTransaction is the current write ID. For INSERT, it is the same as currentTransaction. For DELETE, it is the write ID when this record is first created.
+row contains the actual data. For DELETE, row will be null.
+
+
+
+Parent topic: READ Support for FULL ACID ORC Tables

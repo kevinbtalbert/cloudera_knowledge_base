@@ -1,0 +1,77 @@
+Periodically rebuilding a materialized viewCloudera Docs
+Periodically rebuilding a materialized view
+ Using materialized views can enhance query performance. You need to refresh
+        materialized view contents when new data is added to the underlying table. Instead of
+        rebuilding the materialized view manually, you can schedule this task. Rebuilding occurs
+        periodically and  transparently to users. 
+
+This task assumes you created the following schemas for storing employee and
+                departmental information:
+CREATE TABLE emps (
+empid INTEGER,
+deptno INTEGER,
+name VARCHAR(256),
+salary FLOAT,
+hire_date TIMESTAMP);
+                
+CREATE TABLE depts (
+deptno INTEGER,
+deptname VARCHAR(256),
+locationid INTEGER);          
+Imagine that you add data for a number of employees to the table. Assume many users
+                of your database issue queries to access to data about the employees hired during
+                last year including the department they belong to. 
+You perform the steps below to create a materialized view of the table to address
+                these queries. Imagine new employees are hired and you add their records to the
+                table. These changes render the materialized view contents outdated. You need to
+                refresh its contents. You create a scheduled query to perform this task. The
+                scheduled rebuilding will not occur unless there are changes to the input tables.
+                You test the scheduled query by bypassing the schedule and executing the schedule
+                immediately. Finally, you change the schedule to rebuild less often.
+
+
+To handle many queries to access recently hired employee and departmental data,
+                    create a materialized view.
+
+CREATE MATERIALIZED VIEW mv_recently_hired AS
+  SELECT empid, name, deptname, hire_date FROM emps
+  JOIN depts ON (emps.deptno = depts.deptno)
+  WHERE hire_date >= '2020-01-01 00:00:00';
+
+
+Use the materialized view by querying the employee data.
+
+SELECT empid, name FROM emps
+JOIN depts  ON (emps.deptno = depts.deptno)
+WHERE hire_date >= '2020-03-01 00:00:00' AND deptname = 'finance';
+
+
+Assuming new hiring occurred and you added new records to the
+                        emps table, rebuild the materialized view.
+
+ALTER MATERIALIZED VIEW mv_recently_hired REBUILD; 
+
+The rebuilding refreshes the contents of the materialized
+                    view.
+
+Create a scheduled query to invoke the rebuild statement every 10 minutes.
+
+CREATE SCHEDULED QUERY scheduled_rebuild
+EVERY 10 MINUTES AS
+ALTER MATERIALIZED VIEW mv_recently_hired REBUILD; 
+
+ A rebuild executes every 10 minutes, assuming changes to the emp table occur
+                    within that period. If a materialized view can be rebuilt incrementally, the scheduled rebuild does not occur unless there are changes to the input tables.
+
+To test the schedule, run a scheduled query immediately.
+
+ALTER SCHEDULED QUERY scheduled_rebuild EXECUTE;
+
+
+Change the frequency of the rebuilding.
+
+ALTER SCHEDULED QUERY scheduled_rebuild EVERY 20 MINUTES;  
+
+
+
+Related informationApache Hive Language Manual--Scheduled QueriesParent topic: Query scheduling

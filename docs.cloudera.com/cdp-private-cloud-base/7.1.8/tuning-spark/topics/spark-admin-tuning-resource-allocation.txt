@@ -1,0 +1,96 @@
+Tuning Resource AllocationCloudera Docs
+Tuning Resource Allocation
+
+ For background information on how Spark applications use the YARN
+      cluster manager, see "Running Spark Applications on YARN." 
+
+          The two main resources that Spark and YARN manage are CPU and memory. Disk and network
+          I/O affect Spark performance as well, but neither Spark nor YARN actively manage them.
+        
+
+          Every Spark executor in an application has the same fixed number of cores and same
+          fixed heap size. Specify the number of cores with the
+          --executor-cores command-line flag, or by setting the
+          spark.executor.cores property. Similarly, control the heap size with
+          the --executor-memory flag or the
+          spark.executor.memory property. The cores property
+          controls the number of concurrent tasks an executor can run. For example, set
+          --executor-cores 5 for each executor to run a maximum of five tasks
+          at the same time. The memory property controls the amount of data Spark can cache, as
+          well as the maximum sizes of the shuffle data structures used for grouping,
+          aggregations, and joins.
+        
+ Dynamic allocation, which adds and removes executors dynamically, is
+      enabled by default. To explicitly control the number of executors, you can
+      override dynamic allocation by setting the
+        --num-executors command-line flag or
+        spark.executor.instances configuration property. 
+
+          Consider also how the resources requested by Spark fit into resources YARN has
+          available. The relevant YARN properties are:
+        
+
+
+yarn.nodemanager.resource.memory-mb controls the maximum sum of
+            memory used by the containers on each host.
+          
+
+yarn.nodemanager.resource.cpu-vcores controls the maximum sum of
+            cores used by the containers on each host.
+          
+
+
+          Requesting five executor cores results in a request to YARN for five cores. The memory
+          requested from YARN is more complex for two reasons:
+        
+
+ The --executor-memory/spark.executor.memory
+            property controls the executor heap size, but executors can also use
+            some memory off heap, for example, Java NIO direct buffers. The
+            value of the spark.yarn.executor.memoryOverhead
+            property is added to the executor memory to determine the full
+            memory request to YARN for each executor. It defaults to
+              max(384, .1 *
+              spark.executor.memory). 
+
+            YARN may round the requested memory up slightly. The
+            yarn.scheduler.minimum-allocation-mb and
+            yarn.scheduler.increment-allocation-mb properties control the
+            minimum and increment request values, respectively.
+          
+
+
+          The following diagram (not to scale with defaults) shows the hierarchy of memory
+          properties in Spark and YARN:
+        
+
+
+          Keep the following in mind when sizing Spark executors:
+        
+
+
+            The ApplicationMaster, which is a non-executor container that can request containers
+            from YARN, requires memory and CPU that must be accounted for. In
+            client deployment mode, they default to 1024 MB and one core. In
+            cluster deployment mode, the ApplicationMaster runs the driver, so
+            consider bolstering its resources with the --driver-memory and
+            --driver-cores flags.
+          
+
+            Running executors with too much memory often results in excessive garbage-collection
+            delays. For a single executor, use 64 GB as an upper limit.
+          
+
+            The HDFS client has difficulty processing many concurrent threads. At most, five
+            tasks per executor can achieve full write throughput, so keep the number of cores
+            per executor below that number.
+          
+
+            Running tiny executors (with a single core and just enough memory needed to run a
+            single task, for example) offsets the benefits of running multiple tasks in a single
+            JVM. For example, broadcast variables must be replicated once on each executor, so
+            many small executors results in many more copies of the data.
+          
+
+
+Parent topic: Tuning Apache Spark Applications

@@ -1,0 +1,133 @@
+Troubleshooting classic cluster registration errors (CCMv1)Cloudera Docs
+Troubleshooting classic cluster registration errors (CCMv1)
+While trying to resume the registration process, you can identify the problem behind the error and fix it.
+Issues during registration in CDP
+
+
+Error or issue details
+Resolution
+
+
+
+Alert: Registration is pending for a cluster with the same details.
+A cluster with the same IP Address and Datacenter cannot registered again. Check if
+         you have registered this cluster already. To check this, navigate to the Classic Clusters
+         page and search for your cluster in the list.Check if the IP address is
+         correct.Provide a different DataCenter name.
+
+
+
+Cluster side issues
+
+
+Error or issue details
+Resolution
+
+
+
+When installing the AutoSSH rpm on a cluster node, fetching the
+         ccm-autossh-client rpm package failed. Multiple mirrors were tried but a
+        lot of them resulted in 404/ timed out errors.
+Install autossh independently and then try installing the script.
+        
+       
+
+
+Connection refused even though the systemctl status ccm-tunnel@CM.service shows that the autossh client is running.
+        
+       
+Make sure you copied the right ssh setup files for the cluster or check if the port
+        number CCM_TUNNEL_SERVICE_PORT in cm_reverse_tunnel.conf or
+         cluster_connectivity.conf is your Cloudera Manager's port number. 
+
+
+When running install script on cluster node, the ssh tunnel could not be established (as indicated in the logs generated using journalctl -xe).
+       
+Check if outbound connection to CDP or HDP control plane (host/port =
+        CCM_HOST/CCM_SSH_PORT) is allowed. Make sure to check the firewall rules. 
+
+
+Test connection failure
+
+Try the following:
+
+Check if the reverse SSH tunnel is running on the Knox
+          node:systemctl status ccm-tunnel@KNOX.service
+If the tunnel is not running, start the tunnel by running the install script.
+If the tunnel is active, check if there are any Ranger policies set up to deny access
+          to the cluster. If such policies exist on the cluster, modify or set up policies to allow
+          access to the cluster cdp_default topology
+If the tunnel is active, check if the port number entered during registration is
+          correct.
+If the port number is incorrect, delete the registration attempt from the UI, remove
+          all the setup-related file from the cluster node and re-register the cluster with the
+          correct information.
+If the port number is correct, check if outbound connection to CDP control plane
+           (host/port = CCM_HOST/CCM_SSH_PORT) is allowed on the directory which
+          has the ssh setup files.
+cat reverse_tunnel.conf or cat
+             cluster_connectivity.conf and collect the following properties -
+             CCM_HOST, CCM_SSH_PORT, CCM_TUNNEL_INITIATOR_ID
+Check if the NLB is reachable from the node:
+On the node, execute the command nslookup <CCM_HOST> to check
+              if the NLB is reachable from the node.
+If this fails, then the traffic to the cloudera network is blocked on the
+              customer’s VPC. 
+The customer should check the outbound rules on their VPC to make sure that the
+              traffic to the cloudera network is allowed. 
+
+
+
+
+
+
+
+CCM issues
+Classic Clusters registration uses CCM, enabled by the installation of the CCM client and
+    secrets on the CM node. 
+
+
+
+Error or issue details
+Resolution
+
+
+
+Unable to get endpoint from CCM for key <key>
+The Network Load Balancers (NLBs) might be unreachable. 
+To verify, find the autossh process on the FreeIPA master host by issuing the
+            ps aux | grep autossh command. 
+Modify the command by adding the process
+           name:ssh -o ConnectTimeout=30 -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o UserKnownHostsFile=/etc/ccm/ccm.pub ... -vvv
+Outgoing traffic should be allowed in the port range 6000-6049 on the legacy CDH/HDP
+           cluster. 
+If there is a proxy in the network it is also worth checking the ssh proxy
+           configurations under:
+
+/root/.ssh/config
+/root/.ssh/proxy_auth
+
+
+
+
+
+
+
+Other issues
+
+
+
+Error or issue details
+Resolution
+
+
+
+If Cluster name and Display name are different, few details are missing
+         from the cluster detail page. 
+Cluster name and Display name must be the same. 
+
+
+
+
+
+Troubleshooting: Install autossh packageDuring step 2 of the classic cluster registration process, you install an rpm to   establish connectivity between the cluster and CDP Control Plane. If the installation fails, you   can install the autossh using the following steps.Parent topic: Adding classic clusters with CCMv1

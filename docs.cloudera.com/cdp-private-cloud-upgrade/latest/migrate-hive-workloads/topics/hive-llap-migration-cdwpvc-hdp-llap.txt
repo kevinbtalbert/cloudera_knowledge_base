@@ -1,0 +1,132 @@
+Migrate Hive workloads from HDP (LLAP) to CDW (LLAP)Cloudera Docs
+Migrate Hive workloads from HDP (LLAP) to CDW (LLAP)
+If you are on the HDP platform and running your Hive workloads using LLAP (low-latency
+  analytical processing), learn how you can migrate to CDW Private Cloud without compromising on the
+  performance offered by LLAP.
+You perform the following high-level tasks to migrate from HDP (LLAP) to CDW (LLAP):
+
+Upgrade your clusters to CDP Private Cloud Base.
+Install CDP Private Cloud Data Services.
+Migrate your Hive workloads to CDW.
+Perform the post-migration tasks described in Apache Tez processing of Hive jobs.
+
+LLAP in HDP
+LLAP on HDP runs on YARN with a persistent LLAP daemon that provides execution and caching of
+    data. You can adjust many aspects of the LLAP deployment, such as:
+
+Size of the LLAP daemons (Memory / Executors)
+Number of daemons created to scale up and handle large workloads
+Number of Apache Tez ApplicationMasters (coordinators) to establish query concurrency
+Ratio of memory used for processing and cache
+
+The YARN configurations in HDP are complex and are not usually optimal, leading to poor
+    experiences.
+In HDP, you could only have one LLAP instance running and the instance was sized to handle
+    workloads at peak intervals. The LLAP instances in HDP could not autoscale and consumed a finite
+    amount of YARN resources regardless of whether workloads were running or not.
+When Hive LLAP is used for large complex ETL queries and without a robust workload management
+    in place, large workloads can block BI-type workloads thereby leading to poor user experience
+    for BI users.
+Some advanced LLAP on YARN implementations may have used ‘Hive Workload Management’ in LLAP to
+    help manage query isolation and deal with query outliers. ‘Hive Workload Management’ in LLAP is
+    not supported in CDW, however, query isolation in CDW ensures that individual warehouses are
+    completely isolated and ensures that instances have sufficient compute resources for their
+    workloads.
+
+LLAP in CDW
+In CDW Private Cloud, Hive LLAP runs in Docker containers on Kubernetes instead of YARN. The
+    Virtual Warehouse instances in CDW are preconfigured to handle the LLAP configurations described
+    above and are optimized for your workloads thereby enabling a predictable and stable
+    deployment.
+CDW offers the following benefits:
+
+Provides isolation by having more than one LLAP instance, which was not easily obtained in
+     LLAP on HDP
+Enables Virtual Warehouse instances to AutoScale (scale up and down) to address varying
+     workload demands
+Automatically suspends a Virtual Warehouse instance if workloads cease and Executors are
+     left idle for a period of time
+
+While setting up your Virtual Warehouse, consider setting up multiple instances to leverage
+    the full use of LLAP that you have enjoyed on HDP. The Virtual Warehouse instances should be
+    configured based on the characteristics of the workloads.
+Query concurrency in CDW is controlled by the number of Coordinators in an Executor Group.
+    HiveServer locates an available query coordinator in the Virtual Warehouse to handle the query.
+    The query coordinator generates the final query plan that distributes query tasks across
+    available Executors for execution. Each query coordinator can send query tasks to all query
+    Executors in the Executor Group. There is a 1:1 ratio of Coordinators to Executor Groups. When
+    the query load increases, auto-scaling increases concurrency by adding additional query Executor
+    Groups to the Virtual Warehouse instance.
+The following table lists the size of the Executor Groups and Coordinators based on the
+    Virtual Warehouse size:
+
+
+Executors
+Coordinators (Query Concurrency)
+
+XSMALL
+2
+2
+
+SMALL
+10
+10
+
+MEDIUM
+20
+20
+
+LARGE
+40
+40
+
+
+HDP and CDW LLAP terminology map
+When migrating HDP LLAP configurations to CDW, you need to familiarize yourself with the
+    differences in terminology and default configurations that are available in CDW.
+
+Term
+LLAP on HDP
+LLAP on CDW
+
+Number of LLAP nodes
+num_llap_count
+Number of query executors
+
+Number of internal executors in a single LLAP daemon instance.Also described as the
+       number of daemons; not the internal number of task slots.
+hive.llap.daemon.num.executors
+Not available during setup. By default, 12 Executors are allowed per Executor
+      Group.
+
+Query Concurrency
+hive.server2.tez.sessions.per.default.queue
+Known as Coordinators and are configured 1:1 with Executor Groups
+
+Total Daemon Memory Size
+hive.llap.daemon.yarn.container.mb
+This comes in two modes:
+Standard resource mode (Production) allocates 128 GB per daemon
+Low resource mode allocates 48 GB per daemon
+For more information, see Resource planning.
+
+Daemon Task Memory
+llap_heap_size
+Preconfigured to 48 GB in Standard resource mode and 16 GB in Low resource
+      mode.
+
+Daemon Cache Memory
+Calculated difference between total memory allocation - (headroom +
+       llap_heap_size)
+Calculated value of approximately 70 GB.Total memory (128 GB) - Headroom and task
+       memory (48 GB).
+
+Headroom
+Refers to an LLAP daemon node's memory used for non-task and non-cache
+      requirements.
+Configuration to specify number of available coordinators that trigger
+      auto-scaling.
+
+
+
+Related informationInstalling Private Cloud Data ServicesApache Tez processing of Hive jobsPlanning a Virtual Warehouse instanceHive auto-scaling on CDW Private CloudParent topic: Migrating Hive workloads from CDP Private Cloud Base to CDW Private Cloud

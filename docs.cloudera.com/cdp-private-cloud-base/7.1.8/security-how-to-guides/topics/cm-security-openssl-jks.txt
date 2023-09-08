@@ -1,0 +1,106 @@
+How to Convert File Encodings (DER, JKS, PEM) for TLS/SSL Certificates and KeysCloudera Docs
+How to Convert File Encodings (DER, JKS, PEM) for TLS/SSL Certificates
+    and Keys
+
+Client and server processes require specific file formats for
+      certificates, keys, and other digital artifacts used for TLS/SSL
+      encryption. For example, when TLS is enabled, Cloudera Manager Server
+      presents Java KeyStore (JKS) formatted key and certificate to requesting
+      Cloudera Manager Agent hosts. The Hue client also connects to Cloudera
+      Manager Server, but Hue requires a PEM-formatted key and certificate,
+      rather than JKS. The PEM format used by Cloudera Manager is PKCS #8, which
+      handles certificates and keys as individual Base64-encoded text files.
+If you receive binary DER files from your certificate authority, you must convert them to the
+      appropriate format. Since neither Java Keytool nor OpenSSL work directly with PKCS format,
+      many of the configuration tasks detailed in How to Configure TLS Encryption for Cloudera
+        Manager
+      involve converting formats, or extracting keys or certificates from an artifact in one format
+      to another. 
+Certificates issued by a CA in one format (encoding) can be used to create certificates in a
+      different format using Java Keytool and OpenSSL as detailed below.
+    
+
+Converting DER Encoded Certificates to PEM
+OpenSSL can be used to convert a DER-encoded certificate to an ASCII (Base64)
+        encoded certificate. Typically, DER-encoded certificates may have file
+        extension of .DER, .CRT, or .CER, but regardless of the extension, a DER
+        encoded certificate is not readable as plain text (unlike PEM encoded
+        certificate).
+A PEM-encoded certificate may also have file extension of .CRT or .CER,
+        in which case, you can simply copy the file to a new name using the .PEM
+        extension:
+cp hostname.cer hostname.pem
+To convert a DER-encoded certificate to PEM encoding using
+        OpenSSL:openssl x509 -inform der -in hostname.cer -out hostname.pem
+        For example:
+        openssl x509 -inform der -in /opt/cloudera/security/pki/hostname.cer -out /tmp/hostname.pem
+
+
+
+
+Converting JKS Key and Certificate to PEM
+
+This process uses both Java keytool and OpenSSL
+          (keytool and openssl, respectively,
+        in the commands below) to export the composite private key and
+        certificate from a Java keystore and then extract each element into its
+        own file. 
+The PKCS12 file created below is an interim file
+        used to obtain the individual key and certificate files.
+Replace hostname-keystore, cmhost, hostname, and
+          password with values from your system.
+Export the private key and certificate command line:
+$ keytool -importkeystore -srckeystore /opt/cloudera/security/jks/hostname-keystore.jks \
+-srcstorepass password -srckeypass password -destkeystore /tmp/hostname-keystore.p12 \
+-deststoretype PKCS12 -srcalias hostname -deststorepass password -destkeypass password
+
+
+Extract the certificate file from the resulting PKCS12
+          file:
+          $ openssl pkcs12 -in /tmp/hostname-keystore.p12 -passin pass:password  -nokeys \
+-out /opt/cloudera/security/pki/hostname.pem
+            This
+          extracted certificate can be used, as is, but you can additionally
+          extract the private key from the keystore as detailed in the next
+          section.
+
+
+
+Extracting the Private Key from PKCS Keystore
+Use OpenSSL to extract the private key from the PKCS keystore when needed.
+          The command shown below extracts the key and saves it to a keystore
+          that is protected using the password you provide:
+          
+   $ openssl pkcs12 -in /tmp/hostname-keystore.p12 -passin pass:password \
+   -nocerts -out /opt/cloudera/security/pki/hostname.key -passout pass:password
+    
+
+To generate a key without a password, use this version of the command:
+          
+  $ openssl rsa -in /tmp/hostname-keystore.p12 -passin pass:password \
+   -nocerts -out /opt/cloudera/security/pki/hostname.pem
+   
+
+
+
+
+
+Converting PEM Key and Certificate to JKS
+Replace
+      hostname in the commands below with the FQDN of the
+      host whose certificate is being imported.
+    
+Convert the openssl private key and certificate files into
+          a PKCS12 file.
+          $ openssl pkcs12 -export -in /opt/cloudera/security/pki/hostname.pem \
+-inkey /opt/cloudera/security/pki/hostname.key -out /tmp/hostname.p12 \
+-name hostname -passin pass:password -passout pass:password
+
+ Import the PKCS12 file into the Java keystore.
+          
+$ keytool -importkeystore -srckeystore /tmp/hostname.p12 -srcstoretype PKCS12 \
+-srcstorepass password -alias hostname -deststorepass password \
+-destkeypass password -destkeystore /opt/cloudera/security/jks/hostname-keystore.jks
+
+
+

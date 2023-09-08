@@ -1,0 +1,146 @@
+Understanding Threat Triage Rule ConfigurationCloudera Docs
+Understanding Threat Triage Rule Configuration
+Not all threat intelligence indicators are equal. Some require immediate response,
+      while others can be addressed as time and availability permits. As a result, you must triage
+      and rank threats by severity. The goal of threat triage is to prioritize the alerts that pose
+      the greatest threat and need urgent attention. To create a threat triage rule configuration,
+      you must first define your rules. 
+In CCP, you assign severity by associating possibly complex conditions with numeric scores.
+         Then, for each message, you use a configurable aggregation function to evaluate the set of
+         conditions and to aggregate the set of numbers for matching conditions This aggregated
+         score is added to the message in the threat.triage.level field. 
+Each rule has a predicate to determine whether or not the rule applies. The threat score
+         from each applied rule is aggregated into a single threat triage score that is used to
+         prioritize high risk threats.
+Following are some examples:
+
+Rule 1
+
+If a threat intelligence enrichment type zeusList is alerted, imagine that you
+                want to receive an alert score of 5.
+
+Rule 2
+
+If the URL ends with neither .com nor .net, then imagine that you want to
+                receive an alert score of 10.
+
+Rule 3
+
+For each message, the triage score is the maximum score across all
+                conditions.
+
+
+These example rules become the following example configuration:
+      
+“triageConfig” : {
+   “riskLevelRules” : [
+{
+“name” : “zeusList is alerted"
+“comment” : “Threat intelligence enrichment type zeusList is alerted."
+“rule”: "exists(threatintels.hbaseThreatIntel.domain_without_subdomains.zeusList)”
+“score” : 5
+}
+{
+“name” : “Does not end with .com or .net"
+“comment” : “The URL ends with neither .com nor .net."
+“rule”: “not(ENDS_WITH(domain_without_subdomains, ‘.com’) or ENDS_WITH(domain_without_subdomains, ‘.net’))“ : 10
+“score” : 10
+}
+]
+      ,“aggregator” : “MAX”
+       ,”aggregationConfig” : { }
+}
+
+You can use the 'reason' field to generate a message explaining why a rule fired. One
+          or more rules may fire when triaging a threat. Having detailed, contextual information
+          about the environment when a rule fired can greatly assist actioning the alert. For
+          example:
+
+Rule 1
+
+For hostname, the value exceeds threshold of value-threshold, receive an alert
+                score of 10.
+
+
+This example rule becomes the following example configuration:
+“triageConfig” : {
+   “riskLevelRules” : [
+      {
+      “name” : “Abnormal Value"     
+      “comment” : “The value has exceeded the threshold",
+      "reason": "FORMAT('For '%s' the value '%d' exceeds threshold of '%d', hostname, value, value_threshold)"
+      “rule”: "value > value_threshold”,
+      “score” : 10
+      }
+   ],
+   “aggregator” : “MAX”,
+   ”aggregationConfig” : { }
+}
+
+If the value threshold is exceeded, Threat Triage will generate a message similar to
+          the following:
+
+"threat.triage.score": 10.0,
+"threat.triage.rules.0.name": "Abnormal Value",
+"threat.triage.rules.0.comment": "The value has exceeded the threshold",
+"threat.triage.rules.0.score": 10.0,
+"threat.triage.rules.0.reason": "For '10.0.0.1' the value '101' exceeds threshold of '42'"
+
+where
+
+riskLevelRules
+
+This is a list of rules (represented as Stellar expressions) associated with
+                scores with optional names and comments.
+
+name
+
+The name of the threat triage rule.
+
+comment
+
+A comment describing the rule.
+
+reason
+
+An optional Stellar expression that when executed results in a custom
+                      message describing why the rule fired.
+
+rule
+
+The rule, represented as a Stellar statement.
+
+score
+
+Associated threat triage score for the rule.
+
+
+
+aggregator
+
+An aggregation function that takes all non-zero scores representing the matching
+                queries from riskLevelRules and aggregates them into a single
+                score.
+You can choose between:
+MAX
+
+The maximum of all of the associated values for matching queries.
+
+MIN
+
+The minimum of all of the associated values for matching queries.
+
+MEAN
+
+the mean of all of the associated values for matching queries.
+
+POSITIVE_MEAN
+
+The mean of the positive associated values for the matching
+                        queries.
+
+
+
+
+
+

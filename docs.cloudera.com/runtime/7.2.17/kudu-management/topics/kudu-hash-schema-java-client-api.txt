@@ -1,0 +1,78 @@
+Range-specific hash schemas example: Using Kudu Java client APICloudera Docs
+Range-specific hash schemas example: Using Kudu Java client API
+Review an example of using Kudu Java client API to create a table with a range partition
+  having range-specific hash schema and then alter the table, adding one more range with custom hash
+  schema. 
+
+
+noteAfter adding or dropping ranges with custom hash schemas you
+     have to refresh the KuduTable handle.
+
+  // Define the column schema.
+  ArrayList<ColumnSchema> columns = new ArrayList<>(2);
+  columns.add(new ColumnSchema.ColumnSchemaBuilder(
+      "key", Type.INT32).key(true).build());
+  columns.add(new ColumnSchema.ColumnSchemaBuilder(
+      "col", Type.INT64).build());
+  final Schema schema = new Schema(columns);
+
+  CreateTableOptions builder = new CreateTableOptions();
+
+  // Do range partitioning on the "key" column.
+  builder.setRangePartitionColumns(ImmutableList.of("key"));
+
+  // Define the table-wide schema: two buckets on the "key" column.
+  builder.addHashPartitions(ImmutableList.of("key"), 2, 0);
+
+  // Add [0, 100) range partition with custom hash schema.
+  {
+    PartialRow lower = schema.newPartialRow();
+    lower.addInt("key", 0);
+    PartialRow upper = schema.newPartialRow();
+    upper.addInt("key", 100);
+
+    // Custom hash schema for the range: five buckets on the "key" column.
+    RangePartitionWithCustomHashSchema rangePartition =
+        new RangePartitionWithCustomHashSchema(
+            lower,
+            upper,
+            RangePartitionBound.INCLUSIVE_BOUND,
+            RangePartitionBound.EXCLUSIVE_BOUND);
+    rangePartition.addHashPartitions(ImmutableList.of("key"), 5, 0);
+    builder.addRangePartition(rangePartition);
+  }
+
+  // Create the table.
+  KuduTable table = client.createTable("mytable", schema, builder);
+
+  // Work with the table.
+  . . .
+
+  // Alter the table: add [100, 200) range partition with custom hash schema.
+  {
+    PartialRow lower = schema.newPartialRow();
+    lower.addInt("key", 100);
+    PartialRow upper = schema.newPartialRow();
+    upper.addInt("key", 200);
+    RangePartitionWithCustomHashSchema range =
+        new RangePartitionWithCustomHashSchema(
+            lower,
+            upper,
+            RangePartitionBound.INCLUSIVE_BOUND,
+            RangePartitionBound.EXCLUSIVE_BOUND);
+    range.addHashPartitions(ImmutableList.of("key"), 3, 0);
+    client.alterTable("mytable",
+        new AlterTableOptions().addRangePartition(range));
+  }
+
+  // NOTE: after adding or dropping a range with custom hash schemas
+  //       it’s necessary to refresh the KuduTable handle
+  table = client.openTable("mytable");
+
+  // Continue working with the table.
+  . . .
+
+   
+
+
+Parent topic: Managing Kudu tables with range-specific hash schemas

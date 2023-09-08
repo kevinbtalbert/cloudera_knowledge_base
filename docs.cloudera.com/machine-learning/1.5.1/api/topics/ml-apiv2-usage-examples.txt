@@ -1,0 +1,148 @@
+API v2 UsageCloudera Docs
+API v2 Usage
+You can use API v2 to perform actions on Projects, Jobs, Models, and
+  Applications.
+Set up the client
+The client is the object you use for executing API commands. You obtain the client from the
+    CML cluster using your API key and the default_client() function.
+Start by downloading the Python library directly from the workspace:
+> pip3 install <workspace domain>/api/v2/python.tar.gz
+Next, get an API key. Go to User Settings > API Keys. Select Create API Key. Copy the generated API Key
+        value to the clipboard.
+Create an instance of the API:
+> import cmlapi
+> client = cmlapi.default_client(url=”<workspace domain>”, cml_api_key=”<api key>”)
+> client.list_projects()
+   
+If your workspace is using a custom self-signed certificate, you might need to 
+    include it when creating the client:
+> config = cmlapi.Configuration()
+> config.host = “<workspace domain>”
+> config.ssl_ca_cert = "<path to SSL certificate>"
+> api = cmlapi.ApiClient(config)
+> api.set_default_header("authorization", "Bearer " + “<api key>”)
+> client = cmlapi.CMLServiceApi(api)
+   
+
+Using the Project API
+
+To list the available projects:
+projects = client.list_projects() # returns the first 10
+second_page_projects = client.list_projects(page_token=projects.next_page_token) # returns the next 10
+lots_of_projects = client.list_projects(page_size=100)
+second_page_lots_of_projects = client.list_projects(page_size=100, page_token=lots_of_projects.next_page_token) # must re-include the same page size for future pages
+filtered_projects = client.list_projects(search_filter=”production”) # returns all projects with “production” in the name or description
+   
+Select a particular project ID, and then validate it with a command to fetch the project:
+project = client.get_project(project_id=”<project id>”)
+Delete a project with the following command:
+client.delete_project(project_id=”<project id>”)
+
+
+Using the Jobs API
+
+You can list out the jobs in the project like so:
+jobs = client.list_jobs(project_id=”<projectid>”)
+The same searching and filtering rules apply as before. You can delete a job with:
+client.delete_job(project_id=”<project id>”,job_id=”<job_id>”)
+Finally you can get the job ID from a job response and create a job run for a job:
+job_run =client.create_job_run(cmlapi.CreateJobRunRequest(), project_id=”<project id>”,job_id=”<job id>”)
+If you wish to stop the job run, you can do so as well
+client.stop_job_run(project_id=”<project id>”,job_id=”<job id>”, run_id=job_run.id)
+Check the status of a job:
+client.list_job_runs(project_id, job_id, sort="-created_at", page_size=1)
+
+
+Using the Models API
+
+This example demonstrates the use of the Models API. To run this example, first do the
+     following:
+Create a project with the Python template and a legacy engine.
+Start a session.
+Run !pip3 install sklearn
+Run fit.py
+
+The example script first obtains the project ID, then creates and deploys a model.
+projects = client.list_projects(search_filter=json.dumps({"name": “<your project name>”}))
+project = projects.projects[0] # assuming only one project is returned by the above query
+model_body = cmlapi.CreateModelRequest(project_id=project.id, name="Demo Model", description="A simple model")
+model = client.create_model(model_body, project.id)
+model_build_body = cmlapi.CreateModelBuildRequest(project_id=project.id, model_id=model.id, file_path="predict.py", function_name="predict", kernel="python3")
+model_build = client.create_model_build(model_build_body, project.id, model.id)
+while model_build.status not in [“built”, “build failed”]:
+	print(“waiting for model to build...”)
+time.sleep(10)
+	model_build = client.get_model_build(project.id, model.id, model_build.id)
+if model_build.status == “build failed”:
+	print(“model build failed, see UI for more information”)
+	sys.exit(1)
+print(“model built successfully!”)
+model_deployment_body = cmlapi.CreateModelDeploymentRequest(project_id=project.id, model_id=model.id, build_id=model_build.id)
+model_deployment = client.create_model_deployment(model_deployment_body, project.id, model.id, build.id)
+while model_deployment.status not in [“stopped”, “failed”, “deployed”]:
+	print(“waiting for model to deploy...”)
+	time.sleep(10)
+	model_deployment = client.get_model_deployment(project.id, model.id, model_build.id, model_deployment.id)
+if model_deployment.status != “deployed”:
+	print(“model deployment failed, see UI for more information”)
+	sys.exit(1)
+print(“model deployed successfully!”)
+   
+
+Using the Applications API
+
+Here is an example of using the Application API.
+application_request = cmlapi.CreateApplicationRequest(
+     name = "application_name",
+     description = "application_description",
+     project_id = project_id,
+     subdomain = "application-subdomain",
+     kernel = "python3",
+     script = "entry.py",
+     environment = {"KEY": "VAL"}
+)
+app = client.create_application(
+     project_id = project_id,
+     body = application_request
+)
+
+
+Using the Cursor class
+The Cursor is a helper function that works with any endpoint used for listing items, such as
+    list_projects, list_jobs, or list_runtimes. The Cursor returns an iterable object. The following
+    example returns a list of
+    runtimes.cursor = Cursor(client.list_runtimes)
+runtimes = cursor.items()
+for rt in runtimes:
+    print(rt.image_identifier)
+The Cursor can also use a search filter, as shown in this example:
+cursor = Cursor(client.list_runtimes, search_filter = json.dumps({"image_identifier":"jupyter"}))
+
+End to end example
+This example creates a project, job, and job run. For the job script, it uses the
+     analysis.py file that is included in the Python template. 
+import cmlapi
+import time
+import sys
+import random
+import string
+random_id=''.join(random.choice(string.ascii_lowercase) for i in range(10))
+project_body = cmlapi.CreateProjectRequest(name="APIv2 Test Project " + random_id, description="Project for testing APIv2", template="Python")
+project_result = client.create_project(project_body)
+poll_retries = 5
+while True: # wait for the project to reach the "success" state
+  project = client.get_project(project_result.id)
+  if project.creation_status == "success":
+    break
+  poll_retries -= 1
+  if poll_retries == 0:
+    print("failed to wait for project creation to succeed")
+    sys.exit(1)
+  time.sleep(2) # wait a couple seconds before the next retry
+
+job_body = cmlapi.CreateJobRequest(name="APIv2 Test Job " + random_id, kernel="python3", script="analysis.py")
+job_result = client.create_job(job_body, project_id=project_result.id)
+job_run = client.create_job_run(cmlapi.CreateJobRunRequest(), project_id=project_result.id, job_id=job_result.id)
+  
+
+

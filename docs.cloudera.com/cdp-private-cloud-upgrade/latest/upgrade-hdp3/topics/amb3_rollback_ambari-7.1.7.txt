@@ -1,0 +1,69 @@
+Rollback Ambari 7.1.x to Ambari 2.7.5Cloudera Docs
+Rollback Ambari 7.1.x to Ambari 2.7.5
+You must use the backup of Ambari 2.7.5 to perform the following steps. 
+In 7.1.x, x represents greater than or equal to 6. For example, 7.1.6, 7.1.7, and
+            so on.
+
+Stop all services in Ambari UI.
+
+On the Ambari Server host, stop the Ambari Server.
+
+ambari-server stop
+Stop  Ambari Agent on all host
+ambari-agent stop
+
+
+Obtain Ambari Repositories:
+
+wget -nv 
+https://archive.cloudera.com/p/ambari/2.x/${your_ambari_version}/centos7/ambari.repo -O 
+/etc/yum.repos.d/ambari.repo
+yum clean all
+
+
+Downgrade ambari-server, ambari-agent packages manually using “yum
+                        downgrade <packagename>”
+
+yum  downgrade ambari-server
+yum  downgrade ambari-agent # on all hosts
+
+
+Reinitialize Ambari DB - Drop the old schema and initialize blank new schema
+                    :
+
+Example -
+                        Postgrespsql -W -d ${AMBARI_DB_NAME} --user ${AMBARI_DB_USER}
+DROP SCHEMA ${AMBARI_DB_NAME} CASCADE;
+CREATE SCHEMA ambari;
+GRANT ALL ON SCHEMA ambari TO ambari;
+
+
+MYSQL
+mysql -u ${AMBARI_DB_USER} 
+drop database ${AMBARI_DB_NAME}; 
+create database ${AMBARI_DB_NAME}; 
+
+
+Populate the Ambari database with backup data:
+POSTGRESpsql -W -d ${AMBARI_DB_NAME} --user ${AMBARI_DB_USER} < pre_upgrade.sqlMYSQLmysql -u ${AMBARI_DB_USER} ${AMBARI_DB_NAME} < pre_upgrade.sql
+
+Restore these files from the backup:
+
+/etc/ambari-server/conf/ambari.properties
+/etc/ambari-agent/conf/ambari-agent.ini
+
+
+Restore old stack symlinks on Agent nodes:
+
+hdp-select set all 3.1.5.0-152
+
+
+Check ambari-server user: 
+grep ambari-server.user /etc/ambari-server/conf/ambari.propertiesIf
+                    ambari-server is running as non-root user, set permissions for files by running: 
+ambari-server setup
+
+Start Ambari
+
+
+Parent topic: Upgrading HDP to Cloudera Runtime 7.1.x

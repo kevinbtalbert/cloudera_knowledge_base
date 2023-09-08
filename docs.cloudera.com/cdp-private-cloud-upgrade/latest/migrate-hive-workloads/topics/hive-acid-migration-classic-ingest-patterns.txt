@@ -1,0 +1,42 @@
+Hive ingest patterns introductionCloudera Docs
+Hive ingest patterns introduction
+Understanding what does not work when designing Hive tables helps you understand
+  recommended patterns discussed. You can avoid potential performance issues, and perhaps data
+  loss.
+Operations on non-ACID tables create a small file problem. Appending small, non-ACID files to
+   the same partition or table generally prevents consolidation of files inside the partition
+   directory. Consolidation happens only after an INSERT OVERWRITE to the table or partition. 
+Using classic INSERT OVERWRITE methods can lead to data loss. Data not picked up at beginning
+   of INSERT OVERWRITE can be lost. INSERT OVERWRITES are not atomic, so for a time during that
+   operation, there will be no data in the table when HMS is processing the data. 
+By contrast, ACID tables are consolidated through the compaction process. When you insert data
+   into a non-ACID table before writing results to target partition or table, Hive tries to write to
+   the file as if the file were new, and empty. An object storage failure, such as an HDFS failure,
+   occurs as the file already exists because of a previous insert. Hive renames the file to copy 1
+   and tries again. If another failure occurs, which it will because copy 1 exists in that dir, it
+   renames the file to copy 2.
+An ACID anti-pattern is doing 1400 inserts a day to a relatively small table. Hive needs to
+   iteract with the NameNode 1400 times, or more, just to insert a single file into a table. It must
+   fail in each of the 1400 interations before finding a number that works. In addition to a small
+   file problem, the thrashing activity overwhelms the NameNode.
+Creating a partition per ingest cycle is another classic pattern for managing batches. The
+   pattern leads to the following problems: 
+Extremely poor performance on the consumer side
+Many small files
+Enormous pressure on the metastore and filesystem
+More compute to handle queries
+
+Avoid ingesting tables having numerous partitions and heavy append operations. Consolidate
+   files. Doing so saves time and resources, and relieves stress on the NameNode. Running compaction
+   of ACID tables achieves this consolidation and prevents these problems. Hive also collects ACID
+   table statistics. All ACID operations are atomic. 
+When your data source cannot be altered, for example when the frequency of ingesting data is
+   high, you need to keep the source data intact. You can use a sweep operation, or ingest table, to
+   sweep data into an acid table. The ingest table can be an external table populated by NiFi, for
+   example. NiFi reads data from Kafka and writes files to HDFS. Using a sweep table you append data
+   to the ACID table on a less frequent basis. This technique helps you manage the operation. Read
+   operations from consumer side go through the ACID table, which can be consumed efficiently. 
+When partitions make sense, design the partitions for the consumer, not for the ingest pattern
+   to the final target acid table. 
+
+Parent topic: Migrating Hive workloads to ACID

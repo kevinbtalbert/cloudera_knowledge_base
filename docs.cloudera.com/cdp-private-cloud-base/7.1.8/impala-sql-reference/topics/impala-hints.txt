@@ -1,0 +1,373 @@
+Optimizer hints in ImpalaCloudera Docs
+Optimizer hints in Impala
+The Impala SQL dialect supports query hints, for fine-tuning the inner workings of
+    queries. Specify hints as a temporary workaround for expensive queries, where missing statistics
+    or other factors cause inefficient performance.
+
+      Hints are most often used for the most resource-intensive kinds of Impala queries:
+    
+
+        Join queries involving large tables, where intermediate result sets are transmitted
+        across the network to evaluate the join conditions.
+      
+
+        Inserting into partitioned Parquet tables, where many memory buffers could be allocated
+        on each host to hold intermediate results for each partition.
+      
+
+Syntax:
+ In Impala 2.0 and higher, you can specify the hints inside comments that use either
+        the /* */ or -- notation. Specify a +
+        symbol immediately before the hint name. Recently added hints are only available using the
+          /* */ and -- notation. For clarity, the /*
+          */ and -- styles are used in the syntax and examples throughout
+        this section. With the /* */ or -- notation for hints,
+        specify a + symbol immediately before the first hint name. Multiple hints
+        can be specified separated by commas, for example /* +clustered,shuffle */
+SELECT STRAIGHT_JOIN select_list FROM
+join_left_hand_table
+  JOIN /* +BROADCAST|SHUFFLE */
+join_right_hand_table
+remainder_of_query;
+
+SELECT select_list FROM
+join_left_hand_table
+  JOIN -- +BROADCAST|SHUFFLE
+join_right_hand_table
+remainder_of_query;
+
+INSERT insert_clauses
+  /* +SHUFFLE|NOSHUFFLE */
+  SELECT remainder_of_query;
+
+INSERT insert_clauses
+  -- +SHUFFLE|NOSHUFFLE
+  SELECT remainder_of_query;
+
+INSERT /* +SHUFFLE|NOSHUFFLE */
+  insert_clauses
+  SELECT remainder_of_query;
+
+INSERT -- +SHUFFLE|NOSHUFFLE
+  insert_clauses
+  SELECT remainder_of_query;
+
+UPSERT /* +SHUFFLE|NOSHUFFLE */
+  upsert_clauses
+  SELECT remainder_of_query;
+
+UPSERT -- +SHUFFLE|NOSHUFFLE
+  upsert_clauses
+  SELECT remainder_of_query;
+
+SELECT select_list FROM
+table_ref
+  /* +{SCHEDULE_CACHE_LOCAL | SCHEDULE_DISK_LOCAL | SCHEDULE_REMOTE}
+    [,RANDOM_REPLICA] */
+remainder_of_query;
+
+INSERT insert_clauses
+  -- +CLUSTERED
+  SELECT remainder_of_query;
+
+INSERT insert_clauses
+  /* +CLUSTERED */
+  SELECT remainder_of_query;
+
+INSERT -- +CLUSTERED
+  insert_clauses
+  SELECT remainder_of_query;
+
+INSERT /* +CLUSTERED */
+  insert_clauses
+  SELECT remainder_of_query;
+
+UPSERT -- +CLUSTERED
+  upsert_clauses
+  SELECT remainder_of_query;
+
+UPSERT /* +CLUSTERED */
+  upsert_clauses
+  SELECT remainder_of_query;
+
+CREATE /* +SHUFFLE|NOSHUFFLE */
+  table_clauses
+  AS SELECT remainder_of_query;
+
+CREATE -- +SHUFFLE|NOSHUFFLE
+  table_clauses
+  AS SELECT remainder_of_query;
+
+CREATE /* +CLUSTERED|NOCLUSTERED */
+  table_clauses
+  AS SELECT remainder_of_query;
+
+CREATE -- +CLUSTERED|NOCLUSTERED
+  table_clauses
+  AS SELECT remainder_of_query;
+
+      The square bracket style hints are supported for backward compatibility, but the syntax is
+      deprecated and will be removed in a future release. For that reason, any newly added hints
+      are not available with the square bracket syntax.
+    SELECT STRAIGHT_JOIN select_list FROM
+join_left_hand_table
+  JOIN [{ /* +BROADCAST */ | /* +SHUFFLE */ }]
+join_right_hand_table
+remainder_of_query;
+
+INSERT insert_clauses
+  [{ /* +SHUFFLE */ | /* +NOSHUFFLE */ }]
+  [/* +CLUSTERED */]
+  SELECT remainder_of_query;
+
+UPSERT [{ /* +SHUFFLE */ | /* +NOSHUFFLE */ }]
+  [/* +CLUSTERED */]
+  upsert_clauses
+  SELECT remainder_of_query;
+
+Usage notes:
+
+      With both forms of hint syntax, include the STRAIGHT_JOIN keyword
+      immediately after the SELECT and any DISTINCT or
+      ALL keywords to prevent Impala from reordering the tables in a way that
+      makes the join-related hints ineffective.
+    
+        The STRAIGHT_JOIN hint affects the join order of table references in the query
+        block containing the hint. It does not affect the join order of nested queries, such as views,
+        inline views, or WHERE-clause subqueries. To use this hint for performance
+        tuning of complex queries, apply the hint to all query blocks that need a fixed join order.
+       To reduce the need to use hints, run the COMPUTE STATS statement against all
+        tables involved in joins, or used as the source tables for INSERT ...
+          SELECT operations where the destination is a partitioned Parquet table. Do this
+        operation after loading data or making substantial changes to the data within each table.
+        Having up-to-date statistics helps Impala choose more efficient query plans without the need
+        for hinting. To see which join strategy is used for a particular query, examine the EXPLAIN
+        output for that query.
+Hints for join queries:
+
+      The /* +BROADCAST */ and /* +SHUFFLE */ hints control
+      the execution strategy for join queries. Specify one of the following constructs
+      immediately after the JOIN keyword in a query:
+    
+
+/* +SHUFFLE */ makes that join operation use the partitioned
+        technique, which divides up corresponding rows from both tables using a hashing
+        algorithm, sending subsets of the rows to other nodes for processing. (The keyword
+        SHUFFLE is used to indicate a partitioned join, because that
+        type of join is not related to partitioned tables.) Since the alternative
+        broadcast join mechanism is the default when table and index statistics are
+        unavailable, you might use this hint for queries where broadcast joins are unsuitable;
+        typically, partitioned joins are more efficient for joins between large tables of
+        similar size.
+      
+
+/* +BROADCAST */ makes that join operation use the broadcast
+        technique that sends the entire contents of the right-hand table to all nodes involved
+        in processing the join. This is the default mode of operation when table and index
+        statistics are unavailable, so you would typically only need it if stale metadata caused
+        Impala to mistakenly choose a partitioned join operation. Typically, broadcast joins are
+        more efficient in cases where one table is much smaller than the other. (Put the smaller
+        table on the right side of the JOIN operator.)
+      
+
+Hints for INSERT ... SELECT and CREATE TABLE AS SELECT (CTAS):
+
+      When inserting into partitioned tables, such as using the Parquet file format, you can
+      include a hint in the INSERT or CREATE TABLE AS
+      SELECT(CTAS) statements to fine-tune the overall performance of the operation and
+      its resource usage.
+    
+      You would only use hints if an INSERT or CTAS into a
+      partitioned table was failing due to capacity limits, or if such an operation was
+      succeeding but with less-than-optimal performance.
+    
+
+/* +SHUFFLE */ and /* +NOSHUFFLE */ Hints
+        
+
+/* +SHUFFLE */ adds an exchange node, before writing the data,
+            which re-partitions the result of the SELECT based on the
+            partitioning columns of the target table. With this hint, only one node writes to a
+            partition at a time, minimizing the global number of simultaneous writes and the
+            number of memory buffers holding data for individual partitions. This also reduces
+            fragmentation, resulting in fewer files. Thus it reduces overall resource usage of
+            the INSERT or CTAS operation and allows some
+            operations to succeed that otherwise would fail. It does involve some data transfer
+            between the nodes so that the data files for a particular partition are all written
+            on the same node.
+            
+              Use /* +SHUFFLE */ in cases where an INSERT or
+              CTAS statement fails or runs inefficiently due to all nodes
+              attempting to write data for all partitions.
+            
+
+              If the table is unpartitioned or every partitioning expression is constant, then
+              /* +SHUFFLE */ will cause every write to happen on the
+              coordinator node.
+            
+
+
+/* +NOSHUFFLE */ does not add exchange node before inserting to
+            partitioned tables and disables re-partitioning. So the selected execution plan
+            might be faster overall, but might also produce a larger number of small data files
+            or exceed capacity limits, causing the INSERT or
+            CTAS operation to fail.
+            
+              Impala automatically uses the /* +SHUFFLE */ method if any
+              partition key column in the source table, mentioned in the SELECT
+              clause, does not have column statistics. In this case, use the /*
+              +NOSHUFFLE */ hint if you want to override this default behavior.
+            
+
+
+            If column statistics are available for all partition key columns in the source table
+            mentioned in the INSERT ... SELECT or CTAS query,
+            Impala chooses whether to use the /* +SHUFFLE */ or /*
+            +NOSHUFFLE */ technique based on the estimated number of distinct values in
+            those columns and the number of nodes involved in the operation. In this case, you
+            might need the /* +SHUFFLE */ or the /* +NOSHUFFLE
+            */ hint to override the execution plan selected by Impala.
+          
+
+
+
+/* +CLUSTERED */ and /* +NOCLUSTERED */ Hints
+        
+
+/* +CLUSTERED */ sorts data by the partition columns before inserting
+              to ensure that only one partition is written at a time per node. Use this hint to
+              reduce the number of files kept open and the number of buffers kept in memory
+              simultaneously. This technique is primarily useful for inserts into Parquet tables,
+              where the large block size requires substantial memory to buffer data for multiple
+              output files at once. This hint is available in Impala 2.8 or higher.  Starting in
+                Impala 3.0, /* +CLUSTERED */ is the default behavior for HDFS
+                tables. 
+
+
+/* +NOCLUSTERED */ does not sort by primary key before insert. This
+              hint is available in Impala 2.8 or higher.  Use this hint when inserting to Kudu
+                tables. 
+ In the versions lower than Impala 3.0, /* +NOCLUSTERED */ is the
+                default in HDFS tables. 
+
+
+
+
+Kudu consideration:
+ Starting from Impala 2.9, the INSERT or
+          UPSERT operations into Kudu tables automatically add an exchange and a
+        sort node to the plan that partitions and sorts the rows according to the
+        partitioning/primary key scheme of the target table (unless the number of rows to be
+        inserted is small enough to trigger single node execution). Since Kudu partitions and sorts
+        rows on write, pre-partitioning and sorting takes some of the load off of Kudu and helps
+        large INSERT operations to complete without timing out. However, this
+        default behavior may slow down the end-to-end performance of the INSERT or
+          UPSERT operations. Starting from Impala 2.10, you can use the /*
+          +NOCLUSTERED */ and /* +NOSHUFFLE */ hints together to disable
+        partitioning and sorting before the rows are sent to Kudu. Additionally, since sorting may
+        consume a large amount of memory, consider setting the MEM_LIMIT query
+        option for those queries. 
+Hints for scheduling of scan ranges (HDFS data blocks or Kudu
+        tablets):
+ The hints /* +SCHEDULE_CACHE_LOCAL
+      */, /* +SCHEDULE_DISK_LOCAL */, and /*
+        +SCHEDULE_REMOTE */ have the same effect as specifying the
+        REPLICA_PREFERENCE query option with the respective
+      option settings of CACHE_LOCAL,
+        DISK_LOCAL, or REMOTE.  Specifying the replica preference as a query hint
+      always overrides the query option setting. The hint /* +RANDOM_REPLICA */ is the
+      same as enabling the SCHEDULE_RANDOM_REPLICA query
+      option.  You can use these hints in combination by separating them with commas, for
+        example, /* +SCHEDULE_CACHE_LOCAL,RANDOM_REPLICA */.Specifying either the
+        SCHEDULE_RANDOM_REPLICA query option or the
+      corresponding RANDOM_REPLICA query hint enables the
+      random tie-breaking behavior when processing data blocks during the query. 
+Suggestions versus directives:
+
+      In early Impala releases, hints were always obeyed and so acted more like directives. Once
+      Impala gained join order optimizations, sometimes join queries were automatically
+      reordered in a way that made a hint irrelevant. Therefore, the hints act more like
+      suggestions in Impala 1.2.2 and higher.
+     To force Impala to follow the hinted execution mechanism for a join query, include the
+          STRAIGHT_JOIN keyword in the SELECT statement. When you
+        use this technique, Impala does not reorder the joined tables at all, so you must be careful
+        to arrange the join order to put the largest table (or subquery result set) first, then the
+        smallest, second smallest, third smallest, and so on. This ordering lets Impala do the most
+        I/O-intensive parts of the query using local reads on the DataNodes, and then reduce the
+        size of the intermediate result set as much as possible as each subsequent table or subquery
+        result set is joined. 
+Restrictions:
+
+      Queries that include subqueries in the WHERE clause can be rewritten
+      internally as join queries. Currently, you cannot apply hints to the joins produced by
+      these types of queries.
+    
+      Because hints can prevent queries from taking advantage of new metadata or improvements in
+      query planning, use them only when required to work around performance issues, and be
+      prepared to remove them when they are no longer required, such as after a new Impala
+      release or bug fix.
+     In particular, the /* +BROADCAST */ and /* +SHUFFLE */ hints
+        are expected to be needed much less frequently in Impala 1.2.2 and higher, because the join
+        order optimization feature in combination with the COMPUTE STATS statement
+        now automatically choose join order and join mechanism without the need to rewrite the query
+        and add hints. 
+Compatibility:
+
+      The hints embedded within -- comments are compatible with Hive queries.
+      The hints embedded within /* */ comments or [ ] square
+      brackets are not recognized by or not compatible with Hive. For example, Hive raises an
+      error for Impala hints within /* */ comments because it does not
+      recognize the Impala hint names.
+    
+Considerations for views:
+
+      If you use a hint in the query that defines a view, the hint is preserved when you query
+      the view. Impala internally rewrites all hints in views to use the --
+      comment notation, so that Hive can query such views without errors due to unrecognized
+      hint names.
+    
+Examples:
+
+      For example, this query joins a large customer table with a small lookup table of less
+      than 100 rows. The right-hand table can be broadcast efficiently to all nodes involved in
+      the join. Thus, you would use the /* +broadcast */ hint to force a
+      broadcast join strategy:
+    select straight_join customer.address, state_lookup.state_name
+  from customer join /* +broadcast */ state_lookup
+  on customer.state_id = state_lookup.state_id;
+      This query joins two large tables of unpredictable size. You might benchmark the query
+      with both kinds of hints and find that it is more efficient to transmit portions of each
+      table to other nodes for processing. Thus, you would use the /* +shuffle
+      */ hint to force a partitioned join strategy:
+    select straight_join weather.wind_velocity, geospatial.altitude
+  from weather join /* +shuffle */ geospatial
+  on weather.lat = geospatial.lat and weather.long = geospatial.long;
+      For joins involving three or more tables, the hint applies to the tables on either side of
+      that specific JOIN keyword. The STRAIGHT_JOIN keyword
+      ensures that joins are processed in a predictable order from left to right. For example,
+      this query joins t1 and t2 using a partitioned join,
+      then joins that result set to t3 using a broadcast join:
+    select straight_join t1.name, t2.id, t3.price
+  from t1 join /* +shuffle */ t2 join /* +broadcast */ t3
+  on t1.id = t2.id and t2.id = t3.id;
+Table Level Hint
+ If you attach this table level hint convert_limit_to_sample(n) to a table
+        either in the main query block or within a view/subquery and if the query satisfies the
+        simple limit optimization conditions, the limit is converted to a table sample. The
+        parameter 'n' in parenthesis specifies the sample percentage and must be an integer between
+        1 and 100.
+
+      
+        set optimize_simple_limit = true;
+      
+      
+        CREATE VIEW v1 as SELECT * FROM T [convert_limit_to_sample(5)]
+        WHERE [always_true] <predicate>;
+          SELECT * FROM v1 LIMIT 10;
+      
+
+In this case, the limit 10 is applied on top of a 5 percent sample of T which is applied
+        after partition pruning.
+
+
+Related informationBackground information about join queriesPerformance considerations for join queriesQuery optionsParent topic: Impala SQL statements

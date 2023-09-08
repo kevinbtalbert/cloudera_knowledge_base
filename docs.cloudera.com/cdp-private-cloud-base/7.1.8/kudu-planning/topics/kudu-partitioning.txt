@@ -1,0 +1,27 @@
+PartitioningCloudera Docs
+Partitioning
+In order to provide scalability, Kudu tables are partitioned into units called
+    tablets, and distributed across many tablet servers. A row always belongs to a single tablet.
+    The method of assigning rows to tablets is determined by the partitioning of the table, which is
+    set during table creation.
+
+        Choosing a partitioning strategy requires understanding the data model and the expected
+        workload of a table. For write-heavy workloads, it is important to design the
+        partitioning such that writes are spread across tablets in order to avoid overloading a
+        single tablet. For workloads involving many short scans, where the overhead of
+        contacting remote servers dominates, performance can be improved if all of the data for
+        the scan is located on the same tablet. Understanding these fundamental trade-offs is
+        central to designing an effective partition schema.
+      
+important
+        Kudu does not provide a default partitioning strategy when creating tables. It is
+        recommended that new tables which are expected to have heavy read and write workloads
+        have at least as many tablets as tablet servers.
+      
+
+        Kudu provides two types of partitioning: range partitioning and hash partitioning.
+        Tables may also have multilevel partitioning, which combines range and hash
+        partitioning, or multiple instances of hash partitioning.
+      
+
+Range partitioningRange partitioning distributes rows using a totally-ordered range partition key. Each     partition is assigned a contiguous segment of the range partition keyspace. The key must be     comprised of a subset of the primary key columns. If the range partition columns match the     primary key columns, then the range partition key of a row will equal its primary key. In range     partitioned tables without hash partitioning, each range partition will correspond to exactly     one tablet.Hash partitioningHash partitioning distributes rows by hash value into one of many buckets. In     single-level hash partitioned tables, each bucket will correspond to exactly one tablet. The     number of buckets is set during table creation. Typically the primary key columns are used as     the columns to hash, but as with range partitioning, any subset of the primary key columns can     be used.Multilevel partitioningKudu allows a table to combine multiple levels of partitioning on a single table. Zero     or more hash partition levels can be combined with an optional range partition level. The only     additional constraint on multilevel partitioning beyond the constraints of the individual     partition types, is that multiple levels of hash partitions must not hash the same     columns.Partition pruningKudu scans will automatically skip scanning entire partitions when it can be       determined that the partition can be entirely filtered by the scan predicates. To prune hash       partitions, the scan must include equality predicates on every hashed column. To prune range       partitions, the scan must include equality or range predicates on the range partitioned       columns. Scans on multilevel partitioned tables can take advantage of partition pruning on any       of the levels independently. Partitioning examplesTo illustrate the factors and tradeoffs associated with designing a partitioning     strategy for a table, we will walk through some different partitioning scenarios.Parent topic: Kudu schema design

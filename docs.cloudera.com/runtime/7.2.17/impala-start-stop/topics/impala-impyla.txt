@@ -1,0 +1,179 @@
+Configuring Impyla for ImpalaCloudera Docs
+Configuring Impyla for Impala
+Explains how to install Impyla to connect to and submit SQL queries to Impala. Impyla
+        is a Python client wrapper around the HiveServer2 Thrift Service. It connects to Impala and
+        implements Python DB API 2.0.
+
+Impyla releases are available at pypi.org. To get the available releases, check Release history.
+noteCloudera will not support versions of Impyla that are built manually from source code.
+Key Features of Impyla
+
+HiveServer2 compliant.
+Works with Impala including nested data.
+DB API 2.0 (PEP 249)-compliant Python client (similar to sqlite or MySQL
+                    clients) supporting Python 2.6+ and Python 3.3+.
+Works with Kerberos, LDAP, SSL.
+SQLAlchemy connector.
+Converts to pandas DataFrame, allowing easy integration into the Python data
+                    stack (including scikit-learn and matplotlib); see the Ibis project for a
+                    richer experience.
+For more information, see here.
+
+
+
+Different systems require different packages to be installed to enable SASL support
+                in Impyla. The following list shows some examples of how to install the packages on
+                different distributions.
+You must have the following installed in your environment before installing
+                impyla. Python 2.6+ or 3.3+ and the pip packages six, bitarray, thrift and
+                thriftpy2 will be automatically installed as dependencies when installing
+                impyla. However if you clone the impyla repo and run their local copy, you must
+                install these pip packages manually.
+
+Install the latest pip and setuptools:
+                    python -m pip install --upgrade pip setuptools
+Optionally, to install Impyla with Hive and/or GSSAPI (kerberos) support, you
+                        will also need to install additional software packages:
+
+
+                    RHEL/CentOS: sudo yum install gcc-c++ cyrus-sasl-md5 cyrus-sasl-plain cyrus-sasl-gssapi cyrus-sasl-devel
+
+
+                    Ubuntu: sudo apt install g++ libsasl2-dev libsasl2-2 libsasl2-modules-gssapi-mit
+
+
+
+
+Using pip you can install the latest release: pip install impyla
+
+
+Optionally, to install Impyla with GSSAPI (kerberos) support:pip install impyla[kerberos]
+
+
+You also need to pip-install pandas for conversion to DataFrame objects or 
+                    sqlalchemy for the SQLAlchemy engine.
+
+
+
+Sample codes
+
+Impyla implements the 
+                Python DB API v2.0 (PEP 249) database interface (refer to it for API details):
+from impala.dbapi import connect
+
+conn = connect(host = "my.host.com", port = 21050)
+cursor = conn.cursor()
+cursor.execute("SELECT * FROM mytable LIMIT 100")
+print(cursor.description)  # prints the result set's schema
+results = cursor.fetchall()
+cursor.close()
+conn.close()
+The Cursorobject also exposes the iterator interface, which is buffered (controlled by 
+                cursor.arraysize):
+cursor.execute("SELECT * FROM mytable LIMIT 100")
+for row in cursor:
+    print(row)
+Furthermore the Cursor object returns you information about the columns returned in
+                the query. This is useful to export your data as a csv file.
+import csv
+
+cursor.execute("SELECT * FROM mytable LIMIT 100")
+columns = [datum[0] for datum in cursor.description]
+targetfile = "/tmp/foo.csv"
+
+with open(targetfile, "w", newline = "") as outcsv:
+    writer = csv.writer(
+        outcsv,
+        delimiter = ",",
+        quotechar = '"',
+        quoting = csv.QUOTE_ALL,
+        lineterminator = "\n")
+writer.writerow(columns)
+
+for row in cursor:
+    writer.writerow(row)
+You can also get back a pandas DataFrame object
+from impala.util import as_pandas
+
+# carry df through scikit-learn, for example
+df = as_pandas(cur)
+Connecting over HTTP/HTTPS
+GSSAPI (kerberos) authentication over HTTP has been supported since 0.17a1. Use this
+                example to establish connection over HTTP/HTTPS.
+from impala.dbapi import connect
+
+conn = connect(
+    "impala-coordinator.example.com",
+    28000,
+    auth_mechanism = "GSSAPI",
+    kerberos_service_name = "impala",
+    use_http_transport = True,
+    http_path = "cliservice",
+    auth_cookie_name = "impala.auth")
+cursor = conn.cursor()
+cursor.execute("SHOW DATABASES")
+res = cursor.fetchall()
+cursor.close()
+conn.close()
+
+
+
+Connecting to DataHub
+Lists an example code to connect to Impala with LDAP over http using LDAP as the
+            authentication mechanism.
+
+
+Sample code
+
+from impala.dbapi import connect
+
+conn = connect(
+    host = "aaaaaaa-aaaa-master0.se-sandb.a465-9q4k.cloudera.site",
+    port = 443,
+    auth_mechanism = "LDAP",
+    use_ssl = True,
+    use_http_transport = True,
+    http_path = "aaaaaaa-aaaa/cdp-proxy-api/impala",
+    user = "aaaaaaa",
+    password = "xxxxx")
+cursor = conn.cursor()
+cursor.execute("SELECT * FROM default.emax_temp")
+
+for row in cursor:
+    print(row)
+cursor.close()
+conn.close()
+
+
+
+
+Connecting to DataHub Data Mart
+Lists an example code to connect to DataHub Data Mart using LDAP as the
+            authentication mechanism.
+
+                Must have the latest Impyla release.
+            
+
+
+Sample code
+
+from impala.dbapi import connect
+
+conn = connect(
+    "xxxxxxx-data-mart-master0.xxxxxxx.xcu2-8y8x.dev.cldr.work",
+    443,
+    auth_mechanism = "LDAP",
+    user = "XXXXX",
+    password = "XXXXX",
+    use_ssl = True,
+    use_http_transport = True,
+    http_path = "xxxxxxx-data-mart/cdp-proxy-api/impala")
+cursor = conn.cursor()
+cursor.execute("SHOW DATABASES")
+res = cursor.fetchall()
+print(res)
+cursor.close()
+conn.close()
+
+
+

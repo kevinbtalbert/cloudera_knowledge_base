@@ -1,0 +1,153 @@
+Migrate from the Cloudera Manager External PostgreSQL Database Server to a MySQL/Oracle Database ServerCloudera Docs
+ Migrate from the Cloudera Manager External PostgreSQL Database Server to a MySQL/Oracle
+    Database Server 
+When you migrate from the Cloudera Manager external PostgreSQL database server to a
+    MySQL or Oracle database server, you export the Cloudera Manager configuration, prepare the
+    target database for Cloudera Manager, and complete other tasks.
+
+Minimum Required Role:
+Operator
+        (also provided by Configurator,
+          Cluster Administrator, Limited
+          Cluster Administrator , Full
+          Administrator) 
+
+
+
+Migrate from the embedded PostgreSQL database server to an external PostgreSQL database
+          server as described in the topic Migrating from the Cloudera Manager Embedded
+            PostgreSQL Database Server to an External PostgreSQL Database.important Migrating directly from the Cloudera Manager
+            embedded PostgreSQL to a MySQL or Oracle database is not supported. You must first
+            migrate from the Cloudera Manager embedded PostgreSQL database server to the external
+            PostgreSQL database server. After performing this migration, you can use this procedure
+            to migrate from the external PostgreSQL database server to MySQL or Oracle database
+            servers.
+Upgrade the Cloudera Manager enterprise license by navigating to Administration >  Licenses and installing a valid Cloudera Manager license.
+
+
+Export your Cloudera Manager Configuration. First, get the latest supported API
+          version:
+curl -u <admin_username>:<admin_password> "http://<cm_server_host>:7180/api/version"
+curl -u <admin_username>:<admin_password> "http://<cm_server_host>:7180/api/<api_version> /cm/deployment" > <path_to_file>/cm-deployment.json
+The following is an example of the API version command:
+curl -u admin:admin "http://10.17.103.191:7180/api/v19/cm/deployment" > /root/cm-deployment.json
+important
+If you have Cloudera Manager with TLS for the Admin Console enabled, retrieve the
+              certificate file and use curl with the --cacert
+              option:
+curl --cacert <certificate_file> -u admin:admin "https://<cm_server_host>:7183/api/version"
+
+
+Preserve Cloudera Manager's GUID by running the following command on the Cloudera
+          Manager server to create a /etc/cloudera-scm-server/uuid file:
+
+sudo -u postgres psql -qtAX scm -c "select GUID from CM_VERSION" > uuid
+importantConfirm the name of your Cloudera Manager database in
+              /etc/cloudera-scm-server/db.properties.
+Move the UUID file to Cloudera Manager server's
+              /etc/cloudera-scm-server
+            directory.sudo mv uuid /etc/cloudera-scm-server/
+
+
+Stop the cluster and the Cloudera Management services. For details, see Starting,
+            Stopping, Refreshing, and Restarting a Cluster and Stopping the Cloudera
+            Management Service.
+
+Run the following command to stop the Cloudera Manager server:
+
+sudo systemctl stop cloudera-scm-server
+
+
+Prepare the target database for Cloudera Manager. For details, see Install and
+            Configure MySQL for Cloudera Software or Install and Configure Oracle
+            Database for Cloudera Software. 
+
+Run the following command to obtain the value of the GUID:
+
+cat /etc/cloudera-scm-server/uuid
+
+
+Insert the GUID returned from the previous command into MySQL or Oracle as
+          follows:
+
+
+Run the following command to login to MySQL:
+
+sudo -u mysql -p <name_of_cm_database>
+
+
+
+Run the following command to login to Oracle:
+
+sqlplus system@localhost
+Enter password: [***password***]
+
+
+
+Run the following command to update the GUID:
+
+update cm_version set guid = '[***GUID***]’
+
+
+
+
+The process directory (/var/run/cloudera-scm-agent/process/) must
+          be cleaned out for all hosts with agents running on them. The agent completes this cleanup
+          with a server reboot. However, if a server reboot is not a viable option, do the following
+          steps to accomplish the same task.
+
+
+Run the following command on all hosts to stop the agent and supervisor:
+
+sudo systemctl stop cloudera-scm-agent
+
+
+
+Run the following command to confirm that the agent and supervisor processes are
+              stopped:
+
+ps -ef | grep -i cmf-agent; ps -ef | grep -i supervisor
+
+
+
+Move the existing /var/run/cloudera-scm-agent/
+              directory:
+
+mv /var/run/cloudera-scm-agent /var/run/cloudera-scm-agent-BU
+The agent recreates the directory. Delete the backed-up copy after confirming that
+                the migration was successful. 
+
+
+
+Run the following command on all hosts to start the agent and supervisor:
+
+sudo systemctl start cloudera-scm-agent
+
+
+
+
+Run the following command to start the Cloudera Manager server:
+
+sudo systemctl start cloudera-scm-server
+
+
+Login to Cloudera Manager. Exit the installation wizard by clicking the product logo in
+          the upper-left corner to stop the wizard and return to the Cloudera Manager home
+          page.
+
+Run the following command to restore the Cloudera Manager configuration: 
+curl -H "Content-Type: application/json" --upload-file <path_to_file>/cm-deployment.json -u <admin_username>:<admin_password> "http://<cm_server_host>:7180/api/<api_version>/cm/deployment?deleteCurrentDeployment=true"The
+          following example shows how to restore a Cloudera Manager configuration:
+          curl -H "Content-Type: application/json" --upload-file /root/cm-deployment.json -u admin:admin "http://172.31.113.146:7180/api/v19/cm/deployment?deleteCurrentDeployment=true"
+
+Start the following: Cloudera Management Service, Host Monitor, and Services Monitor.
+          Verify that all the services in the Cloudera Management Service started and are Healthy.
+          For details, see Starting the Cloudera Management Service and Starting
+            and Stopping Cloudera Management Service Roles.
+
+Go to Home >  Status and select the cluster(s) that you previously stopped, and select
+            Start from the Actions drop-down
+          menu.
+
+
+Related informationMigrating from the Cloudera Manager Embedded PostgreSQL Database Server to an External PostgreSQL DatabaseStarting, Stopping, Refreshing, and Restarting a ClusterStopping the Cloudera Management ServiceInstall and Configure MySQL for Cloudera SoftwareInstall and Configure Oracle Database for Cloudera SoftwareStarting the Cloudera Management ServiceStarting and Stopping Cloudera Management Service RolesParent topic: Migrating from the Cloudera Manager External PostgreSQL Database Server to a MySQL/Oracle Database Server

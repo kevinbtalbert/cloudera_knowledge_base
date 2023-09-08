@@ -1,0 +1,218 @@
+Impala with Azure Data Lake Store (ADLS)Cloudera Docs
+Impala with Azure Data Lake Store (ADLS)
+You can use Impala to query data residing on the Azure Data Lake
+    Store (ADLS) filesystem and Azure Blob File System (ABFS). This capability
+    allows convenient access to a storage system that is remotely managed,
+    accessible from anywhere, and integrated with various cloud-based services. 
+ Impala can query files in any supported file format from ADLS. The ADLS
+      storage location can be for an entire table or individual partitions in a
+      partitioned table. 
+
+      The default Impala tables use data files stored on HDFS, which are ideal for bulk loads and queries using
+      full-table scans. In contrast, queries against ADLS data are less performant, making ADLS suitable for holding
+      cold data that is only queried occasionally, while more frequently accessed hot data resides in
+      HDFS. In a partitioned table, you can set the LOCATION attribute for individual partitions
+      to put some partitions on HDFS and others on ADLS, typically depending on the age of the data.
+    
+ Impala requires that the default filesystem for the cluster be HDFS. You
+      cannot use ADLS as the only filesystem in the cluster.
+To be able to access ADLS, first set up an Azure account, configure an
+      ADLS store, and configure your cluster with appropriate credentials.
+ 
+Creating Impala Databases, Tables, and Partitions for Data Stored
+        on ADLS
+ To create a table that resides on ADLS, specify the ADLS details in
+        the LOCATION clause of the CREATE
+          TABLE or ALTER TABLE statement. The syntax
+        for the LOCATION clause is: 
+
+ For ADLS Gen1:
+          LOCATION 'adl://account.azuredatalakestore.net/path/file'
+ For ADLS Gen2:
+            LOCATION 'abfs://container@account.dfs.core.windows.net/path/file'
+            or
+          LOCATION 'abfss://container@account.dfs.core.windows.net/path/file'
+
+
+
+container denotes the parent
+        location that holds the files and folders, which is the Containers in
+        the Azure Storage Blobs service. 
+
+account is the name given for your
+        storage account. 
+ Any reference to an ADLS location must be fully qualified. (This rule
+        applies when ADLS is not designated as the default filesystem.) 
+ Once a table or partition is designated as residing on ADLS, the
+          SELECT statement transparently accesses the data
+        files from the appropriate storage layer. 
+ALTER TABLE can also set the LOCATION
+        property for an individual partition so that some data in a table
+        resides on ADLS and other data in the same table resides on HDFS. 
+note
+ By default, TLS is enabled both with abfs:// and
+            abfss://. 
+ When you set the fs.azure.always.use.https=false
+          property, TLS is disabled with abfs://, and TLS is
+          enabled with abfss://
+
+
+ For a partitioned table, either specify a separate
+          LOCATION clause for each new partition, or specify a
+        base LOCATION for the table and set up a directory
+        structure in ADLS to mirror the way Impala partitioned tables are
+        structured in HDFS. 
+Although, strictly speaking, ADLS filenames do not have directory
+        paths, Impala treats ADLS filenames with / characters
+        the same as HDFS pathnames that include directories. 
+ To point a nonpartitioned table or an individual partition at ADLS,
+        specify a single directory path in ADLS, which could be any arbitrary
+        directory. 
+To replicate the structure of an entire Impala partitioned table or
+        database in ADLS requires more care, with directories and subdirectories
+        nested and named to match the equivalent directory tree in HDFS.
+        Consider setting up an empty staging area if necessary in HDFS, and
+        recording the complete directory structure so that you can replicate it
+        in ADLS. 
+ For example, the following session creates a partitioned table where
+        only a single partition resides on ADLS. The partitions for years 2013
+        and 2014 are located on HDFS. The partition for year 2015 includes a
+          LOCATION attribute with an adl://
+        URL, and so refers to data residing on ADLS, under a specific path
+        underneath the store impalademo. 
+CREATE TABLE mostly_on_hdfs (x INT) PARTITIONED BY (year INT);
+ALTER TABLE mostly_on_hdfs ADD PARTITION (year=2013);
+ALTER TABLE mostly_on_hdfs ADD PARTITION (year=2014);
+ALTER TABLE mostly_on_hdfs ADD PARTITION (year=2015)
+   LOCATION 'adl://impalademo.azuredatalakestore.net/dir1/dir2/dir3/t1';
+
+ When working with multiple tables with data files stored in ADLS, you
+        can create a database with the LOCATION attribute
+        pointing to an ADLS path. Specify a URL of the form as shown above. Any
+        tables created inside that database automatically create directories
+        underneath the one specified by the database LOCATION
+        attribute. 
+ Use the standard ADLS file upload methods to actually put the data
+        files into the right locations. You can also put the directory paths and
+        data files in place before creating the associated Impala databases or
+        tables, and Impala automatically uses the data from the appropriate
+        location after the associated databases and tables are created. 
+ You can switch whether an existing table or partition points to data
+        in HDFS or ADLS. For example, if you have an Impala table or partition
+        pointing to data files in HDFS or ADLS, and you later transfer those
+        data files to the other filesystem, use an ALTER TABLE
+        statement to adjust the LOCATION attribute of the
+        corresponding table or partition to reflect that change. This
+        location-switching technique is not practical for entire databases that
+        have a custom LOCATION attribute. 
+ You cannot use the ALTER TABLE ... SET CACHED
+        statement for tables or partitions that are located in ADLS. 
+
+Internal and External Tables Located on ADLS
+ Just as with tables located on HDFS storage, you can designate
+        ADLS-based tables as either internal (managed by Impala) or external, by
+        using the syntax CREATE TABLE or CREATE
+          EXTERNAL TABLE respectively. 
+When you drop an internal table, the files associated with the table
+        are removed, even if they are on ADLS storage. When you drop an external
+        table, the files associated with the table are left alone, and are still
+        available for access by other tools or components. 
+ If the data on ADLS is intended to be long-lived and accessed by other
+        tools in addition to Impala, create any associated ADLS tables with the
+          CREATE EXTERNAL TABLE syntax, so that the files are
+        not deleted from ADLS when the table is dropped. 
+ If the data on ADLS is only needed for querying by Impala and can be
+        safely discarded once the Impala workflow is complete, create the
+        associated ADLS tables using the CREATE TABLE syntax so
+        that dropping the table also deletes the corresponding data files on
+        ADLS. 
+
+Loading Data into ADLS for Impala
+        Queries If your ETL pipeline involves moving data into ADLS
+        and then querying through Impala, you can either use Impala DML
+        statements to create, move, or copy the data, or use the same data
+        loading techniques as you would for non-Impala data.  Using
+          Impala DML Statements for ADLS Data:The Impala DML statements
+        (INSERT, LOAD DATA, and CREATE
+        TABLE AS SELECT) can write data into a table or partition that
+      resides in the Azure Data Lake Store (ADLS) or ADLS Gen2.Manually
+          Loading Data into Impala Tables on ADLS: You can use the
+        Microsoft-provided methods to bring data files into ADLS for querying
+        through Impala. See the Microsoft ADLS documentation
+        for details.  After you upload data files to a location already
+        mapped to an Impala table or partition, or if you delete files in ADLS
+        from such a location, issue the REFRESH statement to
+        make Impala aware of the new set of data files.
+Running and Queries for Data Stored on ADLS
+ Once the appropriate LOCATION attributes are set up
+        at the table or partition level, you query data stored in ADLS the same
+        as data stored on HDFS or in HBase: 
+
+ Queries against ADLS data support all the same file formats as for
+          HDFS data. 
+ Tables can be unpartitioned or partitioned. For partitioned tables,
+          either manually construct paths in ADLS corresponding to the HDFS
+          directories representing partition key values, or use ALTER
+            TABLE ... ADD PARTITION to set up the appropriate paths in
+          ADLS. 
+ HDFS, Kudu, and HBase tables can be joined to ADLS tables, or ADLS
+          tables can be joined with each other. 
+ Authorization to control access to databases, tables, or columns
+          works the same whether the data is in HDFS or in ADLS. 
+ The catalogd daemon caches metadata for both
+          HDFS and ADLS tables. Use REFRESH and
+            INVALIDATE METADATA for ADLS tables in the same
+          situations where you would issue those statements for HDFS tables. 
+ Queries against ADLS tables are subject to the same kinds of
+          admission control and resource management as HDFS tables. 
+ Metadata about ADLS tables is stored in the same Metastore database
+          as for HDFS tables. 
+ You can set up views referring to ADLS tables, the same as for HDFS
+          tables. 
+ The COMPUTE STATS, SHOW TABLE
+            STATS, and SHOW COLUMN STATS statements
+          support ADLS tables. 
+
+
+Query Performance for ADLS Data
+ Although Impala queries for data stored in ADLS might be less
+        performant than queries against the equivalent data stored in HDFS, you
+        can still do some tuning. Here are techniques you can use to interpret
+        explain plans and profiles for queries against ADLS data, and tips to
+        achieve the best performance possible for such queries. 
+ All else being equal, performance is expected to be lower for queries
+        running against data on ADLS rather than HDFS. The actual mechanics of
+        the SELECT statement are somewhat different when the
+        data is in ADLS. Although the work is still distributed across the
+        datanodes of the cluster, Impala might parallelize the work for a
+        distributed query differently for data on HDFS and ADLS. ADLS does not
+        have the same block notion as HDFS, so Impala uses heuristics to
+        determine how to split up large ADLS files for processing in parallel.
+        Because all hosts can access any ADLS data file with equal efficiency,
+        the distribution of work might be different than for HDFS data, where
+        the data blocks are physically read using short-circuit local reads by
+        hosts that contain the appropriate block replicas. Although the I/O to
+        read the ADLS data might be spread evenly across the hosts of the
+        cluster, the fact that all data is initially retrieved across the
+        network means that the overall query performance is likely to be lower
+        for ADLS data than for HDFS data. 
+ Because data files written
+        to ADLS do not have a default block size the way HDFS data files do, any
+        Impala INSERT or CREATE TABLE AS
+          SELECT statements use the PARQUET_FILE_SIZE
+        query option setting to define the size of Parquet data files. (Using a
+        large block size is more important for Parquet tables than for tables
+        that use other file formats.) 
+ When optimizing aspects of for complex queries such as the join order,
+        Impala treats tables on HDFS and ADLS the same way. 
+ In query profile reports, the numbers for
+          BytesReadLocal,
+          BytesReadShortCircuit,
+          BytesReadDataNodeCached, and
+          BytesReadRemoteUnexpected are blank because those
+        metrics come from HDFS. 
+All the I/O for ADLS tables involves remote reads, and they will appear
+        as remote read operations in the query profile.
+
+
+Parent topic: Storage Systems Supports

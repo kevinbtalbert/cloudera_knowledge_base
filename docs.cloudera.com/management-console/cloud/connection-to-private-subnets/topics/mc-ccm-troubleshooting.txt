@@ -1,0 +1,158 @@
+Troubleshooting CCMv1Cloudera Docs
+Troubleshooting CCMv1
+You can troubleshoot cluster connection issues that might occur when you use CCMv1 by
+    referring to the syslog on your Cloudera Manager node for classic clusters and your gateway and
+    Knox nodes for data lake and data hub clusters. 
+Search for auto-ssh messages to diagnose any connection problems.
+For example, CDP can communicate with clusters that are on private subnets with only private
+      IPs without any additional network configuration or setup. However, CDP requires that these
+      clusters have outbound connections to AWS NLBs hosted in the Cloudera's AWS account.
+Common cases when connection via CCMv1 fails
+The following list includes the most common cases when connection via CCM fails
+        and steps for how to fix the problems.
+In all the cases listed below, it is essential to check if the CCM domain name
+        “.ccm.cdp.cloudera.com” has been whitelisted and the port range 6000-6049 has been
+        whitelisted for SSL connections. This is because by default SSL connections are allowed only
+        on the port 443 but connections to the Control Plane via CCM go through the ports in the
+        range 6000-6049.
+
+
+
+Reason for connection failure
+How to fix the problem
+
+
+
+You have not whitelisted the NLB domains or the port range 6000-6049 on your
+                  VPC. 
+Both the incoming and the outgoing traffic must be allowed from CCM NLB and
+                  port ranges.
+
+
+You are using a transparent proxy and you did not explicitly whitelist NLB
+                  domains and the ports on the transparent proxies.
+If you are using a transparent proxy, you need to explicitly whitelist the
+                  NLB domains and the ports on the transparent proxies.
+
+
+You are using a non-transparent proxy but you did not register it in CDP. 
+If you are using a non-transparent proxy, you need to perform the steps in
+                    Setting up a non-transparent proxy in CDP
+                  documentation.
+
+
+Your firewall doesn’t allow traffic to/from NLBs. 
+The firewall configured on your VPC should allow the traffic to/from the NLBs
+                  and the port range 6000-6049.
+
+
+The IPs of the NLB do not fall under the elastic IP CIDR block assigned to
+                  CCM NLBs.
+CCM NLBs have IPs assigned to them which are taken from the CIDR block
+                  44.234.52.96/27. If the NLB assigned to the environment/cluster
+                    returns IPs that do not fall under this CIDR block when an nslookup call is
+                    made, then the IPs returned need to be explicitly whitelisted so that the
+                    traffic from these IPs is allowed in your VPCs.
+
+
+
+If you are still unable to determine the root cause and fix the issue, you may consider
+        collecting more information.
+
+Collecting information from the cluster where connection fails 
+Obtaining relevant information such as the NLB domain name, tunnel type (for
+        example, CM), autossh client logs, and the syslogs from a cluster helps narrow down the root
+        cause. 
+The following steps explain how to obtain this information.
+
+
+
+Check if the autossh process is running on the cluster:
+SSH into the node on which the issue is being seen. Execute ps -aux |
+                    grep autossh to see if the autossh client responsible for creating the
+                  tunnel from the node to CDP is running.
+If the process is running, it would show the command similar
+                  to:autossh -M 0 -o ServerAliveInterval 30 -o ServerAliveCountMax 3 -o UserKnownHostsFile=/etc/ccm/ccm.pub -N -T -R 0.0.0.0:0:localhost:<LOCAL_PORT> -i /tmp/pk.key -p <NLB_PORT> <INITIATOR_ID>@<NLB_HOST_NAME> -vvv
+Collect the values of NLB_HOST_NAME, NLB_PORT,
+                    INITIATOR_ID from the above step. 
+Share the collected information with Cloudera support.
+
+
+
+Check if the NLB is reachable from the node: 
+On the node, execute the command nslookup <NLB_HOST_NAME> to
+                  check if the NLB is reachable from the node. 
+Use tools such as telnet or netcat to check if it is possible to
+                  reach the NLB on the specific NLB_PORT. For example:
+                  telnet <NLB_HOST_NAME> <NLB_PORT>
+If telnet is not installed on the node, you can use curl telnet as an
+                  alternative. For
+                  example:curl -vv telnet://<NLB_HOST_NAME>:<NLB_PORT>
+If this fails, then the traffic to the Cloudera network is blocked on your VPC.
+                  This means that you should check the outbound rules on their VPC to make sure that
+                  the traffic to the cloudera network is allowed. 
+
+
+
+Collect the following logs and share them with Cloudera support:
+The dump of /var/log/messages (which stores the global system messages)
+                  is necessary to debug the issue with the SSH tunnel setup by CCM.
+The dump of the output of the tcpdump command on the problematic node captures
+                  the network messages with the description of contents of packets between the node
+                  and the CDP control plane. Cloudera support may ask for this if needed or when the
+                  already collected information is not sufficient to debug the issue.
+The dump of /var/log/socket_wait_cleanup.log (which stores the logs
+                  related to the restarts of autossh process) Note that this log file is only
+                  present in environments created after December 12, 2020.
+
+
+
+Collect the firewall logs and share them with Cloudera support:
+It is useful for Cloudera support to see the logs from your firewall to see if
+                  the firewall is closing the connection to the CDP Control Plane.
+
+
+
+Collect and share the environment/cluster and CCM related information:
+To look up the logs, Cloudera support needs the account id of the customer,
+                  environment CRN, and the time period to scan the logs for the issue. 
+
+
+
+
+
+FreeIPA sync issues 
+
+
+
+Error or issue details
+Resolution
+
+
+
+502 or "Bad Gateway" error such as: 
+"Bad Gateway, cause=com.cloudera.cdp.cm.ApiException: Bad Gateway"
+Unexpected response from FreeIPA; details: code: 502
+Status: 502 Bad Gateway Response
+
+A new parameter defining connection timeout was added to the autossh script
+                  placed on images used to provision clusters. Without it, there is no timeout for
+                  CCM connections and CCM related services won't restart automatically. If you
+                  provisioned Freeipa or Data Lake prior to the implementation of this parameter,you
+                  need to update the script by using the following steps:1. Modify autossh
+                    command on FreeIPA, Data Lake and Data Hub nodes in this
+                    script:/cdp/bin/reverse-tunnel.shAdd new parameter to the
+                    command: -o "ConnectTimeout 30"Original command:
+                    exec autossh -M 0 -o "ServerAliveInterval 30" -o "ServerAliveCountMax 3" -o UserKnownHostsFile=${CCM_PUBLIC_KEY_FILE} -N -T -R ${LOCAL_IP}:0:localhost:${CCM_TUNNEL_SERVICE_PORT} -i ${PRIVATE_KEY} -p ${CCM_SSH_PORT} ${USER}@${CCM_HOST} -vvvNew
+                    command:exec autossh -M 0 -o "ConnectTimeout 30" -o "ServerAliveInterval 30" -o "ServerAliveCountMax 3" -o UserKnownHostsFile=${CCM_PUBLIC_KEY_FILE} -N -T -R ${LOCAL_IP}:0:localhost:${CCM_TUNNEL_SERVICE_PORT} -i ${PRIVATE_KEY} -p ${CCM_SSH_PORT} ${USER}@${CCM_HOST} -vvv2.
+                    Restart ccm-tunnel@KNOX service on Data Lake and Data Hub nodes and
+                    ccm-tunnel@GATEWAY on FreeIPA, Data Lake and Data Hub nodes:
+                    systemctl restart ccm-tunnel@KNOXsystemctl restart ccm-tunnel@GATEWAY3.
+                    Check if modification of the command was
+                  successful:ps aux | grep autossh
+
+
+
+
+
+Parent topic: Cluster Connectivity Manager

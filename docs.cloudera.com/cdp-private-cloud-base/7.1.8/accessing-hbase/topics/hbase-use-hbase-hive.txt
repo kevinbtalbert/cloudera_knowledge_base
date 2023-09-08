@@ -1,0 +1,105 @@
+Configuring HBase Hive integrationCloudera Docs
+Configuring HBase Hive integration
+After you have configured HBase Hive integration, you can create an HBase table from
+        Hive, and access that table from HBase.
+
+
+
+
+From the Hive shell, create an HBase table:
+
+CREATE EXTERNAL TABLE hbase_hive_table (key int, value string) 
+STORED BY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
+WITH SERDEPROPERTIES ("hbase.columns.mapping" = ":key,cf1:val")
+TBLPROPERTIES ("hbase.table.name" = "hbase_hive_table", "hbase.mapred.output.outputtable" = "hbase_hive_table");
+
+The hbase.columns.mapping property is mandatory. The
+                        hbase.table.name property is optional. The
+                            hbase.mapred.output.outputtable property is optional;
+                        it is needed, if you plan to insert data to the table.
+If hbase.columns.mapping values contain special characters
+                        like '#' or '%', they have to be encoded because the values are used to form
+                        the URI for Ranger based authentication. To enable URL encoding, set the
+                            hive.security.hbase.urlencode.authorization.uri
+                        property to "true" in the Hive Service Advanced Configuration Snippet
+                            (Safety Valve) for hive-site.xml and restart the Hive on Tez
+                        service. Also, update the corresponding Ranger policies for the table so
+                        that they are in URL encoded format.
+
+
+From the HBase shell, access the hbase_hive_table:
+
+$ hbase shell
+hbase(main):001:0> list 'hbase_hive_table'                                                                                                          1 row(s) in 0.0530 seconds
+hbase(main):002:0> describe 'hbase_hive_table'
+Table hbase_hive_table is ENABLED
+hbase_hive_table COLUMN FAMILIES DESCRIPTION{NAME => 'cf', DATA_BLOCK_ENCODING => 'NONE', BLOOMFILTER => 'ROW', REPLICATION_SCOPE => '0', VERSIONS => '1', COMPRESSION => 'NONE', MIN_VERSIONS => '0', TTL => 'FOREVER', KEEP_DELETED_CELLS => 'FALSE', BLOCKSIZE => '65536', IN_MEMORY => 'false', BLOCKCACHE => 'true'} 1 row(s) in 0.2860 seconds
+ 
+hbase(main):003:0> scan 'hbase_hive_table'
+ROW           COLUMN+CELL                                                                      
+0 row(s) in 0.0060 seconds
+
+
+
+Insert the data into the HBase table through Hive: 
+
+INSERT OVERWRITE TABLE HBASE_HIVE_TABLE values (98, 'val_98');
+
+
+From the HBase shell, verify that the data got loaded:
+
+hbase(main):009:0> scan "hbase_hive_table"
+ROW                        COLUMN+CELL                                                                      
+ 98                        column=cf1:val, timestamp=1267737987733, value=val_98                            
+1 row(s) in 0.0110 seconds
+
+
+
+From Hive, query the HBase data to view the data that is inserted in the
+                    hbase_hive_table:
+
+hive> select * from HBASE_HIVE_TABLE;
+Total MapReduce jobs = 1
+Launching Job 1 out of 1
+...
+OK
+98	val_98
+Time taken: 4.582 seconds
+
+
+
+Use the following steps to access the existing HBase table through Hive.
+You can access the existing HBase table through Hive using the CREATE EXTERNAL
+                    TABLE:
+                    CREATE EXTERNAL TABLE hbase_table_2(key int, value string) 
+STORED BY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler' WITH SERDEPROPERTIES 
+("hbase.columns.mapping" = ":key,cf1:val")
+TBLPROPERTIES("hbase.table.name" = "some_existing_table", 
+"hbase.mapred.output.outputtable" = "some_existing_table");
+You can use different type of column mapping to map the HBase columns to
+                        Hive:
+Multiple Columns and Families To define four columns, the first being
+                            the rowkey: “:key,cf:a,cf:b,cf:c”
+Hive MAP to HBase Column Family When the Hive data type is a Map, a
+                            column family with no qualifier might be used. This will use the keys of
+                            the Map as the column qualifier in HBase: “cf:”
+Hive MAP to HBase Column Prefix When the Hive data type is a Map, a
+                            prefix for the column qualifier can be provided which will be prepended
+                            to the Map keys: “cf:prefix_.*” noteThe prefix is removed from the
+                                column qualifier as compared to the key in the Hive Map. For
+                                example, for the above column mapping, a column of “cf:prefix_a”
+                                would result in a key in the Map of “a”. 
+
+You can also define composite row keys. Composite row keys use multiple Hive
+                    columns to generate the HBase row key.
+Simple Composite Row Keys. A Hive column with a datatype of Struct will
+                            automatically concatenate all elements in the struct with the
+                            termination character specified in the DDL.
+Complex Composite Row Keys and HBaseKeyFactory Custom logic can be
+                            implemented by writing Java code to implement a KeyFactory and provide
+                            it to the DDL using the table property key
+                            “hbase.composite.key.factory”.
+
+
+
+Parent topic: Using the Apache HBase Hive integration

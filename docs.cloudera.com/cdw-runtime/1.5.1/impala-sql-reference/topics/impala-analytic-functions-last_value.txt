@@ -1,0 +1,86 @@
+LAST_VALUECloudera Docs
+LAST_VALUE
+Returns the expression value from the last row in the window. If
+              your table has null values, you can use the IGNORE
+                NULLS clause to return the last non-null value from the
+              window. This same value is repeated for all result rows for the
+              group. The return value is NULL if the input
+              expression is NULL.
+
+
+Syntax:
+
+LAST_VALUE(expr [IGNORE NULLS]) OVER([partition_by_clause] order_by_clause [window_clause])
+ The PARTITION BY clause is optional. The
+                ORDER BY clause is required. The window clause
+              is optional. 
+
+Usage notes:
+
+ If any duplicate values occur in the tuples evaluated by the
+                ORDER BY clause, the result of this function is
+              not deterministic. Consider adding additional ORDER
+                BY columns to ensure consistent ordering. 
+
+Examples:
+
+ The following example uses the same MAIL_MERGE table as in the
+              example for the FIRST_VALUE function. Because the default window when
+                ORDER BY is used is BETWEEN UNBOUNDED PRECEDING AND CURRENT
+                ROW, the query requires the UNBOUNDED FOLLOWING to look
+              ahead to subsequent rows and find the last value for each country. 
+select country, name,
+  last_value(greeting) over (
+    partition by country order by name, greeting
+    rows between unbounded preceding and unbounded following
+  ) as greeting
+  from mail_merge
++---------+---------+--------------+
+| country | name    | greeting     |
++---------+---------+--------------+
+| Germany | Boris   | Guten morgen |
+| Germany | Michael | Guten morgen |
+| Sweden  | Bjorn   | Tja          |
+| Sweden  | Mats    | Tja          |
+| USA     | John    | Hello        |
+| USA     | Pete    | Hello        |
++---------+---------+--------------+
+Introducing null values into the MAIL_MERGE
+              table as in the example for the FIRST VALUE function, the result
+              set changes when you use the IGNORE NULLS
+              clause.select * from mail_merge;
++---------+---------+--------------+
+| name    | country | greeting     |
++---------+---------+--------------+
+| Kei     | Japan   | NULL         |
+| Boris   | Germany | Guten tag    |
+| Li      | China   | NULL         |
+| Michael | Germany | Guten morgen |
+| Bjorn   | Sweden  | Hej          |
+| Peng    | China   | Nihao        |
+| Pete    | USA     | Hello        |
+| Mats    | Sweden  | Tja          |
+| John    | USA     | Hi           |
++---------+---------+--------------+
+
+select country, name,
+  last_value(greeting ignore nulls) over (
+    partition by country order by name, greeting
+    rows between unbounded preceding and unbounded following
+  ) as greeting
+  from mail_merge;
++---------+---------+--------------+
+| country | name    | greeting     |
++---------+---------+--------------+
+| Japan   | Kei     | NULL         |
+| Germany | Boris   | Guten morgen |
+| Germany | Michael | Guten morgen |
+| China   | Li      | Nihao        |
+| China   | Peng    | Nihao        |
+| Sweden  | Bjorn   | Tja          |
+| Sweden  | Mats    | Tja          |
+| USA     | John    | Hello        |
+| USA     | Pete    | Hello        |
++---------+---------+--------------+
+
+

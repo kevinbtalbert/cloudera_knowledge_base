@@ -1,0 +1,62 @@
+Classic ingest patternsCloudera Docs
+Classic ingest patterns
+You need to move away from ingest patterns commonly used for Hive 1 and 2 that are
+  consumer centric to avoid performance problems on the consumer side.
+The following diagram shows the classic partition that addresses the ingest pipeline instead of
+   the consumer pipeline. Multiple appends to the table or partition that create small files are
+   minimally addressed with INSERT OVERWRITE. This mitigation is not atomic. 
+Classic Pattern 1
+
+
+
+This classic pattern shows repeatedly inserts: creating copy 1, copy 2, copy 3, copy 4. When you
+   get to the sixth insert, Hive tries to write the original file, but fails because it already
+   exists. The write attempt will fail 6 times before the insert succeeds. 
+This pattern can be summarized as follows:
+
+Brute force. 
+Small files
+Poor performance 
+Counter by: 
+Overwrite compaction job 
+Problems:
+Not atomic 
+Data if ingest events are not stopped 
+
+
+Classic pattern using partitions
+When using Hive 1 or 2, creating a partition per ingest cycle helps you manage batches. This
+    pattern results in extremely poor performance on the consumer side for the following reasons:
+Generates many small files
+Pressures the metastore and file system
+Requires more compute to handle queries 
+
+
+Classic Pattern 2
+
+
+Classic pattern 2 is similar to classic pattern 1, but adds a physical abstraction:
+    partitioning.
+Classic pattern 2 adds the pressure of partition management at the Hive metastore (HMS) level.
+    Creating partitions per cycle, for example on day, month, year, and hour was a convenient way to
+    manage batches for Hive 1 and 2. In Hive 3, partition ACID tables at a higher level. Instead of
+    partitioning by day, for example, partition by month. Consider the following things: 
+How frequently you ingest the data.
+How often you update the data.
+ The size of the data. 
+
+A daily partition thats yields 4MB of data makes sense on the ingest side, but causes problems
+    on the consumer side. In this case, it makes sense to change the partitioning from daily to
+    monthly. To improve the yield, partition 4MB x 30 days of data a day to yields 120MG of data.
+    The number of small files is reduced. Hive compacts the files. Queries hit a higher density of
+    records inside the same size ORC file.
+Small partitions lead to HMS performance pressures and other problems, especially during heavy
+    queries to the same table. Heavy reads greatly increase the load on Hive metastore (HMS) to
+    build the partition list. If partition pruning does not occur, performance degrades. Build
+    partitions of ACID tables on a level appropriate for your data volume. You need a huge amount of
+    data to justify partitioning by month, day, and hour, which represents 8700 partitions per year. 
+Partitioning by month reduces the number of compaction operations and optimizes append
+    operations.
+
+
+Parent topic: Migrating Hive workloads to ACID

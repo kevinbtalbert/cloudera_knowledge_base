@@ -1,0 +1,285 @@
+Configure TLS/SSL for Ranger in a manually configured TLS/SSL environmentCloudera Docs
+Configure TLS/SSL for Ranger in a manually configured TLS/SSL environment
+How to manually configure TSL/SSL for Ranger in a manually configured TLS/SSL
+        environment.
+
+If you use manual TLS encryption on CDH and you plan to enable TLS for Ranger during
+                the CDP upgrade, you must ensure that the Ranger Admin certificate is imported into
+                the truststore file configuration of all services that support Ranger plugins.
+note
+If you have existing CA-signed certificates for keystores and truststores deployed
+                    across all the cluster hosts, then continue to use the same for the Ranger service.
+                    In this case you can skip the steps in this topic that create a self-signed
+                    certificate. Proceed to Upgrade the Cluster Step 4 : Add Ranger service from
+                        CM Upgrade Wizard and update the TLS/SSL configurations.
+
+
+
+Create a keystore file for Ranger Admin.
+mkdir -p /etc/security/serverKeys
+
+${JAVA_HOME}/bin/keytool -genkeypair -alias {ALIAS} 
+-keyalg RSA -keysize 2048 -validity 360 
+-keystore /etc/security/serverKeys/ranger-admin-keystore.jks 
+-storepass {STOREPASS}Where
+ALIAS
+A unique alias specified for creating the keystore file. This
+            can be Ranger Admin host FQDN/UQDN where it is going to be
+            installed or can use custom text.note If
+                upgrading to CDP <= 7.1.4, it is recommended to use the
+                host FQDN.
+STOREPASS
+A password which is used to protect the keystore.
+chown -R ranger:ranger /etc/security/serverKeys/ranger-admin-keystore.jks
+
+Export the certificate from the Ranger Admin keystore and create a certificate file.
+${JAVA_HOME}/bin/keytool -exportcert -keystore 
+/etc/security/serverKeys/ranger-admin-keystore.jks -alias {ALIAS} -file 
+/etc/security/serverKeys/ranger-admin-trust.cer
+Where
+ALIAS
+Use the same alias used for creating the keystore file
+                                ranger-admin-keystore.jks, as we are exporting the certificate
+                                associated with that alias.note No need
+                                    to provide a -storepass password to secure the
+                                    certificate file.
+
+
+Import Ranger Admin certificate into a truststore file for creating a
+                    "trusted certificate".
+${JAVA_HOME}/bin/keytool -importcert -file /etc/security/serverKeys/ranger-admin-trust.cer 
+-alias {ALIAS} -keystore /etc/security/serverKeys/ranger-truststore.jks -storepass
+{STOREPASS}
+Where
+ALIAS
+Assign any alias name.
+STOREPASS
+A password to secure the truststore file.
+
+note You must also import Solr Server certificate into
+                            /etc/security/serverKeys/ranger-truststore.jks, if
+                        Solr (CDP-INFRA-SOLR) Server has TLS enabled. This will help Ranger Admin to
+                        connect Solr for creating ranger_audits collection.
+
+
+On Review Changes, set the TLS/SSL configurations:
+
+
+
+Configuration Property
+Description
+
+
+Enable TLS/SSL for Ranger Admin
+                                                (ranger.service.https.attrib.ssl.enabled)
+Select this check box
+
+
+Ranger Admin TLS/SSL Server JKS
+                                                Keystore File Location
+                                                (ranger.https.attrib.keystore.file)
+
+The path to the keystore file created in Step
+                                                  1 : Creating a keystore file for Ranger
+                                                  Admin
+OR
+The path to the existing keystore file if 
+using existing CA-signed certificates
+
+
+
+Ranger Admin TLS/SSL Server JKS
+                                                Keystore File Password
+                                                (ranger.service.https.attrib.keystore.pass)
+The password of the keystore file used
+                                                for Ranger Admin
+
+
+
+Ranger Admin TLS/SSL Keystore File Alias
+                                                  (ranger.service.https.attrib.keystore.keyalias) 
+noteThis
+                                            config will be shown from CM-7.3.1 for CDP-7.1.5+
+                                            onwards in the initial wizard setup. If using CM
+                                            <=7.3.1 & upgrading to CDP < 7.1.5, continue
+                                            the use of alias name to FQDN of the host while creating
+                                            Ranger Admin keystore or using the existing
+                                            keystore.
+
+
+Enter the alias used for the keystore file
+                                                  created in Step 1 : Creating a keystore file
+                                                  for Ranger Admin.
+The {{RANGER_ADMIN_HOST}} is a placeholder value
+                                                  which will be replaced with the host FQDN where
+                                                  Ranger Admin will be installed in the current
+                                                  cluster when Auto-TLS is enabled which uses host
+                                                  FQDN as alias while creating keystore file. The
+                                                  placeholder can be replaced to have custom alias
+                                                  value in case of manual TLS/SSL setup. If using a
+                                                  custom alias value which is the same as the host
+                                                  short name then use {{RANGER_ADMIN_HOST_UQDN}}
+                                                  placeholder as a value.
+
+
+
+Ranger Admin TLS/SSL Trust Store File
+                                                (ranger.truststore.file)
+
+The path to the truststore file created in
+                                                  Step 3 : Import Ranger Admin certificate into a
+                                                  truststore file for creating a "trusted
+                                                  certificate" entry
+OR
+The path to the existing truststore file if 
+using existing CA-signed certificates
+
+
+
+Ranger Admin TLS/SSL Trust Store
+                                                Password (ranger.truststore.password)
+The password used for creating the
+                                                trust store file
+
+
+Ranger Tagsync TLS/SSL Trust Store File
+                                                (xasecure.policymgr.clientssl.truststore)
+
+The path to the truststore file created
+                                                  in Step 3 : Import Ranger Admin certificate
+                                                  into a truststore file for creating a "trusted
+                                                  certificate" entry
+OR
+The path to the existing truststore file if 
+using existing CA-signed certificates
+
+
+
+Ranger Tagsync TLS/SSL Trust Store
+                                                Password
+                                                (xasecure.policymgr.clientssl.truststore.password)
+The password used for creating the
+                                                trust store file
+
+
+Ranger Usersync TLS/SSL Trust Store
+                                                File (ranger.usersync.truststore.file)
+
+The path to the truststore file created
+                                                  in Step 3 : Import Ranger Admin certificate
+                                                  into a truststore file for creating a "trusted
+                                                  certificate" entry
+OR
+The path to the existing truststore file if 
+using existing CA-signed certificates
+
+
+
+Ranger Usersync TLS/SSL Trust Store
+                                                Password
+                                                (ranger.usersync.truststore.password)
+The password used for creating the
+                                                trust store file 
+
+
+
+
+Import the Ranger Admin certificate into the truststore file configs for the
+                    following services, if present in the cluster. Ranger plugin is being enabled
+                    for these services during upgrade.
+
+
+Search for the following configuration properties:
+
+
+HDFS
+HDFS NameNode TLS/SSL Trust Store File
+                                        (namenode_truststore_file)
+HDFS NameNode TLS/SSL Trust Store Password
+                                        (namenode_truststore_password)
+Hive (shown under Hive Configuration in CM-7.3.1+)
+Hive Metastore TLS/SSL Trust Store File
+                                        (hive.metastore.dbaccess.ssl.truststore.path)
+Hive Metastore TLS/SSL Trust Store Password
+                                        (hive.metastore.dbaccess.ssl.truststore.password)
+Kafka
+Kafka Broker TLS/SSL Trust Store File
+                                        (ssl.truststore.location)
+Kafka Broker TLS/SSL Trust Store Password
+                                        (ssl.truststore.password.generator)
+Impala
+impala TLS/SSL Trust Store File
+                                        (impala_truststore_file)
+impala TLS/SSL Trust Store Password
+                                        (impala_truststore_password)
+Atlas
+Atlas Server TLS/SSL Trust Store File (truststore.file)
+Atlas Server TLS/SSL Trust Store Password
+                                        (truststore.password)
+
+
+
+
+If a service has an existing truststore file, use that to import the
+                            Ranger Admin certificate. If not, then add a new truststore file and
+                            update the above configs.
+
+
+Import the Ranger Admin certificate into the existing/new truststore
+                            file.
+
+${JAVA_HOME}/bin/keytool -importcert -file 
+/etc/security/serverKeys/ranger-admin-trust.cer -alias {ALIAS} -keystore 
+{TRUSTSTORE} -storepass {STOREPASS}
+Where
+ALIAS
+Assign any alias name.
+STOREPASS
+A password to secure the truststore file.
+TRUSTSTORE
+EITHER an existing truststore file used by the service
+                                            to import the Ranger Admin certificate OR a new
+                                            truststore file which will have Ranger Admin
+                                            certificate.
+
+
+
+
+If using existing CA-signed certificates then add the path of the
+                            existing truststore file.
+
+
+Proceed to upgrade wizard for further other tasks.
+
+
+
+Migrate Key Trustee KMS to Ranger KMS KTS.
+
+
+If you have Key Trustee service present in the cluster, Ranger KMS KTS will be
+                            added from the backend as part of the upgrade flow.
+
+
+To successfull start Ranger KMS KTS service in the upgrade flow:
+
+
+
+
+Change the alias of the keystore file used by Key Trustee KMS to point to the
+                            hostname where it is installed. Check Key Management Server Proxy TLS/SSL
+                                Server JKS Keystore File Location config to get the keystore
+                            file.
+${JAVA_HOME}/bin/keytool -changealias -alias {EXISTING_ALIAS} -destalias 
+`hostname -f` -keystore {KT_KMS_KEYSTORE}note
+    In a High Availability envrionment, perform this step on all KT KMS
+    servers.
+
+
+Import Ranger Admin certificate into truststore file used by KT KMS. Check
+                            Key Management Server Proxy TLS/SSL Trust Store File config to
+                            get the truststore file getting used.
+
+
+
+
+Parent topic: Step 10: Run the Upgrade Cluster Wizard

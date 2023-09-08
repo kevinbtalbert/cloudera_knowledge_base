@@ -1,0 +1,63 @@
+Use Fastcapa in a Kerberized EnvironmentCloudera Docs
+Use Fastcapa in a
+      Kerberized Environment
+You can use the Fastcapa probe in a Kerberized environment. 
+The following task assumes that you have configured the
+         following values. If necessary, change these values to match your environment.The Kafka
+            broker is at kafka1:6667.ZooKeeper is at
+               zookeeper1:2181.The Kafka security protocol is
+               SASL_PLAINTEXT.The keytab used is located at
+               /etc/security/keytabs/metron.headless.keytab.The service
+            principal is metron@EXAMPLE.COM.
+
+Build Librdkafka with SASL support (--enable-sasl):
+
+wget https://github.com/edenhill/librdkafka/archive/v0.9.4.tar.gz  -O - | tar -xz
+cd librdkafka-0.9.4/
+./configure --prefix=$RDK_PREFIX --enable-sasl
+make 
+make install
+
+
+
+Verify that Librdkafka supports SASL:
+
+$ examples/rdkafka_example -X builtin.features
+builtin.features = gzip,snappy,ssl,sasl,regex
+
+
+
+If Librdkafka does not support SASL, install libsasl or
+                  libsasl2. Use the following command to install
+                  libsasl on your CentOS environment:
+
+yum install -y cyrus-sasl cyrus-sasl-devel cyrus-sasl-gssapi
+
+
+Grant access to your Kafka topic (in this example, named pcap):
+
+$KAFKA_HOME/bin/kafka-acls.sh --authorizer kafka.security.auth.SimpleAclAuthorizer \
+  --authorizer-properties zookeeper.connect=zookeeper1:2181 \
+  --add --allow-principal User:metron --topic pcap
+
+
+
+Obtain a Kerberos ticket:
+
+kinit -kt /etc/security/keytabs/metron.headless.keytab metron@EXAMPLE.COM
+
+
+
+Add the following additional configuration values to your Fastcapa configuration
+               file:
+
+security.protocol = SASL_PLAINTEXT
+sasl.kerberos.keytab = /etc/security/keytabs/metron.headless.keytab
+sasl.kerberos.principal = metron@EXAMPLE.COM
+
+
+
+Run Fastcapa
+
+
+Parent topic: Setting up pcap Overview

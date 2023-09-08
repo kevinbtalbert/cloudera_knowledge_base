@@ -1,0 +1,284 @@
+Generating Table and Column StatisticsCloudera Docs
+Generating Table and Column Statistics
+Use the COMPUTE STATS statement to collect table
+    and column statistics. The COMPUTE STATS variants offer
+    different tradeoffs between computation cost, staleness, and maintenance
+    workflows.
+important
+ For a particular table, use either COMPUTE
+          STATS or COMPUTE INCREMENTAL STATS, but
+        never combine the two or alternate between them. If you switch from
+          COMPUTE STATS to COMPUTE INCREMENTAL
+          STATS during the lifetime of a table, or vice versa, drop all
+        statistics by running DROP STATS before making the
+        switch. 
+
+COMPUTE STATS
+ The COMPUTE STATS command collects and sets the
+        table-level and partition-level row counts as well as all column
+        statistics for a given table. The collection process is CPU-intensive
+        and can take a long time to complete for very large tables. 
+ To speed up COMPUTE STATS consider the following
+        options which can be combined. 
+
+ Limit the number of columns for which statistics are collected
+              to increase the efficiency of COMPUTE STATS. Queries benefit from
+              statistics for those columns involved in filters, join conditions,
+              group by or partition by clauses. Other columns are good
+              candidates to exclude from COMPUTE STATS. This feature is
+              available since Impala 2.12. 
+
+
+ Set the MT_DOP query option to use more threads
+              within each participating impalad to compute the
+              statistics faster - but not more efficiently. Note that computing
+              stats on a large table with a high MT_DOP value
+              can negatively affect other queries running at the same time if
+              the COMPUTE STATS claims most CPU cycles.
+
+
+ Consider the experimental extrapolation and sampling features
+              (see below) to further increase the efficiency of computing stats.
+            
+
+
+
+
+COMPUTE STATS is intended to be run periodically, e.g.
+        weekly, or on-demand when the contents of a table have changed
+        significantly. Due to the high resource utilization and long response
+        time of tCOMPUTE STATS, it is most practical to run it
+        in a scheduled maintenance window where the Impala cluster is idle
+        enough to accommodate the expensive operation. The degree of change that
+        qualifies as significant depends on the query workload, but
+        typically, if 30% of the rows have changed then it is recommended to
+        recompute statistics. 
+ If you reload a complete new set of data for a table, but the number
+        of rows and number of distinct values for each column is relatively
+        unchanged from before, you do not need to recompute stats for the table.
+      
+
+Extrapolation and Sampling
+ Impala supports extrapolation and sampling to alleviate the following
+        common issues for computing and maintaining statistics on very large
+        tables: 
+
+ Newly added partitions do not have row count statistics. Table
+              scans that only access those new partitions are treated as not
+              having stats. Similarly, table scans that access both new and old
+              partitions estimate the scan cardinality based on those old
+              partitions that have stats, and the new partitions without stats
+              are treated as having 0 rows. 
+
+
+ The row counts of existing partitions become stale when data is
+              added or dropped. 
+
+
+ Computing stats for tables with a 100,000 or more partitions
+              might fail or be very slow due to the high cost of updating the
+              partition metadata in the Hive Metastore. 
+
+
+ With transient compute resources it is important to minimize the
+              time from starting a new cluster to successfully running queries.
+              Since the cluster might be relatively short-lived, users might
+              prefer to quickly collect stats that are "good enough" as opposed
+              to spending a lot of time and resources on computing full-fidelity
+              stats. 
+
+ For very large tables, it is often wasteful or impractical to run
+        a full COMPUTE STATS to address the scenarios above on
+        a frequent basis. 
+ The sampling feature makes COMPUTE STATS more
+        efficient by processing a fraction of the table data, and the
+        extrapolation feature aims to reduce the frequency at which
+          COMPUTE STATS needs to be re-run by estimating the
+        row count of new and modified partitions. 
+ The sampling and extrapolation features are disabled by default. They
+        can be enabled globally or for specific tables, as follows.
+
+Set the impalad start-up configuration
+            --enable_stats_extrapolation to enable the features
+          globally.
+To enable them only for a specific table, set the
+            impala.enable.stats.extrapolation table property to
+            true for the table. The table-level property
+          overrides the global setting, so it is also possible to enable
+          sampling and extrapolation globally, but disable it for specific
+          tables by setting the table property to false. For
+          example:
+          ALTER TABLE mytable test_table SET TBLPROPERTIES("impala.enable.stats.extrapolation"="true");
+
+note Why are these features experimental? Due to their probabilistic
+        nature it is possible that these features perform pathologically poorly
+        on tables with extreme data/file/size distributions. Since it is not
+        feasible for us to test all possible scenarios we only cautiously
+        advertise these new capabilities. That said, the features have been
+        thoroughly tested and are considered functionally stable. If you decide
+        to give these features a try, please tell us about your experience at
+        user@impala.apache.org! We rely on user feedback to guide future
+        improvements in statistics collection. 
+
+Stats Extrapolation
+
+ The main idea of stats extrapolation is to estimate the row
+              count of new and modified partitions based on the result of the
+              last COMPUTE STATS. Enabling stats extrapolation
+              changes the behavior of COMPUTE STATS, as well as
+              the cardinality estimation of table scans. COMPUTE
+                STATS no longer computes and stores per-partition row
+              counts, and instead, only computes a table-level row count
+              together with the total number of file bytes in the table at that
+              time. No partition metadata is modified. The input cardinality of
+              a table scan is estimated by converting the data volume of
+              relevant partitions to a row count, based on the table-level row
+              count and file bytes statistics. It is assumed that within the
+              same table, different sets of files with the same data volume
+              correspond to the similar number of rows on average. With
+              extrapolation enabled, the scan cardinality estimation ignores
+              per-partition row counts. It only relies on the table-level
+              statistics and the scanned data volume. 
+ The SHOW TABLE STATS and
+                EXPLAIN commands distinguish between row counts
+              stored in the Hive Metastore, and the row counts extrapolated
+              based on the above process. 
+
+Sampling
+
+ A TABLESAMPLE clause may be added to
+                COMPUTE STATS to limit the percentage of data
+              to be processed. The final statistics are obtained by
+              extrapolating the statistics from the data sample over the entire
+              table. The extrapolated statistics are stored in the Hive
+              Metastore, just as if no sampling was used. The following example
+              runs COMPUTE STATS over a 10 percent data
+              sample.COMPUTE STATS test_table TABLESAMPLE SYSTEM(10) ;
+ We have found that a 10 percent sampling rate typically offers a
+              good tradeoff between statistics accuracy and execution cost. A
+              sampling rate well below 10 percent has shown poor results and is
+              not recommended. 
+important Sampling-based techniques sacrifice result
+              accuracy for execution efficiency, so your mileage may vary for
+              different tables and columns depending on their data distribution.
+              The extrapolation procedure Impala uses for estimating the number
+              of distinct values per column is inherently non-detetministic, so
+              your results may even vary between runs of COMPUTE STATS
+                TABLESAMPLE, even if no data has changed. 
+
+
+
+COMPUTE INCREMENTAL STATS
+ In Impala 2.1.0 and higher, you can use the COMPUTE
+          INCREMENTAL STATS and DROP INCREMENTAL STATS
+        commands. The INCREMENTAL clauses work with incremental
+        statistics, a specialized feature for partitioned tables. 
+ When you compute incremental statistics for a partitioned table, by
+        default Impala only processes those partitions that do not yet have
+        incremental statistics. By processing only newly added partitions, you
+        can keep statistics up to date without incurring the overhead of
+        reprocessing the entire table each time. 
+ You can also compute or drop statistics for a specified subset of
+        partitions by including a PARTITION clause in the
+          COMPUTE INCREMENTAL STATS or DROP INCREMENTAL
+          STATS statement. 
+important
+ When you run COMPUTE
+            INCREMENTAL STATS on a table for the first time, the
+          statistics are computed again from scratch regardless of whether the
+          table already has statistics. Therefore, expect a one-time
+          resource-intensive operation for scanning the entire table when
+          running COMPUTE INCREMENTAL STATS for the first time
+          on a given table. 
+
+ The metadata for incremental statistics is handled differently from
+        the original style of statistics: 
+
+
+ Issuing a COMPUTE INCREMENTAL STATS without a
+            partition clause causes Impala to compute incremental stats for all
+            partitions that do not already have incremental stats. This might be
+            the entire table when running the command for the first time, but
+            subsequent runs should only update new partitions. You can force
+            updating a partition that already has incremental stats by issuing a
+              DROP INCREMENTAL STATS before running
+              COMPUTE INCREMENTAL STATS. 
+
+
+ The SHOW TABLE STATS and SHOW
+              PARTITIONS statements now include an additional column
+            showing whether incremental statistics are available for each
+            column. A partition could already be covered by the original type of
+            statistics based on a prior COMPUTE STATS
+            statement, as indicated by a value other than -1
+            under the #Rows column. Impala query planning uses
+            either kind of statistics when available. 
+
+
+
+COMPUTE INCREMENTAL STATS takes more time than
+              COMPUTE STATS for the same volume of data.
+            Therefore it is most suitable for tables with large data volume
+            where new partitions are added frequently, making it impractical to
+            run a full COMPUTE STATS operation for each new
+            partition. For unpartitioned tables, or partitioned tables that are
+            loaded once and not updated with new partitions, use the original
+              COMPUTE STATS syntax. 
+
+
+
+COMPUTE INCREMENTAL STATS uses some memory in the
+              catalogd process, proportional to the number of
+            partitions and number of columns in the applicable table. The memory
+            overhead is approximately 400 bytes for each column in each
+            partition. This memory is reserved in the
+              catalogd daemon, the
+              statestored daemon, and in each instance of the
+              impalad daemon. 
+
+
+ In cases where new files are added to an existing partition, issue
+            a REFRESH statement for the table, followed by a
+              DROP INCREMENTAL STATS and COMPUTE
+              INCREMENTAL STATS sequence for the changed partition.
+          
+
+
+ The DROP INCREMENTAL STATS statement operates
+            only on a single partition at a time. To remove statistics (whether
+            incremental or not) from all partitions of a table, issue a
+              DROP STATS statement with no
+              INCREMENTAL or PARTITION
+            clauses. 
+
+
+ The following considerations apply to incremental statistics when the
+        structure of an existing table is changed (known as schema
+          evolution): 
+
+
+ If you use an ALTER TABLE statement to drop a
+            column, the existing statistics remain valid and COMPUTE
+              INCREMENTAL STATS does not rescan any partitions. 
+
+
+ If you use an ALTER TABLE statement to add a
+            column, Impala rescans all partitions and fills in the appropriate
+            column-level values the next time you run COMPUTE
+              INCREMENTAL STATS. 
+
+
+ If you use an ALTER TABLE statement to change the
+            data type of a column, Impala rescans all partitions and fills in
+            the appropriate column-level values the next time you run
+              COMPUTE INCREMENTAL STATS. 
+
+
+ If you use an ALTER TABLE statement to change the
+            file format of a table, the existing statistics remain valid and a
+            subsequent COMPUTE INCREMENTAL STATS does not
+            rescan any partitions. 
+
+
+
+

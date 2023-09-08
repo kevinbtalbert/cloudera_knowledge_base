@@ -1,0 +1,67 @@
+FilesystemsCloudera Docs
+Filesystems
+In Linux, there are several choices for formatting and organizing drives. However, only
+  a few choices are optimal for Hadoop.
+In RHEL and CentOS, the Logical Volume Manager (LVM) should not be used for data drives. It is
+   not optimal and can lead to combining multiple drives into one logical disk, which is in complete
+   contrast to how Hadoop manages fault tolerance across HDFS. It is beneficial to keep LVM enabled
+   on the OS drives. Any performance impact that may occur is countered by the improvement of system
+   manageability. Using LVM on the OS drives enables the admin to avoid over-allocating space on
+   partitions. Space needs can change over time and the ability to dynamically grow a filesystem is
+   better than having to rebuild a system. Do not use LVM to stripe or span logical volumes across
+   multiple physical volumes to mimic RAID.
+Cloudera recommends using an extent-based filesystem. This includes ext3,
+    ext4, and xfs. Most new Hadoop clusters use the
+    ext4 filesystem by default. RHEL 7 uses xfs as its default
+   filesystem.
+noteIf using Kudu, ensure that filesystem hole punching is a capability of
+   the filesystem. Hole punching is the use of the fallocate() system call with the
+    FALLOC_FL_PUNCH_HOLE option. Newer versions of ext4 and
+    xfs support Hole Punching. ext3 does not support hole punching
+   and unpatched RHEL prior to 6.4 does not support this facility. Older versions of
+    ext4 and xfs that do not support hole punching cause Kudu to
+   fail to start because Kudu provides a pre-start test for this facility. Without the hole punching
+   support, the block manager is unsafe to use because claimed blocks are released and more disk
+   space is consumed.
+Filesystem creation options
+When creating ext4 filesystems for use with Hadoop data volumes, Cloudera
+    recommends reducing the superuser block reservation from 5% to 1% for root (using the
+     -m1 option) as well as setting the following options:
+use one inode per 1 MB (largefile) 
+minimize the number of super block backups (sparse_super)
+enable journaling (has_journal)
+use b-tree indexes for directory trees (dir_index)
+use extent-based allocations (extent)
+
+Run the following command for creating an ext4
+    filesystem:mkfs –t ext4 –m 1 –O sparse_super,dir_index,extent,has_journal /dev/sdb1
+Run the following command for creating an xfs
+     filesystem:mkfs –t xfs /dev/sdb1noteYou need not specify any options when creating an xfs
+     filesystem.
+
+Disk mount options
+By design, HDFS is a fault-tolerant filesystem. All drives used by DataNode machines for data
+    need to be mounted without the use of RAID. Drives should be mounted in the
+     /etc/fstab filesystem table using the noatime option
+    (which also implies nodiratime). In case of SSD or flash, turn on TRIM by specifying the discard option when mounting. This reduces
+    premature SSD wear and device failures, while primarily avoiding long garbage collection
+    pauses.
+In the /etc/fstab filesystem table, ensure that the appropriate
+    filesystems have the noatime mount option
+    specified:/dev/sda1	/         	ext4    noatime        		0 0
+To enable TRIM, edit the /etc/fstab filesystem table and also set the
+     discard mount
+    option:/dev/sdb1	/data       ext4    noatime,discard       0 0
+
+Disk mount naming convention
+For ease of administration, it is recommended to mount all of the disks on the DataNode
+    machines with a naming pattern, such as the
+    following:/data1
+/data2
+/data3
+/data4
+/data5
+/data6
+
+
+Parent topic: Operating system best practices

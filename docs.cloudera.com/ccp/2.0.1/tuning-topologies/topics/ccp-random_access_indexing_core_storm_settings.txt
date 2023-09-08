@@ -1,0 +1,89 @@
+Tune Random Access Indexing Core Storm SettingsCloudera Docs
+Tune Random Access Indexing
+      Core Storm Settings
+You can set the number of Kafka spouts to match the number of Kafka partitions. You
+      can also increase the number of workers and ackers to match the Storm nodes, unless the
+      estimated throughput for the parser is very low.
+
+Set the parser Storm settings using the enrichment.properties
+               file.
+
+vi ~/elasticsearch.properties
+
+
+##### Storm #####
+indexing.workers=3
+indexing.acker.executors=3
+topology.worker.childopts=
+topology.auto-credentials=[]
+topology.max-spout.pending=
+               
+  ...
+               
+kafka.start=LATEST
+               
+  ...
+               
+##### Parallelism #####
+kafka.spout.parallelism=9
+
+
+Set the Kafka Offset Strategy to LATEST to allow the Kafka topic
+               to be written to continuously during testing so when the parser is restarted, the
+               topology will not be flooded with events.
+
+kafka.start-LATEST
+
+
+Alternatively, you can set the Kafka Offset Strategy to EARLIEST
+               to determine the maximum throughput of the topology though you should set Max Spout
+               Pending to avoid errors..
+
+kafka.start-EARLIEST
+
+
+Increase the hdfs.writer.parallelism values in increments based on the number of
+               workers.
+For example, in the previous example, the parameters could be incremented by
+               3.
+
+##### Parallelism #####
+kafka.spout.parallelism=9
+enrichment.split.parallelism=
+enrichment.stellar.parallelism=
+enrichment.join.parallelism=18
+threat.intel.split.parallelism=
+threat.intel.stellar.parallelism=
+threat-intel.join-parallelism-18
+kafka.writer.parallelism=9
+
+
+As you increase the enrichment.join.parallelism, threat.intel.join.parallelism, and
+               kafka.writer.parallelism values, check the two Storm statistics, Capacity of the HDFS
+               indexing component, the number of tuples acked in a 10-minute window, and the
+               complete latency.
+
+
+For a given estimated throughput, the capacity should be no greater than ~0.800.
+               This will allow for ~20% overhead should the number of incoming events spike above
+               the estimated average. If the capacity is above this level, Parallelism and Num Tasks
+               should be incremented and the topology restarted. 
+The number of acked tuples should be approximately equal to (Desired Throughput
+               ×600) assuming the topology has been active for at least 11 - 12 minutes. If the
+               number of acked tuples and the capacity of the topology are both low, there may not
+               be enough Kafka partitions.
+If the Storm UI is showing a capacity of ~0.800 or less, the Kafka consumer should
+               be monitored to ensure that there is no significant lag or buildup of messages for
+               the parser. The command below shows an example of how this can be monitored via the
+               command line on a Kafka node:
+
+cd /usr/hdp/current/kafka-broker/bin/
+                  
+watch -n 2 ./kafka-run-class.sh kafka.tools.ConsumerOffsetChecker --zookeeper 
+master01:2181 --topic indexing --group index-batch
+
+
+
+
+
+Parent topic: Tuning a Random Access Indexing Topology

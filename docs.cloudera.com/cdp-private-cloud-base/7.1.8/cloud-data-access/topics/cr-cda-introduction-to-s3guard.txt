@@ -1,0 +1,70 @@
+Introduction to S3GuardCloudera Docs
+Introduction to S3Guard
+Amazon S3 is an object store, not a filesystem. There are no directories, only
+    objects. The S3A connector lets Hadoop, Hive and Spark applications see files in a directory
+    tree, but really they are working on the objects underneath, by listing them and working on each
+    one one-by-one.
+noteS3Guard is no longer used with newly registered AWS environments using
+          Runtime version 7.2.2 or newer. Consequently, the ''Enable S3Guard" environment registration
+          option has been removed and there is no need to create a DynamoDB table for your environment
+          when planning to use Runtime version 7.2.2 or newer. Environments created prior to this change
+          continue to use S3Guard.
+Some of the operations which filesystems support are actually absent, with rename being
+      the key one. The S3A connector mimics file or directory rename, by copying each file then
+      deleting the original, which takes about 6-10 megabytes/second.
+Until November 2020, the S3 Object Store was "eventually consistent": when a file was deleted
+      or overwritten it took time for that change to propagate across all servers replicating the
+      data. As a result, newly deleted files could still be visible, while queries of updated files
+      could return the old version.
+A critical problem was listing inconsistency: when a query was made of S3 to list all objects
+      under a specific path, that listing could be out of date. This could result in files being
+      left out of operations such as copying or renaming directories. Newly created files were at
+      most risk. 
+S3Guard mitigated the issues related to S3's eventual consistency on listings by using
+      a table on Amazon DynamoDB as a consistent metadata store. This guaranteed a consistent view
+      of data stored in S3.
+How S3Guard Works
+S3Guard is a feature in the Hadoop S3A connector which uses Amazon's DynamoDB to cache
+        information about created and deleted files, "The S3Guard Database".
+When an application using the S3A Connector with S3Guard enabled manipulates objects in
+        S3, such as creating, deleting or "renaming" them, the S3Guard database is updated. Newly
+        created/copied files are added to the table, while deleted files have "tombstone markers"
+        added to indicate that they have been deleted.
+When a directory is listed on S3, the information from the S3Guard database is used to
+        update the listing with this information: new files are added while those files with
+        tombstone markers are not included in a listing.
+As a result, the listing is up to date with all operations performed on the directory by
+        all clients using S3Guard.
+When a file is opened for reading, or any existence check made, the S3Guard database is
+        checked first. If an entry is found in the database. that is used as the response —omitting
+        all checks of S3 itself. This includes tombstone markers, which are used as evidence that a
+        file does not exist. The caller is given the current state of the object
+        (existence/nonexistence, size and type), without S3 being queried at all. This can be
+        significantly faster than interacting with S3.
+With this design, directory listings are kept consistent across a sequence of
+        operations, even across multiple servers —indeed, across multiple Hadoop clusters.
+What S3Guard Cannot Do
+S3Guard only stores filenames, lengths, "etags" and optional version data in its DynamoDB
+      tables. The contents of the files are still stored in S3. If a file is overwritten, S3's
+      eventual consistency may mean that the old data is still present. S3 tries to detect this by
+      using the following techniques:
+Storing the etag checksum of each file and detecting when the value
+          is different from that in S3.
+In an S3 bucket with versioning enabled, the version is used to
+          guarantee that the file loaded is the one matching the S3Guard record.
+
+When a file is loaded, the S3A connector will make repeated attempts to load a file
+      with the expected etag and version ID before concluding that it is not available – at which
+      point the operation will fail.
+S3Guard does not provide the atomic directory rename operation which
+      many applications rely on to commit their intermediate work to the final destination of the
+      job. This does not work in S3 where files are copied one-by-one in a slow process. If this
+      operation is interrupted, the source and destination will be in an unknown state.
+
+For Spark applications, use an S3A committer. 
+When copying files using distcp, avoid the -atomic
+        option. All it will do is make the copy slower. Use the -direct operation
+        for a direct upload, and be aware that a failure during the copy can leave the destination
+        inconsistent.
+
+Parent topic: Using S3Guard for Consistent S3 Metadata

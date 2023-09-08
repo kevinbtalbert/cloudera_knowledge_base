@@ -1,0 +1,93 @@
+Run the spark-submit jobCloudera Docs
+Run the spark-submit job
+After you  create an indexer.jar file, you need to run a spark-submit job on a Solr
+        worker node to index your input file.
+
+
+You have prepared the indexer.jar file and it is available on
+                    your local machine.
+You have sufficient rights to SSH into one of the cluster nodes.
+You have retrieved the keytab for your environment.
+
+
+
+SSH to one of the worker nodes in your Data Hub cluster.
+
+Copy your keytab file to the working directory:
+
+scp <keytab> <user>@<IP_OF_WORKER_NODE>:/<PATH/TO/WORKING/DIRECTORY>
+
+For example:
+                    scp sampleuser.keytab sampleuser@1.1.1.1:/tmp
+
+Create a JAAS file with the following content:
+Client {
+  com.sun.security.auth.module.Krb5LoginModule required
+  useKeyTab=true
+  useTicketCache=false
+  doNotPrompt=true
+  debug=true
+  keyTab="sampleuser.keytab"
+  principal="sampleuser@EXAMPLE.COM";
+};Replace
+                        sampleuser@EXAMPLE.COM with your user principal.
+
+Copy the indexer JAR file to the working directory:
+
+scp <indexer>.jar <user>@<IP_OF_WORKER_NODE>:/<PATH/TO/WORKING/DIRECTORY>
+
+For example:
+                    scp indexer-1.0-SNAPSHOT.jar sampleuser@1.1.1.1:/tmp
+
+Copy the input CSV file to the working directory:
+
+scp <INPUT_FILE> <user>@<IP_OF_WORKER_NODE>:/<PATH/TO/WORKING/DIRECTORY>
+
+For
+                    example:scp nyc_yellow_taxi_sample_1k.csv sampleuser@1.1.1.1:/tmp
+
+Add the input file to HDFS:
+
+hdfs dfs -put <INPUT_FILE>
+
+For
+                    example:hdfs dfs -put nyc_yellow_taxi_sample_1k.csv
+
+Create a Solr collection:
+
+solrctl config --create <configName> <baseConfige> -p immutable=false
+solrctl collection --create <collectionName> -s <numShards> -c <collectionConfName>
+
+For
+                    example:solrctl config --create testConfig managedTemplate -p immutable=false
+solrctl collection --create testcollection -s 2 -c testConfig
+
+Submit your spark job:
+spark-submit --jars /opt/cloudera/parcels/CDH/jars/spark-solr-*-shaded.jar --files <KEYTAB>,<JAAS_CONF_FILE> --name <SPARK_JOB_NAME> --driver-java-options="-Djavax.net.ssl.trustStore=<ABSOLUTE/PATH/TO/TRUSTSTORE/FILE> -Djavax.net.ssl.trustStorePassword=" --class com.lucidworks.spark.SparkApp <INDEXER_JAR> csv -zkHost <ZOOKEEPER_ENSEMBLE> -collection <TARGET_SOLR_COLLECTION> -csvPath <INPUT_CSV_FILE> -solrJaasAuthConfig=<JAAS_CONF_FILE>Replace 
+spark-solr-*-shaded.jar
+with the name of the shaded.jar file under
+                                    /opt/cloudera/parcels/CDH/jars/
+<KEYTAB>
+with the keytab file of your user
+<JAAS_CONF_FILE>
+with the JAAS file you created
+<SPARK_JOB_NAME>
+with the name of the job you want to run
+<ABSOLUTE/PATH/TO/TRUSTSTORE/FILE>
+with the absolute path to the truststore file
+<INDEXER_JAR>
+with the indexer.jar file you created
+<ZOOKEEPER_ENSEMBLE>
+with the address of the ZooKeeper ensemble used by the Solr
+                                cluster.
+<TARGET_SOLR_COLLECTION>
+with the name of the Solr collection you created
+<INPUT_CSV_FILE>
+with the name of the file that you want to index into the
+                                    <TARGET_SOLR_COLLECTION>
+
+For
+                    example:spark-submit --jars /opt/cloudera/parcels/CDH/jars/spark-solr-3.9.0.7.2.2.0-218-shaded.jar --files sampleuser.keytab,jaas-client.conf --name spark-solr --driver-java-options="-Djavax.net.ssl.trustStore=/var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_truststore.jks -Djavax.net.ssl.trustStorePassword=" --class com.lucidworks.spark.SparkApp indexer-1.0-SNAPSHOT.jar csv -zkHost sampleuser-leader2.sampleuser.work:2181,sampleuser.work:2181,sampleuser-master7.work:2181/solr-dde -collection testcollection -csvPath nyc_yellow_taxi_sample_1k.csv -solrJaasAuthConfig=jaas-client.conf
+
+
+Related informationGenerating collection configuration using configsCreating a Solr collectionParent topic: Batch indexing to Solr using SparkApp framework

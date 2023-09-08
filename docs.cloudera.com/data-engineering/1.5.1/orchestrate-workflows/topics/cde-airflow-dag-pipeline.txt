@@ -1,0 +1,141 @@
+Automating data pipelines using Apache Airflow in Cloudera Data EngineeringCloudera Docs
+Automating data pipelines using Apache Airflow in Cloudera Data
+    Engineering
+Cloudera Data Engineering (CDE) enables you to automate a workflow or data pipeline
+    using Apache Airflow Python DAG files. Each CDE virtual cluster includes an embedded instance of
+    Apache Airflow. You can also use CDE with your own Airflow deployment. CDE on CDP
+      Private Cloud currently supports only the CDE job run operator.
+
+importantCloudera provides support for Airflow core operators and hooks, but does not provide support for Airflow provider packages.
+        
+        Cloudera Support may require you to remove any installed provider packages during troubleshooting. 
+
+
+The following instructions are for using the Airflow service provided with each CDE virtual
+        cluster. For instructions on using your own Airflow deployment, see Using the Cloudera provider for
+          Apache Airflow. 
+
+Create an Airflow DAG file in Python. Import the CDE operator and define the
+          tasks and dependencies.For example, here is a complete DAG
+            file:from dateutil import parser
+from datetime import datetime, timedelta
+from datetime import timezone
+from airflow import DAG
+from cloudera.cdp.airflow.operators.cde_operator import CDEJobRunOperator
+
+
+default_args = {
+    'owner': 'psherman',
+    'retry_delay': timedelta(seconds=5),
+    'depends_on_past': False,
+    'start_date': parser.isoparse('2021-05-25T07:33:37.393Z').replace(tzinfo=timezone.utc)
+}
+
+example_dag = DAG(
+    'airflow-pipeline-demo',
+    default_args=default_args, 
+    schedule_interval='@daily', 
+    catchup=False, 
+    is_paused_upon_creation=False
+)
+
+ingest_step1 = CDEJobRunOperator(
+    connection_id='cde-vc01-dev',
+    task_id='ingest',
+    retries=3,
+    dag=example_dag,
+    job_name='etl-ingest-job'
+)
+
+prep_step2 = CDEJobRunOperator(
+    task_id='data_prep',
+    dag=example_dag,
+    job_name='insurance-claims-job'
+)
+
+
+ingest_step1 >> prep_step2
+Here
+            are some examples of things you can define in the DAG file:
+CDE job run operator
+Use CDEJobRunOperator to specify a CDE job
+                to run. This job must already exist in the virtual cluster
+                specified by the connection_id. If no
+                  connection_id is specified, CDE looks for the
+                job in the virtual cluster where the Airflow job
+                runs.from cloudera.cdp.airflow.operators.cde_operator import CDEJobRunOperator
+...
+ingest_step1 = CDEJobRunOperator(
+    connection_id='cde-vc01-dev',
+    task_id='ingest',
+    retries=3,
+    dag=example_dag,
+    job_name='etl-ingest-job'
+)
+
+Email Alerts
+Add the following parameters to the DAG default_args to
+                send email alerts for job failures or missed service-level agreements or both.
+                'email_on_failure': True,
+'email': 'abc@example.com',
+'email_on_retry': True,
+'sla': timedelta(seconds=30)                
+Task dependencies
+After you have defined the tasks, specify the dependencies as
+                  follows:ingest_step1 >> prep_step2For
+                  more information on task dependencies, see Task Dependencies in
+                  the Apache Airflow documentation.
+For a tutorial on creating Apache Airflow DAG
+          files, see the Apache Airflow
+          documentation.
+Create a CDE job. 
+
+
+In the Cloudera Data Platform (CDP) console, click the
+                Data Engineering tile. The CDE Home
+              page displays.
+
+
+In the CDE Home page, in Jobs, click
+                Create New under Airflow or click
+                Jobs in the left navigation menu and then click
+                Create Job.
+
+
+Select the Airflow job type.If you are creating the job from the Home page,
+              select the virtual cluster where you want to create the job.
+
+
+Name: Provide a name for the job. 
+
+
+DAG File: Use an existing file or add a DAG file to an
+              existing resource or create a resource and upload it. 
+
+
+Select from Resource: Click Select from
+                    Resource to select a DAG file from an existing resource.
+Upload: Click Upload to upload a
+                  DAG file to an existing resource or to a new resource that you can create by
+                  selecting Create a resource from the Select a
+                    Resource dropdown list. Specify the resource name and upload the DAG
+                  file to it. 
+
+
+
+
+
+noteYou must configure the Configure Email
+              Alerting option while creating a virtual cluster to send your email
+            alerts. For more information about configuring email alerts, see Creating virtual clusters. You can add the
+              email alert parameters to the DAG default_args to get email alerts for job failures
+              and missed service-level agreements. An example of email alert configurations is
+              listed in Step 1.
+
+
+Click Create and Run to create the job and run it immediately,
+          or click the dropdown button and select Create to create the
+          job.
+
+
+Related informationProvider packagesManaging Cloudera Data Engineering job resources using the CLI

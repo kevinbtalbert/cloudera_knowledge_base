@@ -1,0 +1,113 @@
+Batch indexing into online Solr servers using GoLiveCloudera Docs
+Batch indexing into online Solr servers using GoLive
+MapReduceIndexerTool is a MapReduce batch job driver that creates a set of Solr index
+    shards from a set of input files and writes the indexes into HDFS in a flexible, scalable, and
+    fault-tolerant manner. Using GoLive, MapReduceIndexerTool also supports merging the output
+    shards into a set of live customer-facing Solr servers. 
+
+warningBatch indexing into offline Solr shards is not supported in environments
+        in which batch indexing into online Solr servers using GoLive occurs.
+
+If you are working with a secured cluster, configure your client JAAS file
+            ($HOME/jaas.conf) as follows:
+
+Client {
+ com.sun.security.auth.module.Krb5LoginModule required
+ useKeyTab=false
+ useTicketCache=true
+ principal="solr@EXAMPLE.COM";
+ };
+If you are using Kerberos, kinit as a user
+          that has privileges to update the collection: 
+
+kinit solr@EXAMPLE.COM
+Replace EXAMPLE.COM with your Kerberos realm
+            name.
+Delete any existing documents in the cloudera_tutorial_tweets collection. If
+          your cluster does not have security enabled, run the following commands as the
+            solr user by adding sudo -u solr before the command: 
+
+solrctl collection --deletedocs cloudera_tutorial_tweets
+Run the MapReduce job with the --go-live parameter. Replace
+            nn01.example.com and zk01.example.com with your
+          NameNode and ZooKeeper hostnames, respectively.   
+
+
+Security Enabled:
+YARN_OPTS="-Djava.security.auth.login.config=/path/to/jaas.conf" yarn jar /opt/cloudera/parcels/CDH/lib/solr/contrib/mr/search-mr-job.jar org.apache.solr.hadoop.MapReduceIndexerTool -D 'mapred.child.java.opts=-Xmx500m' -D 'mapreduce.job.user.classpath.first=true' --log4j /opt/cloudera/parcels/CDH/share/doc/search*/examples/solr-nrt/log4j.properties --morphline-file /opt/cloudera/parcels/CDH/share/doc/search*/examples/solr-nrt/test-morphlines/tutorialReadAvroContainer.conf --output-dir hdfs://nn01.example.com:8020/user/jdoe/outdir --verbose --go-live --zk-host zk01.example.com:2181/solr --collection cloudera_tutorial_tweets hdfs://nn01.example.com:8020/user/jdoe/indir
+
+
+Security Disabled:
+yarn jar /opt/cloudera/parcels/CDH/lib/solr/contrib/mr/search-mr-job.jar org.apache.solr.hadoop.MapReduceIndexerTool -D 'mapred.child.java.opts=-Xmx500m' -D 'mapreduce.job.user.classpath.first=true' --log4j /opt/cloudera/parcels/CDH/share/doc/search*/examples/solr-nrt/log4j.properties --morphline-file /opt/cloudera/parcels/CDH/share/doc/search*/examples/solr-nrt/test-morphlines/tutorialReadAvroContainer.conf --output-dir hdfs://nn01.example.com:8020/user/jdoe/outdir --verbose --go-live --zk-host zk01.example.com:2181/solr --collection cloudera_tutorial_tweets hdfs://nn01.example.com:8020/user/jdoe/indir
+
+This command requires a morphline file, which must include a
+            SOLR_LOCATOR directive. Any CLI parameters for
+            --zkhost and --collection override
+          the parameters of the solrLocator. The
+            SOLR_LOCATOR directive might appear as follows:SOLR_LOCATOR : {
+  # Name of solr collection
+  collection : collection_name
+
+  # ZooKeeper ensemble
+  zkHost : "zk01.example.com:2181,zk02.example.com:2181,zk03.example.com:2181/solr"
+}
+
+morphlines : [
+  {
+    id : morphline1
+    importCommands : ["org.kitesdk.**", "org.apache.solr.**"]
+    commands : [
+      { generateUUID { field : id } }
+
+      { # Remove record fields that are unknown to Solr schema.xml.
+        # Recall that Solr throws an exception on any attempt to load a document that
+        # contains a field that isn't specified in schema.xml.
+        sanitizeUnknownSolrFields {
+          solrLocator : ${SOLR_LOCATOR} # Location from which to fetch Solr schema
+        }
+      }
+
+      { logDebug { format : "output record: {}", args : ["@{}"] } }
+
+      {
+        loadSolr {
+          solrLocator : ${SOLR_LOCATOR}
+        }
+      }
+    ]
+  }
+]
+For help on how to run the MapReduce job, run the following
+            command:yarn jar /opt/cloudera/parcels/CDH/lib/solr/contrib/mr/search-mr-*-job.jar org.apache.solr.hadoop.MapReduceIndexerTool --help
+For development purposes, you can use the
+              --dry-run option to run in local mode and print
+            documents to stdout instead of loading them into
+            Solr. Using this option causes the morphline to run locally without
+            submitting a job to MapReduce. Running locally provides faster
+            turnaround during early trial and debug sessions.To print
+            diagnostic information, such as the content of records as they pass
+            through the morphline commands, enable TRACE log level diagnostics
+            by adding the following entry to your
+              log4j.properties
+            file:log4j.logger.org.kitesdk.morphline=TRACEThe
+              log4j.properties file location can be specified
+            by using the MapReduceIndexerTool --log4j
+              /path/to/log4j.properties command-line option.Check the job status at: 
+http://rm01.example.com:8088/ui2/#/yarn-apps/appsFor
+          secure clusters, replace http with
+            https and port 8088 with
+            8090.When the job is complete, run a Solr query. For example, for a Solr server running on
+            search01.example.com, go to one of the following URLs in a browser,
+          depending on whether you have enabled security on your cluster:
+
+
+Security Enabled:
+https://search01.example.com:8985/solr/cloudera_tutorial_tweets/select?q=*:*
+
+
+Security Disabled:
+http://search01.example.com:8983/solr/cloudera_tutorial_tweets/select?q=*:*
+
+If indexing was successful, this page displays the first 10 query
+          results.
+Parent topic: Using MapReduce batch indexing to index sample Tweets

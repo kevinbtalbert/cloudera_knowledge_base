@@ -1,0 +1,216 @@
+Download Solr configuration from HDP Search ZooKeeperCloudera Docs
+Download Solr configuration from HDP Search ZooKeeper
+The solr-download-metadata.sh script downloads metadata from HDP
+        Search ZooKeeper. You can then copy this information into a CDP cluster and use it as input
+        for the CDP Private Cloud Base upgrade process.
+The migration script uses jq for JSON file processing, this tool
+            has to be installed:For example, yum install jq
+
+Copy the solr-download-metadata.sh script to any of the nodes
+                    in the cluster where HDP Search is deployed.
+
+#!/bin/bash
+
+exec 3>/dev/null
+
+set -e
+
+ZKCLI_HDP_LUCIDWORKS=/opt/lucidworks-hdpsearch/solr/server/scripts/cloud-scripts/zkcli.sh
+ZKCLI_HDP_CLOUDERA=/usr/cloudera-hdp-solr/current/cloudera-hdp-solr/solr/server/scripts/cloud-scripts/zkcli.sh
+ZKCLI_CDH=/opt/cloudera/parcels/CDH/lib/solr/bin/zkcli.sh
+
+error() {
+  >&2 echo "$1"
+  exit 1
+}
+
+remove_trailing_slash() {
+  echo "$1" | sed 's@/*$@@'
+}
+
+check_jq() {
+  if ! command -v jq &> /dev/null; then
+    echo "Command jq could not be found"
+    exit
+  fi
+}
+
+check_java() {
+  if ! command -v java &> /dev/null; then
+    echo "Command java could not be found"
+    exit
+  fi
+}
+
+check_zkcli() {
+  if [ ! -f ${ZKCLI_HDP_LUCIDWORKS} ]; then
+    if [ ! -f ${ZKCLI_HDP_CLOUDERA} ]; then
+      if [ ! -f ${ZKCLI_CDH} ]; then
+        error "Cannot find zkcli.sh"
+      else
+        zkcli=${ZKCLI_CDH}
+      fi
+    else
+      zkcli=${ZKCLI_HDP_CLOUDERA}
+    fi
+  else
+    zkcli=${ZKCLI_HDP_LUCIDWORKS}
+  fi
+  echo "Found zklci.sh at ${zkcli}"
+}
+
+run_zk_cli() {
+  : ${SOLR_ZK_ENSEMBLE:?"Please configure Solr ZooKeeper ensemble using the SOLR_ZK_ENSEMBLE env variable"}
+  ${zkcli} -zkhost "$SOLR_ZK_ENSEMBLE" "$@" 2>&3
+}
+
+get_collections() {
+  if ! jq -r 'to_entries[] | .key' < "$1"; then
+    error "Cannot find collections in file $1. Please check the contents of the file."     
+  fi
+}
+
+get_configname() {
+   jq -r '.["'$2'"].configName' < "$1"
+}
+
+
+download_zk_metadata() {
+#  echo "Cleaning up $1"
+#  rm -rf "${1:?}"/*
+
+  mkdir -p "$1/collections"
+  mkdir -p "$1/configs"
+
+  echo "Copying clusterstate.json"
+  # run_zk_cli -cmd get /clusterstate.json > "$1"/clusterstate.json;
+  : ${SOLR_ADMIN_URI:?"Please configure Solr URI using the SOLR_ADMIN_URI env variable"}
+  SOLR_ADMIN_URI=$(remove_trailing_slash "$SOLR_ADMIN_URI")
+  curl --retry 5 -s -L -k --negotiate -u : "${SOLR_ADMIN_URI}/admin/collections?action=CLUSTERSTATUS&wt=json" 2> /dev/null | jq -r '.cluster.collections' > "$1"/clusterstate.json
+
+  echo "Copying clusterprops.json"
+  if ! run_zk_cli -cmd get /clusterprops.json > "$1"/clusterprops.json; then
+    echo "Missing/empty clusterprops.json file in ZooKeeper, creating empty json"
+    echo "{}" > "$1"/clusterprops.json
+  fi
+
+  echo "Copying solr.xml"
+  if ! run_zk_cli -cmd get /solr.xml > "$1"/solr.xml; then
+    echo "Missing/empty solr.xml in ZK, copying from local dir"
+    if ! cp /etc/solr/home/solr.xml "$1"/solr.xml; then
+      if ! cp /etc/solr/data_dir/solr.xml "$1"/solr.xml; then
+        if ! cp /opt/solr/data/solr.xml "$1"/solr.xml; then
+          if ! cp /opt/lucidworks/solr.xml  "$1"/solr.xml; then
+            : ${SOLR_XML_PATH:?"Cannot download solr.xml from ZooKeeper and cannot find it locally. Please specify its location using the SOLR_XML_PATH variable"}
+            if ! cp "${SOLR_XML_PATH}" "$1"/solr.xml; then                         
+              error "Cannot find solr.xml. Exiting."
+            fi
+          fi
+        fi
+      fi
+    fi
+  fi
+
+  echo "Copying aliases.json"
+  if ! run_zk_cli -cmd get /aliases.json > "$1"/aliases.json ; then
+    echo "Unable to copy aliases.json. Please check if it contains any data ?"
+    echo "Continuing with the download..."
+  fi
+
+  collections=$(get_collections "$1"/clusterstate.json)
+  for c in ${collections}; do
+    echo "Downloading configuration for collection ${c}"
+    run_zk_cli -cmd get /collections/"$c" > "$1/collections/${c}_config.json"
+    coll_conf=$(get_configname "$1/clusterstate.json" "$c")
+    echo "Downloading config named ${coll_conf} for collection ${c}"
+    run_zk_cli -cmd downconfig -confdir "$1/configs/${coll_conf}/conf" -confname "${coll_conf}"
+  done
+
+  echo "Successfully downloaded Solr metadata from ZooKeeper"
+}
+
+[[ -z "$1" ]] && error "Please specify output directory"
+
+check_jq
+check_java
+check_zkcli
+download_zk_metadata "$1"
+
+
+Set the JAVA_HOME environment variable to the JDK location.
+                    For example:
+
+export JAVA_HOME=/usr/jdk64/jdk1.8.0_112
+
+
+Add java to PATH. For example:
+
+ export PATH=$PATH:$JAVA_HOME/bin
+
+
+On a host running Solr server, set the SOLR_ZK_ENSEMBLE
+                    environment variable:
+
+export SOLR_ZK_ENSEMBLE=[***HOSTNAME***]:2181/solr
+Replace [***HOSTNAME***] with a value that is valid in
+                        your environment.
+
+
+On a host running Solr server, set the SOLR_ADMIN_URI
+                    environment variable:
+
+export SOLR_ADMIN_URI=[***HOSTNAME***]:8983/solr
+Replace [***HOSTNAME***] with an actual value that is
+                        valid in your environment. Make sure that you include the protocol (HTTP or
+                        HTTPS) and do not include a trailing slash (/).
+
+For
+                    example:export SOLR_ADMIN_URI=htp://example.com:8983/solr
+
+On a secure cluster you may need to set additional zkcli flags, for
+                    instance:
+
+export ZKCLI_JVM_FLAGS="-Djava.security.auth.login.config=[***/PATH/TO/JAAS.CONF***]"
+Replace [***/PATH/TO/JAAS.CONF***] with path to a valid
+                            jaas.conf  file.
+
+
+If you have enabled Kerberos, run the kinit command with the Solr service
+                    superuser. For example:
+kinit solr@[***EXAMPLE.COM***]Replace
+                        [***EXAMPLE.COM***] with your Kerberos realm name.
+
+Download the current (HDP Search 2 or 3) Solr configuration from
+                    ZooKeeper:
+
+
+solr-download-metadata.sh [***DIRECTORY***]
+Replace [***DIRECTORY***] with the path to the
+                            directory where you want to download the Solr configuration.
+
+
+If you have enabled Kerberos and configured ZooKeeper Access Control
+                            Lists (ACLs), specify your JAAS configuration file by adding the
+                                --jaas parameter to the command.
+solr-download-metadata.sh --jaas [***/PATH/TO/JAAS.CONF***] [***DIRECTORY***]
+Replace [***/PATH/TO/JAAS.CONF***] with the path to a
+                            valid jaas.conf  file.
+Replace [***DIRECTORY***] with the path to the
+                            directory where you want to download the Solr configuration.
+
+
+In case of a successful run, the last line printed out by the script
+                        is: Successfully downloaded SOLR metadata from
+                        ZookeepernoteMake a backup copy of the downloaded
+                        configuration.
+
+Copy the migrated data to $HOME/cr7-solr-migration in the
+                    interim Solr instance.
+
+Initialize a directory for the migrated configuration as a copy of the current
+                    configuration:
+cp -r $HOME/cr7-solr-migration
+                    $HOME/cr7-migrated-solr-config
+
+
+Parent topic: Preparing HDP Search for upgrade

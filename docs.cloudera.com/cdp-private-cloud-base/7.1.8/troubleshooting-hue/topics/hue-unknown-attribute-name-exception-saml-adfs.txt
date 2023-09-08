@@ -1,0 +1,60 @@
+“Unknown Attribute Name” exception when enabling SAMLCloudera Docs
+“Unknown Attribute Name” exception when enabling SAML
+You may see an “Unknown Attribute Name” exception when a SAML Identity Provider (IdP)
+        returns the 'uid' profile attribute and Hue which uses pysaml2 cannot interpret this
+        attribute. To resolve this, you must create an attribute mapping file and then reference it
+        in the libsaml configuration of Hue.
+
+SSH into a Hue server as a root user.
+
+Create an attribute mapping directory as follows:
+
+mkdir -p /opt/cloudera/security/saml/attribute_mapping
+
+
+Create an attribute mapping file as follows:
+
+vi /opt/cloudera/security/saml/attribute_mapping/saml_uri.py
+
+
+Add the following lines in the saml_uri.py file:
+
+MAP = {
+    "identifier": "urn:oasis:names:tc:SAML:2.0:attrname-format:uri",
+    "fro": {
+        'uid': 'uid',
+        },
+    "to": {
+        'uid': 'uid',
+    }
+}
+
+
+Repeat steps 1 to 4 on all the Hue hosts.
+
+Sign in to Cloudera Manager as an Administrator.
+
+Go to Clusters > Hue service > Configuration.
+
+Add the following lines in the Hue Service Advanced Configuration
+                        Snippet (Safety Valve) for hue_safety_valve.ini field:
+
+[libsaml]
+xmlsec_binary=/usr/bin/xmlsec1
+metadata_file=/opt/certs/saml/FederationMetadata.xml
+key_file=/opt/certs/hue.key
+cert_file=/opt/certs/hue.crt
+entity_id=[***HOST-BASE-URL***]
+logout_enabled=false
+username_source=attributes
+attribute_map_dir=/opt/cloudera/security/saml/attribute_mapping  
+#user_attribute_mapping='{"uid":"username"}'
+
+
+Click Save Changes.
+
+Restart the Hue service by clicking Actions > Restart.
+
+The users should now be able to authenticate to Hue through
+            SAML.
+

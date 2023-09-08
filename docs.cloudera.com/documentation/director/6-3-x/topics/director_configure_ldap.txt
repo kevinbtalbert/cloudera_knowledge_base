@@ -1,0 +1,582 @@
+
+
+
+
+Configuring Altus Director Server for LDAP and Active Directory | 6.3.x | Cloudera Documentation
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ Documentation
+
+
+Products
+Services & Support
+Solutions
+
+
+
+
+
+
+
+
+
+Cloudera Altus Director 6.3.x | Other versions
+
+
+
+
+
+Configuring and Running Altus Director
+
+
+
+
+
+
+
+
+View All Categories
+
+Introduction
+
+Displaying Altus Director Documentation
+Altus Director Interfaces
+
+
+Release Notes
+
+New Features and Changes
+Known Issues
+Fixed Issues
+Unsupported Components and Features
+Altus Director API
+
+
+Requirements and Supported Versions
+Getting Started
+
+Amazon Web Services (AWS)
+
+Preparing Your AWS EC2 Resources
+Launching an EC2 Instance for Altus Director
+
+Choosing an AMI
+
+
+Installing Altus Director Server and Client on the EC2 Instance
+Subscribing to Altus Director in the AWS Marketplace
+Configuring a SOCKS Proxy for Amazon EC2
+Adding an Altus Director Environment on AWS
+Simple Setup: Creating a Cluster on AWS with Default Settings
+Advanced Setup: Installing Cloudera Manager and CDH on AWS
+Pausing a Cluster on AWS
+Cleaning Up Your AWS Deployment
+Using Custom DNS in AWS
+
+
+Google Cloud Platform
+
+Creating a Google Cloud Platform Project
+Configuring Tools for Your Google Cloud Platform Account
+Creating a Google Compute Engine VM Instance
+Installing Altus Director Server and Client on Google Compute Engine
+Configuring a SOCKS Proxy for Google Compute Engine
+Deploying Cloudera Manager and CDH on Google Compute Engine
+Cleaning Up Your Google Cloud Platform Deployment
+
+
+Microsoft Azure
+
+Obtaining Credentials for Altus Director
+Setting up Azure Resources
+Setting Up Dynamic DNS on Azure
+Setting Up MySQL or PostgreSQL
+Setting Up a Virtual Machine for Altus Director Server
+Installing Altus Director Server and Client on Azure
+Configuring a SOCKS Proxy for Microsoft Azure
+Allowing Access to VM Images
+Adding an Altus Director Environment on Azure
+Simple Setup: Creating an Azure Cluster with Default Settings
+Advanced Setup: Installing Cloudera Manager and CDH on Azure
+Terminating an Azure Deployment
+Adding New VM Images, Custom VM Images, Regions, and Instances
+Important Notes About Altus Director and Azure
+
+
+
+
+Usage-Based Billing
+
+Usage Bundles
+
+
+Using Cloud Provider Regions
+
+Running Altus Director and Cloudera Manager in Different Regions or Clouds
+Using a New AWS Region in Altus Director
+
+
+Configuring Storage for Altus Director
+
+Using MySQL for Altus Director Server
+Using MariaDB for Altus Director Server
+Altus Director Database Encryption
+Migrating the Altus Director Database
+
+
+Configuring Storage for Cloudera Manager and CDH
+
+Using an External Database for Cloudera Manager and CDH
+
+Defining External Database Servers
+Defining External Databases
+Using the External Databases for Cloudera SDX
+
+
+Using Amazon S3 Object Storage
+
+
+Using EBS Volumes for Cloudera Manager and CDH
+Security, Encryption, and High Availability
+
+Enabling TLS with Altus Director
+SSH Host Key Retrieval and Verification
+Creating Kerberized Clusters With Altus Director
+Enabling Sentry Service Authorization
+Creating Highly Available Clusters With Altus Director
+Encrypted Configuration Properties
+
+
+Configuring and Running Altus Director
+
+Auto-Repair for Failed or Terminated Instances
+Deploying Java on Cluster Instances
+Setting Altus Director Properties
+Pausing Altus Director Instances
+Configuring Altus Director Server for LDAP and Active Directory
+Configuring Altus Director for a New AWS Instance Type
+Configuring Altus Director to Use Custom Tag Names on AWS
+
+
+Running Altus Director Behind a Proxy
+
+Configuring Cloudera Manager to Use a Proxy
+Configuring Other Software to Use a Proxy
+Configuring Altus Director to Use a Proxy
+Authenticating Proxies
+HTTPS Proxies
+
+
+Using Altus Director Server to Manage Cloudera Manager Instances
+
+Altus Director and Cloudera Manager Usage
+Setting Cloudera Manager Configurations
+Ports Used by Altus Director
+SSH Keys in Altus Director
+Creating AWS Identity and Access Management (IAM) Policies
+Using Custom Repositories with Cloudera Manager and CDH
+Cloudera Manager Health Information
+Opening Cloudera Manager
+Diagnostic Data Collection
+User Management
+
+
+Using Altus Director Server to Manage Cluster Instances
+
+The Altus Director Configuration File
+Submitting a Cluster Configuration File
+Exporting a Configuration File
+Deploying Clusters in an Existing Environment
+Using Spot Instances
+Using Automatic Instance Groups
+Using Products outside CDH with Altus Director
+
+Custom Service Descriptors
+Using Kudu with CDH 5.12 or Earlier
+Using Spark 2 with Altus Director
+Using Cloudera Data Science Workbench with Altus Director
+Using Third-Party Products with Altus Director
+
+
+Creating and Modifying Clusters with the Altus Director Web UI
+Altus Director Scripts
+Terminating a Cluster
+
+
+Using the Altus Director Client
+
+Installing Altus Director Client
+Provisioning a Cluster on AWS
+Running Altus Director Client
+
+
+Upgrading Altus Director
+Troubleshooting
+FAQ
+Altus Director Glossary
+
+
+
+
+
+To read this documentation, you must turn JavaScript on.
+
+
+
+
+Configuring Altus Director Server for LDAP and Active Directory
+
+By default, the Altus Director server uses its own internal database to store user accounts and authorizations. You can instead configure the server to perform authentication and
+authorization using an external LDAP server, including Active Directory.
+Note: This section describes configuring Altus Director itself for use of LDAP, and not configuring any installations of Cloudera Manager or CDH
+clusters that Altus Director bootstraps.
+
+
+
+User and Group Model
+
+When configured for LDAP, Altus Director expects that each user has an entry in an LDAP server under some base DN. When a user attempts to log in to the Altus Director server, the server
+will locate the user in LDAP and try to authenticate the user against the LDAP server using the provided password.
+Altus Director expects that LDAP groups, collected under some base DN, are used to determine the roles that a user is authorized for. If a user is a member of a group in LDAP, then the
+user is granted the role that maps to that group. Multiple groups can map to the same role in Altus Director, and users can have multiple roles. Altus Director does not support the use of nested
+groups in LDAP to determine roles.
+
+
+
+Basic LDAP Configuration
+
+Determine the following pieces of information in order to configure Altus Director for LDAP. The same information is also needed for Active Directory.
+
+The LDAP server host and port.
+The bind DN and password that Altus Director should use when searching for users and groups. This account does not need administrative access to the LDAP server, but only read access
+for the necessary searches.
+The base DN for user searches.
+The filter to use for user searches or the DN pattern that all user DNs adhere to. More information on these is provided below.
+The base DN for group searches.
+The filter to use for group searches. More information on this is provided below.
+The attribute of each group that forms the basis for an Altus Director role. More information on this is provided below.
+
+
+The user search filter is employed to locate a user attempting to log in to Altus Director. The user's login username is substituted into the filter before it is submitted to the LDAP
+server. The string {0} indicates where the username is substituted.
+
+To look for a username in the uid attribute of a user entry, use the filter (uid={0}).
+To look for a username in the cn attribute of a user entry, use the filter (cn={0}).
+For Active Directory, use the filter (sAMAccountName={0}).
+
+
+Instead of specifying a user search filter, you can instead supply a user DN pattern. This avoids a search, because Altus Director can determine a user DN by substituting the user's
+login username into the pattern. The string {0} indicates where the username is substituted.
+
+The user DN pattern cannot be used for Active Directory. Instead, a user search filter must be supplied.
+
+
+The group search is employed to locate groups that an authenticated user belongs to. The user's DN is substituted into the filter before it is submitted to the LDAP server. The string
+{0} indicates where the username is substituted.
+
+When using the objectclass groupOfUniqueNames for user groups, use the filter (uniqueMember={0}).
+For Active Directory, use the filter (member={0}).
+
+
+The group role attribute selects which attribute of a group entry is used as the basis for determining the corresponding Altus Director role. Usually this is the CN of the group, but
+any attribute can be selected instead.
+
+The group role attribute is not used for Active Directory. The group name is always used as the basis for determining a role.
+
+
+The following configuration properties control basic LDAP connectivity. Additional configuration properties described in a later section are needed for Active Directory.
+
+
+
+
+Configuration Property
+Default
+Meaning
+
+
+
+
+lp.security.userSource
+internal
+Where to look for user data; for LDAP or Active Directory connectivity, set this to LDAP.
+
+
+lp.security.ldapConfig.url
+N/A
+The LDAP URL, with host and optional port, e.g.: ldap://ldaphost:389/.
+
+
+lp.security.ldapConfig.bindDn
+N/A
+The bind DN for Altus Director to use for searches.
+
+
+lp.security.ldapConfig.bindPw
+N/A
+The bind password for Altus Director to use for searches.
+
+
+lp.security.ldapConfig.userSearchBase
+N/A
+The base DN for user searches.
+
+
+lp.security.ldapConfig.userSearchFilter
+N/A
+The user search filter, e.g., (uid={0}).
+
+
+lp.security.ldapConfig.ldapDnPattern
+N/A
+The DN pattern for users.
+
+
+lp.security.ldapConfig.groupSearchBase
+N/A
+The base DN for group searches.
+
+
+lp.security.ldapConfig.groupSearchFilter
+N/A
+The group search filter, e.g., (uniqueMember={0}).
+
+
+lp.security.ldapConfig.groupRoleAttribute
+N/A
+The group attribute to use as a basis for selecting a role, e.g., cn.
+
+
+
+
+
+After setting or changing these configuration properties, restart the Altus Director server for them to take effect.
+The following is an example of an LDAP configuration that points to an OpenLDAP server. Each user's uid attribute is used as their login username, and
+group membership is determined by the uniqueMember attribute.
+lp.security.userSource: LDAP
+lp.security.ldapConfig.url: ldap://openldaphost/
+lp.security.ldapConfig.bindDn: cn=ldapadm,dc=domain,dc=example
+lp.security.ldapConfig.bindPw: password
+lp.security.ldapConfig.userSearchBase: ou=People,dc=domain,dc=example
+lp.security.ldapConfig.userSearchFilter: (uid={0})
+lp.security.ldapConfig.ldapDnPattern: uid={0},ou=People,dc=domain,dc=example
+lp.security.ldapConfig.groupSearchBase: ou=Groups,dc=domain,dc=example
+lp.security.ldapConfig.groupSearchFilter: (uniqueMember={0})
+lp.security.ldapConfig.groupRoleAttribute: cn
+
+
+
+Local User Management under LDAP
+
+Altus Director does not provide user management services when configured for LDAP. To make changes to user accounts and roles, make the necessary changes in the source LDAP server. Users
+might need to log out of Altus Director and log back in for changes to take effect.
+Most user API endpoints for the Altus Director server are disabled when the server is configured for LDAP, and will return the HTTP response code 400 (Bad Request) for any request. Also,
+the Altus Director server UI does not present user management capabilities, such as password changes, when the server is configured for LDAP.
+
+
+
+Role Mapping
+
+Altus Director maps LDAP groups to its own roles in a simple fashion.
+
+The value of the group role attribute, such as cn, is found.
+The value is converted to uppercase.
+The prefix ROLE_ is prepended.
+
+
+Therefore, a group with a role attribute of admin is converted to the role ROLE_ADMIN. When using a role attribute of cn, then the DN for the group is similar to cn=admin,ou=Groups,dc=domain,dc=example.
+Currently, the only roles supported by Altus Director are:
+
+ROLE_READONLY - read-only / guest access
+ROLE_ADMIN - full access
+
+
+An administrative account should have all roles, and therefore be a member of all mapped groups.
+Role mapping is more complex for Active Directory and is described below.
+
+
+
+
+Active Directory Configuration
+
+Determine the following additional pieces of information in order to configure Altus Director for Active Directory.
+
+The domain for users and groups.
+The desired role mapping from group names to Altus Director roles.
+
+
+The following configuration properties control Active Directory connectivity, in addition to those for basic LDAP configuration.
+
+
+
+
+Configuration Property
+Default
+Meaning
+
+
+
+
+lp.security.ldapConfig.activeDirectory.domain
+N/A
+The domain.
+
+
+lp.security.ldapConfig.activeDirectory.roleMapping.*
+N/A
+The role mapping (multiple properties).
+
+
+
+
+
+After setting or changing these configuration properties, restart the Altus Director server for them to take effect.
+The following is an example of an LDAP configuration that points to an Active Directory server. Each user's sAMAccountName
+attribute is used as their login username, and group membership is determined by the member attribute.
+lp.security.userSource: LDAP
+lp.security.ldapConfig.url: ldap://adhost/
+lp.security.ldapConfig.bindDn: cn=Administrator,ou=Users,dc=domain,dc=example
+lp.security.ldapConfig.bindPw: password
+lp.security.ldapConfig.userSearchBase: ou=Users,dc=domain,dc=example
+lp.security.ldapConfig.userSearchFilter: (sAMAccountName={0})
+lp.security.ldapConfig.groupSearchBase: ou=Groups,dc=domain,dc=example
+lp.security.ldapConfig.groupSearchFilter: (member={0})
+lp.security.ldapConfig.activeDirectory.domain: DOMAIN.EXAMPLE
+lp.security.ldapConfig.activeDirectory.roleMapping.adminGroup: admin
+lp.security.ldapConfig.activeDirectory.roleMapping.readonlyGroup: readonly
+
+
+
+Role Mapping
+
+Altus Director provides flexibility in mapping the names of Active Directory groups to Altus Director roles. The mapping process is:
+
+The group name is searched for among the roleMapping configuration properties.
+
+If one is found, the property value is used as the base name for the role.
+If one is not found, the group is ignored.
+
+
+The base name is converted to uppercase.
+The prefix ROLE_ is prepended.
+
+
+In the example below, two groups named group1Name and group2Name are mapped to the ROLE_READONLY Altus Director role, while another group3Name is mapped to the ROLE_ADMIN role.
+lp.security.ldapConfig.activeDirectory.roleMapping.group1Name: readonly
+lp.security.ldapConfig.activeDirectory.roleMapping.group2Name: readonly
+lp.security.ldapConfig.activeDirectory.roleMapping.group3Name: admin
+
+
+Note: If no role mapping is provided in the configuration, then no roles are granted to authenticated users by the Altus Director server, and they
+will be unable to use it.
+
+
+
+
+
+Categories: Active Directory | Altus Director | Configuring | LDAP | All Categories
+
+
+
+Pausing Altus Director Instances
+
+
+Configuring Altus Director for a New AWS Instance
+Type
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+About Cloudera
+Resources
+Contact
+Careers
+Press
+Documentation
+
+United States: +1 888 789 1488
+Outside the US: +1 650 362 0488
+
+
+
+© 2019 Cloudera, Inc. All rights reserved. Apache Hadoop and associated open source project names are trademarks of the Apache Software Foundation. For a complete list of trademarks, click here.
+If this documentation includes code, including but not limited to, code examples, Cloudera makes this available to you under the terms of the Apache License, Version 2.0, including any required
+notices. A copy of the Apache License Version 2.0 can be found here.
+
+
+
+
+
+
+
+
+
+
+Terms & Conditions  |  Privacy Policy
+
+Page generated July 28, 2019.
+
+
+
+
+
+
+
+
+
+
+
+

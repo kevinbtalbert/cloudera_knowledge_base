@@ -1,0 +1,47 @@
+Troubleshooting Performance of DecommissioningCloudera Docs
+Troubleshooting Performance of Decommissioning
+Several conditions can impact performance when you decommission DataNodes.
+
+Open Files
+Write operations on the DataNode do not involve the NameNode. If there are blocks
+          associated with open files located on a DataNode, they are not relocated until the file is
+          closed. This commonly occurs with:
+Clusters using HBase
+Open Flume files
+Long running tasks
+To find open files, run the following command:
+            hdfs dfsadmin -listOpenFiles -blockingDecommissionThe command
+          returns output similar to the following example:
+Client Host         Client Name         Open File Path
+172.26.12.77        DFSClient_NONMAPREDUCE_-698274460_1 /hbase/oldWALs/dn3.cloudera.com%2C22101%2C1540973344249.dn3.cloudera.com%2C22101%2C1540973344249.regiongroup-0.154099857098
+After you find the open files, perform the appropriate action to restart process to
+            close the file. For example, major compaction closes all files in a
+            region for HBase.Alternatively, you may evict writers to those decommissioning
+            DataNodes with the following command:
+            hdfs dfsadmin -evictWriters <datanode_host:ipc_port>For
+            example:hdfs dfsadmin -evictWriters datanode1:20001
+
+
+A block cannot be relocated because there are not enough DataNodes to satisfy the block
+          placement policy.
+For example, for a 10 node cluster, if the mapred.submit.replication is
+          set to the default of 10 while attempting to decommission one  DataNode, there will be
+          difficulties relocating blocks that are associated with map/reduce jobs.    This condition
+          will lead to errors in the NameNode logs similar to the following:   
+            org.apache.hadoop.hdfs.server.blockmanagement.BlockPlacementPolicyDefault: Not able to place enough replicas, still in need of 3 to reach 3   Use
+            the following steps to find the number of files where the block replication policy is
+            equal to or above your current cluster size:
+Provide a listing of open files, their blocks, the locations of those blocks by
+                running the following
+                command:hadoop fsck / -files -blocks -locations -openforwrite 2>&1 > openfiles.out
+Run the following command to return a list of how many files have a given
+                replication
+                factor:grep repl= openfiles.out | awk '{print $NF}' | sort | uniq -cFor
+                example, when the replication factor is 10 , and decommissioning
+                one:egrep -B4 "repl=10" openfiles.out | grep -v '<dir>' | awk '/^\//{print $1}'
+Examine the paths, and decide whether to reduce the replication factor of the
+                files, or remove them from the cluster.
+
+
+
+Parent topic: Tuning and Troubleshooting Host Decommissioning

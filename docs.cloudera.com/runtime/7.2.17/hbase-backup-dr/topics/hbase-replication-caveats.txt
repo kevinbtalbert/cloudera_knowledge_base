@@ -1,0 +1,36 @@
+Replication caveatsCloudera Docs
+Replication caveats
+Note these caveats when you use HBase replication. 
+ 
+Two variables govern replication: hbase.replication and a replication znode.
+     Stopping replication (using disable_table_replication as above) sets the znode
+     to false. Two problems can result:
+If you add a new RegionServer to the active cluster while replication is stopped, its
+       current log will not be added to the replication queue, because the replication znode is
+       still set to false. If you restart replication at this point (using
+        enable_peer), entries in the log will not be replicated.
+Similarly, if a log rolls on an existing RegionServer on the active cluster while
+       replication is stopped, the new log will not be replicated, because the replication znode was
+       set to false when the new log was created.
+
+In the case of a long-running, write-intensive workload, the destination cluster may become
+     unresponsive if its meta-handlers are blocked while performing the replication. Cloudera
+     Runtime has three properties to deal with this problem:
+hbase.regionserver.replication.handler.count - the number of replication
+       handlers in the destination cluster (default is 3). Replication is now handled by separate
+       handlers in the destination cluster to avoid the above-mentioned sluggishness. Increase it to
+       a high value if the ratio of active to passive RegionServers is high.
+replication.sink.client.retries.number - the number of times the HBase
+       replication client at the sink cluster should retry writing the WAL entries (default is
+       1).
+replication.sink.client.ops.timeout - the timeout for the HBase
+       replication client at the sink cluster (default is 20 seconds).
+
+For namespaces, tables, column families, or cells with associated
+    ACLs, the ACLs themselves are not replicated. The ACLs need to be
+    re-created manually on the target table. This behavior opens up the
+    possibility for the ACLs could be different in the source and
+    destination cluster.
+
+
+Related informationCommon replication topologiesParent topic: Using HBase replication

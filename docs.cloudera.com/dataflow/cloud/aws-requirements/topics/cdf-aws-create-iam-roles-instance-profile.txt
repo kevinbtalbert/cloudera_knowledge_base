@@ -1,0 +1,318 @@
+Create the IAM roles and instance profileCloudera Docs
+Create the IAM roles and instance profile
+Enable the LIFTIE_USE_PRECREATED_IAM_RESOURCES entitlement and
+        then create the IAM roles and instance profile.
+
+Confirm that the LIFTIE_USE_PRECREATED_IAM_RESOURCES entitlement
+                is enabled for the  tenant in consideration.
+
+
+Apply the following CloudFormation template to create the following:
+
+
+IAM role called cdp-eks-master-role
+IAM role and instance profile pair called
+                cdp-liftie-instance-profile
+
+
+
+Figure 1. CloudFormation Template (YAML)
+AWSTemplateFormatVersion: 2010-09-09
+Description: Creates Liftie IAM resources
+Parameters:
+  TelemetryLoggingEnabled:
+    Description: Telemetry logging is enabled
+    Type: String
+  TelemetryLoggingBucket:
+    Description: Telemetry logging bucket where Liftie logs will be stored.
+    Type: String
+  TelemetryKmsKeyARN:
+    Description: KMS Key ARN For Telemetry logging bucket.
+    Type: String
+    Default: ""
+  TelemetryLoggingRootDir:
+    Description: Telemetry logging root directory inside telemetry logging bucket used for storing logs.
+    Default: "cluster-logs"
+    Type: String
+Conditions:
+  TelemetryLoggingEnabled:
+    Fn::Equals:
+      - {Ref: TelemetryLoggingEnabled}
+      - true
+  KMSKeyARNForTelemetryLoggingBucketIsEmpty: !Not [!Equals [!Ref TelemetryKmsKeyARN, ""]]
+Resources:
+  AWSServiceRoleForAmazonEKS:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - eks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEKSServicePolicy
+        - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+      RoleName: cdp-eks-master-role
+  NodeInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+      RoleName: cdp-liftie-instance-profile
+      Policies:
+        - PolicyName: ssm-required
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameters
+                Resource:
+                  - "*"
+        - PolicyName: cluster-autoscaler
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - autoscaling:DescribeAutoScalingGroups
+                  - autoscaling:DescribeAutoScalingInstances
+                  - autoscaling:DescribeTags
+                  - autoscaling:DescribeLaunchConfigurations
+                  - autoscaling:SetDesiredCapacity
+                  - autoscaling:TerminateInstanceInAutoScalingGroup
+                  - ec2:DescribeLaunchTemplateVersions
+                Resource:
+                  - "*"
+        - PolicyName: ebs-csi
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:CreateSnapshot
+                  - ec2:AttachVolume
+                  - ec2:DetachVolume
+                  - ec2:ModifyVolume
+                  - ec2:DescribeAvailabilityZones
+                  - ec2:DescribeInstances
+                  - ec2:DescribeSnapshots
+                  - ec2:DescribeTags
+                  - ec2:DescribeVolumes
+                  - ec2:DescribeVolumesModifications
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ec2:CreateTags
+                Resource:
+                  - "arn:aws:ec2:*:*:volume/*"
+                  - "arn:aws:ec2:*:*:snapshot/*"
+                Condition:
+                  StringEquals:
+                    "ec2:CreateAction":
+                      - CreateVolume
+                      - CreateSnapshot
+              - Effect: Allow
+                Action:
+                  - ec2:DeleteTags
+                Resource:
+                  - "arn:aws:ec2:*:*:volume/*"
+                  - "arn:aws:ec2:*:*:snapshot/*"
+              - Effect: Allow
+                Action:
+                  - ec2:CreateVolume
+                Resource: "*"
+                Condition:
+                  StringLike:
+                    "aws:RequestTag/ebs.csi.aws.com/cluster": "true"
+              - Effect: Allow
+                Action:
+                  - ec2:CreateVolume
+                Resource: "*"
+                Condition:
+                  StringLike:
+                    "aws:RequestTag/CSIVolumeName": "*"
+              - Effect: Allow
+                Action:
+                  - ec2:CreateVolume
+                Resource: "*"
+                Condition:
+                  StringLike:
+                    "aws:RequestTag/kubernetes.io/cluster/*": "owned"
+              - Effect: Allow
+                Action:
+                  - ec2:DeleteVolume
+                Resource: "*"
+                Condition:
+                  StringLike:
+                    "ec2:ResourceTag/ebs.csi.aws.com/cluster": "true"
+              - Effect: Allow
+                Action:
+                  - ec2:DeleteVolume
+                Resource: "*"
+                Condition:
+                  StringLike:
+                    "ec2:ResourceTag/CSIVolumeName": "*"
+              - Effect: Allow
+                Action:
+                  - ec2:DeleteVolume
+                Resource: "*"
+                Condition:
+                  StringLike:
+                    "ec2:ResourceTag/kubernetes.io/created-for/pvc/name": "*"
+              - Effect: Allow
+                Action:
+                  - ec2:DeleteSnapshot
+                Resource: "*"
+                Condition:
+                  StringLike:
+                    "ec2:ResourceTag/CSIVolumeSnapshotName": "*"
+              - Effect: Allow
+                Action:
+                  - ec2:DeleteSnapshot
+                Resource: "*"
+                Condition:
+                  StringLike:
+                    "ec2:ResourceTag/ebs.csi.aws.com/cluster": "true"
+        - PolicyName: efs-csi
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - elasticfilesystem:DescribeAccessPoints
+                  - elasticfilesystem:DescribeFileSystems
+                  - elasticfilesystem:DescribeMountTargets
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - elasticfilesystem:CreateAccessPoint
+                Resource: "*"
+                Condition:
+                  StringLike:
+                    "aws:RequestTag/efs.csi.aws.com/cluster": "true"
+              - Effect: Allow
+                Action:
+                  - elasticfilesystem:DeleteAccessPoint
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    "aws:ResourceTag/efs.csi.aws.com/cluster": "true"
+        - !If
+          - TelemetryLoggingEnabled
+          - PolicyName: telemetry-s3-list-bucket
+            PolicyDocument:
+              Version: 2012-10-17
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - s3:ListBucket
+                  Resource:
+                    - !Sub 'arn:aws:s3:::${TelemetryLoggingBucket}'
+                    - !Sub 'arn:aws:s3:::${TelemetryLoggingBucket}/${TelemetryLoggingRootDir}/*'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - TelemetryLoggingEnabled
+          - PolicyName: telemetry-s3-read-write
+            PolicyDocument:
+              Version: 2012-10-17
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - s3:*Object
+                    - s3:AbortMultipartUpload
+                    - s3:GetBucketAcl
+                  Resource:
+                    - !Sub 'arn:aws:s3:::${TelemetryLoggingBucket}'
+                    - !Sub 'arn:aws:s3:::${TelemetryLoggingBucket}/${TelemetryLoggingRootDir}/*'
+          - !Ref 'AWS::NoValue'
+        - !If
+          - KMSKeyARNForTelemetryLoggingBucketIsEmpty
+          - PolicyName: s3-kms-read-write-policy
+            PolicyDocument:
+              Version: 2012-10-17
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - kms:Decrypt
+                    - kms:GenerateDataKey
+                  Resource:
+                    - !Sub ${TelemetryKmsKeyARN}
+          - !Ref 'AWS::NoValue'
+        - PolicyName: calico-cni
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:ModifyInstanceAttribute
+                Resource:
+                  - "*"
+  NodeInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      InstanceProfileName: cdp-liftie-instance-profile
+      Roles:
+        - !Ref NodeInstanceRole
+
+
+
+
+In the AWS console Cloudformation wizard, provide values for the following
+                    properties: 
+
+
+Stack Name: Provide an appropriate name. Example:
+                                compute-precreated-roles-and-instanceprofile)
+TelemetryLoggingBucket: Name of the log bucket.
+                            Example: compute-logging-bucket
+
+TelemetryLoggingEnabled: Set it to true.
+TelemetryLoggingRootDir: Verify that it is set to the default
+                            value cluster-logs.
+TelemetryKMSKeyARN: If the telemetry bucket is encrypted, specify the KMS Key
+              ARN. The default value is null.
+
+
+
+
+
+
+
+
+On the last page in the wizard process, click the I
+            acknowledge... checkbox to allow creation of IAM resources with special
+          names.
+
+
+
+
+
+
+Click Create stack.
+
+On the Cloudformation Resources tab, you find the precreated
+      role and instance profile. 
+
+
+
+Update the environment role to use the restricted role and policy.
+
+Parent topic: AWS restricted policies

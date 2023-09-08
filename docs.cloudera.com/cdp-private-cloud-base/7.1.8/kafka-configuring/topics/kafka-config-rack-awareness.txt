@@ -1,0 +1,189 @@
+Kafka rack awarenessCloudera Docs
+Kafka rack awareness
+Learn about Kafka rack awareness and how it can be configured for Kafka brokers and
+    clients.
+Racks provide information about the physical location of a broker or a client. A Kafka
+      deployment can be made rack aware by configuring rack awareness for the Kafka brokers and
+      clients respectively. Enabling rack awareness can help in hardening your deployment, it
+      provides durability guarantees for your Kafka service, and significantly decreases the chances
+      of data loss.
+
+
+
+Rack awareness for Kafka brokers
+Learn about Kafka broker rack awareness and how rack aware Kafka brokers
+    behave.
+To avoid a single point of failure, instead of putting all brokers into the same rack, it is
+      considered a best practice to spread your Kafka brokers among racks. In cloud environments
+      Kafka brokers located in different availability zones or data centers are usually deployed in
+      different racks. Kafka brokers have built in support for this type of cluster topology and can
+      be configured to be aware of the racks they are in. 
+If you create, modify, or redistribute a topic in a rack-aware Kafka deployment, rack
+      awareness ensures that replicas of the same partition are spread across as many racks as
+      possible. This limits the risk of data loss if a complete rack fails. Replica assignment will
+      try to assign an equal number of leaders for each broker, therefore, it is advised to
+      configure an equal number of brokers for each rack to avoid uneven load of racks. 
+For example, assume you have a topic partition with 3 replicas and have the brokers
+      configured in 3 different racks. If rack awareness is enabled, Kafka will try to distribute
+      the replicas among the racks evenly in a round-robin fashion. In the case of this example,
+      this means that Kafka will ensure to spread all replicas among the 3 different racks,
+      significantly decreasing the chances of data loss in case of a rack failure.
+
+
+
+Configuring rack awareness for Kafka brokers 
+Learn how to configure rack awareness for Kafka brokers
+
+Rack awareness is enabled and configured by specifying rack information for your hosts
+        using the Hosts > All
+            Hosts > Actions for Selected > Assign
+            Rack action in Cloudera Manager and selecting the
+          Enable Rack Awareness Kafka service property. Once selected,
+          Enable Rack Awareness automatically configures racks for each Kafka
+        broker based on the rack information you provided using the Assign
+          Rack action.
+importantIf after configuring and enabling rack awareness you make changes to
+        rack information (for example, change a rack name), ensure that you restart the Kafka
+        service. If the rack information is changed, the Kafka service will become stale, Cloudera
+        Manager, however, will not display the Kafka service as stale. 
+
+
+
+In order for rack awareness to properly function, the brokers in your deployment must be
+          spread across available racks. If all brokers are deployed on the same rack, enabling and
+          configuring rack awareness will not provide you with any benefits.
+If you previously configured and enabled rack awareness by manually configuring the
+            broker.rack property with Kafka Broker Advanced
+            Configuration Snippet (Safety Valve), ensure that you remove all
+            broker.rack entries from the advanced configuration snippet. The
+          advanced configuration snippet takes precedence over Enable Rack
+            Awareness and overwrites the configuration set by Enable Rack
+            Awareness.
+Specify rack information for your hosts. Complete Specifying Racks for Hosts.
+
+
+In Cloudera Manager, select the Kafka service.Go to Configuration.Find and select the Enable Rack Awareness
+        property.Click Save Changes.Restart the Kafka service.
+ Rack awareness is enabled and configured for the Kafka brokers. 
+Configure rack awareness for Kafka clients.
+
+
+Rack awareness for Kafka consumers
+Learn about leader fetching, which can be used to make Kafka consumers rack
+    aware
+When a Kafka consumer tries to consume a topic partition, it fetches from the partition
+      leader by default. If the partition leader and the consumer are not in the same rack, fetching
+      generates significant cross-rack traffic, which has a number of disadvantages. For example, it
+      can generate high costs and lead to lower consumer bandwidth and throughput. 
+
+For this reason, it is possible to provide the client with rack information so that the
+      client fetches from the closest replica instead of the leader. If the configured closest
+      replica does not exist (there is no replica for the needed partition in the configured closest
+      rack), it uses the partition leader. This feature is called follower fetching and it can be
+      used to mitigate the costs generated by cross-rack traffic or increase consumer throughput. 
+noteDue to the nature of the Kafka protocol and high watermark propagation, consumers might
+      experience increased message latency when fetching from a replica compared to when they are
+      fetching from the leader.
+
+
+
+Configuring rack awareness for Kafka consumers
+Learn how to make Kafka consumers rack aware by enabling and configuring follower
+    fetching.
+
+Kafka Consumers can be made rack aware enabling follower fetching for your Kafka
+        deployment. Follower fetching can be enabled by configuring
+          replica.selector.class property for the broker and configuring the
+          client.rack property in the consumer’s configuration. The
+          replica.selector.class property is not directly available for
+        configuration in Cloudera Manager and you must use an advanced security snippet to configure
+        it.
+
+Ensure that brokers have rack awareness enabled. For more information, see Configuring rack awareness for Kafka brokers.
+In Cloudera Manager, select the Kafka service.Go to Configuration.Find the Kafka Broker Advanced Configuration Snippet (Safety Valve) for
+            kafka.properties property.Add the following configuration entry to the advanced configuration snippet.
+replica.selector.class=org.apache.kafka.common.replica.RackAwareReplicaSelector
+Click Save Changes.Restart the Kafka service.Add the following to your consumer
+          configuration.client.rack=[***RACK ID***]
+Replace
+            [***RACK ID***] with the ID of the rack that the consumer is running
+          in. The rack ID should match one of the rack ID’s you configured for the brokers. Ensure
+          that you configure each consumer and add its corresponding rack ID. If the consumer is
+          deployed in a rack with no brokers, specify the rack ID of a broker that is closest to the
+          rack that the consumer is running in.
+Follower fetching is enabled for the Kafka deployment. Kafka consumers are now rack
+      aware and attempt to consume from the replica that is in the closet rack instead of consuming
+      from the replica leader.
+
+
+Rack awareness for Kafka producers
+Learn about rack awareness for Kafka producers.
+Compared to brokers or consumers, there are no producer specific rack-awareness features or
+      toggles that you can enable. However, in a deployment where rack awareness is an important
+      factor, you can make configuration changes so that producers make use of rack awareness and
+      have messages replicated to multiple racks. 
+Specifically, Cloudera recommends a configuration that ensures that the produced messages are
+      replicated to at least two different racks before the messages are considered to be
+      successful. This involves configuring acks to all in the
+      producer configuration and setting up min.insync.replicas for the topics in a
+      way that ensures a minimum of two racks get the message before the produce request is
+      considered successful.
+The configuration of the acks property is fixed. If you want to make your
+      producers rack aware, the property must be set to all no matter the cluster
+      topology or deployment.
+The exact value you set for min.insync.replicas on the other hand depends on
+      your cluster deployment. Specifically, the min.insync.replicas value you must
+      set will depend on the number of racks, brokers, and the replication factor of your topics.
+      Cloudera recommends that you exercise caution and review the following examples to better
+      understand configuration.
+For example, consider a Cloudera recommended deployment that has three racks with topic
+      replication set to 3. In a case like this, a min.insync.replicas setting of 2
+      ensures that you always have data written to at least two different racks even if one replica
+      is lagging.
+
+Understand however, that setting min.insync.replicas to 2 does not
+      universally work for all deployments and may not guarantee that you always have your produced
+      message in at least two racks. Configuration depends on the number of replicas, as well as the
+      number of racks and brokers. 
+If you have more replicas and brokers than racks, you will have at least two replicas in the
+      same rack. In a case like this, setting min.insync.replicas to 2 is not
+      sufficient, a partition might become unavailable under certain circumstances.
+For example, assume you have three racks with topic replication factor set to 4, meaning that
+      there are a total of four replicas. Additionally, assume that only two of the replicas are in
+      the in-sync replica set (ISR), the leader and one of the followers, and both are located in
+      the same rack. The other two replicas are lagging. Unclean leader election is disabled to
+      avoid data loss.
+
+When the leader and the in-sync follower (located in the same rack) successfully append a
+      produced message to the log, message production is considered successful. The leader does not
+      wait for acknowledgement from the lagging replicas. This is because acks=all
+      only guarantees that the leader waits for the replicas that are in the ISR (including itself).
+      This means that while the latest messages are available on two brokers, both are located on
+      the same rack. If the rack goes down at the same time or shortly after production is
+      successful, the partition will become unavailable as only the two lagging replicas remain,
+      which cannot become leaders.
+In cases like this, a correct value for min.insync.replicas would be 3
+      instead of 2 as three ISRs would guarantee that messages are produced to at least two
+      different racks.
+
+
+Configuring rack awareness for Kafka producers
+Learn how to enable and configure rack awareness for Kafka producers.
+
+Enabling rack awareness for Kafka producers involves configuring your Kafka deployment in a
+        way that ensures that producers commit messages to at least two separate brokers that are
+        deployed on different racks. This can be done by configuring your producers to provide the
+        highest available guarantee on message delivery and configuring
+          min.insync.replicas for your topics. 
+
+Ensure that brokers have rack awareness enabled. For more information, see Configuring rack awareness for Kafka brokers.
+Add the following to your producer configuration.
+acks=all
+This is the default configuration for producer version 3.0.0 or later. As a result,
+            configuring this property might not be required.
+Configure min.insync.replicas for the produced topics to a value
+          that ensures the desired number of racks (minimum of 2) get the message before the produce
+          request is considered successful.
+Rack awareness for Kafka producers is configured. Producers will now ensure that
+      messages are produced to at least 2 (or more) of the available racks.
+

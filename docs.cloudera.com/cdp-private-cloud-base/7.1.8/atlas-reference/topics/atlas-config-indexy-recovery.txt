@@ -1,0 +1,95 @@
+Configuring index recoveryCloudera Docs
+Configuring index recovery
+To enable index recovery, you must configure some of the underlying
+        entities.
+
+Enable write-ahead logs of JanusGraph by configuring root.tx.log-tx graph
+                    property. As this is considered as a GLOBAL property, it can be configured only
+                    through the JanusGraphManagement setting. 
+: The graph property file must be reopened for the new changes to take
+                    effect.
+
+Start new service, IndexRecoveryService, at Atlas
+                    startup to handle index recovery and continuously monitor Solr (Index Client)
+                    health for every retryTime milliseconds. 
+This service should exit if the write-ahead transaction log is not enabled.
+If Solr is healthy and recovery start time is available:
+
+
+Commence transaction recovery with available recovery start time (which
+                        is noted when Solr became unhealthy)
+Persist current recovery time as previous which can be used later by
+                        passing as custom recovery time to start index recovery, if
+                        required.
+Reset current recovery start time.
+
+
+
+If Solr is unhealthy and no recovery start time is available:
+
+
+
+Shutdown the existing transaction recovery process.
+Note down the time which should be the next recovery start time and
+                        persist in the graph.
+
+
+Continue with Solr health checkup.
+The following diagram illustrates the index recovery approach:
+
+
+
+
+Parent topic: Dynamic handling of failure in updating index
+Configurations used for index recovery
+The configuration properties that must be set in <?>
+You must note and set the following properties for you
+                to recover the index.
+atlas.index.recovery.enable: To enable or disable index
+                        recovery. Based on this property you must configure JanusGraph write-ahead
+                        logs property root.tx.log-tx.Example:
+                            atlas.ndex.recovery.enable=truenoteBy default index recovery is
+                            enabled on Atlas startup.
+atlas.graph.index.status.check.frequency: To configure as
+                        to how frequently SOLR health check must be done. It takes input as time in
+                        milliseconds. By default SOLR health checkup takes effect every 30
+                            secondsExample:
+                                atlas.graph.index.status.check.frequency=5000.
+
+atlas.graph.index.recovery.start.time: To start index recovery by custom
+                        recovery time as provided by the user. This property consumes the input as a
+                        timestamp in milliseconds.noteIf Solr is restarted frequently or if Solr
+                            is down, setting the start time configuration works and in turn provides
+                            additional clarity. Example:
+                                atlas.graph.index.recovery.start.time=1630478608000.
+write.ahead.log.ttl.in.hours: To configure the life of write-ahead
+                        transaction log. This property consumes the input as a number of
+                            hours.noteBy default, write-ahead logs live upto 7 days as per
+                            JanusGraph default settings.Example:
+                                write.ahead.log.ttl.in.hours=36.
+
+
+
+
+Index recovery time
+Index recovery time persists in a single graph vertex.
+
+Index recovery vertex has the following properties:
+
+Property-1: Key as “__idxRecovery_name” and with
+                        constant value as ”__solrIndexRecoveryInfo”.
+Property-2: Key as “__idxrecovery_startTime” and
+                        holds the current recovery time.
+Property-3: Key as “__idxrecovery_prevTime” andit
+                        holds the previous recovery time.
+
+Whenever Solr becomes unhealthy the upcoming recovery time is logged in
+                    Atlas application log as “Upcoming index recovery should start
+                        from:<timestamp>”
+When Solr becomes <term>Active</term> again it
+                    gets logged in Atlas application log as “Index recovery starts from :
+                        <timestamp>”, and then current recovery time is assigned to
+                    previous recovery time and reset to null.
+
+
+

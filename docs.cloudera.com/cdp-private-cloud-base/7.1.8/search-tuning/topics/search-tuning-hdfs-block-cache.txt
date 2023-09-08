@@ -1,0 +1,155 @@
+Solr and HDFS - the block cacheCloudera Docs
+Solr and HDFS - the block cache
+Cloudera Search enables Solr to store indexes in an HDFS filesystem. To maintain
+  performance, an HDFS block cache has been implemented using Least Recently Used (LRU) semantics.
+  This enables Solr to cache HDFS index files on read and write, storing the portions of the file in
+  JVM direct memory (off heap) by default, or optionally in the JVM heap.
+warningDo not enable the Solr HDFS write cache,
+   because it can lead to index
+   corruption.
+Cloudera Search enables Solr to store indexes in an HDFS filesystem. To maintain performance,
+   an HDFS block cache has been implemented using Least Recently Used (LRU) semantics. This enables
+   Solr to cache HDFS index files on read and write, storing the portions of the file in JVM direct
+   memory (off heap) by default, or optionally in the JVM heap.
+Batch jobs typically do not use the cache, while Solr servers (when serving queries or indexing
+   documents) should. When running indexing using MapReduce (MR), the MR jobs themselves do not use
+   the block cache. Block write caching is turned off by default and should be left disabled.
+Tuning of this cache is complex and best practices are continually being refined. In general,
+   allocate a cache that is about 10-20% of the amount of memory available on the system. For
+   example, when running HDFS and Solr on a host with 96 GB of memory, allocate 10-20 GB of memory
+   using solr.hdfs.blockcache.slab.count. As index sizes grow you may need to tune
+   this parameter to maintain optimal performance.noteBlock cache metrics are currently
+    unavailable.
+Configure Index Caching
+The following parameters control caching. They can be configured at the Solr process level by
+    setting the respective Java system property or by editing solrconfig.xml
+    directly. 
+If the parameters are set at the collection level (using solrconfig.xml), the
+    first collection loaded by the Solr server takes precedence, and block cache settings in all
+    other collections are ignored. Because you cannot control the order in which collections are
+    loaded, you must make sure to set identical block cache settings in every collection
+     solrconfig.xml. Block cache parameters set at the collection level in
+     solrconfig.xml also take precedence over parameters at the process level.
+
+
+Parameter
+Cloudera Manager Setting
+Default
+Description
+
+
+
+solr.hdfs.blockcache.enabled
+HDFS Block Cache
+true
+Enable the block cache.
+
+
+solr.hdfs.blockcache.read.enabled
+Not directly configurable. If the block cache is enabled, Cloudera Manager
+        automatically enables the read cache. To override this setting, you must use the
+         Solr Service Environment Advanced Configuration Snippet (Safety
+         Valve).
+true
+Enable the read cache.
+
+
+solr.hdfs.blockcache.blocksperbank
+HDFS Block Cache Blocks per Slab
+16384
+Number of blocks per cache slab. The size of the cache is 8 KB (the block size) times
+        the number of blocks per slab times the number of slabs.
+
+
+solr.hdfs.blockcache.slab.count
+HDFS Block Cache Number of Slabs
+1
+Number of slabs per block cache. The size of the cache is 8 KB (the block size) times
+        the number of blocks per slab times the number of slabs.
+
+
+To configure index caching using Cloudera Manager:
+Go to the Solr service.
+Click the Configuration tab.
+In the Search box, type 
+HDFS Block Cache
+to toggle the value of solr.hdfs.blockcache.enabled and enable or
+         disable the block cache.
+HDFS Block Cache Blocks per Slab
+to configure solr.hdfs.blockcache.blocksperbank and set the number of
+         blocks per cache slab.
+HDFS Block Cache Number of Slabs
+to configure solr.hdfs.blockcache.slab.count and set the number of
+         slabs per block cache.
+
+Set the new parameter value.
+Restart Solr servers after editing the parameter.
+
+note
+Increasing the direct memory cache size may make it necessary to increase the maximum direct
+     memory size (MaxDirectMemorySize) allowed by the JVM. Each Solr slab allocates
+     memory, which is 128 MB by default, as well as allocating some additional direct memory
+     overhead. Therefore, ensure that the MaxDirectMemorySize is set comfortably
+     above the value expected for slabs alone. The amount of additional memory required varies
+     according to multiple factors, but for most cases, setting MaxDirectMemorySize
+     to at least 10-20% more than the total memory configured for slabs is sufficient. Setting
+      MaxDirectMemorySize to the number of slabs multiplied by the slab size does
+     not provide enough memory.
+For example, for a direct memory of 20 GB the slab count should be no more than 140 with the
+     default slab size, so there are 7 * 128 MB to store per GB of memory.
+To increase the maximum direct memory size (MaxDirectMemorySize) using
+      Cloudera Manager
+Go to the Solr service.
+Click the Configuration tab.
+In the Search box, type Java Direct Memory Size of Solr Server in
+        Bytes.
+Set the new direct memory value.
+Restart Solr servers after editing the parameter.
+
+
+Solr HDFS optimizes caching when performing NRT indexing using Lucene's
+     NRTCachingDirectory.
+Lucene caches a newly created segment if both of the following conditions are true:
+The segment is the result of a flush or a merge and the estimated size
+      of the merged segment is <=
+      solr.hdfs.nrtcachingdirectory.maxmergesizemb.
+The total cached bytes is <=
+       solr.hdfs.nrtcachingdirectory.maxcachedmb.
+
+The following parameters control NRT caching behavior:
+
+Parameter
+Default
+Description
+
+
+
+solr.hdfs.nrtcachingdirectory.enable
+true
+Whether to enable the NRTCachingDirectory.
+
+
+solr.hdfs.nrtcachingdirectory.maxcachedmb
+192
+Size of the cache in megabytes.
+
+
+solr.hdfs.nrtcachingdirectory.maxmergesizemb
+16
+Maximum segment size to cache.
+
+
+This is an example solrconfig.xml file with
+    defaults: <directoryFactory name="DirectoryFactory">
+    <bool name="solr.hdfs.blockcache.enabled">${solr.hdfs.blockcache.enabled:true}</bool>
+    <int name="solr.hdfs.blockcache.slab.count">${solr.hdfs.blockcache.slab.count:1}</int>
+    <bool name="solr.hdfs.blockcache.direct.memory.allocation">${solr.hdfs.blockcache.direct.memory.allocation:true}</bool>
+    <int name="solr.hdfs.blockcache.blocksperbank">${solr.hdfs.blockcache.blocksperbank:16384}</int>
+    <bool name="solr.hdfs.blockcache.read.enabled">${solr.hdfs.blockcache.read.enabled:true}</bool>
+    <bool name="solr.hdfs.nrtcachingdirectory.enable">${solr.hdfs.nrtcachingdirectory.enable:true}</bool>
+    <int name="solr.hdfs.nrtcachingdirectory.maxmergesizemb">${solr.hdfs.nrtcachingdirectory.maxmergesizemb:16}</int>
+    <int name="solr.hdfs.nrtcachingdirectory.maxcachedmb">${solr.hdfs.nrtcachingdirectory.maxcachedmb:192}</int>
+</directoryFactory>
+
+
+Related tasksSetting Java system properties for SolrRelated informationQuery Settings in SolrConfig - Apache Solr Reference Guide

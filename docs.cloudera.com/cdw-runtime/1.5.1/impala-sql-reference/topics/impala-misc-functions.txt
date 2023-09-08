@@ -1,0 +1,225 @@
+Impala miscellaneous functionsCloudera Docs
+Impala miscellaneous functions
+ Impala supports some utility functions that do not operate on a particular column or
+    data type.
+For example:
+
+CURRENT_DATABASE
+
+
+EFFECTIVE_USER
+
+
+GET_JSON_OBJECT
+
+
+LOGGED_IN_USER
+
+
+PID
+
+
+SLEEP
+
+
+USER
+
+
+UUID
+
+
+VERSION
+
+
+
+
+CURREN_DATABASE()
+
+
+Purpose: Returns the database that the session is currently using, either
+              default if no database has been selected, or whatever database the
+            session switched to through a USE statement or the
+              impalad
+-d option. 
+Return type:
+STRING
+
+
+
+EFFECTIVE_USER()
+
+
+Purpose: Typically returns the same value as USER(), except if
+            delegation is enabled, in which case it returns the ID of the delegated user. 
+Return type:
+STRING
+
+
+ GET_JSON_OBJECT(STRING json_str, STRING selector) 
+
+Purpose: Extracts JSON object from the json_str based on the
+              selector JSON path and returns the string of the extracted JSON
+            object.  The function returns NULL if the input
+                json_str is invalid or if nothing is selected based on the
+                selector JSON path. 
+ The following characters are supported in the selector JSON path: 
+ $ : Denotes the root object 
+ . : Denotes the child operator 
+ [] : Denotes the subscript operator for array 
+ * : Denotes the wildcard for [] or . 
+
+
+
+Return type:
+STRING
+
+
+Examples:
+
+---- QUERY
+SELECT GET_JSON_OBJECT ('{"a":true, "b":false, "c":true}', '$.*');
+---- RESULTS
+[true,false,true]
+---- QUERY
+SELECT GET_JSON_OBJECT(t.json, '$.a.b.c') FROM (VALUES (
+ ('{"a": {"b": {"c": 1}}}' AS json),
+ ('{"a": {"b": {"c": 2}}}'),
+ ('{"a": {"b": {"c": 3}}}')
+)) t
+---- RESULTS
+'1'
+'2'
+'3'
+---- QUERY
+SELECT GET_JSON_OBJECT(t.json, '$.a'),
+ GET_JSON_OBJECT(t.json, '$.b'),
+ GET_JSON_OBJECT(t.json, '$.c')
+FROM (VALUES (
+ ('{"a":1, "b":2, "c":3}' AS json),
+ ('{"b":2, "c":3}'),
+ ('{"c":3}')
+)) t
+---- RESULTS
+'1','2','3'
+'NULL','2','3'
+'NULL','NULL','3'
+---- QUERY
+SELECT GET_JSON_OBJECT(t.json, '$[1]'),
+ GET_JSON_OBJECT(t.json, '$[*]')
+FROM (VALUES (
+ ('["a", "b", "c"]' AS json),
+ ('["a", "b"]'),
+ ('["a"]')
+)) t
+---- RESULTS
+'b','["a","b","c"]'
+'b','["a","b"]'
+'NULL','a'
+
+Added in: Impala 3.1 
+
+ LOGGED_IN_USER() 
+
+Purpose: Typically returns the same value as USER(). If
+            delegation is enabled, it returns the ID of the delegated user. 
+LOGGED_IN_USER() is an alias of EFFECTIVE_USER(). 
+
+Return type:
+STRING
+
+
+Added in: Impala 3.1 
+
+
+PID()
+
+
+Purpose: Returns the process ID of the impalad daemon that the
+            session is connected to. You can use it during low-level debugging, to issue Linux
+            commands that trace, show the arguments, and so on the impalad
+            process. 
+Return type:
+INT
+
+
+
+SLEEP(INT ms)
+
+
+Purpose: Pauses the query for a specified number of milliseconds. For slowing
+            down queries with small result sets enough to monitor runtime execution, memory usage,
+            or other factors that otherwise would be difficult to capture during the brief interval
+            of query execution. When used in the SELECT list, it is called once for
+            each row in the result set; adjust the number of milliseconds accordingly. For example,
+            a query SELECT *, sleep(5) FROM table_with_1000_rows would take at
+            least 5 seconds to complete (5 milliseconds * 1000 rows in result set). To avoid an
+            excessive number of concurrent queries, use this function for troubleshooting on test
+            and development systems, not for production queries. 
+Return type: N/A 
+
+
+USER()
+
+
+Purpose: Returns the username of the Linux user who is connected to the
+              impalad daemon. Typically called a single time, in a query without
+            any FROM clause, to understand how authorization settings apply in a
+            security context; once you know the logged-in username, you can check which groups that
+            user belongs to, and from the list of groups you can check which roles are available to
+            those groups through the authorization policy file.  Impala 2.0 and later,
+                USER() returns the full Kerberos principal string, such as
+                user@example.com, in a Kerberized environment. 
+ When delegation is enabled, consider calling the effective_user()
+              function instead. 
+
+Return type:
+STRING
+
+
+
+UUID() 
+
+
+Purpose: Returns a universal unique identifier, a 128-bit value encoded as a string
+            with groups of hexadecimal digits separated by dashes.  Each call to
+                UUID() produces a new arbitrary value. 
+ If you get a UUID for each row of a result set, you can use it as a unique
+              identifier within a table, or even a unique ID across tables. 
+
+Return type:
+STRING
+
+Usage notes:
+
+ Ascending numeric sequences of type BIGINT are often used as
+              identifiers within a table, and as join keys across multiple tables. The
+                uuid() value is a convenient alternative that does not require
+              storing or querying the highest sequence number. For example, you can use it to
+              quickly construct new unique identifiers during a data import job, or to combine data
+              from different tables without the likelihood of ID collisions. 
+
+
+VERSION()
+
+
+Purpose: Returns information such as the precise version number and build date
+            for the impalad daemon that you are currently connected to. Typically
+            used to confirm that you are connected to the expected level of Impala to use a
+            particular feature, or to connect to several nodes and confirm they are all running the
+            same level of impalad. 
+Return type:
+STRING (with one or more embedded newlines) 
+
+ COORDINATOR() 
+
+Purpose: Returns the name of the host which is running the
+              impalad daemon that is acting as the coordinator for
+            the current query. 
+Return type:
+STRING
+
+
+Added in: Impala 3.1 
+
+
+

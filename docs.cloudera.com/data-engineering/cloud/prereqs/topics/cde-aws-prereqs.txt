@@ -1,0 +1,185 @@
+Amazon AWS prerequisites for Cloudera Data EngineeringCloudera Docs
+Amazon AWS prerequisites for Cloudera Data Engineering
+Amazon Web Services (AWS) prerequisites for Cloudera Data Engineering
+    (CDE).
+Review AWS account prerequisites for CDP
+Refer to the CDP AWS account requirements and verify that the AWS
+        account you are using for CDP has the required resources, and that you have the permissions
+        required to manage these resources.
+
+Review CDE-specific AWS resource
+        requirementsProvisioning a CDE service and virtual clusters
+        require access to the following AWS resources. AWS Services used
+          by Cloudera Data Engineering (CDE)
+Network – Amazon VPC (see below for requirements)
+Compute – Amazon Elastic Kubernetes Service (EKS)
+Load Balancing – Amazon ELB Classic Load Balancer
+Key Management – AWS Key Management Service (KMS)
+DNS – Amazon Route 53 (CDE makes use of this but it is hosted in
+          Cloudera's AWS infrastructure)
+Persistent Instance Storage – Amazon Elastic Block Store (EBS)
+Persistent Service and Virtual Cluster Storage – Amazon Elastic File
+          System (EFS)
+Database – Amazon Relational Database Service (RDS)
+VPC RequirementsYou can use an existing VPC, or
+        allow CDP to create one when you create an environment.Option
+          1: use your own VPCMinimum requirements:
+CDE requires at least two subnets, each in a different Availability
+          Zone (AZ). If you require a public endpoint for CDE, provision at
+          least one public subnet.
+Ensure that the CIDR block for the subnets is sized appropriately.
+          For each CDE environment, in addition to ensuring enough IPs to
+          accomodate the maximum number of autoscaling compute instances, allow
+          for a fixed overhead of three instances for core CDE services and
+          approximately one instance for every two virtual clusters.
+You must enable DNS for the VPC.
+Recommended setup:
+Cloudera recommends that you provision at least three subnets, each
+          in a different Availability Zone (AZ). If you do not require a public
+          endpoint, use three private subnets. If you require a public endpoint,
+          use at least two private subnets and one public subnet.
+Private subnets should have routable IPs over your internal VPN. If
+          IPs are not routable, private CDE endpoints must be accessed via a
+          SOCKS. This is not recommended.
+Tag the VPC and the subnets as shared so that Kubernetes can find
+          them. For load balancers to be able to choose the subnets correctly,
+          you are also required to tag private subnets with the
+            kubernetes.io/role/internal-elb:1 tag, and public
+          subnets with the kubernetes.io/role/elb:1 tag.
+Note that only the load balancer needs to be on a public subnet
+        for access to CDE. By default, if they are available, CDE will configure
+        the EKS to run on private subnets.Option 2: CDP creates a new
+          VPCIf you choose to allow CDP to create a new VPC, three
+        subnets will be automatically created. One subnet is created for each
+        availability zone assuming three AZs per region; If a region has two AZs
+        instead of three, three subnets are still created, with two in the same
+        AZ.You will be asked to specify a valid CIDR in IPv4 range that
+        will be used to define the range of private IPs for EC2 instances
+        provisioned into these subnets.Related AWS documentation: Amazon EKS - Cluster VPC
+          Considerations, Creating a VPC for your Amazon EKS
+          ClusterFirewall requirementsHTTPS access
+        to CDE endpoints is available over port 443 for the following cases:
+Internal only – Should be accessible from your organization's
+          network, but not the public internet.
+Internet facing (public endpoint) – Should be accessible from the
+          public internet as well as your organization's internal network.
+If you are using a firewall or a security group setting to prevent
+        egress traffic from the service, make sure that the
+          container.repository.cloudera.com and
+          docker.repository.cloudera.com URLs on port 443 are
+        allowed at all times.If egress traffic is blocked to these URLs,
+        then autoscaling cannot pull images, which can result in broken pods.
+        For more information on required outbound access, see Outbound network access destinations
+          for AWS and Security groups.Do not
+        remove firewall rules added during provisioning. The rules are also
+        required for regular operation. You must also maintain the minimum
+        firewall requirements set by the cloud provider. For more information,
+        see Amazon EKS security group
+          considerations in the Amazon AWS documentation.
+If you’re using Amazon Relational Database Service (RDS), you’ll need to ensure that you
+        are using *.*.rds.amazonaws.com and TCP 5432 / 3306 / 443 ports. 
+Review the default AWS service limits and your current AWS account
+        limits
+By default, AWS imposes certain default limits for AWS services for each user account. Make
+        sure you review your account's current usage status and resource limits before you start
+        provisioning additional resources for CDP and CDE.
+For example, depending on your AWS account, you may only be allowed to provision a certain
+        number of EC2 instances. Be sure to review your AWS service limits before your proceed.
+Related AWS documentation: AWS Service Limits, Amazon EC2 Resource Limits.
+
+Supported AWS regions
+CDP supports the following AWS regions: Supported AWS regions. However, the CDE service also requires
+        AWS Elastic Kubernetes Service (EKS). Make sure you select a region that
+        includes EKS.
+Related AWS documentation: Region Table.
+
+Set up an AWS Cloud Credential
+Create a role-based AWS credential that allows CDP to authenticate with your AWS account
+        and has authorization to provision AWS resources on your behalf. Role-based authentication
+        uses an IAM role with an attached IAM policy that has the minimum permissions required to
+        use CDP.
+Once you have created this IAM policy, register it in CDP as a cloud credential. Reference
+        this credential when you register an AWS environment in CDP environment as described in the
+        next step.
+Instructions: Cross-account access IAM role
+
+Register an AWS Environment in CDP
+A CDP user must have the Environment Creator role in order to register an environment. An
+        environment determines the specific cloud provider region and virtual network in which
+        resources can be provisioned, and includes the credential that should be used to access the
+        cloud provider account.
+CDE supports deployment into environments with non-transparent proxies.
+        To use this feature, you need to register a proxy and add it to
+        the environment during environment registration. Registering a proxy
+        requires Power User privileges.
+Instructions: Register an AWS environment
+
+CDE Role Requirements
+There are two CDP user roles associated with the CDE service: DEAdmin and DEUser. Any CDP
+        user with the EnvironmentAdmin (or higher) access level must assign these roles to users who
+        require access to the Cloudera Data Engineering console within their environment.
+Furthermore, if you want to allow users to log in to provisioned workspaces and run
+        workloads on them, this will need to be configured separately.
+
+Set up the AWS account to run kubectl commands
+
+
+In the AWS console, create an IAM user ( for example, kubectl-user)
+            with Programmatic access (you don't need to grant any permissions).
+Note the User ARN and copy the Access key ID and Secret access key and set up an AWS
+            profile as follows:
+[kubectl-user] 
+aws_access_key_id = <Access Key ID>
+aws_secret_access_key = <Secret access key>
+
+Navigate to IAM Roles and edit the cross-account IAM role (note the Role ARN) that was
+            created as part of the CDP prerequisites.
+Navigate to Trust relationships > Edit trust relationships.
+Add the following to the policy document, then click Update trust policy.
+ "Effect": "Allow",
+ "Principal": {
+  "AWS": "User ARN from step 2"
+ },
+ "Action": "sts:AssumeRole"
+ },
+
+Download the kubeconfig file from the CDE UI and save it (
+              ~/.kube/cde-env1-kube-config, for example), then run the following
+            shell commands:
+$ export AWS_PROFILE=kubectl-user
+$ unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+$ cred=$(aws sts assume-role --role-arn <Role ARN from step 3> --role-session-name test | jq .Credentials)
+$ export AWS_ACCESS_KEY_ID=$(echo $cred|jq .AccessKeyId|tr -d '"')
+$ export AWS_SECRET_ACCESS_KEY=$(echo $cred|jq .SecretAccessKey|tr -d '"')
+$ export AWS_SESSION_TOKEN=$(echo $cred|jq .SessionToken|tr -d '"')
+$ export KUBECONFIG=~/.kube/cde-env1-kube-config
+$ export TILLER_NAMESPACE=tiller
+
+You should now be able to run kubectl commands.
+
+
+
+Using AWS S3 buckets with encryption
+You may need to incorporate a policy to use at-rest encryption on your Amazon Web Services
+        (AWS) S3 buckets and telemetry log bucket. Starting with CDE 1.18 or higher, telemetry
+        buckets with a customer-managed key is supported. When the policy is used, the data is
+        encrypted before it is saved to your disk in S3 and is decrypted when read. This encryption
+        and decryption takes place in the S3 infrastructure and is transparent to authentiated
+        clients. See server-side encryption listed below under Encrypting Data on S3. 
+For CDE to write and read data to and from an encrypted S3 bucket, you must configure a KMS
+        Key ARN under the Customer Managed Encryption Key for a CDP environment before you create a
+        CDE service. 
+Once the KMS KEY ARN is configured, newly created CDE services will use that key to access
+        the encrypted bucket. If the key is not configured or is invalid, then CDE cant access the
+        encrypted telemetry bucket. This results in service/jobs logs not being stored on S3 and
+        will be available on the Virtual Cluster user interface or for Diagnostics bundles.
+        Additionally, the Spark user interface will not be available for completed applications.
+There may be cases when you want the telemetry bucket to be encrypted with a key that is
+        different from the one that is specified under the Customer Managed Encryption Key (see
+        Adding a customer managed encryption key to a CDP environment running on AWS linked below)
+        and use it to encrypt the EBS volumes and RDS instances running in the environment. In those
+        cases, it's possible to override KMS KEY ARN via the "telemetry.encryption.key" property
+        during service creation.
+
+
+Related informationAdding a customer managed encryption key to a CDP environment running on AWSEncrypting Data on S3

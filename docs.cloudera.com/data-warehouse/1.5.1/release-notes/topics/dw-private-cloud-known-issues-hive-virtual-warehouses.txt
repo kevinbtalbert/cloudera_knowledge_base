@@ -1,0 +1,100 @@
+Known issues in Hive Virtual WarehousesCloudera Docs
+Known issues in Hive Virtual Warehouses
+This topic describes the Hive Virtual Warehouse known issues for Cloudera Data
+    Warehouse (CDW) Private Cloud.
+Known Issues identified in 1.5.1
+
+
+DWX-15869: Virtual Warehouse edit page does not load
+If the Trusted Kerberos Realms configuration on the base
+            cluster's Core Settings service is not empty or if the Additional Rules to
+              Map Kerberos Principals to Short Names field
+              (auth_to_local_rule property) contains the following characters:
+              \, ", \t, \n,
+              \b, and \f, then the CDW Database Catalog and
+            Virtual Warehouse edit page does not load. The logs of the dwx-server pod in the control
+            plane namespace contain the following error message: Not able to render
+              config, err:invalid character 'Q' in string escape code.
+If the Trusted Kerberos Realms property is configured,
+            then perform the folowing:
+Log in to Cloudera Manager as an Administrator.
+Go to Clusters > Core Settings service > Actions, click Download Client Configuration. Save the
+                file on your computer and decompress it.
+Open the core-site.xml file and copy the value of the
+                  hadoop.security.auth_to_local configuration property.
+Paste the value of the hadoop.security.auth_to_local
+                  configuration property in a text editor and remove all
+                  \Q and \E regular expression constructs. Copy
+                the modified text.
+Go to Cloudera Manager > Clusters > Core Settings service > Configuration and paste the modified text in the Additional Rules to Map
+                  Kerberos Principals to Short Names field.
+Remove the Trusted Kerberos Realms configuration from Core Settings service > Configuration tab.
+Click Save Changes.
+Restart the affected services in Cloudera Manager to apply stale
+                configurations.
+Go to the Data Warehouse service and refresh your Database Catalogs and Virtual
+                Warehouses. In case this does not work, deactivate and reactivate your environment
+                in CDW.
+If the Additional Rules to Map Kerberos Principals to Short
+                Names field (extra_auth_to_local_rules property) in
+              Core Settings service contains the following characters: \,
+                ", \t, \n, \b,
+              and \f, then remove these characters regular expression. Save changes
+              and restart the affected services in Cloudera Manager, and then refresh the Database
+              Catalog and Virtual Warehouses.
+
+
+DWX-15480: Hive queries fail with FILE_NOT_FOUND error
+ACID directory cache may become outdated in Tez AMs in case of
+            ACID tables that change often, possibly leading to different errors with the same root
+            cause: "split generation works from cache pointing to non-existing files". And you may
+            see the following error in the diagnostic bundles and query logs:
+              FILE_NOT_FOUND: Unable to get file status.
+Disable the cache by setting the value of the
+              hive.txn.acid.dir.cache.duration property to
+              -1 by going to Virtual Warehouse >  > Edit > CONFIGURATIONS > Hue > Configuration files > hive-site from the CDW web interface.
+
+
+DWX-15287: Drop database query for Hive fails with Invalid ACL
+            Exception
+You may see the following error in a Hue or beeline session when
+            running DROP DATABASE, DROP TABLE, or ALTER TABLE DROP PARTITION operations on a Hive
+            Virtual Warehouse that is in Stopped state:
+              "org.apache.zookeeper.KeeperException$InvalidACLException:
+              KeeperErrorCode = InvalidACL for /llap-sasl/user-hive".The exception
+              is caused because the Hive Virtual Warehouse tries to evict the cache in the LLAP
+              executors, but the compute pods of the stopped warehouse are no longer running.noteThe database or table is deleted despite the exception, only
+                the LLAP executors do not flush their database or table related buffers, because
+                these executors are not running.
+Start the Virtual Warehouse before you run the DROP
+            DATABASE, DROP TABLE, or ALTER TABLE DROP PARTITION operations.Alternatively, you can
+              add the hive.llap.io.proactive.eviction.enabled=false setting in the
+                hive-site.xml file. This method may result in some performance
+              degradation, because LLAP no longer discards the dropped database/table or temp table
+              related buffers.
+Log in to CDW as DWAdmin.
+Click  > Edit > CONFIGURATIONS > Hiveserver2 on the Virtual Warehouse tile and select
+                    hive-site from the Configuration
+                    files drop-down menu.
+Click  and add the following
+                  line:hive.llap.io.proactive.eviction.enabled=false
+Click Apply Changes.Wait for the Virtual Warehouse to
+                    refresh and return to Running or Stopped state.
+
+
+
+
+Known Issues identified before 1.4.1
+
+
+DWX-4842: Entities are not being created in Atlas
+Base clusters that are using Java 11 might be using truststores
+            in PKCS12 format. Currently, Hive Virtual Warehouses on CDW Private Cloud only supports
+            truststores in JKS format. This prevents the entities from being created in Atlas.
+Using the keytool, convert the PKCS12
+            truststore in the base cluster to a JKS truststore.
+
+
+
+
+Parent topic: Known issues and limitations in Cloudera Data Warehouse Private Cloud

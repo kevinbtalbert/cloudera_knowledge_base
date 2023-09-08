@@ -1,0 +1,72 @@
+Managed storage accessCloudera Docs
+Managed storage access
+Understanding how Cloudera Data Warehouse (CDW) stores data for multiple tenants and a
+  high-level overview of the configuration tasks prepares you as DWAdmin to set up a RAZ-controlled
+  warehouse.
+The multitenant storage technique in CDW offers increased security over the storage method used
+   in earlier releases that based all storage access in CDW on a single EC2 instance role. The old
+   method listing all S3 buckets that need to be accessible by Hive or Impala made the impact of a
+   leaked access token for a role unacceptably wide, even though the access token is normally very
+   time-constrained. The new technique requires a separate Database Catalog plus at least one
+   Virtual Warehouse per tenant.
+You configure a dedicated IAM role to give only the tenant-specific default database catalog
+   instance and its associated virtual warehouse data access to both of the following buckets.
+The tenant-specific bucket(s) 
+Potentially shared bucket(s) 
+The SDX Data Lake bucket
+
+If the access token for a role is leaked, the data of others is not compromised; only one
+   tenant’s own, and shared, data is vulnerable. A custom identity broker IDBroker approach to
+   accessing the Virtual Warehouse is shown in the following graphic:
+
+
+
+Using a Ranger Remote Authorization (RAZ)-enabled environment, you can control access to data
+   based on user roles and classifications. As a CDP Admin, you can apply Ranger fine-grained access
+   control policies to S3 buckets, directories, and files.
+The following diagram shows the high-level steps for configuring RAZ-enabled storage: 
+
+
+
+
+
+After you obtain the entitlements required for this feature CDW_ALLOW_MULTI_DEFAULT_DBC and
+   CDW_STORAGE_ROLES, you can configure storage as shown in this diagram:
+
+In CDP, register an environment that enables RAZ and uses the SDX Data Lake.
+Activate the environment in CDW.
+Manually create S3 bucket(s), or use existing ones, for access by the IAM tenant role.
+In AWS, create an IAM role for the tenant.
+Give the IAM role certain permissions.
+Configure a trust relationship with the IDBROKER_ROLE.
+Give the Instance Profile (idbroker assume role) the permission to assume the IAM
+    role of the tenant. 
+In CDP Management Console, create an UMS group. 
+Add the UMS machine user (created when you activated the CDW environment) to the UMS
+    group.
+Add the id broker mapping to the environment.
+
+      Sync user group changes for the RAZ-enabled environment with FreeIPA.
+     
+ Create a separate Database Catalog with a unique IAM role. 
+ Create a tenant-specific Virtual Warehouse based on the Database Catalog, SDX
+    Data Lake, and RAZ-enabled environment. 
+
+Create a tenant-specific Hive or Impala database that points to tenant-specific buckets. 
+As the metadata is shared across all tenants, Ranger grants access to tenant data via a
+     group at the database level.
+
+
+For each tenant, repeat the actions above, starting from the step after
+       activating the environment for CDW.
+
+
+The IAM role accesses a tenant specific bucket s3-tenant-1 and SDX Data Lake bucket. The SDX
+   Data Lake bucket is needed for shared data and other data used by Database Catalog and to
+   integrate WXM. WXM writes Impala query data to the shared bucket. You need the UMS group to add
+   the IDBroker mapping, as a single UMS machine user
+   cannot have multiple ID broker mappings to different IAM roles.
+The following topics describe step-by-step how to set up your environment, IAM roles, Database
+   Catalog, and Virtual Warehouse for storing RAZ-enabled data.
+
+Setting up managed storage accessYou learn the consequences of setting up RAZ control, which cannot be removed, and         requirements you must meet to enable managed storage access.

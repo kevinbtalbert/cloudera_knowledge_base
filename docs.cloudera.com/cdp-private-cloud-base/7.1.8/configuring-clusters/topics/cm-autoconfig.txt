@@ -1,0 +1,605 @@
+AutoconfigurationCloudera Docs
+Autoconfiguration
+
+Cloudera Manager provides several interactive wizards to automate common
+      workflows:
+Installation - used to bootstrap a Cloudera Manager
+          deployment
+Add Cluster - used when adding a new cluster
+Add Service - used when adding a new service
+Upgrade - used when upgrading to a new version of
+          CDH
+Import MapReduce - used when migrating from MapReduce to YARN
+
+In some of these wizards, Cloudera Manager uses a set of rules to automatically
+      configure certain settings to best suit the characteristics of the
+      deployment. For example, the number of hosts in the deployment drives the
+      memory requirements for certain monitoring daemons: the more hosts, the
+      more memory is needed. Additionally, wizards that are tasked with creating
+      new roles will use a similar set of rules to determine an ideal host
+      placement for those roles.
+Scope
+The following table shows, for each wizard, the scope of entities it affects
+        during autoconfiguration and role-host placement.
+
+Wizard
+Autoconfiguration Scope
+Role-Host Placement Scope
+
+
+
+Installation
+New cluster, Cloudera Management Service
+New cluster, Cloudera Management Service
+
+
+Add Cluster
+New cluster
+New cluster
+
+
+Add Service
+New service
+New service
+
+
+ Upgrade
+Cloudera Management Service
+Cloudera Management Service
+
+
+Import MapReduce
+Existing YARN service
+N/A
+
+
+Certain autoconfiguration rules are unscoped, that is, they configure settings
+        belonging to entities that aren't necessarily the entities under the
+        wizard's scope. These exceptions are explicitly listed.
+
+
+Related informationRole Groups
+Autoconfiguration
+
+Cloudera Manager employs several different rules to drive automatic
+        configuration, with some variation from wizard to wizard. These rules
+        range from the simple to the complex.
+
+
+Configuration Scope
+
+One of the points of complexity in autoconfiguration is configuration
+          scope. The configuration hierarchy as it applies to services is as
+          follows: configurations may be modified at the service level
+          (affecting every role in the service), role group level (affecting
+          every role instance in the group), or role level (affecting one role
+          instance). A configuration found in a lower level takes precedence
+          over a configuration found in a higher level.
+With the exception of the Static Service Pools, and the Import MapReduce wizard,
+          all Cloudera Manager wizards follow a basic pattern:
+Every role in scope is moved into its own, new, role group.
+This role group is the receptacle for the role's "idealized" configuration. Much
+              of this configuration is driven by properties of the role's host,
+              which can vary from role to role.
+Once autoconfiguration is complete, new role groups with common configurations
+              are merged.
+The end result is a smaller set of role groups, each with an "idealized"
+              configuration for some subset of the roles in scope. A subset can
+              have any number of roles; perhaps all of them, perhaps just one,
+              and so on.
+The Static Service Pools and Import MapReduce wizards configure role groups
+          directly and do not perform any merging.
+
+
+
+Data Directories
+
+Several autoconfiguration rules work with data directories, and there's a common
+          sub-rule used by all such rules to determine, out of all the
+          mountpoints present on a host, which are appropriate for data. The
+          subrule works as follows:
+The initial set of mountpoints for a host includes all those that are
+              disk-backed. Network-backed mountpoints are excluded.
+Mountpoints beginning with /boot, /cdrom,
+              /usr, /tmp,
+              /home, or /dev are excluded.
+Mountpoints beginning with /media are excluded, unless the backing device's name
+              contains /xvd somewhere in it.
+Mountpoints beginning with /var are excluded, unless they are
+              /var or /var/lib.
+The largest mount point (in terms of total space, not available space) is
+              determined.
+Other mountpoints with less than 1% total space of the largest are excluded.
+Mountpoints beginning with /var or equal to /
+              are excluded unless they’re the largest mount point.
+Remaining mountpoints are sorted lexicographically and retained for future use.
+
+
+
+
+Memory
+
+The rules used to autoconfigure memory reservations are perhaps the
+          most complicated rules employed by Cloudera Manager. When configuring
+          memory, Cloudera Manager must take into consideration which roles are
+          likely to enjoy more memory, and must not over commit hosts if at all
+          possible. To that end, it needs to consider each host as an entire
+          unit, partitioning its available RAM into segments, one segment for
+          each role. To make matters worse, some roles have more than one memory
+          segment. For example, a Solr server has two memory segments: a JVM
+          heap used for most memory allocation, and a JVM direct memory pool
+          used for HDFS block caching. Here is the overall flow during memory
+            autoconfiguration:
+The set of participants includes every host under scope as well
+              as every {role, memory segment} pair on those hosts. Some roles
+              are under scope while others are not.
+For each {role, segment} pair where the role is under scope, a
+              rule is run to determine four different values for that pair:
+Minimum memory configuration. Cloudera Manager must satisfy
+                  this minimum, possibly over-committing the host if
+                  necessary.
+Minimum memory consumption. Like the above, but possibly
+                  scaled to account for inherent overhead. For example, JVM
+                  memory values are multiplied by 1.3 to arrive at their
+                  consumption value.
+Ideal memory configuration. If RAM permits, Cloudera Manager
+                  will provide the pair with all of this memory.
+Ideal memory consumption. Like the above, but scaled if
+                  necessary.
+
+For each {role, segment} pair where the role is not under scope,
+              a rule is run to determine that pair's existing memory
+              consumption. Cloudera Manager will not configure this segment but
+              will take it into consideration by setting the pair's "minimum"
+              and "ideal" to the memory consumption value.
+For each host, the following steps are taken:
+20% of the host's available RAM is subtracted and reserved
+                  for the OS.
+sum(minimum_consumption) and sum(ideal_consumption) are
+                  calculated.
+An "availability ratio" is built by comparing the two sums
+                  against the host's available RAM.
+If RAM < sum(minimum) ratio = 0
+If RAM >= sum(ideal) ratio = 1
+
+If the host has more available memory than the total of the
+                  ideal memory for all roles assigned to the host, each role is
+                  assigned its ideal memory and autoconfiguration is finished. 
+Cloudera Manager assigns all available host memory by
+                  setting each {role, segment} pair to the same consumption
+                  value, except in cases where that value is below the minimum
+                  memory or above the ideal memory for that pair. In that case,
+                  it is set to the minimum memory or the ideal memory as
+                  appropriate. This ensures that pairs with low ideal memory
+                  requirements are completely satisfied before pairs with higher
+                  ideal memory requirements.
+
+The {role, segment} pair is set with the value from the previous
+              step. In the Static Service Pools wizard, the role group is set
+              just once (as opposed to each role).
+Custom post-configuration rules are run.
+
+Customization rules are applied in steps 2, 3 and 7. In step 2,
+          there's a generic rule for most cases, as well as a series of custom
+          rules for certain {role, segment} pairs. Likewise, there's a generic
+          rule to calculate memory consumption in step 3 as well as some custom
+          consumption functions for certain {role, segment} pairs.
+
+
+Step 2 Generic Rule 
+
+For every {role, segment} pair where the segment defines a default value, the
+            pair's minimum is set to the segment's minimum value (or 0 if
+            undefined), and the ideal is set to the segment's default value.
+
+
+
+Step 2 Custom Rules 
+
+HDFS
+For the NameNode and Secondary NameNode JVM heaps, the minimum is
+              50 MB and the ideal is max(4 GB, sum_over_all(DataNode
+                mountpoints’ available space) / 0.000008).
+
+MapReduce
+For the JobTracker JVM heap, the minimum is 50 MB and the ideal
+              is max(1 GB, round((1 GB * 2.3717181092 * ln(number of
+                TaskTrackers in MapReduce service)) - 2.6019933306)).
+              If the number of TaskTrackers <= 5, the ideal is 1 GB.
+For the mapper JVM heaps, the minimum is 1 and the ideal is  the
+              number of cores, including hyperthreads, on the TaskTracker host.
+              Memory consumption is scaled by
+                mapred_child_java_opts_max_heap (the size of a
+              task's heap).
+For the reducer JVM heaps, the minimum is 1 and the ideal is
+                (number of cores, including hyperthreads, on the
+                TaskTracker host) / 2. Memory consumption is scaled by
+                mapred_child_java_opts_max_heap (the size of a
+              task's heap).
+
+HBase
+For the memory total allowed for HBase RegionServer JVM heap, the
+              minimum is 50 MB and the ideal is min (31 GB ,(total RAM
+                on region server host) * 0.64)
+
+YARN
+For the memory total allowed for containers, the minimum is 1 GB
+              and the ideal is (total RAM on NodeManager host) *
+                0.64.
+
+Hue
+With the exception of the Beeswax Server (only in CDH 4), Hue
+              roles do not have memory limits. Therefore, Cloudera Manager
+              treats them as roles that consume a fixed amount of memory by
+              setting their minimum and ideal consumption values, but not their
+              configuration values. The two consumption values are set to 256
+              MB.
+
+Impala
+With the exception of the Impala daemon, Impala roles do not have
+              memory limits. Therefore, Cloudera Manager treats them as roles
+              that consume a fixed amount of memory by setting their
+              minimum/ideal consumption values, but not their configuration
+              values. The two consumption values are set to 150 MB for the
+              Catalog Server and 64 MB for the StateStore.
+For the Impala Daemon memory limit, the minimum is 256 MB and the
+              ideal is (total RAM on daemon host) * 0.64.
+
+Solr
+For the Solr Server JVM heap, the minimum is 50 MB and the ideal
+              is min(64 GB, (total RAM on Solr Server host) * 0.64) /
+                2.6. For the Solr Server JVM direct memory segment, the
+              minimum is 256 MB and the ideal is min(64 GB, (total RAM
+                on Solr Server host) * 0.64) / 2.
+
+Cloudera Management Service
+
+Alert Publisher JVM heap - Treated as if it consumed a fixed
+                amount of memory by setting the minimum/ideal consumption
+                values, but not the configuration values. The two consumption
+                values are set to 256 MB.
+Service and Host Monitor JVM heaps - The minimum is 50 MB and
+                the ideal is either 256 MB (10 or fewer managed hosts), 1 GB
+                (100 or fewer managed hosts), or 2 GB (over 100 managed
+                hosts).
+Event Server, Reports Manager, and Navigator Audit Server JVM
+                heaps - The minimum is 50 MB and the ideal is 1 GB.
+Navigator Metadata Server JVM heap - The minimum is 512 MB and
+                the ideal is 2 GB.
+Service and Host Monitor off-heap memory segments - The
+                minimum is either 768 MB (10 or fewer managed hosts), 2 GB (100
+                or fewer managed hosts), or 6 GB (over 100 managed hosts). The
+                ideal is always twice the minimum.
+
+
+
+
+
+Step 2 Generic Rule for Static Service Pools Wizard
+
+For every {role, segment} pair where the segment defines a default
+            value and an autoconfiguration share, the pair's minimum is set to
+            the segment's default value, and the ideal is set to
+              min((segment soft max (if exists) or
+              segment max (if exists) or 2^63-1), (total RAM on role's
+              host * 0.8 / segment scale factor * service percentage chosen in
+              wizard * segment autoconfiguration share)).
+Autoconfiguration shares are defined as follows:
+HBase RegionServer JVM heap: 1
+HDFS DataNode JVM heap: 1 in CDH 4, 0.2 in CDH 5
+HDFS DataNode maximum locked memory: 0.8 (CDH 5 only)
+Solr Server JVM heap: 0.5
+Solr Server JVM direct memory: 0.5
+Spark Standalone Worker JVM heap: 1
+Accumulo Tablet Server JVM heap: 1
+Add-on services: any
+
+Roles not mentioned here do not define autoconfiguration shares and thus aren't
+            affected by this rule.
+Additionally, there's a generic rule to handle
+            cgroup.memory_limit_in_bytes, which is unused by
+            Cloudera services but is available for add-on services. Its behavior
+            varies depending on whether the role in question has segments or
+            not.
+With Segments
+The minimum is the min(cgroup.memory_limit_in_bytes_min
+                (if exists) or 0, sum_over_all(segment minimum
+                consumption)), and the ideal is the sum of all segment
+              ideal consumptions.
+
+Without Segments
+The minimum is cgroup.memory_limit_in_bytes_min (if
+                exists) or 0, and the ideal is (total RAM on
+                role's host * 0.8 * service percentage chosen in
+                wizard).
+
+
+
+
+Step 3 Custom Rules for Static Service Pools Wizard
+
+YARN
+For the memory total allowed for containers, the minimum is 1 GB
+              and the ideal is min(8 GB, (total RAM on NodeManager host)
+                * 0.8 * service percentage chosen in wizard).
+
+Impala
+For the Impala Daemon memory limit, the minimum is 256 MB and the
+              ideal is ((total RAM on Daemon host) * 0.8 * service
+                percentage chosen in wizard).
+
+MapReduce
+
+Mapper JVM heaps - the minimum is 1 and the ideal is (number
+                of cores, including hyperthreads, on the TaskTracker host *
+                service percentage chosen in wizard). Memory consumption is
+                scaled by mapred_child_java_opts_max_heap (the
+                size of a given task's heap).
+Reducer JVM heaps - the minimum is 1 and the ideal is (number
+                of cores, including hyperthreads on the TaskTracker host *
+                service percentage chosen in wizard) / 2. Memory consumption is
+                scaled by mapred_child_java_opts_max_heap (the
+                size of a given task's heap).
+
+
+
+
+
+Step 3 Generic Rule
+
+For every {role, segment} pair, the segment's current value is converted into
+            bytes, and then multiplied by the scale factor (1.0 by default, 1.3
+            for JVM heaps, and freely defined for Custom Service Descriptor
+            services).
+
+
+
+Step 3 Custom Rules
+
+Impala
+For the Impala Daemon, the memory consumption is 0 if YARN
+              Service for Resource Management is set. If the memory limit is
+              defined but not -1, its value is used verbatim. If it's defined
+              but -1, the consumption is equal to the total RAM on the Daemon
+              host. If it is undefined, the consumption is (total RAM *
+              0.8).
+
+Solr
+For the Solr Server JVM direct memory segment, the consumption is equal to the
+              value verbatim provided
+              solr.hdfs.blockcache.enable and
+              solr.hdfs.blockcache.direct.memory.allocation are
+              both true. Otherwise, the consumption is 0.
+
+
+
+
+Step 7 Custom Rules
+
+HDFS
+
+NameNode JVM heaps are equalized. For every pair of NameNodes in an HDFS service
+                with different heap sizes, the larger heap size is reset to the
+                smaller one.
+JournalNode JVM heaps are equalized. For every pair of JournalNodes in an HDFS
+                service with different heap sizes, the larger heap size is reset
+                to the smaller one.
+NameNode and Secondary NameNode JVM heaps are equalized. For every {NameNode,
+                Secondary NameNode} pair in an HDFS service with different heap
+                sizes, the larger heap size is reset to the smaller one.
+
+
+HBase
+Master JVM heaps are equalized. For every pair of Masters in an HBase service
+              with different heap sizes, the larger heap size is reset to the
+              smaller one.
+
+Impala
+If an Impala service has YARN Service for Resource Management
+              set, every Impala Daemon memory limit is set to the value of
+                (yarn.nodemanager.resource.memory-mb * 1 GB) if
+              there's a YARN NodeManager co-located with the Impala Daemon.
+
+MapReduce
+JobTracker JVM heaps are equalized. For every pair of JobTrackers in an
+              MapReduce service with different heap sizes, the larger heap size
+              is reset to the smaller one.
+
+Oozie
+Oozie Server JVM heaps are equalized. For every pair of Oozie Servers in an
+              Oozie service with different heap sizes, the larger heap size is
+              reset to the smaller one.
+
+YARN
+ResourceManager JVM heaps are equalized. For every pair of ResourceManagers in a
+              YARN service with different heap sizes, the larger heap size is
+              reset to the smaller one.
+
+ZooKeeper
+ZooKeeper Server JVM heaps are equalized. For every pair of servers in a
+              ZooKeeper service with different heap sizes, the larger heap size
+              is reset to the smaller one.
+
+
+
+
+
+General Rules
+
+HBase
+
+hbase.replication - For each HBase service, set
+              to true if there's a Key-Value Store Indexer service in the
+              cluster. This rule is unscoped; it can fire even if the HBase
+                service is not under scope.
+replication.replicationsource.implementation -
+              For each HBase service, set to
+                com.ngdata.sep.impl.SepReplicationSource if
+              there's a Keystore Indexer service in the cluster. This rule is
+                unscoped; it can fire even if the HBase service is not under
+                scope.
+
+
+HDFS
+
+dfs.datanode.du.reserved - For each DataNode,
+              set to min((total space of DataNode host largest
+                mountpoint) / 10, 10 GB).
+dfs.namenode.name.dir - For each NameNode, set to the first two
+              mountpoints on the NameNode host with /dfs/nn
+              appended.
+dfs.namenode.checkpoint.dir - For each Secondary NameNode, set
+              to the first mountpoint on the Secondary NameNode host with
+              /dfs/snn appended.
+dfs.datanode.data.dir - For each DataNode, set to all the
+              mountpoints on the host with /dfs/dn appended.
+dfs.journalnode.edits.dir - For each JournalNode, set to the
+              first mountpoint on the JournalNode host with
+              /dfs/jn appended.
+dfs.datanode.failed.volumes.tolerated - For each DataNode, set
+              to (number of mountpoints on DataNode host) / 2.
+dfs.namenode.service.handler.count and
+                dfs.namenode.handler.count - For each NameNode, set to
+                ln(number of DataNodes in this HDFS service) * 20.
+dfs.datanode.hdfs-blocks-metadata.enabled - For each HDFS
+              service, set to true if there's an Impala service in the cluster.
+              This rule is unscoped; it can fire even if the HDFS service is
+              not under scope.
+dfs.client.read.shortcircuit - For each HDFS service, set to
+              true if there's an Impala service in the cluster. This rule is
+              unscoped; it can fire even if the HDFS service is not under
+              scope.
+dfs.datanode.data.dir.perm - For each DataNode, set to 755 if
+              there's an Impala service in the cluster and the cluster isn’t
+              Kerberized. This rule is unscoped; it can fire even if the HDFS
+              service is not under scope.
+fs.trash.interval - For each HDFS service, set to 1.
+
+
+Hue
+
+WebHDFS dependency - For each Hue service, set to either
+              the first HttpFS role in the cluster, or, if there are none, the
+              first NameNode in the cluster.
+HBase Thrift Server dependency- For each Hue service in a
+              CDH 4.4 or higher cluster, set to the first HBase Thrift Server in
+              the cluster.
+
+
+Impala
+For each Impala service, set Enable Audit Collection and
+              Enable Lineage Collection to true if there's a Cloudera
+            Management Service with a Navigator Audit Server and Navigator
+            Metadata Server roles. This rule is unscoped; it can fire even if
+              the Impala service is not under scope.
+
+MapReduce
+
+mapred.local.dir - For each JobTracker, set to the first
+              mountpoint on the JobTracker host with /mapred/jt
+              appended.
+mapred.local.dir - For each TaskTracker, set to all the
+              mountpoints on the host with /mapred/local
+              appended.
+mapred.reduce.tasks - For each MapReduce
+              service, set to max(1, sum_over_all(TaskTracker number of
+                reduce tasks (determined via
+                  mapred.tasktracker.reduce.tasks.maximum for
+                that TaskTracker, which is configured separately)) /
+              2).
+mapred.job.tracker.handler.count - For each
+              JobTracker, set to max(10, ln(number of TaskTrackers in
+                this MapReduce service) * 20).
+mapred.submit.replication - If there's an HDFS service in the
+              cluster, for each MapReduce service, set to max(min(number of DataNodes in the
+                HDFS service, value of HDFS Replication Factor), sqrt(number of DataNodes in the
+                HDFS service)).
+mapred.tasktracker.instrumentation - If there's a management
+              service, for each MapReduce service, set to
+              org.apache.hadoop.mapred.TaskTrackerCmonInst.
+              This rule is unscoped; it can fire even if the MapReduce
+              service is not under scope.
+
+
+YARN
+
+yarn.nodemanager.local-dirs - For each NodeManager, set to all
+              the mountpoints on the NodeManager host with
+              /yarn/nm appended.
+yarn.nodemanager.resource.cpu-vcores - For each NodeManager,
+              set to the number of cores (including hyperthreads) on the
+              NodeManager host.
+mapred.reduce.tasks - For each YARN service,
+              set to max(1,sum_over_all(NodeManager number of cores,
+                including hyperthreads) / 2).
+yarn.resourcemanager.nodemanagers.heartbeat-interval-ms
+              - For each NodeManager, set to max(100, 10 * (number of
+                NodeManagers in this YARN service)).
+yarn.scheduler.maximum-allocation-vcores - For
+              each ResourceManager, set to max_over_all(NodeManager
+                number of vcores (determined via
+                  yarn.nodemanager.resource.cpu-vcores for that
+                NodeManager, which is configured separately)).
+yarn.scheduler.maximum-allocation-mb - For each
+              ResourceManager, set to max_over_all(NodeManager amount of
+                RAM (determined via
+                  yarn.nodemanager.resource.memory-mb for that
+                NodeManager, which is configured separately)).
+mapreduce.client.submit.file.replication - If there's an HDFS
+              service in the cluster, for each YARN service, set to max(min(number of
+                DataNodes in the HDFS service, value of HDFS Replication Factor), sqrt(number of
+                DataNodes in the HDFS service)).
+
+
+All Services
+If a service dependency is unset, and a service with the desired
+            type exists in the cluster, set the service dependency to the first
+            such target service. Applies to all service dependencies except YARN
+            Service for Resource Management. Applies only to the Installation
+            and Add Cluster wizards.
+
+
+
+
+
+Role-Host Placement
+
+Cloudera Manager employs the same role-host placement rule regardless of wizard.
+        The set of hosts considered depends on the scope. If the scope is a
+        cluster, all hosts in the cluster are included. If a service, all hosts
+        in the service's cluster are included. If the Cloudera Management
+        Service, all hosts in the deployment are included. The rules are as
+        follows:
+The hosts are sorted from most to least physical RAM. Ties are broken by sorting
+            on hostname (ascending) followed by host identifier (ascending).
+The overall number of hosts is used to determine which arrangement to use. These
+            arrangements are hard-coded, each dictating for a given "master"
+            role type, what index (or indexes) into the sorted host list in step
+            1 to use.
+Master role types are included based on several factors:
+Is this role type part of the service (or services) under scope?
+Does the service already have the right number of instances of this role type?
+Does the cluster's CDH version support this role type?
+Does the installed license allow for this role type to
+                exist?
+
+Master roles are placed on each host using the indexes and the sorted host list.
+            If a host already has a given master role, it is skipped.
+An HDFS DataNode is placed on every host outside of the arrangement described in
+            step 2, provided HDFS is one of the services under scope.
+Certain "worker" roles are placed on every host where an HDFS DataNode exists,
+            either because it existed there prior to the wizard, or because it
+            was added in the previous step. The supported worker role types are:
+MapReduce TaskTrackers
+YARN NodeManagers
+HBase RegionServers
+Impala Daemons
+Spark Workers
+
+Hive gateways are placed on every host, provided a Hive service is under scope
+            and a gateway didn’t already exist on a given host.
+Spark on YARN gateways are placed on every host, provided a Spark on YARN service is under scope and a gateway didn’t already exist on a given host.
+This rule merely dictates the default placement of roles; you are free to
+        modify it before it is applied by the wizard.
+
+

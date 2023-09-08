@@ -1,0 +1,133 @@
+Building and running a Spark Streaming applicationCloudera Docs
+Building and running a Spark Streaming application
+Use the following steps to build and run a Spark streaming job
+    for Cloudera Data Platform (CDP). 
+Depending on your compilation and build processes, one or more of the following tasks
+                might be required before running a Spark Streaming job:
+
+
+If you are using maven as a compile tool:
+
+Add the Cloudera repository to your pom.xml
+                            file:<repository>
+    <id>cloudera</id>
+    <name>Cloudera Repository</name>
+    <url>https://repository.cloudera.com/artifactory/cloudera-repos/</url>
+</repository>
+Specify the Cloudera version number for Spark
+              streaming Kafka and streaming dependencies to your
+                pom.xml
+                file:<dependency>
+    <groupId>org.apache.spark</groupId>
+    <artifactId>spark-streaming-kafka_2.10</artifactId>
+    <version>2.0.0.2.4.2.0-90</version>
+</dependency>
+
+<dependency>
+    <groupId>org.apache.spark</groupId>
+    <artifactId>spark-streaming_2.11</artifactId>
+    <version>2.4.0.7.0.0.0</version>
+    <scope>provided</scope>
+</dependency>Note
+                that the correct version number includes the Spark version and
+                the Cloudera Runtime version.
+(Optional) If you prefer to pack an uber .jar rather than use the
+                            default ("provided"), add the maven-shade-plugin to
+                            your pom.xml
+                            file:<plugin>
+    <groupId>org.apache.maven.plugins</groupId>
+    <artifactId>maven-shade-plugin</artifactId>
+    <version>2.3</version>
+    <executions>
+        <execution>
+            <phase>package</phase>
+            <goals>
+                <goal>shade</goal>
+            </goals>
+        </execution>
+    </executions>
+    <configuration>
+        <filters>
+            <filter>
+                <artifact>*:*</artifact>
+                <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                </excludes>
+            </filter>
+        </filters>
+        <finalName>uber-${project.artifactId}-${project.version}</finalName>
+    </configuration>
+</plugin>
+
+
+
+Instructions for submitting your job depend on whether you used an uber .jar
+                        file or not:
+
+
+If you kept the default .jar scope and you can access an external
+                                network, use --packages to download dependencies in
+                                the runtime library:
+spark-submit --master yarn-client \
+    --num-executors 1 \
+    --packages org.apache.spark:spark-streaming-kafka_2.10:2.0.0.2.4.2.0-90 \
+    --repositories http://repo.hortonworks.com/content/repositories/releases/ \
+    --class <user-main-class> \
+    <user-application.jar> \
+    <user arg lists>
+The artifact and repository locations should be the same as specified
+                                in your pom.xml file.
+
+
+If you packed the .jar file into an uber .jar, submit the .jar file
+                                in the same way as you would a regular Spark application:
+spark-submit --master yarn-client \
+    --num-executors 1 \
+    --class <user-main-class> \
+    <user-uber-application.jar> \
+    <user arg lists>
+
+
+
+
+
+Select or create a user account to be used as principal.This
+            should not be the kafka or spark
+            service account.
+Generate a keytab for the user.
+Create a Java Authentication and Authorization Service (JAAS) login
+          configuration file: for example, key.conf.
+Add configuration settings that specify the user keytab.The
+            keytab and configuration files are distributed using YARN local
+            resources. Because they reside in the current directory of the Spark
+            YARN container, you should specify the location as
+              ./v.keytab.The following example specifies
+            keytab location ./v.keytab for principal
+              vagrant@example.com:KafkaClient {
+   com.sun.security.auth.module.Krb5LoginModule required
+   useKeyTab=true
+   keyTab="./v.keytab"
+   storeKey=true
+   useTicketCache=false
+   serviceName="kafka"
+   principal="vagrant@EXAMPLE.COM";
+};
+In your spark-submit command, pass the JAAS
+          configuration file and keytab as local resource files, using the
+            --files option, and specify the JAAS configuration
+          file options to the JVM options specified for the driver and
+          executor:spark-submit \
+    --files key.conf#key.conf,v.keytab#v.keytab \
+    --driver-java-options "-Djava.security.auth.login.config=./key.conf" \
+    --conf "spark.executor.extraJavaOptions=-Djava.security.auth.login.config=./key.conf" \
+...
+Pass any relevant Kafka security options to your streaming
+            application.For example, the KafkaWordCount example accepts
+            PLAINTEXTSASL as the last option in the command line:
+KafkaWordCount /vagrant/spark-examples.jar c6402:2181 abc ts 1 PLAINTEXTSASL
+
+
+
+Parent topic: Using Spark Streaming

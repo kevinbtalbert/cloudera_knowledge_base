@@ -1,0 +1,89 @@
+Accessing Ozone S3 using S3A FileSystemCloudera Docs
+Accessing Ozone S3 using S3A FileSystem
+If the Ozone S3 gateway is configured with TLS (HTTPs), you must import the CA
+  certificate to Java truststore. This is because the CA certificate that is used to set up TLS is
+  not available in the default Java truststore; however, the hadoop-aws connector library only
+  trusts the built-in Java truststore certificates. 
+To override the default Java truststore, create a truststore named jssecacerts in the
+   same directory ($JAVA_HOME/jre/lib/security/jssecacerts) on all cluster nodes where the user
+   intends to run jobs or shell commands against Ozone S3. You can find the Ozone S3 gateway
+   truststore location from the ozone-site.xml file which is normally located in the
+   /etc/ozone/conf.cloudera.OZONE-1 directory. From the ozone-site.xml file, you can find
+   ssl.client.truststore.location and ssl.client.truststore.password.
+List entries in the store
+
+/usr/java/default/bin/keytool -list -v -keystore
+     <<ssl.client.truststore.location>>
+
+From the command output, you can find out the srcalias value which is shown as “​​Alias
+    name”. In this example, the “Alias name” is cmrootca-0. Import the CA certificate (In this
+    example, the certificate is imported to jssecacerts truststore). /usr/java/default/bin/keytool
+    -importkeystore -destkeystore $JAVA_HOME/jre/lib/security/jssecacerts -srckeystore
+    <<ssl.client.truststore.location>> -srcalias <<alias>> 
+
+
+
+
+
+
+
+Enter the destination password as “changeit” and the source password as it is configured in
+     the cluster. Ozone S3 currently does not support Etags and versioning because the
+     configuration related to them needs to be disabled when using S3A filesystem with Ozone S3. You
+     can either pass the Ozone S3 configurations from the command line or store them in the
+     /tmp/s3.properties file or cluster-wide safety valve in the core-site.xml file.In
+     Cloudera’s Hadoop fs command examples, S3 properties are stored as safety valves in the
+     core-site.xml file.
+
+
+
+
+You must create an Ozone S3 property file with required configurations to run the Spark
+     program from a spark-shell.
+
+
+Obtain awsAccessKey and awsSecret using the ozone s3 getsecret command
+     ozone s3 getsecret --om-service-id=<<ozone service id>>
+
+
+
+
+Create Ozone S3 property file: /tmp/s3.properties 
+
+
+spark.hadoop.fs.s3a.impl        org.apache.hadoop.fs.s3a.S3AFileSystem
+spark.hadoop.fs.s3a.access.key  <<accessKey>>
+spark.hadoop.fs.s3a.secret.key  <<secret>>
+spark.hadoop.fs.s3a.endpoint    <<Ozone S3 endpoint Url>>
+spark.hadoop.fs.s3a.bucket.probe 0
+spark.hadoop.fs.s3a.change.detection.version.required false
+spark.hadoop.fs.s3a.change.detection.mode none
+spark.hadoop.fs.s3a.path.style.access true
+In the configurations, replace <<accessKey>> and <<secret>> with
+   awsAccessKey and awsSecret obtained using the Ozone S3 getsecret command accordingly and
+   <<Ozone S3 endpoint URL>> with Ozone S3 gateway URL from the cluster.
+Sample shell commands using S3A filesystem
+Create a directory “dir1/dir2” in testbucket.
+
+hadoop fs -mkdir -p s3a://testbucket/dir1/dir2
+
+
+
+
+Place a file named key1 in the “dir1/dir2” directory in
+    testbuckethadoop fs -put /tmp/key1 s3a://testbucket/dir1/dir2/key1
+
+
+
+
+
+List files/directories under testbucket
+
+
+
+
+In the examples above, replace <<accesskey>> and <<secret>> with values of
+   awsAccessKey and awsSecret correspondingly obtained from the Ozone S3 getsecret command.
+ozone s3 getsecret --om-service-id=<<ozone service id>>
+
+Parent topic: Using the AWS CLI with Ozone S3 Gateway

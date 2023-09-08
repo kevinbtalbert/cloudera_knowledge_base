@@ -1,0 +1,395 @@
+Disable the SSL or TLS requirement for HMS databaseCloudera Docs
+Disable the SSL or TLS requirement for HMS database
+Cloudera Data Warehouse (CDW) on Private Cloud requires that you enable SSL or TLS on
+        the database that you use for the Hive MetaStore (HMS) on the base cluster. However, if you
+        have not configured SSL or TLS on the HMS database and you want to continue using CDW, then
+        you must disable the SSL requirement, so that the Database Catalog does not fail to start in
+        an attempt to establish a secure connection with an unsecured database.
+The disable-sslmode.sh script used to
+            disable CDW's requirement to have an SSL-enabled database is designed to work on
+            Machintosh OS.
+You must have the DWAdmin role and must have activated an
+            environment in CDW.
+
+Log in to the Data Warehouse service as DWAdmin.
+
+Obtain the namespace of the Database Catalog from the Database Catalog
+                    tile.
+The Database Catalog namespace is on the line under the Environment
+                    name.
+
+Open a terminal session on your computer.
+
+Install yq and kubectl command-line tools.
+
+Create a work directory.
+You use this directory to create and save the
+                        disable-sslmode.sh file, which you create in the next
+                    step.
+
+Create the disable-sslmode.sh file on your computer by copying
+                    the following lines:
+
+#!/bin/bash
+
+set -euo pipefail
+#set -euvx
+
+
+SHORT=k:,n:,c:,u,a,b:,w:,h
+
+
+>&2 echo "OS-Type: ${OSTYPE}"
+
+if [[ "${OSTYPE}" == "darwin"* ]]; then
+  >&2 echo "Using only short options in getopt"
+  OPTS=$(getopt $SHORT "$@")
+#elif [[ "${OSTYPE}" == "linux-gnu"* ]]; then
+elif [[ "${OSTYPE}" == "linux-"* ]]; then
+  >&2 echo "Using both short and long options in getopt"
+  LONG=kubeconfig:,namespace:,config-map:,clean-up,apply,backup:,working-directory:,help
+  OPTS=$(getopt -a -n generate --options $SHORT --longoptions $LONG -- "$@")
+else
+  >&2 echo "Unsupported OS type: ${OSTYPE}"
+  exit 249
+fi
+
+eval set -- "${OPTS}"
+
+usage() {
+  >&2 echo <<EOF "Updates the SSL mode of javax.jdo.option.ConnectionURL in hive-site.xml of the specified config map in specified namespace.
+
+Please take attention that during the update the kube config file is copied into a temporary directory in /tmp
+
+Prerequisites:
+    - kubectl >= 1.23
+    - yq >= 4.x
+
+Usage: $0 -k|--kubeconfig <path-to-kube-config-file> -n|--namespace <k8s-namespace> [-s|--ssl-mode <ssl-mode-to-be-set>] [-c|--config-map <name-of-config-map-to-update>]
+
+Mandatory parameters:
+    -k|--kubeconfig <path-to-a-kubeconfig-yaml-file>
+        the location of kube config file to use
+
+    -n|--namespace <namespace-name>
+        the kubernetes namespace to edit
+
+Optional parameters:
+    -c|--config-map <config-map-name-to-update>
+        the name of config map to update
+        default: hive-conf-metastore
+
+    -w|--working-directory <a-directory>
+        a directory where temporary created files are stored
+        if not specified then something is created under /tmp using command mktemp -d
+
+    -u|--clean-up
+        deletes the resources created during update
+
+    -a|--apply
+        applies the changes
+        if not specified it only generates the new config map file but is not applying that.
+
+    -b|--backup <backup-file-name>
+        creates a backup in tar.gz (aka tgz) format.
+        it will contain all files in working-directory
+
+    -h|--help
+        this description
+"
+EOF
+}
+
+
+# KUBECONFIG="shared-os-dev-01.yaml"
+# NAMESPACE="compute-sj-230509t1723-hive"
+CONFIG_MAP_NAME="hive-conf-metastore"
+# BACKUP_FILE_NAME="/dev/null"
+APPLY="false"
+CLEAN_UP="false"
+
+echo ${OPTS}
+
+while :
+do
+  case "$1" in
+    -k | --kubeconfig )
+      KUBECONFIG="$2"
+      shift 2
+      ;;
+    -n | --namespace )
+      NAMESPACE="$2"
+      shift 2
+      ;;
+    -c | --config-map )
+      CONFIG_MAP_NAME="$2"
+      shift 2
+      ;;
+    -b | --backup )
+      BACKUP_FILE_NAME="$2"
+      >&2 echo "Creating backup at the end: ${BACKUP_FILE_NAME}"
+      shift 2
+      ;;
+    -w | --working-directory )
+      WD="$2"
+      shift 2
+      ;;
+    -a | --apply )
+      APPLY="true"
+      >&2 echo "Applying changes at the end"
+      shift 1
+      ;;
+    -u | --clean-up )
+      CLEAN_UP="true"
+      >&2 echo "Cleaning up at the end"
+      shift 1
+      ;;
+    -h | --help )
+      usage
+      exit 2
+      ;;
+    --)
+      shift
+      break
+      ;;
+    *)
+      >&2 echo "unexpected option: $1"
+      ;;
+  esac
+done
+
+which yq >/dev/null || (echo "yq not found"; exit 251)
+YQ_CURRENT_VERSION=`yq --version | awk '{ print $4; }' | cut -c 2-`
+YQ_REQUIRED_VERSION=4.18.1
+
+if [ "$(printf '%s\n' "${YQ_REQUIRED_VERSION}" "${YQ_CURRENT_VERSION}" | sort -V | head -n1)" = "${YQ_REQUIRED_VERSION}" ]; then
+  >&2 echo "version of yq (${YQ_CURRENT_VERSION}) is greater than or equal to ${YQ_REQUIRED_VERSION} ... OK"
+else
+  >&2 echo "version of 'yq' must be greater than or equal to '${YQ_REQUIRED_VERSION}' but it is '${YQ_CURRENT_VERSION}' ... FAILED"
+  exit 248
+fi
+
+which kubectl
+which kubectl >/dev/null || (echo "kubectl not found"; exit 252)
+
+if [[ -z "${KUBECONFIG+x}" ]]; then
+  >&2 echo "ERROR: missing kubeconfig use  -k or --kubeconfig"
+	usage
+	exit 254
+fi
+
+if [[ ! -f ${KUBECONFIG} ]]; then
+  >&2 echo "ERROR: kubeconfig file does not exist: ${KUBECONFIG}"
+  exit 246
+fi
+KUBECTL_CLIENT_CURRENT_VERSION="$(kubectl --kubeconfig ${KUBECONFIG} version -o yaml | yq '.clientVersion | [.major,.minor] | join(".")')"
+KUBECTL_CLIENT_REQUIRED_VERSION=1.23
+
+if [ "$(printf '%s\n' "${KUBECTL_CLIENT_REQUIRED_VERSION}" "${KUBECTL_CLIENT_CURRENT_VERSION}" | sort -V | head -n1)" = "${KUBECTL_CLIENT_REQUIRED_VERSION}" ]; then
+  >&2 echo "version of kubectl (${KUBECTL_CLIENT_CURRENT_VERSION}) is greater than or equal to ${KUBECTL_CLIENT_REQUIRED_VERSION} ... OK"
+else
+  >&2 echo "version of 'kubectl' must be greater than or equal to '${KUBECTL_CLIENT_REQUIRED_VERSION}' but it is '${KUBECTL_CLIENT_CURRENT_VERSION}' ... FAILED"
+  exit 247
+fi
+
+
+
+if [[ -z "${NAMESPACE+x}" ]]; then
+  >&2 echo "ERROR: missing namespace use  -n or --namespace"
+	usage
+	exit 253
+fi
+
+if [[ -z "${WD+x}" ]]; then
+	WD=$(mktemp -d)
+fi
+
+if [[ -z ${BACKUP_FILE_NAME+x} ]]; then
+	BACKUP_FILE_NAME="backup.${NAMESPACE}.${CONFIG_MAP_NAME}.$(date -u +%Y%m%dT%H%M%SZ).tar.gz"
+fi
+
+
+[[ -d "${WD}" ]] || mkdir -p "${WD}"
+
+cat <<EOF > "${WD}/logs"
+Working directory: ${WD}
+kubeconfig: ${KUBECONFIG}
+namespace: ${NAMESPACE}
+config-map: ${CONFIG_MAP_NAME}
+apply: ${APPLY}
+backup: ${BACKUP_FILE_NAME}
+clean-up: ${CLEAN_UP}
+EOF
+
+>&2 cat "${WD}/logs"
+
+LOCAL_KUBECONFIG="$(basename "${KUBECONFIG}")"
+cp "${KUBECONFIG}" "${WD}/${LOCAL_KUBECONFIG}"
+
+pushd "${WD}"
+
+ORIGINAL_CM_NAME="original.configmap.${CONFIG_MAP_NAME}.yaml"
+ORIGINAL_HIVE_SITE_XML="${ORIGINAL_CM_NAME}.hive-site.xml"
+UPDATED_CM_NAME="updated.configmap.${CONFIG_MAP_NAME}.yaml"
+export UPDATED_HIVE_SITE_XML="${UPDATED_CM_NAME}.hive-site.xml"
+
+env | grep -i path
+>&2 echo "kubectl --kubeconfig \"${LOCAL_KUBECONFIG}\" get configmap \"${CONFIG_MAP_NAME}\" -n \"${NAMESPACE}\" -o yaml > \"${ORIGINAL_CM_NAME}\""
+kubectl --kubeconfig "${LOCAL_KUBECONFIG}" get configmap "${CONFIG_MAP_NAME}" -n "${NAMESPACE}" -o yaml > "${ORIGINAL_CM_NAME}"
+yq '.data."hive-site.xml"' > "${ORIGINAL_HIVE_SITE_XML}" < "${ORIGINAL_CM_NAME}"
+
+disableSslModeInPostgreSql() {
+	local CONNECTION_URL="${1//sslmode=[^&]*/sslmode=disable}"
+	CONNECTION_URL="${CONNECTION_URL//sslrootcert=[^&]*/}"
+	CONNECTION_URL="${CONNECTION_URL//&&&*/&}"
+	if [[ "${CONNECTION_URL:0-1}" == "&" ]]; then
+		CONNECTION_URL="${CONNECTION_URL::-1}"
+	fi
+  if [[ "${CONNECTION_URL:0-1}" == "?" ]]; then
+	  CONNECTION_URL="${CONNECTION_URL::-1}"
+	fi
+	echo "${CONNECTION_URL}"
+}
+
+disableSslModeInMySql() {
+	local CONNECTION_URL="${1//sslMode=[^&]*/sslMode=PREFERRED}"
+	CONNECTION_URL="${CONNECTION_URL//trustCertificateKeyStoreUrl=[^&]*/}"
+	CONNECTION_URL="${CONNECTION_URL//trustCertificateKeyStorePassword=[^&]*/}"
+	CONNECTION_URL="${CONNECTION_URL//&&&*/&}"
+	if [[ "${CONNECTION_URL:0-1}" == "&" ]]; then
+		CONNECTION_URL="${CONNECTION_URL::-1}"
+	fi
+  if [[ "${CONNECTION_URL:0-1}" == "?" ]]; then
+	  CONNECTION_URL="${CONNECTION_URL::-1}"
+	fi
+	echo "${CONNECTION_URL}"
+}
+
+disableSslModeInOracle() {
+  local CONNECTION_URL="${1//javax.net.ssl.trustStore=[^&]*/}"
+  CONNECTION_URL="${CONNECTION_URL//@tcps:/@tcp:}"
+	CONNECTION_URL="${CONNECTION_URL//javax.net.ssl.trustStoreType=[^&]*/}"
+	CONNECTION_URL="${CONNECTION_URL//javax.net.ssl.trustStorePassword=[^&]*/}"
+	CONNECTION_URL="${CONNECTION_URL//javax.net.ssl.keyStore=[^&]*/}"
+	CONNECTION_URL="${CONNECTION_URL//javax.net.ssl.keyStoreType=[^&]*/}"
+	CONNECTION_URL="${CONNECTION_URL//javax.net.ssl.keyStorePassword=[^&]*/}"
+	CONNECTION_URL="${CONNECTION_URL//oracle.net.ssl_cipher_suites=[^&]*/}"
+	CONNECTION_URL="${CONNECTION_URL//oracle.net.ssl_server_dn_match=[^&]*/}"
+	CONNECTION_URL="${CONNECTION_URL//oracle.net.authentication_services=[^&]*/}"
+	CONNECTION_URL="${CONNECTION_URL//&&&*/&}"
+  if [[ "${CONNECTION_URL:0-1}" == "&" ]]; then
+	  CONNECTION_URL="${CONNECTION_URL::-1}"
+	fi
+  if [[ "${CONNECTION_URL:0-1}" == "?" ]]; then
+	  CONNECTION_URL="${CONNECTION_URL::-1}"
+	fi
+	echo "${CONNECTION_URL}"
+}
+
+ORIGINAL_CONNECTION_URL=$(yq -p=xml '.Configuration.property[]|select(.name=="javax.jdo.option.ConnectionURL")|.value' < "${ORIGINAL_HIVE_SITE_XML}");
+if [[ -n ${ORIGINAL_CONNECTION_URL} ]]; then
+	>&2 echo "javax.jso.option.ConnectioURL=${ORIGINAL_CONNECTION_URL}";
+	echo "javax.jso.option.ConnectioURL=${ORIGINAL_CONNECTION_URL}" >> logs;
+
+	IFS=':' read -a token <<< "${ORIGINAL_CONNECTION_URL}"
+	DRIVER="${token[1]}"
+	>&2 echo "JDBC-Driver: ${DRIVER}"
+	echo "Driver: ${DRIVER}" >> logs
+
+	case "${DRIVER}" in
+		postgres | postgresql )
+			export NEW_CONNECTION_URL=$(disableSslModeInPostgreSql "${ORIGINAL_CONNECTION_URL}")
+			;;
+		mysql | mariadb )
+			export NEW_CONNECTION_URL=$(disableSslModeInMySql "${ORIGINAL_CONNECTION_URL}")
+			;;
+		oracle )
+			export NEW_CONNECTION_URL=$(disableSslModeInOracle "${ORIGINAL_CONNECTION_URL}")
+			;;
+		* )
+			>&2 echo "Unsupported JDBC-Driver: ${DRIVER}"
+			exit 250
+			;;
+	esac
+
+
+	>&2 echo "New ConnectionURL: ${NEW_CONNECTION_URL}";
+	echo "New ConnectionURL: ${NEW_CONNECTION_URL}" >> logs;
+	yq -p=xml '.Configuration.property|=map(select(.name=="javax.jdo.option.ConnectionURL").value=env(NEW_CONNECTION_URL))' -o=xml > "${UPDATED_HIVE_SITE_XML}" 2>> logs < "${ORIGINAL_HIVE_SITE_XML}"
+
+	kubectl --kubeconfig "${LOCAL_KUBECONFIG}" get configmap "${CONFIG_MAP_NAME}" -n "${NAMESPACE}" -o yaml | yq '.data."hive-site.xml" |= load_str(env(UPDATED_HIVE_SITE_XML))' > "${UPDATED_CM_NAME}" 2>>logs
+
+	if [[ ${APPLY} == "true" ]]; then
+		>&2 echo "Applying: kubectl --kubeconfig \"${LOCAL_KUBECONFIG}\" apply -f ${UPDATED_CM_NAME}"
+		echo "Applying: kubectl --kubeconfig \"${LOCAL_KUBECONFIG}\" apply -f ${UPDATED_CM_NAME}" >> logs
+		kubectl --kubeconfig "${LOCAL_KUBECONFIG}" apply -f "${UPDATED_CM_NAME}" >> logs 2>&1
+	fi
+
+fi;
+
+popd
+
+if [[ -n ${BACKUP_FILE_NAME+x} ]]; then
+	>&2 echo "Creating backup from working-directory: ${BACKUP_FILE_NAME}"
+	echo "Creating backup from working-directory: ${BACKUP_FILE_NAME}" >> "${WD}/logs"
+	tar czf "${BACKUP_FILE_NAME}" -C "${WD}" .
+fi
+
+if [[ "${CLEAN_UP}" == "true" ]]; then
+	>&2 echo "Clean-up working-directory: ${WD}"
+	rm -rf "${WD}"
+fi
+
+
+
+
+
+Run the disable-sslmode.sh script as follows:
+
+./disable-sslmode.sh -k [***KUBECONFIG-FILENAME***].yaml -n [***DBC-NAMESPACE***] -c hive-conf-metastore -w [***WORK-DIRECTORY***]
+
+Replace [***KUBECONFIG-FILENAME***] with the actual
+                    kubeconfig yaml file and [***DBC-NAMESPACE***] with the
+                    Database Catalog namespace that you noted earlier.
+
+noteOn MacOS, use short option flags in the command,
+                        such as -n instead of
+                                --namespace.
+
+Sample
+                    output:Working directory: /tmp/tmp.vQnpYUrIq5
+kubeconfig: [***KUBECONFIG-FILENAME***].yaml
+namespace: [***DBC-NAMESPACE***]
+config-map: hive-conf-metastore
+apply: true
+backup: backup.[***DBC-NAMESPACE***].hive-conf-metastore.20230517T131955Z.tar.gz
+clean-up: false
+.
+.
+.
+JDBC-Driver: postgresql
+New ConnectionURL: jdbc:postgresql://postgres-service-default-warehouse:5432/hive1?createDatabaseIfNotExist=true&sslmode=disable
+Applying: kubectl --kubeconfig "[***KUBECONFIG-FILENAME***]" apply -f updated.configmap.hive-conf-metastore.yaml
+
+Note the New ConnectionURL from the logs of the
+                        disable-sslmode.sh script.
+
+If the Database Catalog does not start automatically after the script completes
+                    running, then restart the metastore-0 and
+                        metastore-1 pods as follows:
+
+kubectl --kubeconfig [***KUBECONFIG-FILENAME***].yaml delete pod metastore-0 -n [***DBC-NAMESPACE***]
+
+Wait for the pods to restart and be in the running state.
+
+Go to Database Catalog >  > Edit > CONFIGURATIONS > Metastore and select hive-site from the
+                        Configuration files drop-down menu.
+
+Add the value of the New ConnectionURL parameter in the
+                        javax.jdo.option.ConnectionURL field.
+This ensures that a correct connection URL is delegated to the Virtual
+                    Warehouses from the Database Catalog.
+
+Click Apply Changes.
+
+

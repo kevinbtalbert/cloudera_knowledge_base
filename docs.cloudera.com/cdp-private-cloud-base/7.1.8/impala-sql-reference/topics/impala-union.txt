@@ -1,0 +1,166 @@
+UNION, INTERSECT, and EXCEPT clausesCloudera Docs
+UNION, INTERSECT, and EXCEPT clauses
+The UNION, INTERSECT, and EXCEPT clauses allow you to combine rows
+    from two or more tables. You may use them when you must combine the result sets of multiple
+    queries into one single result.
+UNION Clause
+The UNION clause lets you combine the result sets of multiple queries. By default, the
+        result sets are combined as if the DISTINCT operator was applied.
+
+
+Syntax:
+query_1 UNION [DISTINCT | ALL] query_2
+Usage notes:
+
+      The UNION keyword by itself is the same as UNION DISTINCT. Because
+      eliminating duplicates can be a memory-intensive process for a large result set, prefer UNION
+      ALL where practical. (That is, when you know the different queries in the union will not produce any
+      duplicates, or where the duplicate values are acceptable.)
+    
+      When an ORDER BY clause applies to a UNION ALL or UNION
+      query, in Impala 1.4 and higher, the LIMIT clause is no longer required. To make the
+      ORDER BY and LIMIT clauses apply to the entire result set, turn the
+      UNION query into a subquery, SELECT from the subquery, and put the
+      ORDER BY clause at the end, outside the subquery.
+    
+Examples:
+
+      First, set up some sample data, including duplicate 1 values:
+    [localhost:21000] > create table few_ints (x int);
+[localhost:21000] > insert into few_ints values (1), (1), (2), (3);
+[localhost:21000] > set default_order_by_limit=1000;
+      This example shows how UNION ALL returns all rows from both queries, without any additional
+      filtering to eliminate duplicates. For the large result sets common with Impala queries, this is the most
+      memory-efficient technique.
+    [localhost:21000] > select x from few_ints order by x;
++---+
+| x |
++---+
+| 1 |
+| 1 |
+| 2 |
+| 3 |
++---+
+Returned 4 row(s) in 0.41s
+[localhost:21000] > select x from few_ints union all select x from few_ints;
++---+
+| x |
++---+
+| 1 |
+| 1 |
+| 2 |
+| 3 |
+| 1 |
+| 1 |
+| 2 |
+| 3 |
++---+
+Returned 8 row(s) in 0.42s
+[localhost:21000] > select * from (select x from few_ints union all select x from few_ints) as t1 order by x;
++---+
+| x |
++---+
+| 1 |
+| 1 |
+| 1 |
+| 1 |
+| 2 |
+| 2 |
+| 3 |
+| 3 |
++---+
+Returned 8 row(s) in 0.53s
+[localhost:21000] > select x from few_ints union all select 10;
++----+
+| x  |
++----+
+| 10 |
+| 1  |
+| 1  |
+| 2  |
+| 3  |
++----+
+Returned 5 row(s) in 0.38s
+      This example shows how the UNION clause without the ALL keyword condenses
+      the result set to eliminate all duplicate values, making the query take more time and potentially more
+      memory. The extra processing typically makes this technique not recommended for queries that return result
+      sets with millions or billions of values.
+    [localhost:21000] > select x from few_ints union select x+1 from few_ints;
++---+
+| x |
++---+
+| 3 |
+| 4 |
+| 1 |
+| 2 |
++---+
+Returned 4 row(s) in 0.51s
+[localhost:21000] > select x from few_ints union select 10;
++----+
+| x  |
++----+
+| 2  |
+| 10 |
+| 1  |
+| 3  |
++----+
+Returned 4 row(s) in 0.49s
+[localhost:21000] > select * from (select x from few_ints union select x from few_ints) as t1 order by x;
++---+
+| x |
++---+
+| 1 |
+| 2 |
+| 3 |
++---+
+Returned 3 row(s) in 0.53s
+EXCEPT and INTERSECT Clauses
+The EXCEPT and INTERSECT clause let you combine the result sets of multiple queries and
+        return distinct rows by comparing the results of two queries. EXCEPT returns distinct rows
+        from the left input query that are not part of the result set of the right input query.
+        INTERSECT returns distinct rows that are output by both the left and right input queries
+        operator.
+Syntax:
+query_1 EXCEPT [DISTINCT] query_2
+query_1 INTERSECT [DISTINCT] query_2
+Usage notes:
+When you use EXCEPT or INTERSECT to combine the result sets of two queries the number and the order of the columns must be the same in all queries and the data types must be compatible.
+
+noteINTERSECT ALL and EXCEPT ALL are not currently supported.
+
+Examples:
+This example shows the number of Boeing planes leaving from DFW in 2015. And the subquery
+        shown here uses an INTERSECT on the tail number (tailnum), the unique identification of a
+        plane.
+
+SELECT COUNT(*) FROM (
+                 SELECT tailnum FROM flights 
+                 WHERE 
+                     flights.origin=’DFW’ 
+                     AND flights.year = 2005 
+                 INTERSECT 
+                 SELECT tailnum FROM planes 
+                 WHERE 
+                      planes.manufacturer = ‘BOEING’) subq;
+        
+
+The following example shows the number of non-Boeing planes leaving from DFW. This is done
+        by executing the above query using the INTERSECT operator and then removing the planes that
+        are not from the BOEING manufacturer using the EXCEPT clause.
+
+SELECT COUNT(*) FROM (
+                 SELECT tailnum FROM flights 
+                 WHERE 
+                     flights.origin=’DFW’ 
+                     AND flights.year = 2005 
+                 INTERSECT 
+                 SELECT tailnum FROM planes
+                 EXCEPT
+                 SELECT tailnum FROM planes
+                 WHERE 
+                     planes.manufacturer = ‘BOEING’) subq;
+        
+
+
+
+Parent topic: SELECT statement

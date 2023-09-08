@@ -1,0 +1,86 @@
+Fixing issuesCloudera Docs
+Fixing issues
+You can fix issues using the HBCK2 tool.You must keep these in mind when fixing issues using HBCK2. Ensure that:
+A region is not in the CLOSING state during “assign”, and in the OPENING state
+                during “unassign”. You can change the state using the setRegionState command. See
+                the HBCK2 tool Command Reference section for more information. 
+You fix only one table at a time.
+importantContact Cloudera Support before using any of the HBCK2 tool
+            commands.Fix assign and unassign issues
+You can fix assign and unassign issues by monitoring the current list of outstanding
+                locks. An assign against a locked region will wait till the lock is released. An
+                assignment gets an exclusive lock on the region.
+Fix master startup cannot progress error 
+If you see a master startup cannot progress holding-pattern until region
+                    online error in the Master log, it means that the Master is unable to
+                start because there is no procedure to assign hbase:meta. You will see an error
+                message similar to this:
+                2020-04-01 22:07:42,792 WARN org.apache.hadoop.hbase.master.HMaster:
+ hbase:meta,,1.1588230740 is NOT online; state={1588230740 state=CLOSING, 
+ts=1538456302300, server=ve1017.example.org,22101,1234567891012}; 
+ServerCrashProcedures=true. Master startup cannot progress in holding-pattern until region onlined.
+
+To fix this issue, run the following
+                command:$ hbase hbck -j $HOME/hbase-operator-tools-<version>/hbase-hbck2/hbase-hbck2-<version>.jar 
+assigns 1588230740
+The same issue can occur with a hbase:namespace system table. To fix this issue, run
+                the following command:
+                $ hbase hbck -j $HOME/hbase-operator-tools-<version>/hbase-hbck2/hbase-hbck2-<version>.jar 
+assigns <hbase:namespace encoded region id>
+
+You can find the namespace encoded region id using this command:
+                $ echo "scan 'hbase:meta',{COLUMNS=>'info:regioninfo', 
+FILTER=>\"PrefixFilter('hbase:namespace')\"}" | hbase shell
+The namespace encoded region id is the value under the "ENCODED" field in
+                the results.
+Fix missing regions in hbase:meta region/table
+If you encounter an issue where table regions have been removed from the hbase:meta
+                table, you can use the addFsRegionsMissingInMeta to resolve this issue. Ensure that
+                the Master is online. This command is not as disruptive as the hbase:meta rebuild
+                command.
+To fix this issue, run this command:
+                $ hbase hbck -j $HOME/hbase-operator-tools-<version>/hbase-hbck2/hbase-hbck2-<version>.jar 
+addFsRegionsMissingInMeta <NAMESPACE|NAMESPACE:TABLENAME>
+
+The command returns an HBCK2 “assigns” command with all the listed re-inserted
+                regions.You must restart the Master, and then run the HBCK2 'assigns' command
+                returned by the addFsRegionsMissingInMeta command to complete your fix.
+Example
+                output:Regions re-added into Meta: 2
+WARNING:
+2 regions were added to META, but these are not yet on Masters cache.
+You need to restart Masters, then run hbck2 'assigns' command below:
+assigns 7be03127c5e0e2acfc7cae7ddfa9e29e e50b8c1adc38c942e226a8b2976f0c8c
+
+Fix extra regions in hbase:meta region/table
+If there are extra regions in hbase:meta, it may be because of problems in splitting,
+                deleting/moving the region directory manually, or in rare cases because of the loss
+                of metadata. 
+To fix this issue, run this
+                command:$ hbase hbck -j $HOME/hbase-operator-tools-<version>/hbase-hbck2/hbase-hbck2-<version>.jar 
+extraRegionsInMeta --fix  <NAMESPACE|NAMESPACE:TABLENAME>...
+
+importantUse the --fix option only when the extra regions are overlapping
+                the existing valid regions. Otherwise, use the assigns command to recreate the
+                regions. 
+Rebuild hbase:meta 
+If hbase:meta is offline because it is corrupted, you can bring it back online if the
+                corruption is not too critical. If the namespace region is among the mission
+                regions, scan hbase:meta during initialization to check if hbase:meta is online. 
+To check if hbase:meta is online, run this command in the Apache HBase
+                shell:$ echo "scan 'hbase:meta', {COLUMN=>'info:regioninfo'}" | hbase shell
+If this scan does not throw any errors, then you can run the following command to
+                validate that the tables are
+                present:$ hbase hbck -j $HOME/hbase-operator-tools-<version>/hbase-hbck2/hbase-hbck2-<version>.jar 
+addFsRegionsMissingInMeta <NAMESPACE|NAMESPACE:TABLENAME>
+
+The addFsRegionsMissingInMeta command adds regions back to the
+                hbase:meta table if the regioninfo file is present in the storage but the regions
+                were deleted because of an issue.
+Fix dropped references and corrupted HFiles
+To fix hanging references and corrupt HFiles, run the following command:
+                $ hbase hbck -j $HOME/hbase-operator-tools-<version>/hbase-hbck2/hbase-hbck2-<version>.jar 
+filesystem --fix [<TABLENAME>...]
+
+
+Parent topic: Using the HBCK2 tool to remediate HBase clusters

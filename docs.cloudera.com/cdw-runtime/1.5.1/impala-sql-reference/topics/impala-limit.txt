@@ -1,0 +1,114 @@
+LIMIT clauseCloudera Docs
+LIMIT clause
+The LIMIT clause in a SELECT query sets a maximum
+    number of rows for the result set. Pre-selecting the maximum size of the result set helps Impala
+    to optimize memory usage while processing a distributed query.
+Syntax:
+LIMIT constant_integer_expression
+      The argument to the LIMIT clause must evaluate to a constant value. It can be a numeric
+      literal, or another kind of numeric expression involving operators, casts, and function return values. You
+      cannot refer to a column or use a subquery.
+    
+Usage notes:
+
+      This clause is useful in contexts such as:
+    
+
+        To return exactly N items from a top-N query, such as the 10 highest-rated items in a shopping category or
+        the 50 hostnames that refer the most traffic to a web site.
+      
+
+        To demonstrate some sample values from a table or a particular query. (To display some arbitrary items, use
+        a query with no ORDER BY clause. An ORDER BY clause causes additional
+        memory and/or disk usage during the query.)
+      
+
+        To keep queries from returning huge result sets by accident if a table is larger than expected, or a
+        WHERE clause matches more rows than expected.
+      
+
+      Originally, the value for the LIMIT clause had to be a numeric literal. In Impala 1.2.1 and
+      higher, it can be a numeric expression.
+     Prior to Impala 1.4.0, Impala required any query
+        including an ORDER_BY clause to also use a LIMIT clause.
+        In Impala 1.4.0 and higher, the LIMIT clause is optional for ORDER
+          BY queries. In cases where sorting a huge result set requires enough memory to
+        exceed the Impala memory limit for a particular executor Impala daemon, Impala automatically
+        uses a temporary disk work area to perform the sort operation. 
+        In Impala 1.2.1 and higher, you can combine a LIMIT clause with an OFFSET
+        clause to produce a small result set that is different from a top-N query, for example, to return items 11
+        through 20. This technique can be used to simulate paged results. Because Impala queries typically
+        involve substantial amounts of I/O, use this technique only for compatibility in cases where you cannot
+        rewrite the application logic. For best performance and scalability, wherever practical, query as many
+        items as you expect to need, cache them on the application side, and display small groups of results to
+        users using application logic.
+      
+Restrictions:
+
+        Correlated subqueries used in EXISTS and IN operators cannot include a
+        LIMIT clause.
+      
+Examples:
+
+      The following example shows how the LIMIT clause caps the size of the result set, with the
+      limit being applied after any other clauses such as WHERE.
+    [localhost:21000] > create database limits;
+[localhost:21000] > use limits;
+[localhost:21000] > create table numbers (x int);
+[localhost:21000] > insert into numbers values (1), (3), (4), (5), (2);
+Inserted 5 rows in 1.34s
+[localhost:21000] > select x from numbers limit 100;
++---+
+| x |
++---+
+| 1 |
+| 3 |
+| 4 |
+| 5 |
+| 2 |
++---+
+Returned 5 row(s) in 0.26s
+[localhost:21000] > select x from numbers limit 3;
++---+
+| x |
++---+
+| 1 |
+| 3 |
+| 4 |
++---+
+Returned 3 row(s) in 0.27s
+[localhost:21000] > select x from numbers where x > 2 limit 2;
++---+
+| x |
++---+
+| 3 |
+| 4 |
++---+
+Returned 2 row(s) in 0.27s
+      For top-N and bottom-N queries, you use the ORDER BY and LIMIT clauses
+      together:
+    [localhost:21000] > select x as "Top 3" from numbers order by x desc limit 3;
++-------+
+| top 3 |
++-------+
+| 5     |
+| 4     |
+| 3     |
++-------+
+[localhost:21000] > select x as "Bottom 3" from numbers order by x limit 3;
++----------+
+| bottom 3 |
++----------+
+| 1        |
+| 2        |
+| 3        |
++----------+
+
+      You can use constant values besides integer literals as the LIMIT argument:
+    -- Other expressions that yield constant integer values work too.
+SELECT x FROM t1 LIMIT 1e6;                        -- Limit is one million.
+SELECT x FROM t1 LIMIT length('hello world');      -- Limit is 11.
+SELECT x FROM t1 LIMIT 2+2;                        -- Limit is 4.
+SELECT x FROM t1 LIMIT cast(truncate(9.9) AS INT); -- Limit is 9.
+
+Parent topic: SELECT statement

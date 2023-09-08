@@ -1,0 +1,193 @@
+Handling prerequisitesCloudera Docs
+Handling prerequisites
+You must perform a number of tasks before refactoring workloads.
+You need to handle the following prerequisites: 
+Identify all the Hive 1/2 workloads in the cluster (CDH 5.x, CDH 6.x, HDP 2.x, HDP 3.x).
+     (This document assumes all the identified workloads are in working condition).
+Prepare tables for migration.To prepare the tables for migration, use the Hive SRE
+        Tool which is a Cloudera Lab tool that scans your Hive Metastore and HDFS to
+      identify common upgrade problems that can cause the CDP upgrade to fail. The tool provides
+      guidance for fixing those problems before migrating the tables to CDP. This guidance is
+      provided through reports that the administrator must take action on. The tool does not take
+      corrective action itself.Cloudera strongly recommends running the Hive SRE
+      Tool to aid in this pre-upgrade HMS healthcheck. If you do not run it, you must manually
+      investigate your HMS for the following types of problems.Refer to Hive SRE Tooling for tool setup, tool execution
+      & interpretation of output using Hive SRE Tool on Hive Metadata.The general transition
+     from Hive 1 and 2 to Hive 3 includes the following types of HMS operations. The Hive SRE Tool
+     performs the equivalent types of checks in an automated fashion. Please review these from the
+     Cloudera documentation site (CDH 5, CDH 6, HDP 2, HDP 3).
+
+The following table lists Hive table conditions, the impact of the conditions, and
+   distributions affected. In this table, XXX stands for some value/count. This value is the number
+   of affected paths you get from the Hive-SRE tool output reports. For each type of condition
+   listed in the table, there is some number of paths/tables affected.
+
+
+
+Condition
+Impact
+Distributions Affected
+
+
+
+Bad Filenames
+
+Tables that would be converted from a Managed Non-Acid table to an ACID
+         transactional table require the files to match a certain pattern. This process will scan
+         the potential directories of these tables for bad filename patterns. When located, it will
+         indicate which tables/partitions have file naming conventions that would prevent a
+         successful conversion to ACID. 
+The best and easiest way to correct these file names is to use HiveSQL to
+         rewrite the contents of the table/partition with a simple 'INSERT OVERWRITE TABLE xxx
+         SELECT * FROM xxx'. 
+This type of statement will replace the current bad filenames with valid file
+         names by rewriting the contents in HiveSQL.
+There are approximately XXX paths that may need remediation. The list of paths
+         can be found in the output of the Hive assessment report in the
+         u3/bad_filenames_for_orc_conversion.md.
+
+HDP 2
+
+
+Missing Directories
+
+Missing Directories cause the upgrade conversion process to fail. This
+         inconsistency is an indicator that data was removed from the file system, but the Hive
+         MetaStore was not updated to reflect that operation. An example of this is deleting a
+         partition in HDFS, without dropping the partition in Hive.
+There are XXX affected paths that need remediation. The list of
+         directories can be found in the output of the Hive assessment report, in the file
+         u3/loc_scan_missing_dirs.md.
+
+CDH5, CDH6, HDP2, HDP3
+
+
+Managed Shadow Tables
+
+In Hive 3, Managed tables are 'ACID' tables. Sharing a location between two
+         'ACID' tables will cause compaction issues and data issues. These need to be resolved
+         before the upgrade.
+There are XXX affected tables that need remediation. The list of paths
+         can be found in the output of the Hive assessment report, in the file u3/hms_checks.md
+
+CDH5, CDH6, HDP2, HDP3
+
+
+Managed Table Migrations
+
+This process will list tables that will and 'could' be migrated to "Managed
+         ACID" tables during the upgrade process. 
+Tables used directly by Spark or if data is managed by a separate process that
+         interacts with the FileSystem, you may experience issues post-upgrade.
+Recommended: Consider converting these tables to external tables.
+There are XXX affected tables that may need remediation. The list of
+         tables can be found in the output of the Hive assessment report in the file
+         managed_upgrade_2_acid.sql.
+
+CDH5, CDH6, HDP2
+
+
+Compaction Check
+
+In the upgrade to Hive 3, ACID tables must be compacted prior to initiating the
+         upgrade.
+XXX tables were noted as requiring compaction. Because CDH does not support
+         Hive ACID tables, this may be a leftover from the previous HDP to CDH migration that the
+         customer implemented.
+This should be investigated further. The affected table is
+         ers_stage_tls.test_delete
+
+CDH5, CDH6, HDP2, HDP3
+
+
+Unknown SerDe Jars
+
+A list tables using SerDe’s that are not standard to the platform appears.
+         Review the list of SerDes and verify they are still necessary and available for CDP.
+There are approximately XXX tables configured with 3rd party SerDes.
+
+CDH5, CDH6, HDP2
+
+
+Remove transactional=false from Table Properties
+
+In CDH 5.x it is possible to create tables with the property
+         transactional=false set. While this is a no-op setting, if any of your Hive tables
+         explicitly set this, the upgrade process fails.
+You must remove 'transactional'='false' from any tables you want to upgrade
+         from CDH 5.x to CDP. 
+Alter the table as follows:
+ALTER TABLE my_table UNSET TBLPROPERTIES ('transactional');
+
+CDH5, CDH6
+
+
+Make Tables SparkSQL Compatible
+
+Non-Acid, managed tables in ORC or in a Hive Native (but non-ORC) format that
+         are owned by the POSIX user hive will not be SparkSQL compatible after the upgrade unless
+         you perform manual conversions.
+If your table is a managed, non-ACID table, you can convert it to an external
+         table using this procedure (recommended). After the upgrade, you can easily convert the
+         external table to an ACID table, and then use the Hive Warehouse Connector to access the
+         ACID table from Spark.
+Take one of the following actions.
+
+
+Convert the tables to external Hive tables before the upgrade.
+ALTER TABLE ... SET TBLPROPERTIES('EXTERNAL'='TRUE','external.table.purge'='true')
+
+
+Change the POSIX ownership to an owner other than hive.
+You will need to convert managed, ACID v1 tables to external tables after the
+           upgrade.
+
+
+
+CDH5, CDH6, HDP2
+
+
+Legacy Kudu Serde Report
+Early versions of Hive/Impala tables using Kudu were built before Kudu
+        became an Apache Project. After Kudu became an Apache Project, the base Kudu Storage Handler
+        classname changed. This report locates and reports on tables using the legacy storage
+        handler class.
+CDH5, CDH6, HDP2, HDP3
+
+
+Legacy Decimal Scale and Precision Check
+When the DECIMAL data type was first introduced in Hive 1, it did NOT
+        include a Scale or Precision element. This causes issues in later integration with Hive and
+        Spark. You need to identify and suggest corrective action for tables where this condition
+        exists.
+CDH5, CDH6, HDP2, HDP3
+
+
+Database / Table and Partition Counts
+Use this to understand the scope of what is in the metastore.
+CDH5, CDH6, HDP2, HDP3
+
+
+Small Files, Table Volumes, Empty Datasets
+Identify and fix these details to clean up unwanted datasets in the cluster
+        which would speed up the Hive upgrade process.
+CDH5, CDH6, HDP2, HDP3
+
+
+Merge Independent Hive and Spark Catalogs
+
+In HDP 3.0 - 3.1.4, Spark and Hive use independent catalogs for accessing
+         tables created using SparkSQL or Hive tables. A table created from Spark resides in the
+         Spark catalog. A table created from Hive resides in the Hive catalog. Databases fall under
+         the catalog namespace, similar to how tables belong to a database namespace. In HPD 3.1.5,
+         Spark and Hive share a catalog in Hive metastore (HMS) instead of using separate
+         catalogs.
+The Apache Hive schematool in HDP 3.1.5 and CDP releases supports the
+         mergeCatalog task.
+
+HDP3
+
+
+
+
+Parent topic: Migrating Hive and Impala workloads to CDP One

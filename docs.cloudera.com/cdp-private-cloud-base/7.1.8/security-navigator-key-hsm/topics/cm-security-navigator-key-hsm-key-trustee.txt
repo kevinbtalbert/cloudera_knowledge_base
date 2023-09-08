@@ -1,0 +1,152 @@
+Integrating Key HSM with Key Trustee ServerCloudera Docs
+Integrating Key HSM with Key Trustee Server
+Using a hardware security module with Navigator Key Trustee Server requires Key HSM.
+    This service functions as a driver to support interactions between Navigator Key Trustee Server
+    and the hardware security module, and it must be installed on the same host system as Key
+    Trustee Server. 
+
+
+
+Prepare Existing Keys for MigrationIn this procedure, you are prompted to migrate
+              any existing keys from the Key Trustee Server to the HSM. Successful migration depends
+              on the existing keys conforming to the following constraints: warningMigration fails if any existing keys do not adhere to these constraints.
+
+Key names can begin with alpha-numeric characters only
+Key names can include only these special characters: 
+Hyphen  - 
+Period  . 
+Underscore  _ 
+
+
+To prepare for migration, check your key names and do the following if any of
+              them are non-conforming:
+Decrypt any data using the non-conforming key.
+Create a new key, named as desribed above.
+Re-encrypt the data using the new key.
+importantKeys are not available during migration, so you should
+              perform these tasks during a maintenance window.
+Both Key HSM and Key Trustee Server must be set up and running. See Installing Cloudera Navigator Key HSM for
+            details.
+
+
+
+
+Establish Trust from Key HSM to Key Trustee Server.
+
+This step assumes that Key Trustee Server has a certificate for TLS (wire) encryption
+            as detailed in Managing Key Trustee Server Certificates. Key
+            HSM service must explicitly trust the Key Trustee Server certificate (presented during
+            TLS handshake). To establish this trust, run the following
+            command:sudo keyhsm trust /path/to/key_trustee_server/cert
+
+The /path/to/key_trustee_server/cert in this
+            command (and in the commands below) depends on whether the Key Trustee Server uses the
+              default certificate (created by default during install), or uses a custom
+              certificate (obtained from a commercial or internal CA). The two alternate paths
+            are shown in the table below. The custom path is a common example but may differ from
+            that shown.
+
+Default
+Custom
+
+
+
+/var/lib/keytrustee/.keytrustee/.ssl/ssl-cert-keytrustee.pem
+/etc/pki/cloudera/certs/cert-file.crt
+
+
+/var/lib/keytrustee/.keytrustee/.ssl/ssl-cert-keytrustee-pk.pem
+/etc/pki/cloudera/private/private-key.key
+
+
+
+noteThe system requires TLS and Kerberos authentication throughout the system for
+            security reasons. Connections attempted over SSL (1 through 3) and connections from
+            untrusted clients are immediately terminated to prevent POODLE (Padding Oracle On Downgraded Legacy Encyryption) exploits. See the
+              Cloudera Security Bulletin for more
+            information.
+
+
+Integrate Key HSM and Key Trustee Server.
+
+The following steps assume that both Key HSM and the Key Trustee Server are on the same
+            host system, as detailed in Installing Cloudera Navigator Key HSM. These
+            steps invoke commands on the Key HSM service and the Key Trustee Server, and they must
+            be run on the host—they cannot be run remotely from another host.
+
+Ensure the Key HSM service is running:
+              sudo service keyhsm start
+
+Establish trust from Key Trustee Server to Key HSM specifying the path to the
+              private key and certificate (Key Trustee Server is a client to Key HSM). This example
+              shows how to use the --client-certfile and --client-keyfile
+               options to specify the path to non-default certificate and key:
+              
+$ sudo ktadmin keyhsm --server https://keyhsm01.example.com:9090 \
+--client-certfile  /etc/pki/cloudera/certs/mycert.crt \
+--client-keyfile /etc/pki/cloudera/certs/mykey.key --trust
+              For a password-protected Key Trustee Server private key, add the
+                --passphrase argument to the command and enter the password when
+              prompted: $ sudo ktadmin keyhsm --passphrase \
+--server https://keyhsm01.example.com:9090 \
+--client-certfile  /etc/pki/cloudera/certs/mycert.crt \
+--client-keyfile /etc/pki/cloudera/certs/mykey.key --trust
+
+noteThe preceding commands also create a certificate file for the Key HSM that is
+                  used by the Key Trustee Server. This certificate file is stored in
+                    /var/lib/keytrustee/.keytrustee/.ssl/ssl-cert-keyhsm.pem.
+
+Any keys that exist on the Key Trustee Server are automatically migrated when you
+              run the ktadmin keyhsm command. To complete the migration, enter
+                y or yes at the command
+              prompt:Some deposits were found that will need to be moved to the HSM.
+
+        Note that although this operation can be interrupted, once complete,
+        items stored in the HSM must remain there!
+
+Do you want to perform this migration now? [y/N]: y
+Migrating hsm deposits...
+
+Migration Complete!
+Restart the Key Trustee Server: 
+Using Cloudera Manager: Restart the Key Trustee Server service (Key Trustee Server service > Actions > Restart).
+Using the Command Line: Restart the Key Trustee Server daemon:
+RHEL 6-compatible: $ sudo service keytrusteed restart
+RHEL 7-compatible: $ sudo systemctl restart
+                      keytrusteed
+
+
+Verify connectivity between the Key HSM service and the HSM: curl -k https://keytrustee01.example.com:11371/test_hsm
+importantYou must perform the connection verification between Key HSM
+                and the HSM for all Key Trustee Server hosts.Successful connection and test
+              of operations returns output like the following:
+                "Sample Key TEST_HELLO_DEPOSIT2016-06-03-072718 has been created"noteIf
+                you are using the test_hsm script to verify that the Key Hardware
+                Security Module (Key HSM) has successfully integrated with the Key Trustee Server,
+                or to verify that the Key HSM is connected to HSM, and the Key Trustee Server
+                private key file is password-protected, then the verification may fail. This can
+                occur even if the integration is successful or connected.If this occurs, then
+                  create a key through Hadoop for the test.See Verifying Key HSM
+              Connectivity to HSM for more information about the validation process. 
+
+
+
+
+caution There is no path for migrating keys from KeyHSM back to the KTS. Once
+        KTS is integrated with KeyHSM you cannot get the keys from HSM and remove KeyHSM. This is
+        because the underlying key metadata is changed on the HSM: 
+The HSM creates a symmetric key and Initialization Vector (IV), as well as an
+            asymmetric key pair.
+The IV is packaged up with the deposit, the public key is thrown away and the private
+            key stays on the HSM.
+
+        You can achieve this only by the following steps:
+        
+Backup the data present in the encryption zone.
+Delete the keys created previously.
+Disable the KeyHSM.
+Create new keys and encryption zone.
+Restore data from the back up.
+
+
+

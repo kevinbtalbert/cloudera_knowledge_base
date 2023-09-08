@@ -1,0 +1,112 @@
+Building and deploying UDFsCloudera Docs
+Building and deploying UDFs
+This section explains the steps to compile Impala UDFs from C++ source code, and deploy
+        the resulting libraries for use in Impala queries.
+
+Impala UDF development package ships with a sample build environment for UDFs, that you
+        can study, experiment with, and adapt for your own use.
+ To build the sample environment: 
+ Install the Impala UDF development package as described in Installing the UDF development package. 
+ Run the following commands: cmake .
+make
+
+
+
+ The cmake configuration command reads the file
+          CMakeLists.txt and generates a Makefile
+        customized for your particular directory paths. Then the make command
+        runs the actual build steps based on the rules in the Makefile. 
+ Impala loads the shared library from an HDFS location. After building a shared library
+        containing one or more UDFs, use hdfs dfs or hadoop fs
+        commands to copy the binary file to an HDFS location readable by Impala. 
+ The final step in deployment is to issue a CREATE FUNCTION statement in
+        the impala-shell interpreter to make Impala aware of the new function.
+        Because each function is associated with a particular database, always issue a
+          USE statement to the appropriate database before creating a function, or
+        specify a fully qualified name, that is, CREATE FUNCTION
+            db_name.function_name. 
+ As you update the UDF code and redeploy updated versions of a shared library, use
+          DROP FUNCTION and CREATE FUNCTION to let Impala pick up
+        the latest version of the code. 
+note
+ In Impala 2.5 and higher, Impala
+        UDFs and UDAs written in C++ are persisted in the metastore database. Java UDFs are also
+        persisted, if they were created with the new CREATE FUNCTION syntax for
+        Java UDFs, where the Java function argument and return types are omitted. Java-based UDFs
+        created with the old CREATE FUNCTION syntax do not persist across restarts
+        because they are held in the memory of the catalogd daemon. Until you
+        re-create such Java UDFs using the new CREATE FUNCTION syntax, you must
+        reload those Java-based UDFs by running the original CREATE FUNCTION
+        statements again each time you restart the catalogd daemon. Prior to
+        Impala 2.5 the requirement to reload functions after a restart applied to both C++ and Java
+        functions. 
+ See CREATE FUNCTION statement and DROP FUNCTION statement for the new syntax for the persistent
+          Java UDFs. 
+
+ Prerequisites for the build environment are: 
+ Install the packages using the appropriate package installation command for your
+            Linux distribution.
+            
+sudo yum install gcc-c++ cmake boost-devel
+sudo yum install impala-udf-devel
+# The package name on Ubuntu and Debian is impala-udf-dev.
+
+
+ Download the UDF sample code:
+            
+git clone https://github.com/cloudera/impala-udf-samples
+cd impala-udf-samples &amp;&amp; cmake . &amp;&amp; make
+
+
+ Unpack the sample code in udf_samples.tar.gz and use that as a
+            template to set up your build environment. 
+
+
+ To build the original samples: 
+# Process CMakeLists.txt and set up appropriate Makefiles.
+cmake .
+# Generate shared libraries from UDF and UDAF sample code,
+# udf_samples/libudfsample.so and udf_samples/libudasample.so
+make
+ The sample code to examine, experiment with, and adapt is in these files: 
+
+
+udf-sample.h: Header file that declares the signature for a scalar
+          UDF (AddUDF). 
+
+udf-sample.cc: Sample source for a simple UDF that adds two integers.
+          Because Impala can reference multiple function entry points from the same shared library,
+          you could add other UDF functions in this file and add their signatures to the
+          corresponding header file. 
+
+udf-sample-test.cc: Basic unit tests for the sample UDF. 
+
+uda-sample.h: Header file that declares the signature for sample
+          aggregate functions. The SQL functions will be called COUNT,
+            AVG, and STRINGCONCAT. Because aggregate functions
+          require more elaborate coding to handle the processing for multiple phases, there are
+          several underlying C++ functions such as CountInit,
+            AvgUpdate, and StringConcatFinalize. 
+
+uda-sample.cc: Sample source for simple UDAFs that demonstrate how to
+          manage the state transitions as the underlying functions are called during the different
+          phases of query processing. 
+ The UDAF that imitates the COUNT function keeps track of a single
+              incrementing number; the merge functions combine the intermediate count values from
+              each Impala node, and the combined number is returned verbatim by the finalize
+              function. 
+ The UDAF that imitates the AVG function keeps track of two
+              numbers, a count of rows processed and the sum of values for a column. These numbers
+              are updated and merged as with COUNT, then the finalize function
+              divides them to produce and return the final average value. 
+ The UDAF that concatenates string values into a comma-separated list demonstrates
+              how to manage storage for a string that increases in length as the function is called
+              for multiple rows. 
+
+
+
+uda-sample-test.cc: basic unit tests for the sample UDAFs. 
+
+
+
+Parent topic: User-defined functions (UDFs)

@@ -1,0 +1,316 @@
+kite-morphlines-solr-coreCloudera Docs
+kite-morphlines-solr-core
+This maven module contains morphline commands for Solr that higher level modules such
+    as kite-morphlines-solr-cell, search-mr, and search-flume depend on for indexing.
+solrLocator
+A solrLocator is a set of configuration parameters that identify the
+        location and schema of a Solr server or SolrCloud. Based on this information a morphline
+        Solr command can fetch the Solr index schema and send data to Solr. A
+          solrLocator is not actually a command but rather a common parameter of
+        many morphline Solr commands, and thus described separately here.
+Example usage:
+solrLocator : {
+  # Name of solr collection
+  collection : collection1
+
+  # ZooKeeper ensemble
+  zkHost : "127.0.0.1:2181/solr"
+
+  # Max number of documents to pass per RPC from morphline to Solr Server
+  # batchSize : 10000
+}
+
+loadSolr
+The loadSolr command (source code) inserts, updates or deletes records
+        into a Solr server or MapReduce Reducer.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+solrLocator
+n/a
+Solr location parameters as described separately above.
+
+
+boosts
+[]
+An optional JSON object containing zero or more fieldName-boostValue mappings
+                where the fieldName is a String and the boostValue is a float. The default boost is
+                1.0.
+
+
+Examples:
+
+loadSolrUpdate
+loadSolrPartialUpdate
+loadSolrDeleteById
+loadSolrDeleteByQuery
+loadSolrChildDocuments
+
+Example loadSolr usage to insert a document or update an existing document stored in Solr
+        ("update")
+loadSolr {
+  solrLocator : {
+    # Name of solr collection
+    collection : collection1
+
+    # ZooKeeper ensemble
+    zkHost : "127.0.0.1:2181/solr"
+
+    # Max number of docs to pass per RPC from morphline to Solr Server
+    # batchSize : 10000
+  }
+  boosts : {
+    id : 2.0 # assign to the id field a boost value 2.0
+  }
+}
+Example loadSolr usage to update a subset of fields of an existing document stored in Solr
+        ("partial document update"):
+java { code : """ 
+  // specify the unique key of the document stored in Solr that shall be updated
+  record.put("id", 123); 
+
+  // set "first_name" field of stored Solr document to "Nadja"; retain other fields as-is
+  record.put("first_name", Collections.singletonMap("set", "Nadja"));
+
+  // set "tags" field of stored Solr document to multiple values ["smart", "creative"]; retain other fields as-is
+  record.put("tags", Collections.singletonMap("set", Arrays.asList("smart", "creative")));
+
+  // add "San Francisco" to the existing values of the cities field of the stored Solr document; retain other fields as-is
+  record.put("cities", Collections.singletonMap("add", "San Francisco"));
+  
+  // remove the "text" field from a document stored in Solr; retain other fields as-is
+  record.put("text", Collections.singletonMap("set", null));
+  
+  // increment user_friends_count by 5; retain other fields of stored Solr document as-is
+  record.put("user_friends_count", Collections.singletonMap("inc", 5));
+
+  // pass record to next command in chain
+  return child.process(record); 
+              """
+}
+
+loadSolr {
+  <solrLocator goes here>
+}
+note
+A partial document update requires that all Solr fields be configured as
+            stored="true" in schema.xml, not just the field that
+          shall be updated. This is because this kind of "update" is implemented as a document
+          delete followed by a document insert: the old values of all fields are fetched from Solr
+          (requires stored="true" markers), then the old document is deleted and
+          then a new document is inserted with the old values plus the new field value. For details
+          see this article and http://stackoverflow.com/questions/12183798/solrj-api-for-partial-document-update
+
+Example loadSolr usage for deleteById:
+# Tell loadSolr command to delete the documents for which the unique key field equals 123 or 456.
+setValues {
+  _loadSolr_deleteById:[123, 456]
+}
+
+loadSolr {
+  <solrLocator goes here>
+}
+Example loadSolr usage for deleteByQuery:
+# Tell loadSolr command to delete all documents for which the following conditions hold: 
+# The city field starts with "Paris" AND the color field equals "blue" OR
+# The city field starts with "London" AND the color field equals "purple"
+setValues {
+  _loadSolr_deleteByQuery:["(city:Paris*)AND(color:blue)", "(city:London*)AND(color:purple)"]
+}
+
+loadSolr {
+  <solrLocator goes here>
+}
+Example loadSolr usage for child documents (aka nested documents):
+A record can contain (arbitrarily nested) child documents (aka nested documents aka nested
+        records) in the "_loadSolr_childDocuments" morphline record field. If present, these are
+        recognized and indexed by the loadSolr command, and the parent-child
+        relationships become available to Solr queries, as shown below:
+java { 
+  code: """
+    // Index a document that has a foo child document, which in turn has a bar child document
+    record.put("id", "12345");
+    record.put("content_type", "parent");
+    Record childDoc = new Record();            
+    childDoc.put("id", "foo");
+    childDoc.put("content_type", "child");
+    Record childDoc2 = new Record();
+    childDoc2.put("id", "bar");
+    childDoc2.put("content_type", "child");
+    childDoc.put("_loadSolr_childDocuments", childDoc2); // mark as child doc
+    record.put("_loadSolr_childDocuments", childDoc); // mark as child doc
+    return child.process(record);
+        """ 
+  } 
+}           
+
+loadSolr {
+  <solrLocator goes here>
+}
+Example Solr parent block join that returns the parent records for records where the child
+        documents contain "bar" in the id field:
+{!parent which='content_type:parent'}id:bar
+For more background see this article.
+
+
+
+generateSolrSequenceKey
+The generateSolrSequenceKey command (source code) assigns a record unique key that is the
+        concatenation of the given baseIdField record field, followed by a running
+        count of the record number within the current session. The count is reset to zero whenever a
+          startSession notification is received.
+For example, assume a CSV file containing multiple records but no unique ids, and the
+        base_id field is the filesystem path of the file. Now this command can be used to assign the
+        following record values to Solr's unique key field: $path#0, $path#1, ...
+          $path#N.
+The name of the unique key field is fetched from Solr's schema.xml file,
+        as directed by the solrLocator configuration parameter.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+solrLocator
+n/a
+Solr location parameters as described separately above.
+
+
+baseIdField
+baseid
+The name of the input field to use for prefixing keys.
+
+
+preserveExisting
+true
+Whether to preserve the field value if one is already present.solrLocator n/a
+                Solr location parameters as described separately above. baseIdField baseid The name
+                of the input field to use for prefixing keys. preserveExisting true Whether to
+                preserve the field value if one is already present.
+
+
+Example usage:
+generateSolrSequenceKey {
+  baseIdField: ignored_base_id
+  solrLocator : ${SOLR_LOCATOR}
+}
+
+sanitizeUnknownSolrFields
+The sanitizeUnknownSolrFields command (source code) sanitizes record fields that are
+        unknown to Solr schema.xml by either deleting them
+          (renameToPrefix parameter is absent or a zero length string) or by moving
+        them to a field prefixed with the given renameToPrefix (for example, to use
+        typical dynamic Solr fields).
+Recall that Solr throws an exception on any attempt to load a document that contains a
+        field that is not specified in schema.xml.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+solrLocator
+n/a
+Solr location parameters as described separately above.
+
+
+renameToPrefix
+""
+Output field prefix for unknown fields.
+
+
+Example usage:
+sanitizeUnknownSolrFields {
+  solrLocator : ${SOLR_LOCATOR}
+}
+
+tokenizeText
+The tokenizeText command (source code) uses the embedded Solr/Lucene Analyzer library to generate tokens from a text
+        string, without sending data to a Solr server.
+This is useful for prototyping and debugging Solr applications. It is also useful for
+        standalone usage outside of Solr, e.g. for extracting text features from documents for use
+        with recommendation systems, clustering and classification applications.
+The command provides the following configuration options:
+
+
+Property Name
+Default
+Description
+
+
+
+solrLocator
+n/a
+Solr location parameters as described separately above.
+
+
+inputField
+n/a
+The name of the input field.
+
+
+outputField
+n/a
+The name of the field to add output values to.
+
+
+solrFieldType
+n/a
+The name of the Solr field type in schema.xml to use for text analysis and
+                tokenization. This parameter specifies the algorithmic extraction rules. Example:
+                "text_en"
+
+
+Example usage:
+tokenizeText {
+  inputField : message
+  outputField : tokens
+  solrFieldType : text_en
+  solrLocator : {
+    # Name of solr collection
+    collection : collection1
+
+    # ZooKeeper ensemble
+    zkHost : "127.0.0.1:2181/solr"
+    
+    # solrHomeDir : "example/solr/collection1"    
+  }
+}
+For example, given the input field message with the value Hello
+          World!\nFoo@Bar.com #%()123 the expected output record is:
+tokens:hello
+tokens:world
+tokens:foo
+tokens:bar.com
+tokens:123
+This example assumes the Solr field type named "text_en" is defined in
+          schema.xml as shown in the following snippet:
+...
+<fieldType name="text_en" class="solr.TextField" positionIncrementGap="100">
+  <analyzer type="index">
+    <tokenizer class="solr.StandardTokenizerFactory"/>
+    <filter class="solr.StopFilterFactory"
+       ignoreCase="true"
+       words="lang/stopwords_en.txt"
+       enablePositionIncrements="true"
+    />
+    <filter class="solr.LowerCaseFilterFactory"/>
+    <filter class="solr.EnglishPossessiveFilterFactory"/>
+    <filter class="solr.KeywordMarkerFilterFactory" protected="protwords.txt"/>
+    <filter class="solr.PorterStemFilterFactory"/>
+  </analyzer>
+</fieldType>
+
+

@@ -1,0 +1,76 @@
+Running the level of detail examplesCloudera Docs
+Running the level of detail examples
+
+        You see what the level of detail options, -l MINIMAL, -l DEFAULT, and -l FULL do byy running these examples. The recommended materialized view is identical to the input query regardless of the level of detail option you use.
+    
+
+            Changing the level of detail does not affect the number or structure of recommendations but provides more insights for each query/recommendation in the case of FULL, and less in the case of MINIMAL.
+            In the input directory src/test/resources/demo/queries/scenario02, a file named queryA.sql contains queryA.
+
+
+Go to the workload-insights directory.
+The Workload Insights (wi) script is located in this directory.
+
+Run the script to get a recommendation using the -l MINIMAL option.
+./wi -i queries/queryA.sql -u jdbc:hive2://localhost:10000 -l MINIMAL    
+Only recommendations appear. You can easily copy and paste the CREATE statements for use in another CLI, for example:SUMMARY (END) ################
+Recommended views:
+CREATE MATERIALIZED VIEW `materialized_view_1` AS
+SELECT `store_returns`.`sr_item_sk`, SUM(`store_returns`.`sr_net_loss`) AS `$f1`
+FROM `default`.`reason`,`default`.`store_returns`
+WHERE `store_returns`.`sr_reason_sk` = `reason`.`r_reason_sk` AND 'Found a better price in a store' = `reason`.`r_reason_desc`
+GROUP BY `store_returns`.`sr_item_sk`;
+----------------------------------------------------- 
+
+Run the script using the -l FULL option.
+
+./wi -i queries/queryA.sql -u jdbc:hive2://localhost:10000 -l FULL            
+
+Recommendations
+                        are:…
+Recommended views:
+-- materialized_view_1:
+CREATE MATERIALIZED VIEW `materialized_view_1` AS
+SELECT `store_returns`.`sr_item_sk`, SUM(`store_returns`.`sr_net_loss`) AS `$f1`
+FROM `default`.`reason`,`default`.`store_returns`
+WHERE `store_returns`.`sr_reason_sk` = `reason`.`r_reason_sk` AND 'Found a better price in a store' = `reason`.`r_reason_desc`
+GROUP BY `store_returns`.`sr_item_sk`;
+-- QUERIES : queryA
+-- POTENTIAL : 0.9902040816326532
+-----------------------------------------------------
+Total improvement: 0.9902040816326532
+-----------------------------------------------------From the following verbose details in the output, you can understand why a recommendation was
+                        selected, or not, for a particular query. You might use these details to
+                        troubleshoot problems with the
+                        recommender.Query details:
+-- queryA:SELECT `t0`.`sr_item_sk`, SUM(`t0`.`sr_net_loss`) AS `$f1` FROM (SELECT `sr_item_sk`, `sr_reason_sk`, `sr_net_loss` FROM `default`.`store_returns` WHERE `sr_reason_sk` IS NOT NULL) AS `t0` INNER JOIN (SELECT `r_reason_sk` FROM `default`.`reason` WHERE `r_reason_desc` = 'Found a better price in a store' AND `r_reason_sk` IS NOT NULL) AS `t2` ON `t0`.`sr_reason_sk` = `t2`.`r_reason_sk` GROUP BY `t0`.`sr_item_sk`
+-- RECOMMENDATION : materialized_view_1
+-- PLAN : 
+    DASAggregate(group=[{0}], agg#0=[sum($2)])
+      DASJoin(condition=[=($1, $3)], joinType=[inner])
+        DASProject(sr_item_sk=[$2], sr_reason_sk=[$8], sr_net_loss=[$19])
+          DASFilter(condition=[IS NOT NULL($8)])
+            DASTableScan(table=[[default, store_returns]])
+        DASProject(r_reason_sk=[$0])
+          DASFilter(condition=[AND(=($2, 'Found a better price in a store'), IS NOT NULL($0))])
+            DASTableScan(table=[[default, reason]])
+	-- BT: default.store_returns is a base table
+		-- Row Count: 1.0|Row size: 208.0
+	-- BT: default.reason is a base table
+		-- Row Count: 1.0|Row size: 332.0
+	-- IMPROVEMENT : 0.9902040816326532
+-----------------------------------------------------
+Interesting subsets:
+-- [[default, reason], [default, store_returns]]:1.0
+  "recommended_views" : [ {
+    "name" : "materialized_view_1",
+    "sql" : "CREATE MATERIALIZED VIEW `materialized_view_1` AS\nSELECT `store_returns`.`sr_item_sk`, SUM(`store_returns`.`sr_net_loss`) AS `$f1`\nFROM `default`.`reason`,\n`default`.`store_returns`\nWHERE `store_returns`.`sr_reason_sk` = `reason`.`r_reason_sk` AND 'Found a better price in a store' = `reason`.`r_reason_desc`\nGROUP BY `store_returns`.`sr_item_sk`;"
+  } ],
+  "query_details" : [ {
+    "name" : "queryA",
+    "sql" : "SELECT `t0`.`sr_item_sk`, SUM(`t0`.`sr_net_loss`) AS `$f1`\nFROM (SELECT `sr_item_sk`, `sr_reason_sk`, `sr_net_loss`\nFROM `default`.`store_returns`\nWHERE `sr_reason_sk` IS NOT NULL) AS `t0`\nINNER JOIN (SELECT `r_reason_sk`\nFROM `default`.`reason`\nWHERE `r_reason_desc` = 'Found a better price in a store' AND `r_reason_sk` IS NOT NULL) AS `t2` ON `t0`.`sr_reason_sk` = `t2`.`r_reason_sk`\nGROUP BY `t0`.`sr_item_sk`",
+    "recommendations" : [ "materialized_view_1" ]
+  } ]
+
+
+Parent topic: Running Recommender examples

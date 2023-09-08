@@ -1,0 +1,135 @@
+Configure Hive-HDFS ACL SyncCloudera Docs
+Configure Hive-HDFS ACL Sync
+Ranger Resource Mapping Server (RMS) should be fully configured after installation.
+      This topic provides further information about RMS configuration settings and workflows.  
+Important configuration information
+
+
+
+Ranger RMS enables HDFS access via Ranger Hive policies. Ranger RMS must be
+                     configured with the names of HDFS and Hive services (AKA Repos). In your
+                     installation, there may be multiple Ranger services created for HDFS and Hive.
+                     These can be seen from the Ranger Admin web UI. RMS ACL sync is designed to
+                     work on a specific pair of HDFS and Hive Ranger services. Therefore, it is
+                     important to identify those service names before Ranger RMS is installed. These
+                     names should be configured during the installation of Ranger RMS. The default
+                     value for Ranger HDFS service name is cm_hdfs, and for the
+                     Ranger Hive service the default name is cm_hive.
+
+
+Before starting the Ranger RMS installation, ensure that the Hive service
+                     identified in the installation above allows the rangerrms user
+                        select access to all tables in all databases in default, as
+                     well as in all security-zones for the Hive service.
+
+
+By default, Ranger RMS tracks only external tables in Hive. To configure Ranger
+                     RMS to also track managed Hive tables, add the following configuration setting
+                     to Ranger RMS.
+
+ranger-rms.HMS.map.managed.tables=true
+
+note
+Locations behind managed tables are granted Read access only, even if the
+                        users have Write access at the Hive table level. However, this restriction
+                        is not enforced for the hive and impala
+                        users.
+
+
+
+In Cloudera Manager, select HDFS > Configuration > HDFS Service Advanced
+                        Configuration Snippet (Safety Valve) for ranger-hdfs-security.xml, then
+                     confirm the following settings: 
+ranger.plugin.hdfs.chained.services = cm_hive
+ranger.plugin.hdfs.chained.services.cm_hive.impl = org.apache.ranger.chainedplugin.hdfs.hive.RangerHdfsHiveChainedPlugin
+
+
+
+
+noteIf any of these configurations are changed after Ranger RMS is started and has
+               synchronized with Hive Metastore, the only way to have Ranger RMS use a new
+               configuration is by following these steps: 
+
+Stop Ranger RMS.
+Log in to the Ranger RMS database and run delete from
+                           x_rms_mapping_provider; to remove the only row from this
+                        table.
+Start Ranger RMS.
+
+On restart, Ranger RMS will resynchronize all data from the Hive Metastore.
+                  This may take a significant amount of time depending on the number of Hive tables
+                  in the Hive Metastore.
+
+
+
+Understanding Ranger policies with RMS
+At a high level, the Ranger RMS workflow is as follows: 
+
+
+
+Ranger policies for the HDFS service are evaluated. If any policy explicitly
+                     denies access, access is denied.
+
+
+Ranger checks to see if the accessed location maps to a Hive table. 
+
+
+If it does, Hive policies are evaluated for the mapped Hive table. If there is
+                     an HDFS policy allowing access, access is allowed. Otherwise, the default HDFS
+                     ACLs determine the access.
+
+
+Requested HDFS permission is mapped to Hive permissions as follows:
+HDFS ‘read’ ==> Hive ‘select’
+HDFS ‘write’ ==> Hive ‘update’ or ‘alter’
+HDFS ‘execute’ ==> Any Hive permission
+
+
+If there is no Hive policy that explicitly allows access to the mapped table,
+                     access is denied, otherwise access is allowed.
+
+
+
+Appropriate tag policies are considered both during HDFS access evaluation and if
+            needed, during Hive access evaluation phases. Also, one or more log records are
+            generated to indicate which policy, if any, made the access decision.
+The following scenarios illustrate how the access permissions are determined. All
+            scenarios assume that the HDFS location is NOT explicitly denied access by a Ranger HDFS
+            policy.
+
+
+Location does not correspond to a Hive table.
+In this case, access will be granted only if a Ranger HDFS policy allows
+                        access or HDFS native ACLs allow access. The audit log will show which
+                        policy (or Hadoop-acl) made the decision.
+
+Location corresponds to a Hive table.
+
+A Ranger Hive policy explicitly denied access to the mapped table for any
+                           of the accesses derived from the original HDFS request.
+Access will be denied by Hive policy.
+
+
+There is no matching Ranger Hive policy.
+Access will be denied. Audit log will not specify the policy.
+
+
+Ranger policy masks some columns in the mapped table.
+Access will be denied. Audit log will show Hive masking policy.
+
+
+Mapped Hive table has a row-filter policy
+Access will be denied. Audit log will show Hive Row-filter policy.
+
+
+A Ranger Hive policy allows access to the mapped table for the access
+                           derived from the original HDFS access request.
+Access will be granted. If the access was originally granted by HDFS
+                           policy, the audit log will show HDFS policy.
+
+
+
+
+
+
+Related informationInstalling Ranger RMS

@@ -1,0 +1,76 @@
+Restore Ranger KMS DatabaseCloudera Docs
+Restore Ranger KMS Database
+Restoring Ranger KMS involves steps for restoring MSQL, POSTGRES, and Oracle
+        databases. 
+MySQL
+To restore a database do the folllowing: 
+Delete an existing database. 
+Create an empty new database on the Database host. 
+ Restore the database using below msyql command. mysql -u root
+drop database rangerkms;
+create database rangerkms;
+GRANT ALL PRIVILEGES ON rangerkms.* TO 'rangerkms'@'localhost';
+$ mysql -u [username] -p  existing_empty_db_name < dump_fileName.sql
+Examplemysql -u rangerkms -p rangerkms < /root/backups/ranger/db/kms/rangerkms.sql
+Select the Enter key. Type the database password at the password prompt. 
+POSTGRES
+To restore data, do the folllowing: 
+
+Delete an existing database. 
+Create an empty new database in its place.  
+ Execute the below command on postgres database host.
+
+dropdb -U owner_username dbname; [Enter db owner password at the prompt]
+Example
+dropdb -U rangerkms  rangerkms;
+
+su  -  postgres
+psql 
+create database rangerkms; 
+ALTER DATABASE rangerkms OWNER TO rangerkms;
+\q
+exit
+psql -U rangerkms rangerkms < /root/backups/ranger/db/kms/rangerkms.sql 
+[Enter db owner password at the prompt as rangeradmin]
+For oraclerm -rf del_kms_tbl_cmd.sql
+        	sqlplus -s rangerkms/rangerkms << EOF
+               spool on
+        	spool del_kms_tbl_cmd.sql
+        	SELECT 'DROP TABLE "' || TABLE_NAME || '" CASCADE CONSTRAINTS;' FROM user_tables
+        			union ALL
+        			select 'drop '||object_type||' '|| object_name || ';' from user_objects 
+        			where object_type in ('VIEW','PACKAGE','SEQUENCE', 'PROCEDURE', 'FUNCTION')
+        			union ALL
+        			SELECT 'drop '
+        			||object_type
+        			||' '
+        			|| object_name
+        			|| ' force;'
+        			FROM user_objects
+        			WHERE object_type IN ('TYPE');
+        	spool off
+	@del_kms_tbl_cmd.sql
+	exit;
+EOF
+
+Select Enter and then execute the below imp command.
+            imp rangerkms/rangerkms file=backups/ranger/db/kms/orcl12c.sql 
+log=backups/ranger/db/kms/restore.log
+After rollback, follow the below steps to add ranger LB members node principals in spnego
+            keytab. 
+Execute on LB node (On ranger external url host) :
+
+kadmin.local
+ktadd -norandkey -kt /etc/security/keytabs/spnego.service.keytab HTTP/admin-host1@EXAMPLE.COM
+ktadd -norandkey -kt /etc/security/keytabs/spnego.service.keytab HTTP/admin-host2@EXAMPLE.COM
+   	
+
+Copy same keytab on ranger-admin nodes from LB host:
+
+scp /etc/security/keytabs root@admin-host1:/etc/security/keytabs/spnego.service.keytab
+scp /etc/security/keytabs root@admin-host2:/etc/security/keytabs/spnego.service.keytab
+If you’ve performed Ambari-Infra rollback already, there are no additional rollback steps
+            required to restore the Solr Collection.
+Start Ranger and RangerKMS in Ambari UI.
+
+Parent topic: Ranger

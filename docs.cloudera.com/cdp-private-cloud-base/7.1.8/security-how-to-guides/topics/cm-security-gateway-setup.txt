@@ -1,0 +1,76 @@
+How to Set Up a Gateway Host to Restrict Access to the ClusterCloudera Docs
+How to Set Up a Gateway Host to Restrict Access to the Cluster
+
+The steps below configure a firewall-protected Hadoop cluster that allows
+      access only through the host configured as the gateway. Clients access the
+      cluster through the gateway using the REST API, for example, using HttpFS
+      (which provides REST access to HDFS) or using Oozie, which allows REST
+      access for submitting and monitoring jobs.
+
+Related informationAdding a ServiceRole InstancesCloudera Security OverviewPortsAPIs for accessing HDFSAccessing the Oozie server with the Oozie Client
+Installing and Configuring the Firewall and Gateway
+
+Follow these steps:
+
+Choose a cluster host to be the gateway host.
+Following the instructions in Adding a Service or Role Instances, add the
+          roles and services that you want to be available. For example, you can add the
+            HttpFS role to the HDFS service, or add
+          the Oozie service to your cluster.
+If you have not already done so, add the Oozie service to your
+          cluster, following the instructions in Adding a Service. Assign the
+            Oozie Server role to your selected gateway host.
+Configure your firewall to block access to all cluster nodes from outside the cluster,
+          with the exception of the gateway host. Open the ports to the gateway host for the
+          services you want to make available. In general, Cloudera recommends that you only allow
+          access to the gateway host from clients that require access. For more information on the
+          ports used by Cloudera software, see Ports.
+If you have not already done so, enable security for your cluster, including Kerberos
+          authentication, Apache Sentry authorization, and encryption for data at rest or in
+          transit. For more information, see Cloudera Security Overview.
+
+
+
+
+Accessing HDFS
+
+With the Hadoop client:
+All of the standard hadoop fs commands work; just
+        make sure to specify -fs webhdfs://HOSTNAME:14000. For
+        example (where GATEWAYHOST is the hostname of the
+        gateway machine):
+$ hadoop fs -fs webhdfs://GATEWAYHOST:14000 -cat /user/me/myfile.txt
+Hello World!
+Without the Hadoop client:
+You can run all of the standard  hadoop fs commands by using
+        the WebHDFS REST API and any program that can do GET
+        , PUT,  POST, and
+        DELETE requests; for example:
+$ curl "http://GATEWAYHOST:14000/webhdfs/v1/user/me/myfile.txt?op=OPEN&user.name=me"
+Hello World!
+importantThe user.name parameter is valid only if security is disabled. In a secure cluster, you must a initiate a valid Kerberos session.
+In general, the command will look like this:
+curl "http://GATEWAYHOST/webhdfs/v1/PATH?[user.name=USER&]op=…"
+You can find a full explanation of the commands in the WebHDFS REST API documentation (see
+          APIs for accessing HDFS).
+
+
+
+Submitting and Monitoring Jobs
+
+The Oozie REST API supports the direct submission of jobs for
+        MapReduce, Pig, and Hive; Oozie automatically creates a workflow with a
+        single action. For any other action types, or to run anything more
+        complicated than a single job, you must create an actual workflow.
+        Required files (JAR files, input data) must already exist on
+        HDFS; if they do not, you can use HttpFS to upload the files.
+With the Oozie client:
+All of the standard Oozie commands will work. You can find a full explanation of the
+        commands in the documentation for the command-line utilities (see Accessing the Oozie
+          server with the Oozie Client).
+Without the Oozie client:
+You can run all of the standard Oozie commands by using the REST API and any program that
+        can do GET, PUT, and POST requests. You can find a full explanation of the commands in the
+        Oozie Web Services API documentation.
+
+

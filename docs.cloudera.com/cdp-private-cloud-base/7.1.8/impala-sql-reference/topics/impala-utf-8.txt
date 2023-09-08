@@ -1,0 +1,80 @@
+UTF-8 SupportCloudera Docs
+UTF-8 Support
+Impala has traditionally offered a single-byte binary character set for STRING data
+        type with the character data encoded in an ASCII character set. This release provides a
+        UTF-8 aware behavior for Impala STRING type to get consistent behavior with Hive on UTF-8
+        strings using a query option.
+Turning ON the UTF-8 behavior
+Before this release, Impala was incompatible with Hive in some functions applying on
+                non-ASCII strings. For example, the length() function in Impala returns the length
+                of bytes of the string, while the length() function in Hive returns the length of
+                UTF-8 characters of the string. UTF-8 characters (code points) assemble in
+                variant-length bytes (1~4 bytes), so the results differ for non-ASCII characters in
+                the string.
+UTF-8 support enables you to read and write UTF-8 from standard formats like Parquet
+                and ORC, thus improving interoperability with other engines supporting those
+                standard formats.
+You can use the new query option, UTF8_MODE, to enable and disable the UTF-8 aware
+                behavior. You can set it globally or at a session level. Only queries with
+                UTF8_MODE=true will have UTF-8-related behaviors.
+
+note
+
+If you enable the UTF8_MODE query option globally, you must explicitly
+                            set UTF8_MODE=false for the existing queries that depend on the past
+                            binary behavior.
+Impala Daemons should be deployed on nodes using the same Glibc version
+                            since different Glibc version supports different Unicode standard
+                            version and also ensure that the en_US.UTF-8 locale is installed in the
+                            nodes. Not using the same Glibc version might result in inconsistent
+                            UTF-8 behavior when UTF8_MODE is set to true.
+
+
+
+
+List of STRING functions
+The new query option enables the UTF-8 aware behavior of the following string
+                functions:
+
+LENGTH(STRING a)
+returns the number of UTF-8 characters instead of bytes
+
+SUBSTR(STRING a, INT start [, INT len])
+SUBSTRING(STRING a, INT start [, INT len])()
+the substring start position and  length are counted as UTF-8 characters
+                            instead of bytes
+
+REVERSE(STRING a)
+the unit of the operation is a UTF-8 character. That is, it does not
+                            reverse bytes inside a UTF-8 character.
+noteThe results of reverse("最快的SQL引擎") used to be "��敼�LQS��竿倜�"
+                                    and now "擎引LQS的快最".
+
+
+INSTR(STRING str, STRING substr[, BIGINT position[, BIGINT occurrence]])
+LOCATE(STRING substr, STRING str[, INT pos])
+These functions have an optional position argument. The return values
+                            are also positions in the string. In UTF-8 mode, these positions are
+                            counted as UTF-8 characters instead of bytes.
+
+mask functions
+The unit of the operation is a UTF-8 character. That is, they do not
+                            mask the string byte-to-byte.
+
+upper/lower/initcap
+These functions recognize non-ascii characters and transform them based
+                            on the current locale used by the Impala process.
+
+
+
+Limitations
+
+
+Use the UTF8_MODE option only when needed because the performance of UTF-8
+                        is not optimized yet. It is  an experimental feature.
+UTF-8 support for CHAR and VARCHAR types is not implemented yet. So
+                        VARCHAR(N)  returns N bytes instead of N UTF-8 characters.
+
+
+
+

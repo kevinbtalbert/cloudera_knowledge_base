@@ -1,0 +1,148 @@
+Defining anonymization rules for CDP logsCloudera Docs
+Defining anonymization rules for CDP logs
+CDP includes a set of default anonymization rules and allows you to define custom
+        anonymization rules in order to remove sensitive information from CDP logs. 
+
+
+Use PCRE convention for writing custom anonymization rule patterns. 
+Anonymization rules are applied to the following logs:
+
+Cluster logs collected during deployments and automatically sent
+                        to Cloudera. See Enabling environment telemetry. 
+Diagnostics logs that can be collected for troubleshooting and
+                        sent to Cloudera Support. See Generating a VM-based diagnostic
+                            bundle. 
+
+
+
+
+noteAnonymization rules are only applied to environments created after the rules were
+                added in CDP. 
+
+Default anonymization rules
+CDP includes a set of default anonymization rules that anonymize the
+                following:
+
+
+Anonymization rule (PCRE)
+Replacement
+Description
+
+
+
+\b([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-\._]*[A-Za-z0-9])@(([A-Za-z0-9]|[A-Za-z][A-Za-z0-9\-]*[A-Za-z0-9])\.)+([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])\b
+email@redacted.host
+Email addresses
+
+
+\d{4}[^\w]\d{4}[^\w]\d{4}[^\w]\d{4}
+XXXX-XXXX-XXXX-XXXX
+Credit card numbers
+
+
+\d{3}[^\w]\d{2}[^\w]\d{4}
+XXX-XX-XXXX
+SSN
+
+
+FPW\:\s+[\w|\W].*
+FPW: [REDACTED]
+FreeIPA (workload) password
+
+
+cdpHashedPassword=.*[']
+[CDP PWD ATTRS REDACTED]
+Hashed FreeIPA (workload) password. 
+
+
+
+Creating anonymization rule patterns 
+Use PCRE convention for writing anonymization rule patterns. For each pattern, come
+                up with a replacement string.
+
+Define custom anonymization rules
+You can define custom anonymization rules in CDP. The anonymization rules
+                are only applied to environments created after the rules were added in CDP.
+Required role: PowerUser
+Steps
+CDP UICDP CLI
+
+
+Once you have created the rules, navigate to CDP web interface >
+                        Management Console > Global Settings > Telemetry > Anonymization
+                            rules.
+
+
+Default rules are pre-populated.
+
+
+Click on New rule and add a pattern and replacement string
+                        for your rule. Repeat for multiple rules.
+
+
+Test the rules from the same page on the UI under Test
+                            rules:
+Under Input text paste an example text with sensitive content
+                                that should get anonymized by the rules that you added.
+Click Test all rules.
+The sensitive content should be removed nad replaced in the output
+                                printed in the Anonymized result text box. 
+
+
+Click Save Changes.
+
+note
+You can use the Set defaults button if you would like to revert to the
+                    default rules.
+
+
+
+If you would like to add new rules, you should first prepare the patterns
+                        and replacement strings, and then test them with the following
+                        command:cdp environments test-account-telemetry-rules --cli-input-json {
+    "testInput": "Email: myemail@cloudera.com",
+    "rules": [
+        {
+            "value": "\\b([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-\\._]*[A-Za-z0-9])@(([A-Za-z0-9]|[A-Za-z][A-Za-z0-9\\-]*[A-Za-z0-9])\\.)+([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])\\b",
+            "replacement": "email@redacted.host"
+        }
+    ]
+}
+
+Run the following command to get your current telemetry
+                            settings in JSON
+                            format:cdp environments get-account-telemetry
+
+
+Copy the JSON file that you obtained in the output of this
+                            command and paste it into a text editor.
+
+
+Update the JSON file, updating the settings or adding new rules.note
+Make sure to preserve all the existing rules, or else they will
+                                    be deleted. Also, make sure to pass the
+                                        workloadAnalytics and
+                                        cloudStorageLogging parameters. If you
+                                    don’t pass all of the parameters, the parameters that are not
+                                    passed will get reset to their default values. 
+
+
+
+Once you have the JSON file updated, run the cdp
+                                environments set-account-telemetry command. For
+                            example:cdp environments set-account-telemetry --cli-input-json {
+    "workloadAnalytics": true,
+    "cloudStorageLogging": true,
+    "rules": [
+        {
+            "value": "\\b([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-\\._]*[A-Za-z0-9])@(([A-Za-z0-9]|[A-Za-z][A-Za-z0-9\\-]*[A-Za-z0-9])\\.)+([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])\\b",
+            "replacement": "email@redacted.host"
+        }
+    ]
+}
+
+
+
+
+
+Parent topic: Enabling environment telemetry

@@ -1,0 +1,500 @@
+Authentication and Kerberos IssuesCloudera Docs
+Authentication and Kerberos Issues
+ Troubleshooting sections for specific issues that involve authentication and
+    Kerberos.Overview
+Clusters that use Kerberos for authentication have several possible sources of potential
+      issues, including: 
+Failure of the Key Distribution Center (KDC)
+Missing Kerberos or OS packages or libraries
+Incorrect mapping of Kerberos REALMs for cross-realm authentication
+These are just some examples, but they can prevent users and services from authenticating
+      and can interfere with the cluster's ability to run and process workloads. The first step
+      whenever an issue emerges is to try to isolate the source of the actual issue, by answering
+      basic questions such as these: 
+Is the issue a local issue or a global issue? That is, are all users failing to
+          authenticate, or is the issue specific to a single user?
+Is the issue specific to a single service, or are all services problematic? and so
+          on.
+If all users and multiple services are affected—and if the cluster has not worked at all
+      after integrating with Kerberos for authentication—step through all settings for the Kerberos
+      configuration files, as outlined in the section below, "Auditing the Kerberos Configuration".noteAll nodes in any given cluster configured for Kerberos must use the same
+      configuration settings in the files that are distributed throughout the cluster.Auditing the Kerberos Configuration
+Cloudera recommends verifying the Kerberos configuration whenever issues arise, especially
+        after initially completing the integration process. 
+Verify that all /etc/hosts files conform to Cloudera Manager's
+            installation requirements ("Cloudera Enterprise Requirements and Supported
+            Versions"). 
+Verify forward and reverse name resolution for all cluster hosts and for the MIT KDC
+            or Active Directory KDC hosts.
+Verify that all required Kerberos server and workstation packages ("Enabling Kerberos Authentication for CDH") have been installed and are the correct versions for the OS running
+            on the host systems. 
+Verify that the hadoop.security.auth_to_local property in the
+              core-site.xml has proper mappings for all trusted Kerberos
+            realms, including HDFS trusted realms, for all services on the cluster that use
+            Kerberos.
+Verify your Kerberos configuration by comparing to the "Sample Kerberos Configuration Files" shown below (see "/etc/krb5.conf") and "/var/kerberos/krb5kdc/kdc.conf").
+Review the configuration of all the KDC, REALM, and domain hosts
+            referenced in the krb5.conf and kdc.conf files. The
+            KDC host in particular, is a common point-of-failure and you may have to begin
+            troubleshooting there. Ensure that the REALM set in
+              krb5.conf has the correct hostname listed for the KDC. For
+            cross-realm authentication, see "Reviewing Service Ticket Credentials in Cross-Realm Deployments".
+Use whether the services using Kerberos are running and responding properly with kinit/klist ("User Authentication with and Without Keytab
+            ").
+Attempt to authenticate to Cloudera Manager using cluster service credentials specific
+            to the issue or affected service. Examine the issued credentials if you are able to
+            successfully authenticate with the service keytab.
+Use klist to list the principals present within a service keytab to
+            ensure each service has one.
+Enabling debugging ("Enabling Debugging for the Authentication Process") using either
+            the command line or Cloudera Manager.
+
+Kerberos Command-Line Tools
+User Authentication with and Without Keytab
+The kinit command line tool is used to authenticate a user, service,
+        system, or device to a KDC. The most basic example is a user authenticating to Kerberos with
+        a username (principal) and password. In the following example, the first attempt uses a
+        wrong password, followed by a second successful attempt.
+[alice@host1 ~]$ kinit alice@TEST.ORG.LAB
+Password for alice@TEST.ORG.LAB: (wrong password)
+kinit: Preauthentication failed while getting initial credentials
+
+[alice@host1 ~]$ kinit alice@TEST.ORG.LAB
+Password for alice@TEST.ORG.LAB: (correct password)
+(note silent return on successful auth)
+[alice@host1 ~]$ klist
+Ticket cache: FILE:/tmp/krb5cc_10001
+Default principal: alice@TEST.ORG.LAB
+
+Valid starting     Expires            Service principal
+03/11/14 11:55:39  03/11/14 21:54:55  krbtgt/TEST.ORG.LAB@TEST.ORG.LAB
+renew until 03/18/14 11:55:39
+
+Another method of authentication is using keytabs with the kinit command.
+        You can verify whether authentication was successful by using the klist
+        command to show the credentials issued by the KDC. The following example attempts to
+        authenticate the hdfs service to the KDC by using the hdfs
+        keytab file.
+[root@host1 312-hdfs-DATANODE]# kinit -kt hdfs.keytab hdfs/host1.test.lab@TEST.LAB
+[root@host1 312-hdfs-DATANODE]# klist
+Ticket cache: FILE:/tmp/krb5cc_0
+Default principal: hdfs/host1.test.lab@TEST.LAB
+
+Valid starting      Expires      Service principal
+03/11/14 11:18:34 03/12/14 11:18:34 krbtgt/TEST.LAB@TEST.LAB
+renew until 03/18/14 11:18:34
+Enabling Debugging for Authentication Issues
+Using Cloudera Manager for Debugging
+To obtain additional information in the logs and facilitate troubleshooting, administrators
+        can set debug levels for any of the services running on Cloudera Manager Server. Typically,
+        the settings are added using the Advanced Configuration Snippet (Safety Valve) settings for
+        the specific service, the names are specific to the service. 
+ as for HDFS as detailed below:
+
+Log in to the Cloudera Manager Admin Console.
+Select Clusters > HDFS-n.
+Click the Configuration tab.
+Search for properties specific to the different role types for which you want to enable
+          debugging. For example, if you want to enable debugging for the HDFS NameNode, search for
+          the NameNode Logging Threshold property and select at least DEBUG
+          level logging. 
+Enable Kerberos debugging by using the HDFS service's Advanced Configuration Snippet.
+          Once again, this may be different for each specific role type or service. For the HDFS
+          NameNode, add the following properties to the HDFS Service Environment Safety
+          Valve:HADOOP_JAAS_DEBUG=true
+HADOOP_OPTS="-Dsun.security.krb5.debug=true"
+Click Save Changes.
+Restart the HDFS service.
+
+The output will be seen in the process logs: stdout.log and
+          stderr.log. These can be found in the runtime path of the instance: 
+/var/run/cloudera-scm-agent/process/###-service-ROLE
+After restarting Cloudera Manager Service, the most recent instance of the
+          ###-service-ROLE directory will have debug logs. Use ls
+          -ltr in the /var/run/cloudera-scm-agent/process path to
+        determine the most current path.
+Enabling Debugging for the Authentication Process
+Set the following properties on the cluster to obtain debugging information from the
+        Kerberos authentication process. 
+
+# export HADOOP_ROOT_LOGGER=TRACE,console;
+# export HADOOP_JAAS_DEBUG=true;
+# export HADOOP_OPTS="-Dsun.security.krb5.debug=true"
+You can then use the following command to copy the console output to the user (with
+        debugging messages), along with all output from STDOUT and
+          STDERR to a file. 
+# hadoop fs -ls / > >(tee fsls-logfile.txt) 2>&1
+Kerberos Credential-Generation Issues
+Cloudera Manager creates accounts needed by CDH services using an internal command
+          (Generate Credentials) that is triggered automatically by the
+        Kerberos configuration wizard or when changes are made to the cluster that require new
+        Kerberos principals. 
+After configuring the cluster for Kerberos authentication or making changes that require
+        generation of new principals, you can verify that the command ran successfully by using the
+        Cloudera Manager Admin Console, as follows: 
+Log in to the Cloudera Manager Admin Console. Any error messages display on the
+              Home page, in the Status area near the
+            top of the page. The following Status message indicates that the Generate Credentials
+            command failed: Role is missing Kerberos
+            keytab
+
+To display the output of the command, go to the Home > Status tab and click the All Recent Commands tab. 
+
+Active Directory Credential-Generation Errors
+Error:
+ldap_sasl_interactive_bind_s: Can't contact LDAP server (-1)
+
+Possible cause: The Domain Controller specified is incorrect or LDAPS has not been
+        enabled for it. 
+Steps to resolve: Verify the configuration for Active Directory Active Directory
+        KDC, as follows: 
+Log in to Cloudera Manager Admin Console.
+Select Administration > Settings .
+Select Kerberos for the Category
+            filter.
+ Verify all settings. Also check that LDAPS is enabled for Active Directory.
+Error:
+ldap_add: Insufficient access (50)
+
+Possible cause: The Active Directory account you are using for Cloudera Manager does
+        not have permissions to create other accounts. 
+Steps to resolve: Use the Delegate Control wizard to grant permission to the
+        Cloudera Manager account to create other accounts. You can also login to Active Directory as
+        the Cloudera Manager user to check that it can create other accounts in your Organizational
+        Unit. 
+MIT Kerberos Credential-Generation Errors
+Error:
+kadmin: Cannot resolve network address for admin server in requested realm while
+          initializing kadmin interface.
+
+Possible cause: The hostname for the KDC server is incorrect. 
+Steps to resolve: Check the kdc field for your default realm in
+          krb5.conf and make sure the hostname is correct. 
+Hadoop commands fail after enabling Kerberos security
+Users need to obtain valid Kerberos tickets to interact with a secure cluster, that is, a
+        cluster that has been configured to use Kerberos for authentication. Running any Hadoop
+        command (such as hadoop fs -ls) will fail if you do not have a valid
+        Kerberos ticket in your credentials cache. If you do not have a valid ticket, you will
+        receive an error such as:
+11/01/04 12:08:12 WARN ipc.Client: Exception encountered while connecting to the server : javax.security.sasl.SaslException:
+GSS initiate failed [Caused by GSSException: No valid credentials provided (Mechanism level: Failed to find any Kerberos tgt)]
+Bad connection to FS. command aborted. exception: Call to nn-host/10.0.0.2:8020 failed on local exception: java.io.IOException:
+javax.security.sasl.SaslException: GSS initiate failed [Caused by GSSException: No valid credentials provided (Mechanism level: Failed to find any Kerberos tgt)]
+Steps to resolve: Examine the Kerberos tickets currently in your credentials cache
+        by running the klist command. You can obtain a ticket by running the
+          kinit command and either specifying a keytab file containing credentials,
+        or entering the password for your principal.
+Using the UserGroupInformation class to authenticate Oozie
+Secured CDH services mainly use Kerberos to authenticate RPC communication. RPCs are one of
+        the primary means of communication between nodes in a Hadoop cluster. For example, RPCs are
+        used by the YARN NodeManager to communicate with the ResourceManager, or by the HDFS client
+        to communicate with the NameNode. 
+CDH services handle Kerberos authentication by calling the UserGroupInformation (UGI) login
+        method, loginUserFromKeytab(), once every time the service starts up. Since
+        Kerberos ticket expiration times are typically short, repeated logins are required to keep
+        the application secure. Long-running CDH applications have to be implemented accordingly to
+        accommodate these repeated logins. If an application is only going to communicate with HDFS,
+        YARN, MRv1, and HBase, then you only need to call the
+          UserGroupInformation.loginUserFromKeytab() method at startup, before any
+        actual API activity occurs. The HDFS, YARN, MRv1 and HBase services' RPC clients have their
+        own built-in mechanisms to automatically re-login when a keytab's Ticket-Granting Ticket
+        (TGT) expires. Therefore, such applications do not need to include calls to the UGI re-login
+        method because their RPC client layer performs the re-login task for them. 
+However, some applications may include other service clients that do not involve the
+        generic Hadoop RPC framework, such as Hive or Oozie clients. Such applications must
+        explicitly call the
+          UserGroupInformation.getLoginUser().checkTGTAndReloginFromKeytab() method
+        before every attempt to connect with a Hive or Oozie client. This is because these clients
+        do not have the logic required for automatic re-logins. 
+This is an example of an infinitely polling Oozie client application:
+
+// App startup
+UserGroupInformation.loginFromKeytab(KEYTAB_PATH, PRINCIPAL_STRING);
+OozieClient client = loginUser.doAs(new PrivilegedAction<OozieClient>() {
+    public OozieClient run() {
+        try {
+            returnnew OozieClient(OOZIE_SERVER_URI);
+        } catch (Exception e) {
+            e.printStackTrace();
+            returnnull;
+        }
+    }
+});
+
+while (true && client != null) {
+    // Application's long-running loop
+
+    // Every time, complete the TGT check first
+    UserGroupInformation loginUser = UserGroupInformation.getLoginUser();
+    loginUser.checkTGTAndReloginFromKeytab();
+
+    // Perform Oozie client work within the context of the login user object
+    loginUser.doAs(new PrivilegedAction<Void>() {
+        publicVoid run() {
+            try {
+                List<WorkflowJob> list = client.getJobsInfo("");
+                for (WorkflowJob wfJob : list) {
+                    System.out.println(wfJob.getId());
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        } // End of function block
+    }); // End of doAs
+} // End of loop
+
+Certain Java versions cannot read credentials cache
+Symptom: For MIT Kerberos 1.8.1 (or higher), the following error will occur when you
+        attempt to interact with the Hadoop cluster, even after successfully obtaining a Kerberos
+        ticket using kinit:
+        
+11/01/04 12:08:12 WARN ipc.Client: Exception encountered while connecting to the server : javax.security.sasl.SaslException:
+GSS initiate failed [Caused by GSSException: No valid credentials provided (Mechanism level: Failed to find any Kerberos tgt)]
+Bad connection to FS. command aborted. exception: Call to nn-host/10.0.0.2:8020 failed on local exception: java.io.IOException:
+javax.security.sasl.SaslException: GSS initiate failed [Caused by GSSException: No valid credentials provided (Mechanism level: Failed to find any Kerberos tgt)]
+
+
+Possible cause:
+
+At release 1.8.1 of MIT Kerberos, a change ("#6206: new API for storing extra per-principal data in ccache") was made to the credentials cache format that
+        conflicts with Oracle JDK 6 Update 26 (and earlier
+        JDKs) (for details, see "JDK-6979329 : CCacheInputStream fails to read ticket cache files from Kerberos 1.8.1") rendering Java incapable of reading Kerberos credentials cache created by versions of
+        MIT Kerberos 1.8.1 (or higher). Kerberos 1.8.1 is the default in Ubuntu Lucid and higher
+        releases and Debian Squeeze and higher releases. On RHEL and CentOS, an older version of MIT
+        Kerberos which does not have this issue, is the default.
+Workaround: Use the -R (renew) option with kinit after initially
+        obtaining credentials with kinit. This sequence causes the ticket to be
+        renewed and credentials are cached using a format that Java can read. However, the initial
+        ticket must be renewable. 
+For example:
+$ klist
+klist: No credentials cache found (ticket cache FILE:/tmp/krb5cc_1000)
+$ hadoop fs -ls
+11/01/04 13:15:51 WARN ipc.Client: Exception encountered while connecting to the server : javax.security.sasl.SaslException:
+GSS initiate failed [Caused by GSSException: No valid credentials provided (Mechanism level: Failed to find any Kerberos tgt)]
+Bad connection to FS. command aborted. exception: Call to nn-host/10.0.0.2:8020 failed on local exception: java.io.IOException:
+javax.security.sasl.SaslException: GSS initiate failed [Caused by GSSException: No valid credentials provided (Mechanism level: Failed to find any Kerberos tgt)]
+$ kinit
+Password for username@REALM-NAME.EXAMPLE.COM: 
+$ klist
+Ticket cache: FILE:/tmp/krb5cc_1000
+Default principal: username@REALM-NAME.EXAMPLE.COM
+
+Valid starting     Expires            Service principal
+01/04/11 13:19:31  01/04/11 23:19:31  krbtgt/REALM-NAME.EXAMPLE.COM@REALM-NAME.EXAMPLE.COM
+	renew until 01/05/11 13:19:30
+$ hadoop fs -ls
+11/01/04 13:15:59 WARN ipc.Client: Exception encountered while connecting to the server : javax.security.sasl.SaslException:
+GSS initiate failed [Caused by GSSException: No valid credentials provided (Mechanism level: Failed to find any Kerberos tgt)]
+Bad connection to FS. command aborted. exception: Call to nn-host/10.0.0.2:8020 failed on local exception: java.io.IOException:
+javax.security.sasl.SaslException: GSS initiate failed [Caused by GSSException: No valid credentials provided (Mechanism level: Failed to find any Kerberos tgt)]
+$ kinit -R
+$ hadoop fs -ls
+Found 6 items
+drwx------   - user user     0 2011-01-02
+          16:16 /user/user/.staging
+Non-renewable tickets display this error message when the command
+        kinit: Ticket expired while renewing credentials
+Resolving Cloudera Manager Service keytab Issues
+Every service managed by Cloudera Manager has a keytab file that is provided at startup by
+        the Cloudera Manager Agent. The most recent keytab files can be examined by navigating to
+        the path, /var/run/cloudera-scm-agent/process, with an ls
+          -ltr command. 
+As you can see in the example below, Cloudera Manager service directory names have the
+        form: ###-service-ROLE. Therefore, if you are troubleshooting the HDFS
+        service, the service directory may be called,
+        326-hdfs-NAMENODE.[root@cehd1 ~]# cd /var/run/cloudera-scm-agent/process/
+[root@cehd1 process]# ls -ltr | grep NAMENODE | tail -3
+drwxr-x--x 3 hdfs         hdfs         4096 Mar  3 23:43 313-hdfs-NAMENODE
+drwxr-x--x 3 hdfs         hdfs         4096 Mar  4 00:07 326-hdfs-NAMENODE
+drwxr-x--x 3 hdfs         hdfs         4096 Mar  4 00:07 328-hdfs-NAMENODE-nnRpcWait
+
+[root@cehd1 process]# cd 326-hdfs-NAMENODE
+
+[root@cehd1 326-hdfs-NAMENODE]# ls
+cloudera_manager_agent_fencer.py              dfs_hosts_allow.txt         hdfs.keytab                 log4j.properties             topology.py
+cloudera_manager_agent_fencer_secret_key.txt  dfs_hosts_exclude.txt       hdfs-site.xml               logs
+cloudera-monitor.properties                   event-filter-rules.json     http-auth-signature-secret  navigator.client.properties
+core-site.xml                                 hadoop-metrics2.properties  krb5cc_494                  topology.map
+If you have root access to the /var/run/cloudera-scm-agent/process path,
+        you can use any service's keytab file to log in as root or a sudo user to verify whether
+        basic Kerberos authentication is working. 
+After locating a keytab file, examine its contents ("Examining Kerberos credentials with klist
+        ") using the klist command to view the credentials stored in the
+        file. For example, to list the credentials stored in the hdfs.keytab file:
+        [root@host1 326-hdfs-DATANODE]# klist -kt hdfs.keytab
+
+Keytab name: WRFILE:hdfs.keytab
+KVNO Timestamp         Principal
+---- ----------------- --------------------------------------------------------
+  4 02/17/14 19:09:17 HTTP/host1.test.lab@TEST.LAB
+  4 02/17/14 19:09:17 HTTP/host1.test.lab@TEST.LAB
+  4 02/17/14 19:09:17 HTTP/host1.test.lab@TEST.LAB
+  4 02/17/14 19:09:17 HTTP/host1.test.lab@TEST.LAB
+  4 02/17/14 19:09:17 HTTP/host1.test.lab@TEST.LAB
+  4 02/17/14 19:09:17 HTTP/host1.test.lab@TEST.LAB
+  4 02/17/14 19:09:17 hdfs/host1.test.lab@TEST.LAB
+  4 02/17/14 19:09:17 hdfs/host1.test.lab@TEST.LAB
+  4 02/17/14 19:09:17 hdfs/host1.test.lab@TEST.LAB
+  4 02/17/14 19:09:17 hdfs/host1.test.lab@TEST.LAB
+  4 02/17/14 19:09:17 hdfs/host1.test.lab@TEST.LAB
+  4 02/17/14 19:09:17 hdfs/host1.test.lab@TEST.LAB
+
+Now, attempt to authenticate using the keytab file and a principal within it. In this case,
+        we use the hdfs.keytab file with the
+          hdfs/host1.test.lab@TEST.LAB principal. Then use the
+          klist command without any arguments to see the current user session's
+        credentials.
+root@host1 312-hdfs-DATANODE]# kinit -kt hdfs.keytab hdfs/host1.test.lab@TEST.LAB
+[root@host1 312-hdfs-DATANODE]# klist
+
+Ticket cache: FILE:/tmp/krb5cc_0
+Default principal: hdfs/host1.test.lab@TEST.LAB
+
+Valid starting     Expires            Service principal
+03/11/14 11:18:34  03/12/14 11:18:34  krbtgt/TEST.LAB@TEST.LAB
+renew until 03/18/14 11:18:34
+Note that Kerberos credentials have an expiry date and time. This means, to make sure
+        Kerberos credentials are valid uniformly over a cluster, all hosts and clients within the
+        cluster should be using NTP and must never drift more than 5 minutes apart from each other.
+        Kerberos session tickets have a limited lifespan, but can be renewed (as indicated in the
+        sample krb5.conf and kdc.conf). CDH requires renewable
+        tickets for cluster principals. Check whether renewable tickets have been enabled by using a
+        klist command with the -e (list key encryption types) and
+          -f (list flags set) switches when examining Kerberos sessions and
+        credentials.
+Reviewing Service Ticket Credentials in Cross-Realm Deployments
+When you examine your cluster configuration, make sure you haven't violated any of
+        following the integration rules:
+
+When negotiating encryption types, follow the realm with the most specific limitations
+          on supported encryption types.
+All realms should be known to one another through the /etc/krb5.conf
+          file deployed on the cluster.
+When you make configuration decisions for Active Directory environments, you must
+          evaluate the Domain Functional Level or Forrest Functional Level that is present.
+
+Kerberos typically negotiates and uses the strongest form of encryption possible between a
+        client and server for authentication into the realm. However, the encryption types for TGTs
+        may sometimes end up being negotiated downward towards the weaker encryption types, which is
+        not desirable. To investigate such issues, check the kvno of the
+        cross-realm trust principal (krbtgt) as described in the following steps.
+        Replace CLUSTER.REALM and AD.REALM (or
+          MIT.REALM) with the appropriate values for your configured realm. This
+        scenario assumes cross-realm authentication with Active Directory.
+
+Once trust has been configured (see sample files in previous section),
+            kinit as a system user by authenticating to the AD Kerberos realm.
+From the command line, perform a kvno check of the local and
+          cross-realm krbtgt entry. The local representation of this special
+            REALM service principal is in the form,
+            krbtgt/CLUSTER.REALM@CLUSTER.REALM. The cross-realm principal is named
+          after the trusted realm in the form, krbtgt/AD.REALM.
+Failure of the kvno check indicates incorrect cross-realm trust
+          configuration. Review encryption types again, looking for incompatibilities or unsupported
+          encryption types configured between realms.
+
+Sample Kerberos Configuration Files
+This section contains several example
+          Kerberos configuration files.
+/etc/krb5.conf
+The /etc/krb5.conf file is the configuration a client uses to access a
+        realm through its configured KDC. The krb5.conf maps the realm to the
+        available servers supporting those realms. It also defines the host-specific configuration
+        rules for how tickets are requested and granted.
+[logging]
+ default = FILE:/var/log/krb5libs.log
+ kdc = FILE:/var/log/krb5kdc.log
+ admin_server = FILE:/var/log/kadmind.log
+
+[libdefaults]
+ default_realm = EXAMPLE.COM
+ dns_lookup_realm = false
+ dns_lookup_kdc = false
+ ticket_lifetime = 24h
+ renew_lifetime = 7d
+ forwardable = true
+# udp_preference_limit = 1
+
+# set udp_preference_limit = 1 when TCP only should be
+# used. Consider using in complex network environments when
+# troubleshooting or when dealing with inconsistent
+# client behavior or GSS (63) messages.
+
+# uncomment the following if AD cross realm auth is ONLY providing DES encrypted tickets
+# allow-weak-crypto = true
+
+[realms]
+ AD-REALM.EXAMPLE.COM = {
+  kdc = AD1.ad-realm.example.com:88
+  kdc = AD2.ad-realm.example.com:88
+  admin_server = AD1.ad-realm.example.com:749
+  admin_server = AD2.ad-realm.example.com:749
+  default_domain = ad-realm.example.com
+ }
+ EXAMPLE.COM = {
+  kdc = kdc1.example.com:88
+  admin_server = kdc1.example.com:749
+  default_domain = example.com
+ }
+
+# The domain_realm is critical for mapping your host domain names to the kerberos realms
+# that are servicing them. Make sure the lowercase left hand portion indicates any domains or subdomains
+# that will be related to the kerberos REALM on the right hand side of the expression. REALMs will 
+# always be UPPERCASE. For example, if your actual DNS domain was test.com but your kerberos REALM is
+# EXAMPLE.COM then you would have,
+
+[domain_realm]
+test.com = EXAMPLE.COM
+#AD domains and realms are usually the same
+ad-domain.example.com = AD-REALM.EXAMPLE.COM  
+ad-realm.example.com = AD-REALM.EXAMPLE.COM
+
+Sample Kerberos Configuration Files
+/var/kerberos/krb5kdc/kdc.conf
+The kdc.conf file only needs to be configured on the actual
+        cluster-dedicated KDC, and should be located at /var/kerberos/krb5kdc. Only
+        primary and secondary KDCs need access to this configuration file. The contents of this file
+        establish the configuration rules which are enforced for all client hosts in the
+          REALM. 
+
+[kdcdefaults]
+ kdc_ports = 88
+ kdc_tcp_ports = 88
+
+[realms]
+  EXAMPLE.COM = {
+  #master_key_type = aes256-cts
+  max_renewable_life = 7d 0h 0m 0s
+  acl_file = /var/kerberos/krb5kdc/kadm5.acl
+  dict_file = /usr/share/dict/words
+  admin_keytab = /var/kerberos/krb5kdc/kadm5.keytab
+# note that aes256 is ONLY supported in Active Directory in a domain / forrest operating at a 2008 or greater functional level.
+# aes256 requires that you download and deploy the JCE Policy files for your JDK release level to provide
+# strong java encryption extension levels like AES256. Make sure to match based on the encryption configured within AD for
+# cross realm auth, note that RC4 = arcfour when comparing windows and linux enctypes
+  supported_enctypes = aes256-cts:normal aes128-cts:normal arcfour-hmac:normal
+  default_principal_flags = +renewable, +forwardable
+ }
+
+[logging]
+    kdc = FILE:/var/log/krb5kdc.log
+    admin_server = FILE:/var/log/kadmin.log
+kadm5.acl
+*/admin@HADOOP.COM *
+cloudera-scm@HADOOP.COM * flume/*@HADOOP.COM
+cloudera-scm@HADOOP.COM * hbase/*@HADOOP.COM
+cloudera-scm@HADOOP.COM * hdfs/*@HADOOP.COM
+cloudera-scm@HADOOP.COM * hive/*@HADOOP.COM
+cloudera-scm@HADOOP.COM * httpfs/*@HADOOP.COM
+cloudera-scm@HADOOP.COM * HTTP/*@HADOOP.COM
+cloudera-scm@HADOOP.COM * hue/*@HADOOP.COM
+cloudera-scm@HADOOP.COM * impala/*@HADOOP.COM
+cloudera-scm@HADOOP.COM * mapred/*@HADOOP.COM
+cloudera-scm@HADOOP.COM * oozie/*@HADOOP.COM
+cloudera-scm@HADOOP.COM * solr/*@HADOOP.COM
+cloudera-scm@HADOOP.COM * sqoop/*@HADOOP.COM
+cloudera-scm@HADOOP.COM * yarn/*@HADOOP.COM
+cloudera-scm@HADOOP.COM * zookeeper/*@HADOOP.COM
+
+Related informationEnabling Kerberos Authentication for CDP#6206: new API for storing extra per-principal data in ccacheJDK-6979329 : CCacheInputStream fails to read ticket cache files from Kerberos 1.8.1

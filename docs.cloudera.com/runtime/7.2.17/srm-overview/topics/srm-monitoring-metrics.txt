@@ -1,0 +1,201 @@
+Streams Replication Manager monitoring and metricsCloudera Docs
+Streams Replication Manager monitoring and metrics
+Streams Replication Manager metrics can give you insight into the status of SRM and the
+    replication process as a whole. Learn how SRM metrics are collected, processed, and exposed on
+    the SRM Service REST API. 
+important SRM monitoring using the SRM Service and its REST API is not supported
+      with custom replication policies or the IdentityReplicationPolicy. The
+      following behavior is only true when using the DefaultReplicationPolicy,
+      which is the default replication policy configured for SRM.
+Streams Replication Manager (SRM) consists of two main components (roles) that are each
+      responsible for different tasks related to data replication. These are the SRM Driver and SRM
+      Service roles. 
+The SRM Driver role is based on the Kafka Connect Framework and utilizes Connect connectors
+      and connector tasks to replicate Kafka data. These connectors and tasks produce raw metrics
+      that describe the replication process. The SRM service is responsible for collecting,
+      processing, and exposing these metrics. The metrics can be queried using the SRM Service REST
+      API or viewed in Streams Messaging Manager on the Replications page.
+noteFor a more in depth look at the internal architecture of SRM as well as how the Driver and
+      Service roles work, see Streams Replication Manager Architecture.
+The following sections provide an overview on how raw SRM metrics are collected,
+      how they are processed into metrics that can be used for monitoring.
+Raw metric collection
+Because the SRM Driver is built on top of the Kafka Connect framework, the connectors and
+        connector tasks of the Driver produce raw Kafka Connect metrics. Although there are many
+        metrics that exist within the Connect framework, SRM only collects the following raw
+        metrics:
+
+Status metrics are collected from connectors.
+Status, byte-rate, replication-latency-ms, checkpoint-latency-ms, and
+          replication-records-lag metrics are collected from connector tasks.
+
+All of these metrics have two intrinsic properties. They have an origin and a subject. The
+        origin denotes where the metric is collected from. The subject denotes what entity the
+        metric describes. Based on these properties, the raw metrics can be organized into two
+        groups. Connector-originated metrics, which describe the replication flows, and
+        task-originated metrics, which describe the replication of individual topic partitions.
+Metrics collected from connectors are connector-originated. Connectors within SRM’s
+        framework represent the replications (also referred to as replication flows). Therefore, the
+        subject of connector-originated metrics are the replications. Because the subject is the
+        replication flow, connector-originated metrics have a wide scope and describe the
+        replication process from a high level. Think of a two cluster replication scenario. The
+        replication flow acts as a bridge between the two clusters. Connector-originated metrics
+        describe the bridge, or in other words, the replication.
+Metrics collected from connector tasks are task-originated. Tasks within SRM’s
+        framework represent the actual replication work that is performed. The tasks are the
+        processes that replicate the messages between the source and target clusters from the topic
+        partitions. As a result, the subject of task-originated metrics is the topic partition.
+        Compared to connector-originated metrics, task-originated metrics have a restricted scope
+        and describe the replication process at a low level. 
+The raw metrics collected by SRM do not provide good insights on the replication process as
+        a whole and cannot be used as is for monitoring. For example, even though
+        connector-originated metrics describe the replications, a replication is always made up of
+        multiple connector instances (or workers), which may even run on different nodes. Therefore,
+        the raw metrics of a single connector instance (or worker) only provide partial data on the
+        replication. Because of this, raw metrics are not exposed by the SRM service. Instead, SRM
+        processes and aggregates them before exposing them for consumption on the REST API.
+
+Metrics processing and aggregation
+Evaluating a single metric is rarely useful. For example, looking at the transmitted bytes
+        of an ongoing replication for a single topic partition in the last 30 seconds does not
+        provide good insight on what is actually happening with the topic or the replication. To
+        provide metrics that describe the replication process in a meaningful way, statistics
+        derived from the raw data are required. In other words, the raw metric data must be
+        processed before it can be exposed for consumption. Creating statistics involves gathering
+        data, in this case raw metrics, and deriving their characteristics through processing and
+        aggregation. The result of this are the metrics that SRM exposes on its REST API.
+When processing raw data, SRM uses a combination of the following two strategies:
+
+SRM collects and processes metrics over a time period 
+This is done because having access to the momentary status of a single entity does not
+            provide real value. On the other hand, data gathered over time is descriptive and
+            provides a good filter for temporary or short lived performance issues. SRM gathers data
+            over time using sliding time-window averaging in the case of numeric metrics. 
+SRM collects and processes metrics across different entities
+When monitoring SRM, the entities that you want to monitor are the topics and
+            replications. This is because it is the metrics of the topics and replications that can
+            give you tangible information on SRM’s status. However, there are no raw metrics
+            available that directly describe topics. Additionally, only status metrics are available
+            for the replications; raw metrics measuring byte rate, latency, or lag are not.
+            Nonetheless, SRM can still provide metrics on the topics and replications by way of
+            aggregating available raw metrics across different sets of entities.Specifically, SRM
+              gathers the raw metrics that describe the topic partitions (the task-originated raw
+              metrics). Next, it aggregates the data over all topic partitions that belong to a
+              topic. That is, over the topic. The resulting data are the metrics that describe the
+              topic. Metrics that describe the replications are produced in a similar way.
+              SRM gathers the raw partition metrics and aggregates them over a certain replication.
+              To be precise, over all topics that take part in that replication. The resulting data
+              are the metrics that describe the replication. All resulting metrics reported
+              for the entities include the statistical minimum, maximum, average, and sum of the
+              sample.note Not all statistics are meaningful. For example, the sum of
+              replication speed over all topic partitions does not give good insight on the overall
+              performance of the replication.
+
+Based on how the data is processed, the exposed metrics can be categorized into the
+        following levels:
+Cluster-level metrics
+Cluster-level metrics are aggregated over a certain time frame and (contrary to the
+              name) over a certain replication. These metrics
+              reflect the overall performance of a certain replication. 
+Topic-level metrics
+Topic-level metrics are aggregated over a certain time frame and over a topic. They
+              reflect the overall progress and status of a replication with regards to a single
+              topic. 
+
+
+Available numeric metrics
+Table 1. Streams Replication Manager numeric metrics
+
+name
+level
+description
+
+
+
+byte-rate
+cluster
+The average number of bytes that are being replicated per second,
+                aggregated over a replication
+
+
+byte-rate
+topic
+The average number of bytes that are being replicated per second,
+                aggregated over a topic
+
+
+replication-latency-ms
+cluster
+Time it takes records to replicate from source to target cluster,
+                aggregated over a replication
+
+
+replication-latency-ms
+topic
+Time it takes records to replicate from source to target cluster,
+                aggregated over a topic
+
+
+checkpoint-latency-ms
+cluster
+Time it takes consumer group offsets to replicate from source to
+                target cluster, aggregated over a replication
+
+
+checkpoint-latency-ms
+topic
+Time it takes consumer group offsets to replicate from source to
+                target cluster, aggregated over a topic
+
+
+replication-records-lag
+cluster
+The number of “to be replicated” messages (difference between the
+                source offset of the last replicated message and the log end offset of the source)
+                aggregated over a replication. The “sum” statistics of the metric describes the
+                overall lag of the replication with respect to a replication flow.
+
+
+replication-records-lag
+topic
+The number of “to be replicated” messages (difference between the
+                source offset of the last replicated message and the log end offset of the source)
+                aggregated over a topic. The “sum” statistics of the metric describes the overall
+                lag of the replication in a topic.
+
+
+
+Notes about calculation of metrics
+When monitoring replication and checkpoint latency metrics, keep in mind the
+        following regarding their calculation. 
+
+replication-latency-ms
+Replication latency is the difference between the record timestamp of the message as
+            saved in the source cluster and the time of the commit in the performing task. Because
+            the source and target clusters in a replication are two distinct clusters, the record
+            timestamp of the message and the commit time will come from two different clusters. As a
+            result, the clocks of the two clusters must be in sync. Otherwise, SRM will calculate
+            the latency incorrectly, which can lead to negative or other misleading values being
+            reported
+checkpoint-latency-ms
+ Checkpoint latency is the difference between the time when the data necessary for
+            creating a checkpoint is fetched (this includes consumer group offsets) and when the
+            checkpoint is eventually committed.
+
+
+Status metrics
+Unlike raw metrics related to latency, record lag, or byte rate, raw status metrics are not
+        numeric. These are simple strings of text that describe the state of the connector or task.
+        For example, connectors will report that they are paused, running, or stopped. Connector
+        tasks will report that they are running, stopped, or failed. 
+Similarly to other raw metrics, status metrics are not exposed directly by SRM and are also
+        processed and aggregated. SRM uses status metrics as input to create detailed status
+        messages that describe the overall status of a replication and as input for health checks. 
+The status messages that SRM produces are more complex than the raw metrics used for input.
+        They include the reason and cause of why a specific replication is in the reported state.
+        These messages can be viewed on the Replications page of the SMM
+        UI.
+
+
+Related informationStreams Replication Manager Service REST APIStreams Replication Manager Service REST API ReferenceMonitoring Kafka Cluster Replications using Streams Messaging
+              Manager

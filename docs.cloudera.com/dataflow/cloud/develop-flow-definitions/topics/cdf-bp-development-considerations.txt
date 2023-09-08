@@ -1,0 +1,168 @@
+Considerations when developing flow definitionsCloudera Docs
+Considerations when developing flow definitions
+As you are building your flow definition in your NiFi development environment, you
+  should build the flow definition with ease of CDF export and isolation in mind. 
+Controller Services
+In traditional NiFi data flows, Controller Services are considered shared services
+    and often used by multiple data flows, or by multiple Processors in different Process Groups to
+    avoid redundancies and promote reusability. In CDF, you should plan for the possibility that you
+    will run your process group in isolation and consider how you want to handle shared Controller
+    Services. 
+When you download a flow definition from NiFi, you can choose whether you want to
+    include external controller services (Requires NiFi 1.16 / 1.17.0 or newer). A controller
+    service is considered external when it is referenced by components in the selected process group
+    but is defined outside the process group scope (e.g. controller services in a parent group).
+    Select “With external services” if you want to include referenced controller services in the
+    resulting flow definition and select “without external services” if you only want to include
+    controller services which are defined in the selected process group.
+
+
+
+note
+If use an older version of NiFi which does not support including external services in flow
+     definitions, review the Controller Services defined outside your Process Group and if needed
+     recreate them in the Process Group you are planning to download.
+
+
+
+
+tip
+An easy way to check whether a controller service is considered external is to compare its
+     scope with the process group name you are planning to download. If they do not match, it is
+     considered an external Controller Service.
+
+Default NiFi SSL Context Service
+
+For data flows that interact with other CDP Public Cloud experiences like Streams Messaging or
+    Operational Database Data Hub clusters, you can reference an external NiFi controller service
+    called Default NiFi SSL Context Service in your NiFi flow to automatically obtain the
+    correct truststore configuration for your target CDP environment. 
+Figure 1. Using the Default NiFi SSL Context Service in a processor configuration
+
+
+A Default NiFi SSL Context Service is already set up for you and can be used when you
+    are developing NiFi flows on Flow Management clusters in Data Hub. Any flow that uses the
+     Default NiFi SSL Context Service in Data Hub can be exported and deployed through
+    Cloudera DataFlow.
+If you are developing your NiFi flows outside of Data Hub, you can create a
+    controller service called Default NiFi SSL Context Service yourself and reference it in
+    any processor that requires an SSL Context Service configuration. You have to define the
+     Default NiFi SSL Context Service as an external Controller Service outside of the
+    process group that you plan to export and run in Cloudera DataFlow. 
+Figure 2. If you are creating the Default NiFi SSL Context Service yourself, make sure that the
+     Scope it is created in is a parent to the process group that you plan to export
+
+
+Review the following information if you developed a flow in a CDP Flow Management
+    Data Hub cluster and the flow uses the SSLContextService that was defined outside the Process
+    Group: 
+If the name of the SSLContextService in the flow definition is Default NiFi SSL
+       Context Service, then at the time of deployment, DataFlow automatically creates a
+      new SSLContextService in the Root Process Group with the required information of the target
+      environment.
+Specifically, DataFlow imports the Truststore certificates, creates the Truststore, puts
+      the information on a shared space that all NiFi nodes can access, and updates the
+       Truststore filename property with the correct file path. 
+When the flow definition is deployed, the flow references the Default NiFi SSL
+       Context Service in the Root Process Group and the deployment is successful.
+
+If your flow interacts with non-CDP services that require a TLS/SSL connection, then
+    you must do the following: 
+Define a new SSLContext Service in the Process Group you are planning to
+       export.
+Parameterize the Truststore Filename property so that DataFlow
+      allows you to upload a custom Truststore when you deploy the flow definition using the Flow
+      Deployment Wizard.
+
+
+Parameterize Processor and Controller Service configurations
+Ensure that your Process Group is portable by parameterizing your processor and controller
+    services configurations. This allows you to deploy a flow in different environments without
+    having to update Processor configuration details. 
+
+
+
+
+Customize your Processor and Connection names
+To ensure that you are able to distinguish Processors and Connections when defining
+    KPIs in your CDF flow deployment ensure that you specify a custom name for them when developing
+    your data flow.
+For example: 
+
+
+
+
+Review Reporting Tasks
+Reporting tasks are not exported to CDF when you are exporting your flow definition. When you
+    are designing your flow definition, you should be aware of your monitoring and report needs and
+    plan to address these needs with KPIs and Alerts specified as part of your flow deployment. 
+
+Using the CDPEnvironment parameter to get Hadoop configuration resources
+DataFlow makes it easy to use HDFS processors to read/write data from/to S3. Using HDFS
+    processors to access data in S3 allows you to leverage CDP’s IDBroker authentication method and
+    doesn’t require you to specify any S3 secrets in the processor configuration. HDFS processors
+    however require Hadoop configuration files - specifically the core-site.xml
+    file. CDF offers a special parameter called CDPEnvironment for you to use
+    whenever you are working with processors that require Hadoop configuration files. Simply use the
+    parameter #{CDPEnvironment} for the Hadoop configuration file property and
+    CDF will automatically obtain the required files during the flow deployment process. 
+note
+The value of the #{CDPEnvironment} parameter is not automatically
+     provided when using it in your NiFi development environment. While developing your flow, make
+     sure to add the CDPEnvironment parameter to your parameter context with
+     the correct value for your environment.
+For example, in DataHub set the value for this parameter to
+      /etc/hadoop/conf/core-site.xml. 
+Providing the correct value for your environment allows you to successfully test the
+     flow.
+
+
+
+
+Using CDPEnvironment for the Hadoop Configuration Resources property.
+
+
+
+The DataFlow Deployment Wizard detects usage of the CDPEnvironment
+    parameter and automatically obtains the required Hadoop configuration files.
+
+Resource consumption 
+When deciding how to export your process groups for deployment on DFX, review the
+    data flow resource consumption to help you decide how to isolate your data flows within CDF.
+Once you have developed your data flow in a NiFi development environment, you start
+    to export your flow definition 
+
+
+Root canvas
+
+
+Whole process group level
+
+
+Part of the process group
+
+
+ 
+
+Inter process group communication
+If you have process groups that exchange data between each other, you should treat
+    them as one flow definition and therefore download their parent process group as a flow
+    definition.
+
+Configuring object store access
+When you are developing flows for cloud provider object stores,
+     CDPObjectStore are the preferred processors. Available processors are: 
+
+ListCDPObjectStore
+FetchCDPObjectStore
+PutCDPObjectStore
+DeleteCDPObjectStore
+
+CDPObjectStore processors are equipped with the latest best practices for
+    accessing cloud provider object stores. 
+
+Configuring inbound connection support
+For more information, see Adding Inbound Connection support to a NiFi flow.
+
+
+Related informationAdding Inbound Connection support to a NiFi flow

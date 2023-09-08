@@ -1,0 +1,174 @@
+Using HLL Datasketch Algorithms in ImpalaCloudera Docs
+Using HLL Datasketch Algorithms in Impala
+You can use Datasketch algorithms (HLL) for queries that take too long to calculate
+  exact results due to very large data sets (e.g. number of distinct values).
+You may use data sketches (HLL algorithms) to generate approximate results that are much faster
+   to retrieve. HLL is an algorithm that gives approximate answers for computing the number of
+   distinct values in a column. The value returned by this algorithm is similar to the result of
+   COUNT(DISTINCT col) and the NDV function integrated with
+   Impala. However, HLL algorithm is much faster than COUNT(DISTINCT col) and the
+   NDV function and is less memory-intensive for columns with high
+   cardinality.
+These HLL algorithms create “sketches”, which are data structures
+   containing an approximate calculation of some facet of the data and which are compatible
+   regardless of which system reads or writes them. For e.g., This particular algorithm works in two
+   phases. First it creates a sketch from the dataset provided for the algorithm and then as the
+   second step in the process you can read the estimate from the sketch. Using this approach it’s
+   also possible to create granular sketches for a specific dataset (e.g. one sketch per partition)
+   and later on use them to provide answers for different count(distinct) queries without reading
+   the actual data as they can also be merged together. Using HLL you can create sketches by Hive
+   and read it with Impala for getting the estimate and vice versa.
+Usage Notes
+Query results produced by the HLL algorithm are approximate but within well defined error
+    bounds. Because the number of distinct values in a column returned by this HLL algorithm is an
+    estimate, it might not reflect the precise number of different values in the column, especially
+    if the cardinality is very high.
+
+Data Types
+The following is a list of currently supported data types of the datasets that these HLL functions are compatible with.
+Supported:
+
+Numeric Types:TINYINT, INT, BIGINT, FLOAT, DOUBLE
+String types:STRING, CHAR, VARCHAR
+Other types:BINARY
+
+Unsupported:
+
+Complex types
+Some of the scalar types: DECIMAL, TIMESTAMP, BOOLEAN, SMALLINT, DATE
+
+
+File Formats
+The currently supported file formats are ORC and Parquet. Since Impala does not yet have read
+    support for materialized views, it is required for Hive to write the sketches into regular
+    tables (i.e. not into a materialized view), using the BINARY type. Then Impala can be used to
+    read these sketches and calculate the estimate as Hive does.
+Limitations:
+You can write HLL sketches into a text table, however it may not work as the
+    serialized sketches can contain characters that are special for text format.
+
+Internal Configuration
+The configuration is hard coded and the level of compression is HLL_4 and the number of
+    buckets in the HLL array is k=12 (2 power of 12).
+
+Using HLL Sketches
+This datasketch algorithm works in two phases.
+
+First it creates a sketch from the dataset provided for the algorithm. 
+As the second step in the process the function provides an estimate from the sketch. 
+
+The following example shows how to create a sketch and to create an estimate from the sketch. 
+Creating a sketch
+This query creates a sketch using the ds_hll_sketch function from a column 
+    date_string_col containing the supported data type.
+Select ds_hll_sketch(date_string_col) from tableName;
+This query receives a primitive expression and returns a serialized HLL sketch that is not in a readble format.
+Estimating the number of distinct values in a column
+The following query returns a cardinality estimate (similarly to ndv() ) for that particular column (date_string_col) by using the HLL function 
+    ds_hll_estimate.
+Select ds_hll_estimate(ds_hll_sketch(date_string_col)) from tableName;
+This query receives a primitive expression (column name) and then creates a sketch from the
+    column, and then passes the sketch to the outer function that gives a cardinality estimate.
+
+    +------------------------------------------------+
+    | ds_hll_estimate(ds_hll_sketch(date_string_col))|
+    +------------------------------------------------+
+    | 729                                            |
+    +------------------------------------------------+
+    Fetched 1 row(s) in 0.25s
+   
+The above result is similar to the results received using the count(distinct col) or the ndv() approach.
+
+    Select count(distinct date_string_col) from tableName;
+    +------------------------------------------------+
+    | count (distinct date_string_col)               |
+    +------------------------------------------------+
+    | 730                                            |
+    +------------------------------------------------+
+   
+
+    Select ndv(distinct date_string_col) from tableName;
+    +------------------------------------------------+
+    | ndv (date_string_col)                          |
+    +------------------------------------------------+
+    | 736                                            |
+    +------------------------------------------------+
+   
+Inserting the derived sketch into a table
+You can create a sketch and save it for later use. If you save the sketches to a table or view
+    with the same granularity (e.g. one sketch for each partition in a table) then later you can
+    simply read the sketch and get the estimate almost for free as the real cost here is just the
+    sketch creation.
+The following example shows the creation of a sketch for the column
+    (date_string_col) from the table “tableName” and saving the created sketch into another table
+    called sketch_table and later reading the sketch and its estimate from the saved table called
+    sketch_table.
+
+    select year, month, ds_hll_estimate(ds_hll_sketch(date_string_col)) from tableName group by year, month;
+    +---------------------------------------------------------------+
+    | year | month | ds_hll_estimate(ds_hll_sketch(date_string_col))|
+    +------+-------+------------------------------------------------+
+    | 2010 | 5     | 31                                             | 
+    | 2010 | 11    | 30                                             |
+    | 2010 | 6     | 30                                             |
+    | 2010 | 2     | 28                                             |
+    | 2010 | 10    | 31                                             |
+    | 2009 | 11    | 30                                             |
+    | 2009 | 7     | 31                                             |
+    | 2009 | 10    | 31                                             |
+    | 2010 | 11    | 31                                             |
+    | 2009 | 7     | 31                                             |
+    | 2010 | 10    | 31                                             |
+    | 2010 | 8     | 30                                             |
+    | 2010 | 5     | 31                                             |
+    | 2009 | 7     | 30                                             |
+    | 2010 | 4     | 31                                             |
+    | 2010 | 12    | 30                                             |
+    | 2009 | 9     | 31                                             |
+    | 2009 | 8     | 30                                             |
+    | 2010 | 6     | 28                                             |
+    | 2010 | 3     | 31                                             |
+    | 2010 | 4     | 31                                             |
+    | 2010 | 2     | 30                                             |
+    | 2009 | 1     | 31                                             |
+    | 2009 | 12    | 30                                             |
+    +---------------------------------------------------------------+
+   
+Insert the created sketch into another table:
+
+    insert into sketch_table select year, month, ds_hll_sketch(date_string_col) from tableName group by year, month;
+   
+Verify the number of rows modified using count function in the table:
+
+    select count(1) from sketch_table;
+   
+You can also verify it by getting the estimates from the sketches stored in the table using
+    the following query:
+
+    select year, month, ds_hll_estimate(sketch_col) from sketch_table;
+   
+Combining Sketches
+You can combine sketches to allow complex queries to be computed from a few number of simple sketches.
+
+    select ds_hll_estimate(ds_hll_union(sketch_col)) from sketch_table;
+   
+
+Non-deterministic vs Deterministic Results
+Based on the characteristics of a query, DataSketches HLL might return results in a
+    non-deterministic manner. During the cache populating phase it returns exact results but in the
+    approximating phase the algorithm can be sensitive to the order of data it receives. As a result
+    you might see the results differ in consecutive runs but all of them will be within the error
+    range of the algorithm.
+Due to the characteristics of the algorithm, and to how it was implemented in Impala, the
+    results might be non-deterministic when the query is executed on one node and the input data set
+    is big enough that the algorithm starts approximating instead of giving exact results.
+
+Inter-opreability between Hive and Impala
+From the above examples you will notice that the NDV function is much faster
+    than the Datasketches. But NDV is used only by Impala and not by Hive whereas
+    the Datasketches are implemented in Hive as well as in Impala. In order to maintain the
+    inter-operability between Hive and Impala we recommend to use Datasketches to calculate the
+    estimate. A sketch created by Hive using Datasketches can be fed to Impala to produce an
+    estimate. 
+
+

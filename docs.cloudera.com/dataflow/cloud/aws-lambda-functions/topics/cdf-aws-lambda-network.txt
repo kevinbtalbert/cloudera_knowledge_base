@@ -1,0 +1,118 @@
+Configuring CDP VPC to deploy Lambda FunctionsCloudera Docs
+Configuring CDP VPC to deploy Lambda Functions
+In some scenarios, it is required to run the Lambda in a specific Virtual Private Cloud
+    (VPC). For example, if your Lambda function has to interact with services in a CDP environment,
+    you must run the Lambda in the same VPC where the CDP service is and you must also fulfill some
+    networking prerequisites for the DataFlow Function to work as expected.
+Before you begin
+DataFlow Functions running on top of AWS Lambda require access to the CDP
+        DataFlow Catalog deployed on the CDP Control Plane. This means that Lambda requires outbound
+        internet access to download the flow that is going to be run, and it also requires access to
+        some AWS services like Security Token Service (STS) and AWS Secrets Manager.
+This article explains how you can allow a managed,
+        serverless service like AWS Lambda to have internet access. AWS Lambda cannot be deployed on
+        a public subnet in a VPC as it is not possible to grant a Lambda function a public IP
+        address. This means that to have internet access, you need to have at least one private
+        subnet for each availability zone where the Lambda function is going to run and you need to
+        configure a Network Address Translation (NAT) gateway on the public subnets to route its
+        outbound traffic.
+
+Step 1 - Creating VPC private subnets and route tables
+A VPC can have multiple subnets, which can be public or private. Depending on the
+        connectivity that you need, you might also have to add gateways and route tables. The
+        Internet Gateway (IG) component enables your instances to connect to the internet through
+        the Amazon EC2 network edge. For more information on basic AWS networking concepts, see
+          How Amazon VPC works. 
+A public subnet has a direct route to an internet gateway. Resources in a public
+        subnet can access the public internet. By default, the AWS subnets are public, so the
+        instances have public and private IPs and they have a default route table with a route to an
+        internet gateway.
+A private subnet does not have a direct route to an internet gateway. Resources
+        in a private subnet require a NAT device to access the public internet, so it cannot have a
+        route to an IG. An EC2 instance in a non-default subnet only has private IPs and does not
+        have internet access.
+To allow a private subnet to have internet access you need to use a NAT device,
+        which maps multiple private IPs into a single public IP. So, if you configure the NAT device
+        in a public subnet with a public IP, it can use the internet gateway to route the traffic
+        and get access to the internet.
+Use the following procedure to create subnets for your VPC and to create route
+        tables that will be associated with the subnets.
+
+Create one private subnet per availability domain of your VPC where you will
+          deploy the Lambda function.
+Open the Amazon VPC console.
+Click Subnets in the left navigation pane.
+Click Create subnet.
+For the VPC ID, select the VPC where you want to add the new
+                subnet.noteThis should be the CDP Environment
+              subnet.
+(Optional) For Name, add a name for your
+              subnet.
+Define the Availability Zone and the
+                CIDR.
+Click Create subnet.
+
+Create a route table that will be associated with the subnet.
+Click Route tables in the left navigation
+              pane.
+Click Create route table.
+(Optional) For Name, add a name for your route
+              table.
+For VPC, choose your VPC.
+(Optional) To add a tag, click Add new tag and add
+              the tag key and tag value.
+Click Create route table.
+
+
+noteFollow these steps for all subnets and use a common nomenclature
+        to identify the route table of a subnet.
+
+Step 2 - Creating NAT gateways and configuring route tables
+Now that you have your subnets, you need to create and configure the Network
+        Address Translation (NAT) gateways that map the private IPs to a public IP and allow the
+        instances in your private subnets to connect to services outside your VPC.
+
+Create NAT gateways.
+Open the Amazon VPC console.
+Click NAT gateways in the left navigation
+              pane.
+Click Create NAT gateway.
+(Optional) Add a name for the NAT gateway.
+Define the subnet where you want to create the NAT gateway.
+Define the connectivity type.importantImportant: The subnet where the NAT gateway is deployed must be a public subnet to
+                allow internet access, so make sure that the connectivity type is set to public. For
+                more information about the difference between public and private NAT gateways, see
+                  NAT gateways.
+Allocate an Elastic IP. For more information, see Elastic IP addresses.
+
+Configure the route tables of the private subnets created in the previous
+            procedure.
+Click Route tables.
+Search for the route table.
+Click Routes > Edit routes.There are two routes that need to be defined.Route 1
+Destination: <VPC CIDR>
+Target: local
+Status: Active
+Route 2
+Destination: 0.0.0.0/0
+Target: <Search for one of the NAT Gateways created>
+Status: Active
+
+
+Click Save Changes.
+
+
+Associate each route table with each private subnet.
+Click Subnet Associations.
+Select the specific subnet.
+Save the associations.
+Validate that subnets have the route table with it.
+
+
+noteFollow these steps for all route tables of the private
+        subnets.
+Result
+With this, the private subnet components are able to communicate with other
+        components within the same VPC and have internet access.
+
+

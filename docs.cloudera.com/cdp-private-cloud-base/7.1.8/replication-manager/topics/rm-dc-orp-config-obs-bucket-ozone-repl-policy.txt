@@ -1,0 +1,162 @@
+Configuring properties for OBS bucket replication using Ozone replication policiesCloudera Docs
+Configuring properties for OBS bucket replication using Ozone replication
+        policies
+Before you replicate OBS buckets, you must configure additional properties that
+        assist Ozone replication policies in CDP Private Cloud Base Replication Manager to replicate
+        data in OBS buckets.
+
+Add the key-value pairs in the following table to the Ozone Client
+                        Advanced Configuration Snippet (Safety Valve) property in the
+                        ozone-site.xml file in the source cluster:
+
+
+
+Property
+Description
+
+
+
+fs.s3a.endpoint
+Enter the same value as in Ozone S3 gateway web
+                                        UI as the source cluster.tipThe source and target cluster have their own
+                                            S3A endpoint URL.
+
+
+hadoop.tmp.dir
+Enter the temporary directory on the target
+                                        cluster to buffer file uploads.
+
+
+fs.s3a.secret.key
+See Step 3 to get the required value.
+
+
+fs.s3a.access.key
+See Step 3 to get the required value.
+
+
+
+
+Add the key-value pairs in the following table to the Ozone Client
+                        Advanced Configuration Snippet (Safety Valve) property in the
+                        ozone-site.xml file in the target cluster:
+
+
+
+Property
+Description
+
+
+
+fs.s3a.endpoint
+Enter the same value as in Ozone S3 gateway web
+                                        UI as the target cluster.tipThe source and target cluster have
+                                            their own S3A endpoint URL.
+
+
+fs.s3a.secret.key
+See Step 3 to get the required value.
+
+
+fs.s3a.access.key
+See Step 3 to get the required value.
+
+
+fs.s3a.change.detection.version.required
+Enter false.
+
+
+fs.s3a.change.detection.mode
+Enter none.
+
+
+fs.s3a.path.style.access
+Enter true.
+
+
+
+
+If Kerberos is enabled on the source and target cluster, run the ozone
+                        s3 getsecret --om-service-id=serviceId command to get the secret
+                    and access key. Otherwise, enter any arbitrary value for the secret and access
+                    key. 
+
+You can store the keys in a credstore such as JCEKS for non
+                        Auto-TLS clusters. After you store the keys, perform the following
+                        steps:
+
+Configure the credstore file path for the
+                                hadoop.security.credential.provider.path
+                            property in the ozone-site.xml file. For more
+                            information, see Using DistCp with Amazon S3. 
+Add the HADOOP_CREDSTORE_PASSWORD
+                            parameter to the YARN Service Environment Advanced
+                                Configuration Snippet (Safety Valve) property for the
+                            YARN service in source Cloudera Manager. noteIf
+                                no password is set, enter none for the
+                                property.
+
+
+
+The /s3v volumes store S3 buckets. By default, you can
+                    access the buckets in /s3v volumes using S3 interface. To
+                    access other buckets through the S3 interface, you must create a “symbolic
+                    linked” bucket. You can use the ‘symbolic linked’ bucket in Ozone replication
+                    policies.
+Configure the required OBS buckets as S3-compatible buckets using the
+                    following commands before you use it in Ozone replication policies:
+ozone sh volume create /s3v
+ozone sh volume create
+                                    /[***vol_name***]
+ozone sh bucket create
+                                    /[***vol_name***]/[***bucket_name***]
+ozone sh bucket link
+                                    /[***vol_name***]/[***bucket_name***]
+                                    /s3v/[***symbolic_linked_bucket_name***]
+
+
+Import the S3G CA certificate from the cluster to the local JDK path using the
+                    following commands:
+
+
+Run the keytool -importkeystore -destkeystore
+                                    [***jdk_cacerts_location***] -srckeystore
+                                    [***cm-auto-global_truststore.jks
+                                    location***] -srcalias
+                                    [***cm_alias_on_src_cm***]
+                            command on all the hosts of the source Cloudera
+                            Manager.
+For example, keytool -importkeystore -destkeystore
+                                /usr/java/default/lib/security/cacerts -srckeystore
+                                /var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_truststore.jks
+                                -srcalias cmrootca-0
+
+
+Run the following commands on all the hosts of the target
+                            Cloudera Manager:
+
+
+
+keytool -importkeystore -destkeystore
+                                            [***jdk_cacerts location***] -srckeystore
+                                            [***cm-auto-global_truststore.jks location***] -srcalias
+                                            [***cm_alias_on_src_cm***]
+
+
+keytool -importkeystore -destkeystore
+                                            [***jdk_cacerts_location***] -srckeystore
+                                            [***cm-auto-global_truststore.jks location***] -srcalias
+                                            [***cm_alias_on_dest_cm***]
+
+
+ For example,
+                                keytool -importkeystore -destkeystore /usr/java/default/lib/security/cacerts 
+-srckeystore /var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_truststore.jks -srcalias cmrootca-0
+keytool -importkeystore -destkeystore /usr/java/default/lib/security/cacerts 
+-srckeystore /var/lib/cloudera-scm-agent/agent-cert/cm-auto-global_truststore.jks -srcalias cmrootca-1
+
+
+
+
+
+Parent topic: Preparing clusters to replicate Ozone data

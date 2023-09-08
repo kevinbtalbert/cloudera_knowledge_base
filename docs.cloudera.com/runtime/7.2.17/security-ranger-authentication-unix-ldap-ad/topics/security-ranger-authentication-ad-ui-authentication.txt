@@ -1,0 +1,83 @@
+Ranger UI authenticationCloudera Docs
+Ranger UI authentication
+Reference information on Ranger UI authentication, when configuring Ranger AD
+        integration.
+
+
+This is an extra AD level filter option on top of Kerberos authentication that
+                    maps to:
+
+
+
+For AD there are two options for defining who can access the Ranger UI: LDAP or
+                    ACTIVE_DIRECTORY. There is not a huge amount of difference between them, but
+                    they are separate sets of properties.
+
+
+
+ACTIVE_DIRECTORYIn Cloudera Manager, select
+                    Ranger, then click the Configuration tab.To display the authentication settings,
+                    type "authentication" in the Search box. You may need to scroll down to see the
+                    AD settings. 
+
+
+The ranger.ldap.ad.base.dn property determines the base of
+                    any search, so users not on this OU tree path can not be
+                    authenticated.The ranger.ldap.ad.user.searchfilter
+                    poperty is a dynamic filter that maps the user name in the Ranger web UI login
+                    screen to sAMAccountName. For example, the AD sAMAccountName
+                    property has example values like k.reshi and
+                        d.alora so make sure to enter a matching value for
+                    ‘Username’ in the logon dialogue.
+
+
+
+
+LDAP
+
+The LDAP properties allow for more fine tuning. 
+In Cloudera Manager, select Ranger, then click the Configuration tab.To display
+                    the authentication settings, type "authentication" in the Search box. You may
+                    need to scroll down to see all of the LDAP settings. 
+
+
+
+There is one catch: the ranger.ldap.user.dnpattern is evaluated
+                    first. Consider the following example value:  
+
+CN={0},OU=London,OU=Company,OU=User
+                        Accounts,OU=CorpUsers,DC=field,DC=hortonworks,DC=com 
+
+This would work, but has two side effects:
+
+
+Users would have to log on with their ‘long username’ (like
+                                ‘Kvothe Reshi / Denna
+                                Alora'), which would also mean that policies would have
+                            to be updated using that long name instead of the
+                                k.reshi short name variant.
+Traversing AD by DN patterns does not allow for applying group filters
+                            at all. In the syntax above, only users directly in OU=London would be
+                            able to log on.
+
+
+This adverse behavior can be avoided by intentionally putting a DN pattern
+                    (DC=intentionally,DC=wrong) in the ranger.ldap.user.dnpattern
+                    property, AND a valid filter in User Search Filter:
+
+(&(objectclass=user)(memberOf=CN=Hdp_admins,OU=Company,OU=User
+                        Accounts,OU=CorpUsers,DC=field,DC=hortonworks,DC=com)(sAMAccountName={0}))
+
+This works because the filter is only applied after the DN pattern query on AD
+                    does not return anything. If it does, the User Search
+                        Filter is not applied.
+Ranger has a very simple approach to the internal user list that is kept in a
+                    relational schema. This list contains all users that were synced with AD ever,
+                    and all those users can potentially log in to the Ranger UI. But only Admin
+                    users can really do any policy-related things in the Ranger UI (see next
+                    section).
+Be aware that all of this is only about authentication to Ranger. Someone from
+                    the ‘Hdp_admins’ group would still not have a Ranger admin role.
+
+
+Related informationConfigure Ranger authentication for LDAPParent topic: Ranger AD Integration

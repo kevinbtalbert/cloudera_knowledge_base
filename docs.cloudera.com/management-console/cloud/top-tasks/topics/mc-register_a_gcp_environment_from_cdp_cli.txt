@@ -1,0 +1,205 @@
+Register a GCP environment from CDP CLICloudera Docs
+Register a GCP environment from CDP CLI 
+Once you’ve met the Google Cloud cloud provider requirements, register your GCP
+  environment.
+Before you begin
+This assumes that you have already fulfilled the environment prerequisites described in GCP requirements.
+Required role:
+EnvironmentCreator
+Steps
+Unlike in the CDP web interface, in CDP CLI environment creation is a two-step process with
+     environment creation and data lake creation being two separate steps. The following commands
+     can be used to create an environment in CDP.
+
+Once you’ve met the prerequisites, register your GCP environment in CDP using the cdp
+      environments create-gcp-environment command and providing the CLI input parameters. For
+       example:cdp environments create-gcp-environment --cli-input-json '{
+    "environmentName": "test-env",
+    "description": "Test GCP environment",
+    "credentialName": "test-gcp-crd",
+    "region": "us-west2",
+    "publicKey": "ssh-rsa AAAAB3NzaZ1yc2EAAAADAQABAAABAQDwCI/wmQzbNn9YcA8vdU+Ot41IIUWJfOfiDrUuNcULOQL6ke5qcEKuboXzbLxV0YmQcPFvswbM5S4FlHjy2VrJ5spyGhQajFEm9+PgrsybgzHkkssziX0zRq7U4BVD68kSn6CuAHj9L4wx8WBwefMzkw7uO1CkfifIp8UE6ZcKKKwe2fLR6ErDaN9jQxIWhTPEiFjIhItPHrnOcfGKY/p6OlpDDUOuMRiFZh7qMzfgvWI+UdN/qjnTlc/M53JftK6GJqK6osN+j7fCwKEnPwWC/gmy8El7ZMHlIENxDut6X0qj9Okc/JMmG0ebkSZAEbhgNOBNLZYdP0oeQGCXjqdv",
+    "enableTunnel": true,
+    "usePublicIp": true,
+    "existingNetworkParams": {
+        "networkName": "eng-private",
+        "subnetNames": [
+            "private-us-west2"
+        ],
+        "sharedProjectId": "dev-project"
+    },
+    "logStorage": {
+        "storageLocationBase": "gs://logs",
+        "serviceAccountEmail": "logger@dev-project.iam.gserviceaccount.com"
+    }
+}'
+
+Parameter
+Description
+
+
+
+environmentName
+Provide a name for your environment.
+
+
+credentialName
+Provide the name of the credential created earlier.
+
+
+region
+Specify the region where your existing VPC network is located. For
+           example ”us-west2” is a valid region. 
+
+
+publicKey
+Paste your SSH public key.
+
+
+existingNetworkParams
+Provide a JSON specifying the
+            following:{
+ "networkName": "string",
+ "subnetNames": ["string", ...],
+ "sharedProjectId": "string"
+ }Replace the values with the actual VPC network name, one or more subnet names
+            and shared project ID. The sharedProjectId value needs to be set
+            in the following way:
+For a shared VPC, set it to the GCP host project ID
+For a non-shared VPC, set it to the GCP project ID of the project where CDP is
+              being deployed.
+
+
+
+enableTunnel 
+By default CCM is enabled (set to “true”). If you would like to disable it, set it
+           to “false”. If you disable it, then you must also add the following to your JSON
+           definition to specify two security groups as
+           follows:"securityAccess":
+ {
+   "securityGroupIdForKnox": "string",
+   "defaultSecurityGroupId": "string"
+ }
+
+
+usePublicIp
+Set this to “true” or “false”, depending on whether or not you want to
+           create public IPs.
+
+
+logStorage
+Provide a JSON specifying your configuration for cluster and audit logs:
+ {
+ "storageLocationBase": "string",
+ "serviceAccountEmail": "string"
+ }
+The storageLocationBase should be in the following format:
+            gs://my-bucket-name.
+
+noteCDP CLI includes the cdp environments create-gcp-environment
+       --generate-cli-skeleton command option, which allows you to generate a CLI JSON template. You
+       can also use CLI help to get some information about specific CLI command options.
+      
+To verify that your environment is running,
+      use:cdp environments list-environmentsYou can also log in to the CDP
+      web interface to check the deployment status.
+Once your environment and Data Lake are running, you should set IDBroker Mappings. To
+      create the mappings, run the cdp environments set-id-broker-mappings command. For
+       example:cdp environments set-id-broker-mappings \
+ --environment-name test-env \
+ --data-access-role dl-admin@dev-project.iam.gserviceaccount.com \
+ --ranger-audit-role ranger-audit@dev-project.iam.gserviceaccount.com \
+ --mappings '[{"accessorCrn": "crn:altus:iam:us-west-1:45ca3068-42a6-4227-8394-13a4493e2ac0:user:430c534d-8a19-4d9e-963d-8af377d16963", "role": "data-science@dev-project.iam.gserviceaccount.com"},{"accessorCrn":"crn:altus:iam:us-west-1:45ca3068-42a6-4227-8394-13a4493e2ac0:machineUser:mfox-gcp-idbmms-test-mu/2cbca867-647b-44b9-8e41-47a01dea6c19","role":"data-eng@dev-project.iam.gserviceaccount.com"}]'
+
+Parameter
+Description
+
+
+
+environment-name
+Specify a name of the environment created earlier.
+
+
+data-access-role
+Specify an email address of the Data Lake admin service account created
+           earlier. 
+
+
+ranger-audit-role
+Specify an email address of the Ranger audit service account created
+           earlier. 
+
+
+mappings
+Map CDP users or groups to GCP service accounts created earlier. Use the following
+            syntax:[
+{
+"accessorCrn": "string", 
+"role": "string"
+} 
+... 
+]You can obtain user or group CRN from the Management Console > User
+             Management by navigating to details of a specific user or group. The role should be specified as service account email. 
+
+
+Next, sync IDBroker
+      mappings:cdp environments sync-id-broker-mappings --environment-name demo3
+Finally, check the sync
+      status:cdp environments get-id-broker-mappings-sync-status --environment-name demo3
+One your environment is running, you can create a Data Lake using the cdp datalake
+       create-gcp-datalake command and providing the CLI input
+       parameters:cdp datalake create-gcp-datalake --cli-input-json '{
+    "datalakeName": "my-dl",
+    "environmentName": "test-env",
+    "scale": "LIGHT_DUTY",
+    "cloudProviderConfiguration": {
+        "serviceAccountEmail": "idbroker@dev-project.iam.gserviceaccount.com",
+        "storageLocation": "gs://data-storage"
+    }
+}' 
+
+Parameter
+Description
+
+
+
+datalakeName
+Provide a name for your Data Lake.
+
+
+environmentName
+Provide a name of the environment created earlier.
+
+
+scale
+Provide Data Lake scale. It must be one of: 
+LIGHT_DUTY or 
+MEDIUM_DUTY_HA.
+
+
+
+cloudProviderConfiguration
+Provide the name of the data storage bucket and the email of the IDBroker
+           service account. 
+
+noteCDP CLI includes the cdp datalake create-gcp-datalake --generate-cli-skeleton
+       command option, which allows you to generate a CLI JSON template. You can also use CLI help
+       to get some information about specific CLI command options. 
+To verify that your Data lake is running,
+       use:cdp datalake list-datalakesYou can also log in to the
+       CDP web interface to check the deployment status.
+
+After you finish
+
+After your environment is running, perform the following steps:
+You must assign roles to specific users and groups for the environment so that selected
+     users or user groups can access the environment. Next, you need to perform user sync. For
+     steps, refer to Enabling admin and user access to environments.
+You must onboard your users and/or groups for cloud storage. For steps, refer to Onboarding CDP users and groups for cloud storage.
+You must create Ranger policies for your users. For instructions on how to access your Data
+     Lake, refer to Accessing Data Lake services. Once you've accessed
+     Ranger, create Ranger policies to determine which users have
+     access to which databases and tables.
+
+
+Parent topic: Register your first environment
